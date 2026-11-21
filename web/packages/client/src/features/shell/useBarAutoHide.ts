@@ -66,10 +66,22 @@ export function takeKeepBar(): boolean {
   return pending;
 }
 
+/** Focus within this long of a pointer press came from the pointer. */
+const POINTER_FOCUS_MS = 1000;
+let lastPointerDown = Number.NEGATIVE_INFINITY;
+if (typeof document !== "undefined")
+  document.addEventListener(
+    "pointerdown",
+    () => {
+      lastPointerDown = Date.now();
+    },
+    { capture: true, passive: true },
+  );
+
 export interface BarAutoHide {
   hidden: boolean;
-  /** For the bar's `onFocus` (React's `focusin`): shows the bar, so
-   * Shift+Tab from the feed reaches it. */
+  /** For the bar's `onFocus` (React's `focusin`): keyboard focus shows the
+   * bar, so Shift+Tab from the feed reaches it. */
   onFocusIn: () => void;
   /** For the bar's `onBlur`: focus left the bar if `next` is outside it. */
   onFocusOut: (next: EventTarget | null, bar: HTMLElement | null) => void;
@@ -117,7 +129,11 @@ export function useBarAutoHide(
     return () => scrollEl.removeEventListener("scroll", onScroll);
   }, [scrollEl, enabled, pinned]);
 
-  const onFocusIn = useCallback(() => setFocusInside(true), []);
+  // Only keyboard focus pins the bar: focus that a pointer put there (a click
+  // on a chip) leaves the bar free to hide while the feed scrolls.
+  const onFocusIn = useCallback(() => {
+    setFocusInside(Date.now() - lastPointerDown > POINTER_FOCUS_MS);
+  }, []);
   const onFocusOut = useCallback((next: EventTarget | null, bar: HTMLElement | null) => {
     if (bar && next instanceof Node && bar.contains(next)) return;
     setFocusInside(false);

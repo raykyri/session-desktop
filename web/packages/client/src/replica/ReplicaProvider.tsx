@@ -8,9 +8,10 @@ import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import type { Viewer } from "../features/shell/viewer.js";
+import { useThreadUiStore } from "../stores/threadUi.js";
 
 import { defaultOnlineData, type OnlineData } from "./online.js";
-import { UNKNOWN, emptyReplica, type ReplicaSource, type Unknown } from "./source.js";
+import { UNKNOWN, emptyReplica, runQuery, type ReplicaSource, type Unknown } from "./source.js";
 
 /** How a build makes the viewer's replica. */
 export interface ReplicaConfig {
@@ -60,6 +61,13 @@ export function ReplicaProvider({
     [key, given],
   );
   useEffect(() => () => (made as { dispose?: () => void }).dispose?.(), [made]);
+  // Another viewer (a sign-in or sign-out without a reload): no selection or
+  // open composer of the previous one stays.
+  const previous = useRef(key);
+  useEffect(() => {
+    if (previous.current !== key) useThreadUiStore.getState().reset();
+    previous.current = key;
+  }, [key]);
   const value = useMemo(
     () => ({ source: made, online: { ...defaultOnlineData(), ...config?.online } }),
     [made],
@@ -115,7 +123,7 @@ export function useReplicaQuery<T>(
     const version = source.version();
     const hit = cache.current?.source === source ? cache.current : null;
     if (hit && hit.version === version && sameData(hit.deps, deps)) return hit.value;
-    const value = source.ready() ? select(source) : UNKNOWN;
+    const value = source.ready() ? runQuery(() => select(source)) : UNKNOWN;
     if (hit && sameData(hit.value, value)) {
       cache.current = { source, version, deps, value: hit.value };
       return hit.value;

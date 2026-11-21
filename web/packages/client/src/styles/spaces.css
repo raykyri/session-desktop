@@ -9,7 +9,7 @@
 
 /* ---- shared pieces ---- */
 
-svg.i {
+.i {
   width: 14px;
   height: 14px;
   flex: none;
@@ -179,18 +179,23 @@ svg.i {
   padding: 15px 0 0;
 }
 
-.feed-row.lead + .feed-row {
+.feed-row.lead + .feed-row,
+.feed-row.lead + .feed-rows > .feed-row:first-child,
+.feed-row.lead + .feed-rows > :first-child > .feed-row {
   padding-top: 14px;
 }
 
-/* Channel feeds: 2px less above each post. */
-.feed-inner[data-channel] .feed-row:not(.lead) {
+/* Channel feeds: 2px less above each post, the first one included. */
+.feed-inner[data-channel] .feed-row:not(.lead),
+.feed-inner[data-channel] .feed-row.lead + .feed-rows > .feed-row:first-child,
+.feed-inner[data-channel] .feed-row.lead + .feed-rows > :first-child > .feed-row {
   padding-top: 12px;
 }
 
 /* ---- the card ---- */
 
 .tcard {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-self: start;
@@ -202,8 +207,18 @@ svg.i {
   transition: box-shadow 0.4s;
 }
 
-.tcard > :nth-last-child(2) {
+/* The block before the footer (the mock's `.card > :nth-last-child(2)`). */
+.tcard > :has(+ .card-f),
+.tcard > :has(+ .selwrap + .card-f) {
   margin-bottom: 13px;
+}
+
+/* Look up and Branch here follow the answer in the DOM and are drawn at the
+   selection. */
+.tcard > .selwrap {
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .tcard.flash {
@@ -456,8 +471,9 @@ svg.i {
 }
 
 .answer .cite {
+  display: inline;
   font-size: 9.5px;
-  line-height: 1;
+  line-height: 1.6;
   vertical-align: super;
   color: var(--accent-color);
   font-weight: 600;
@@ -470,7 +486,11 @@ svg.i {
 .answer .cite:hover,
 .answer .cite:focus-visible {
   background: color-mix(in srgb, var(--accent-color) 16%, transparent);
-  outline: none;
+}
+
+.answer .cite:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 /* A citation stays on the line of the word before it. */
@@ -597,7 +617,7 @@ svg.i {
 
 /* Look up and Branch here over a selection (`#sellook`, `#selbranch`). */
 .selact {
-  position: fixed;
+  position: absolute;
   z-index: 25;
   display: inline-flex;
   align-items: center;
@@ -938,7 +958,7 @@ svg.i {
   height: 12px;
 }
 
-button.bq.bqx {
+.bq.bqx {
   display: block;
   width: 100%;
   text-align: left;
@@ -947,7 +967,7 @@ button.bq.bqx {
   font-size: var(--fs-xs);
 }
 
-button.bq.bqx:hover {
+.bq.bqx:hover {
   background: color-mix(in srgb, var(--accent-color) 8%, var(--content-inset-bg));
 }
 
@@ -1899,6 +1919,7 @@ button.bq.bqx:hover {
 
 .bopen {
   display: flex;
+  font-size: var(--fs-sm);
   align-items: center;
   gap: 10px;
   text-align: left;
@@ -1975,13 +1996,39 @@ button.bq.bqx:hover {
   }
 }
 
-:root[data-reduce-motion] .status::before,
-:root[data-reduce-motion] .preview.fadein,
-:root[data-reduce-motion] .feed-toast {
+.status:where([data-reduce-motion] *)::before,
+.preview.fadein:where([data-reduce-motion] *),
+.feed-toast:where([data-reduce-motion] *) {
   animation: none;
 }
 
-:root[data-reduce-motion] .tcard,
-:root[data-reduce-motion] .grp {
+.tcard:where([data-reduce-motion] *),
+.grp:where([data-reduce-motion] *) {
   transition: none;
+}
+
+/* ---- moderated items, reply rows ---- */
+
+.modln {
+  margin: 6px 0 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.grow-w {
+  position: relative;
+}
+
+/* A collapsed reply's "+N": opens its replies. */
+.rhid-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 26px;
+  border-radius: var(--radius-md);
+}
+
+.rhid-btn:hover {
+  background: var(--surface-fill-hover);
 }

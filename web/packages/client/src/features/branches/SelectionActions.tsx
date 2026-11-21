@@ -9,7 +9,6 @@
 
 import type { RefObject } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { OVERLAY_PRIORITY, useOverlaysStore } from "../../stores/overlays.js";
 import { ReplyArrowIcon, SearchIcon } from "../feed/icons.js";
@@ -29,6 +28,8 @@ interface Shown extends SelectionChoice {
   multiline: boolean;
   left: number;
   right: number;
+  /** The card's corner, which the actions are placed against. */
+  origin: { left: number; top: number };
 }
 
 /** The selection's text without citation numbers and count buttons. */
@@ -81,6 +82,7 @@ export function SelectionActions({
       const range = selection.getRangeAt(0);
       const text = selectedText(range) || raw;
       const rect = range.getBoundingClientRect();
+      const card = prose.closest<HTMLElement>(".tcard")?.getBoundingClientRect();
       const lines = new Set(
         Array.from(range.getClientRects())
           .filter((r) => r.width > 1)
@@ -101,6 +103,7 @@ export function SelectionActions({
         multiline: lines.size > 1,
         left: rect.left,
         right: rect.right,
+        origin: { left: card?.left ?? 0, top: card?.top ?? 0 },
       });
     };
     const onUp = () => setTimeout(() => read(false));
@@ -149,16 +152,25 @@ export function SelectionActions({
   }, [shown, width]);
 
   if (!shown || !enabled) return null;
+  // Positioned against the card that holds the answer (the actions follow
+  // the answer in the DOM, so Tab from the answer reaches them).
+  const origin = shown.origin;
   const w = width || 110;
   const x0 = shown.multiline ? shown.left : shown.right - w;
   const x = Math.max(8, Math.min(x0, window.innerWidth - w - 8));
   const style = (row: number) => ({
-    top: shown.y + row * 34,
-    left: x,
+    top: shown.y + row * 34 - origin.top,
+    left: x - origin.left,
     minWidth: width || undefined,
   });
-  return createPortal(
-    <div ref={buttons} data-selection-actions="">
+  return (
+    <div
+      ref={buttons}
+      className="selwrap"
+      data-selection-actions=""
+      role="group"
+      aria-label="Selection"
+    >
       {shown.look !== null ? (
         <button
           type="button"
@@ -190,7 +202,6 @@ export function SelectionActions({
         <ReplyArrowIcon />
         Branch here
       </button>
-    </div>,
-    document.body,
+    </div>
   );
 }

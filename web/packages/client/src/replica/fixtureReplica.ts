@@ -67,6 +67,28 @@ export interface FixtureReplicaOptions {
   runMs?: number | null;
 }
 
+/** Holding runs (tests and the end-to-end build): while `hold` is set, a
+ * new run stays `queued` or `running` until `flush`. */
+export const runControl: { hold: "queued" | "running" | null } = { hold: null };
+const live = new Set<FixtureReplica>();
+
+/** Completes every held or running run of every live fixture replica. */
+export function flushFixtureRuns(): void {
+  for (const replica of live) replica.flushRuns();
+}
+
+/** `window.__sessionFixtures` in a fixture build, for the end-to-end specs:
+ * `hold("running")` keeps new runs at "Researching", `hold("queued")` keeps
+ * them queued, `flush()` answers them. */
+export function exposeFixtureControls(): void {
+  (window as unknown as { __sessionFixtures?: unknown }).__sessionFixtures = {
+    hold: (state: "queued" | "running" | null) => {
+      runControl.hold = state;
+    },
+    flush: flushFixtureRuns,
+  };
+}
+
 /** A fresh replica of the fixture world for `me` (null signed out). */
 export function createFixtureReplica(
   me: string | null,
@@ -118,7 +140,9 @@ export function createFixtureReplica(
   };
 
   const start = (run: RunRec) => {
-    timers.set(run.id, runMs === null ? null : setTimeout(() => finish(run.id), runMs));
+    const held = runControl.hold !== null || runMs === null;
+    timers.set(run.id, held ? null : setTimeout(() => finish(run.id), runMs));
+    if (runControl.hold === "queued") return;
     replica.write([{ ...run, status: "running", step: 0, startedAt: nowIso() }]);
   };
 
@@ -133,10 +157,15 @@ export function createFixtureReplica(
   replica.flushRuns = () => {
     for (const [id, timer] of [...timers]) {
       if (timer !== null) clearTimeout(timer);
+      const run = replica.raw(`run:${id}`);
+      if (run?.kind === "run" && run.status === "queued")
+        replica.write([{ ...run, status: "running", step: 0, startedAt: nowIso() }]);
       finish(id);
     }
   };
+  live.add(replica);
   replica.dispose = () => {
+    live.delete(replica);
     for (const timer of timers.values()) if (timer !== null) clearTimeout(timer);
     timers.clear();
   };

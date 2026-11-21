@@ -2,7 +2,9 @@
 // function of a `ReplicaSource` (exported for tests and for non-React
 // callers) and a hook over it. Per-viewer fields (`joined`, `owned`,
 // `saved`, `mine`) are computed here from the viewer's own records, never
-// stored (01 U1).
+// stored (01 U1). A read the replica has not loaded stops the query
+// (`known`, `source.ts`): the hook answers `UNKNOWN` and the screen shows a
+// loading row.
 
 import {
   answerKey,
@@ -21,9 +23,19 @@ import {
   type SpaceRec,
   type ThreadRec,
 } from "@session/mutators";
+import { useSyncExternalStore } from "react";
 
-import { useReplicaQuery } from "./ReplicaProvider.js";
-import type { ReplicaSource, Unknown } from "./source.js";
+import { useReplica, useReplicaQuery } from "./ReplicaProvider.js";
+import { NotLoaded, known, loose, type ReplicaSource, type Unknown } from "./source.js";
+
+const byCreation = <T extends { createdAt: string; id?: string }>(a: T, b: T) =>
+  a.createdAt === b.createdAt
+    ? (a.id ?? "") < (b.id ?? "")
+      ? -1
+      : 1
+    : a.createdAt < b.createdAt
+      ? -1
+      : 1;
 
 // ---- channels ----
 
@@ -41,9 +53,15 @@ export interface ChannelView {
   owned: boolean;
 }
 
+/** Whether `me` is a member of `sp`. The membership records are the user
+ * log's, so an unloaded one reads as not a member. */
+function isMember(source: ReplicaSource, sp: string): boolean {
+  const me = source.me;
+  return me !== null && loose(source.get(memberKey(sp, me)))?.kind === "member";
+}
+
 export function channelView(source: ReplicaSource, s: SpaceRec): ChannelView {
   const me = source.me;
-  const joined = me !== null && source.get(memberKey(s.id, me))?.kind === "member";
   return {
     id: s.id,
     name: s.name,
@@ -52,7 +70,7 @@ export function channelView(source: ReplicaSource, s: SpaceRec): ChannelView {
     owner: s.owner,
     members: s.members,
     frozen: s.frozen,
-    joined,
+    joined: isMember(source, s.id),
     owned: me !== null && s.owner === me,
   };
 }
@@ -71,9 +89,12 @@ export function useChannels(): ChannelView[] | Unknown {
   return useReplicaQuery(channelsOf, []);
 }
 
+/** The channel of a name; null only once the replica has every space. */
 export function channelByName(source: ReplicaSource, name: string): ChannelView | null {
   const s = source.all("space").find((x) => x.name === name);
-  return s ? channelView(source, s) : null;
+  if (s) return channelView(source, s);
+  if (!source.complete("space")) throw new NotLoaded();
+  return null;
 }
 
 export function useChannelByName(name: string | null): ChannelView | null | Unknown {
@@ -83,7 +104,7 @@ export function useChannelByName(name: string | null): ChannelView | null | Unkn
 export function useChannelById(id: string): ChannelView | null | Unknown {
   return useReplicaQuery(
     (source) => {
-      const s = source.get(spaceKey(id));
+      const s = known(source.get(spaceKey(id)));
       return s?.kind === "space" ? channelView(source, s) : null;
     },
     [id],
@@ -94,35 +115,36 @@ export function useChannelById(id: string): ChannelView | null | Unknown {
 
 export type FeedKind = { kind: "home" } | { kind: "saved" } | { kind: "channel"; id: string };
 
-const newestFirst = (a: ThreadRec, b: ThreadRec) =>
-  a.createdAt === b.createdAt ? (a.id < b.id ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1;
+const newestFirst = (a: ThreadRec, b: ThreadRec) => -byCreation(a, b);
 
 /** A feed's thread ids, newest first. Home is the threads of the viewer's
- * channels (signed out: of the open channels); Saved the viewer's saved
- * threads; a channel its threads. A thread deleted with nothing under it
- * (`gone`) is left out. */
+ * channels (signed out: of the open channels) that are loaded, `UNKNOWN`
+ * while none is; Saved the viewer's saved threads that are loaded; a
+ * channel its threads, `UNKNOWN` while its index is not loaded. A thread
+ * deleted with nothing under it (`gone`) is left out. */
 export function feedOf(source: ReplicaSource, feed: FeedKind): string[] {
-  let threads: ThreadRec[];
-  if (feed.kind === "channel") threads = source.list("thread", { sp: feed.id });
+  let threads: ThreadRec[] = [];
+  if (feed.kind === "channel") threads = known(source.list("thread", { sp: feed.id }));
   else if (feed.kind === "saved") {
     const me = source.me;
-    threads = [];
     if (me !== null)
-      for (const save of source.list("save", { u: me })) {
-        const t = source.get(threadKey(save.th));
+      for (const save of known(source.list("save", { u: me }))) {
+        const t = loose(source.get(threadKey(save.th)));
         if (t?.kind === "thread") threads.push(t);
       }
   } else {
     const me = source.me;
-    const spaces = new Set(
-      source
-        .all("space")
-        .filter((s) =>
-          me === null ? s.vis === "open" : source.get(memberKey(s.id, me))?.kind === "member",
-        )
-        .map((s) => s.id),
-    );
-    threads = source.all("thread").filter((t) => spaces.has(t.s));
+    const spaces = source
+      .all("space")
+      .filter((s) => (me === null ? s.vis === "open" : isMember(source, s.id)));
+    let loaded = 0;
+    for (const s of spaces) {
+      const list = loose(source.list("thread", { sp: s.id }));
+      if (!list) continue;
+      loaded += 1;
+      threads.push(...list);
+    }
+    if (spaces.length > 0 && loaded === 0) throw new NotLoaded();
   }
   return threads
     .filter((t) => !t.gone)
@@ -143,17 +165,18 @@ export interface ThreadView {
   saved: boolean;
 }
 
+/** A thread with its counts and channel; null when known absent. */
 export function threadOf(source: ReplicaSource, id: string): ThreadView | null {
-  const thread = source.get(threadKey(id));
+  const thread = known(source.get(threadKey(id)));
   if (thread?.kind !== "thread") return null;
-  const counts = source.get(countsKey(id));
-  const space = source.get(spaceKey(thread.s));
+  const counts = known(source.get(countsKey(id)));
+  const space = known(source.get(spaceKey(thread.s)));
   const me = source.me;
   return {
     thread,
     counts: counts?.kind === "counts" ? counts : null,
     space: space?.kind === "space" ? channelView(source, space) : null,
-    saved: me !== null && source.get(saveKey(me, id))?.kind === "save",
+    saved: me !== null && loose(source.get(saveKey(me, id)))?.kind === "save",
   };
 }
 
@@ -171,27 +194,21 @@ export interface AskTree {
 }
 
 export function askTreeOf(source: ReplicaSource, th: string): AskTree {
-  const nodes = source
-    .list("node", { th })
-    .sort((a, b) =>
-      a.createdAt === b.createdAt ? (a.id < b.id ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1,
-    );
+  const nodes = [...known(source.list("node", { th }))].sort(byCreation);
   const answers: Record<string, AnswerRec> = {};
   const runs: Record<string, RunRec> = {};
-  const root = source.get(answerKey(th));
+  const root = known(source.get(answerKey(th)));
   if (root?.kind === "answer") answers["r"] = root;
   for (const n of nodes) {
-    const a = source.get(answerKey(n.id));
+    const a = known(source.get(answerKey(n.id)));
     if (a?.kind === "answer") answers[n.id] = a;
   }
-  for (const run of source.list("run", { th })) {
+  for (const run of known(source.list("run", { th }))) {
     const node = run.node;
     const current = runs[node];
     if (!current || current.createdAt <= run.createdAt) runs[node] = run;
   }
-  const comments = source
-    .list("comment", { th })
-    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  const comments = [...known(source.list("comment", { th }))].sort(byCreation);
   return { nodes, answers, runs, comments };
 }
 
@@ -200,11 +217,7 @@ export function useAskTree(th: string): AskTree | Unknown {
 }
 
 export function repliesOf(source: ReplicaSource, th: string): ReplyRec[] {
-  return source
-    .list("reply", { th })
-    .sort((a, b) =>
-      a.createdAt === b.createdAt ? (a.id < b.id ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1,
-    );
+  return [...known(source.list("reply", { th }))].sort(byCreation);
 }
 
 export function useReplies(th: string): ReplyRec[] | Unknown {
@@ -213,25 +226,32 @@ export function useReplies(th: string): ReplyRec[] | Unknown {
 
 // ---- the viewer's own records ----
 
+/** How many of the viewer's runs are waiting to start (03 L1). */
+export function queuedRunsOf(source: ReplicaSource): number {
+  const me = source.me;
+  if (me === null) return 0;
+  return (loose(source.list("run", { u: me })) ?? []).filter((r) => r.status === "queued").length;
+}
+
 export function savedCountOf(source: ReplicaSource): number {
   const me = source.me;
   if (me === null) return 0;
-  return source.list("save", { u: me }).filter((s) => {
-    const t = source.get(threadKey(s.th));
-    return t?.kind === "thread" && !t.gone;
+  return known(source.list("save", { u: me })).filter((s) => {
+    const t = loose(source.get(threadKey(s.th)));
+    return t === undefined || (t.kind === "thread" && !t.gone);
   }).length;
 }
 
 export function unreadCountOf(source: ReplicaSource): number {
   const me = source.me;
   if (me === null) return 0;
-  return source.list("notif", { u: me }).filter((n) => !n.read).length;
+  return known(source.list("notif", { u: me })).filter((n) => !n.read).length;
 }
 
 export function layoutOf(source: ReplicaSource): "centred" | "wide" | null {
   const me = source.me;
   if (me === null) return null;
-  const prefs = source.get(prefsKey(me));
+  const prefs = known(source.get(prefsKey(me)));
   return prefs?.kind === "prefs" ? prefs.layout : null;
 }
 
@@ -239,7 +259,34 @@ export function usePrefsLayout(): "centred" | "wide" | null | Unknown {
   return useReplicaQuery(layoutOf, []);
 }
 
-/** The replica's clock, for relative times. Re-read on every change. */
+// ---- the clock ----
+
+/** The replica's clock rounded down to the minute: relative times ("18m")
+ * change at most once a minute, and a write does not re-render every row. */
+const MINUTE = 60_000;
+
+const clockListeners = new Set<() => void>();
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener);
+  if (clockTimer === undefined) {
+    clockTimer = setInterval(() => {
+      for (const l of clockListeners) l();
+    }, 15_000);
+    (clockTimer as { unref?: () => void }).unref?.();
+  }
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0 && clockTimer !== undefined) {
+      clearInterval(clockTimer);
+      clockTimer = undefined;
+    }
+  };
+}
+
+/** The replica's clock, to the minute; advances while the page is idle. */
 export function useNow(): number {
-  return useReplicaQuery((source) => source.now(), []) as number;
+  const source = useReplica();
+  return useSyncExternalStore(subscribeClock, () => Math.floor(source.now() / MINUTE) * MINUTE);
 }

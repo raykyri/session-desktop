@@ -32,17 +32,24 @@ export function RemoveDialog({
   const what = thread.k === "post" ? "post" : "ask";
   const author = thread.u ?? "";
 
+  const busy = useRef(false);
+  const [sending, setSending] = useState(false);
   const remove = async () => {
     const reason = note.trim();
     if (reason.length > NOTE_MAX) {
       setError(`Keep the reason under ${NOTE_MAX} characters.`);
       return;
     }
+    if (busy.current) return;
+    busy.current = true;
+    setSending(true);
     const outcome = await writes.send("moderation.decide", {
       item: `${thread.k === "post" ? "p" : "a"}:${thread.id}`,
       decision: "removed",
       ...(reason ? { note: reason } : {}),
     });
+    busy.current = false;
+    setSending(false);
     if (!outcome.ok) return;
     onOpenChange(false);
     setNote("");
@@ -95,7 +102,7 @@ export function RemoveDialog({
           <button type="button" className="btn2" onClick={() => onOpenChange(false)}>
             Cancel
           </button>
-          <button type="submit" className="btn1 danger">
+          <button type="submit" className="btn1 danger" disabled={sending} aria-busy={sending}>
             Remove
           </button>
         </div>

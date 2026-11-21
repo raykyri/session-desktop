@@ -13,8 +13,9 @@ import type { ChannelView } from "../../replica/queries.js";
 import { useWrites } from "../../replica/writes.js";
 import { composerKey, useThreadUi, useThreadUiStore } from "../../stores/threadUi.js";
 import { Avatar } from "../../ui/Avatar.js";
-import { InlineComposer } from "../composer/InlineComposer.js";
-import { useRunChoice } from "../feed/FeedContext.js";
+import { InlineComposer, focusSoon, selectedRowOr } from "../composer/InlineComposer.js";
+import { useFeedViewer, useRunChoice } from "../feed/FeedContext.js";
+import { rowText } from "../feed/Moderated.js";
 import { clip } from "../feed/format.js";
 import { CloseIcon, SearchIcon } from "../feed/icons.js";
 
@@ -54,12 +55,15 @@ export function AskSide({
   const close = useThreadUiStore((state) => state.close);
   const writes = useWrites();
   const choice = useRunChoice();
+  const { writer } = useFeedViewer();
   const pinned = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<{ tops: number[]; height: number }>({ tops: [], height: 0 });
 
   const composer = ui.composer;
   const rootAsk =
-    composer?.kind === "ask" && composer.parent === "r" && ui.selected === null ? composer : null;
+    writer && composer?.kind === "ask" && composer.parent === "r" && ui.selected === null
+      ? composer
+      : null;
   const quote = rootAsk?.quote;
 
   // Pins in order: the root composer (when open), then one per passage.
@@ -153,7 +157,10 @@ export function AskSide({
                 className="ibtn bqc"
                 aria-label="Close"
                 title="Close"
-                onClick={() => close(thread.id)}
+                onClick={() => {
+                  close(thread.id);
+                  focusSoon(selectedRowOr(thread.id, `#card-${thread.id} .rcount`));
+                }}
               >
                 <CloseIcon />
               </button>
@@ -165,7 +172,9 @@ export function AskSide({
             placeholder={quote ? "Ask about this passage" : "Ask about the answer"}
             submitLabel="Ask"
             onSubmit={submitRoot}
-            onClose={quote ? undefined : () => close(thread.id)}
+            onClose={() => close(thread.id)}
+            showClose={!quote}
+            returnFocus={selectedRowOr(thread.id, `#card-${thread.id} .rcount`)}
           />
         </div>
       ) : null}
@@ -214,14 +223,16 @@ function rowContent(node: NodeRec, parentAuthor: string) {
       {node.look !== null ? (
         <span className="gq glook" title="Look up">
           <SearchIcon />
+          <span className="sr-only">Look up </span>
           {node.look}
         </span>
       ) : (
-        <span className="gq">{node.del ? "[deleted]" : node.q}</span>
+        <span className="gq">{rowText(node, node.q)}</span>
       )}
       {node.u !== parentAuthor ? (
         <span className="rav rav-r" title={node.u}>
           <Avatar handle={node.u} size="xs" />
+          <span className="sr-only">, by {node.u}</span>
         </span>
       ) : null}
     </>

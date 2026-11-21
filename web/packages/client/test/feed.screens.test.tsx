@@ -178,9 +178,7 @@ test.serial(
     fireEvent.click(await screen.findByRole("button", { name: "Expand" }));
     await waitUntil(
       t,
-      () =>
-        replica.get("prefs:ines.v")?.kind === "prefs" &&
-        (replica.get("prefs:ines.v") as { layout: string }).layout === "wide",
+      () => (replica.raw("prefs:ines.v") as { layout?: string } | undefined)?.layout === "wide",
       "prefs written",
     );
     t.is(useNavigationStore.getState().layout, "wide");

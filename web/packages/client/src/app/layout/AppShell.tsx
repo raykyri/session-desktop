@@ -16,6 +16,7 @@ import { useBarAutoHide } from "../../features/shell/useBarAutoHide.js";
 import { viewerOf, type Viewer } from "../../features/shell/viewer.js";
 import { ReplicaProvider } from "../../replica/ReplicaProvider.js";
 import { useWrites } from "../../replica/writes.js";
+import { useOnline } from "../../stores/connection.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
@@ -65,6 +66,7 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
   const { notifications, dismiss } = useUserNotifications();
   const writes = useWrites();
   const openNewChannel = useNewChannelDialog((state) => state.setOpen);
+  const online = useOnline();
 
   const { layout, toggle: toggleLayout } = useLayoutPreference(viewer);
   const setScope = useNavigationStore((state) => state.setScope);
@@ -173,7 +175,7 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
           <Outlet />
         </PageHeadingFocusContext.Provider>
       </div>
-      <NewChannelDialog />
+      <NewChannelDialog online={online} />
       <ToastHost />
       <ImageLightbox />
       <DiagramLightbox />

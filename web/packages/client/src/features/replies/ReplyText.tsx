@@ -6,7 +6,7 @@ import { memberKey } from "@session/mutators";
 
 import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import type { ChannelView } from "../../replica/queries.js";
-import { UNKNOWN } from "../../replica/source.js";
+import { UNKNOWN, loose } from "../../replica/source.js";
 import { MENTION, formatReply, type ReplyInline } from "../feed/format.js";
 
 function Inline({ parts }: { parts: ReplyInline[] }) {
@@ -29,11 +29,13 @@ export function ReplyText({ text, channel }: { text: string; channel: ChannelVie
   const handles = [...text.matchAll(MENTION)].map((m) => (m[1] ?? "").replace(/\.$/, ""));
   const members = useReplicaQuery(
     (source) =>
-      channel ? handles.filter((h) => source.get(memberKey(channel.id, h))?.kind === "member") : [],
+      channel
+        ? handles.filter((h) => loose(source.get(memberKey(channel.id, h)))?.kind === "member")
+        : [],
     [channel?.id, handles.join(",")],
   );
-  const known = new Set(members === UNKNOWN ? [] : members);
-  const parts = formatReply(text, (h) => known.has(h));
+  const members_ = new Set(members === UNKNOWN ? [] : members);
+  const parts = formatReply(text, (h) => members_.has(h));
   return (
     <div className="rtext">
       {parts.map((part, i) =>

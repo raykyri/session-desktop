@@ -1,6 +1,7 @@
 // Binds this tab's account-scoped local state to the signed-in account
-// (02 §9.4). Today that state is the composer drafts; the sync client's
-// stored `{clientId, userId}` and `threadUi` join it with the replica (§9.2).
+// (02 §9.4): the composer drafts and `threadUi` (selections and open
+// composers); the sync client's stored `{clientId, userId}` joins them with
+// the replica (§9.2).
 //
 // - A route guard calls `claimLocalAccountState` with the session's user id
 //   before the first render: another account's drafts are dropped.
@@ -9,9 +10,15 @@
 // - Sign-out clears them.
 
 import { claimDrafts, hideDrafts, resetDrafts } from "./drafts.js";
+import { useThreadUiStore } from "./threadUi.js";
 
-/** Binds local state to `userId`, or hides it when there is no session. */
+let claimed: string | null | undefined;
+
+/** Binds local state to `userId`, or hides it when there is no session. A
+ * change of account drops `threadUi`. */
 export function claimLocalAccountState(userId: string | null): void {
+  if (claimed !== undefined && claimed !== userId) useThreadUiStore.getState().reset();
+  claimed = userId;
   if (userId === null) {
     hideDrafts();
     return;
@@ -22,4 +29,5 @@ export function claimLocalAccountState(userId: string | null): void {
 /** Clears all local state of the account on sign-out. */
 export function clearLocalAccountState(): void {
   resetDrafts(null);
+  useThreadUiStore.getState().reset();
 }

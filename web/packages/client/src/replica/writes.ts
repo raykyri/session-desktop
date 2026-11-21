@@ -4,6 +4,7 @@
 // message as an alert toast and resolves `false`, so the caller keeps typed
 // text in its composer.
 
+import { QUEUED_RUNS_MAX } from "@session/mutators";
 import type { Spaces } from "@session/shared";
 import { useMemo } from "react";
 
@@ -11,10 +12,15 @@ import { showToast } from "../features/shell/Toast.js";
 
 import { useReplica } from "./ReplicaProvider.js";
 import type { Effort } from "./online.js";
+import { queuedRunsOf } from "./queries.js";
 import type { ReplicaSource, WriteOutcome } from "./source.js";
 import { newUlid } from "./ulid.js";
 
 type SpaceMutatorName = Spaces.SpaceMutatorName;
+
+/** The toast of a run-starting write refused for a full queue (02 §5; at
+ * most `QUEUED_RUNS_MAX` runs wait per person, 03 L1). */
+export const QUEUE_FULL_MESSAGE = `You have ${QUEUED_RUNS_MAX} asks waiting to run. Try again when one starts.`;
 
 /** The mention toast (02 §4.3, N16): "Notified @a, @b." and "@c isn't a
  * member." ("@c, @d aren't members."), joined when both apply. */
@@ -75,8 +81,22 @@ export function makeWrites(source: ReplicaSource): Writes {
   const id = () => newUlid(source.now());
   const send = async (name: SpaceMutatorName, input: unknown) => {
     const outcome = await source.mutate(name, input);
-    if (!outcome.ok) showToast(outcome.error.message, { alert: true });
+    if (!outcome.ok)
+      showToast(
+        outcome.error.reason === "queue_full" ? QUEUE_FULL_MESSAGE : outcome.error.message,
+        { alert: true },
+      );
     return outcome;
+  };
+  /** A write that starts a run: refused here, before it is sent, while 20
+   * of the viewer's runs wait to start (02 §5, 03 L1); the server's
+   * `queue_full` refusal gets the same toast. The caller keeps the text. */
+  const run = async (name: SpaceMutatorName, input: { id: string } & Record<string, unknown>) => {
+    if (queuedRunsOf(source) >= QUEUED_RUNS_MAX) {
+      showToast(QUEUE_FULL_MESSAGE, { alert: true });
+      return null;
+    }
+    return made(name, input);
   };
   const made = async (
     name: SpaceMutatorName,
@@ -95,7 +115,7 @@ export function makeWrites(source: ReplicaSource): Writes {
   return {
     send,
     ask: (space, q, model, effort) =>
-      made("threads.create", { id: id(), space, kind: "ask", q, model, effort }),
+      run("threads.create", { id: id(), space, kind: "ask", q, model, effort }),
     post: (space, q) => made("threads.create", { id: id(), space, kind: "post", q }, true),
     save: async (thread, on) => {
       const ok = await done("saved.set", { kind: "thread", id: thread, on });
@@ -104,7 +124,7 @@ export function makeWrites(source: ReplicaSource): Writes {
     },
     deleteThread: (thread) => done("threads.delete", { id: thread }),
     fork: ({ quote, b, ...rest }) =>
-      made("research.forkNode", {
+      run("research.forkNode", {
         id: id(),
         ...rest,
         kind: "ask",
@@ -112,7 +132,7 @@ export function makeWrites(source: ReplicaSource): Writes {
         ...(b !== undefined ? { b } : {}),
       }),
     lookUp: ({ quote, b, ...rest }) =>
-      made("research.forkNode", {
+      run("research.forkNode", {
         id: id(),
         ...rest,
         parent: "r",
