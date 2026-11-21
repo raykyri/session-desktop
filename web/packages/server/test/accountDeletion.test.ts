@@ -82,9 +82,10 @@ test("B6: the frozen channels of a deleted owner", async (t) => {
   t.false(keys(await signedOutSnapshot(h, `space:${closed}`)).includes(`thread:${secret}`));
 
   // the handle stays taken; the identity is gone
-  const row = users.findByHandle(h.db, "olga");
-  t.is(row?.provider ?? null, null);
-  t.is(row?.providerUserId ?? null, null);
+  const row = h.db.$client
+    .prepare("SELECT provider, provider_user_id AS pid FROM users WHERE handle = ?")
+    .get("olga") as { provider: string | null; pid: string | null };
+  t.deepEqual(row, { provider: null, pid: null });
   t.false(users.handleAvailable(h.db, "olga"));
 });
 
