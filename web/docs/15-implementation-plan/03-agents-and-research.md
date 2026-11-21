@@ -53,7 +53,10 @@ with `at`, `access`, `interrupted`; `runFailureSchema` in `spaces.ts`) and
 adds `error` with `cls`, the existing provider error class (`RunErrorClass`
 in `web/packages/server/src/runs/errors.ts`: `auth`, `content_filter`,
 `context_too_long`, `provider_unavailable`, `network`, `timeout`,
-`unknown`), shown with that file's copy.
+`unknown`), shown with that file's copy. A `key` failure carries `detail`,
+one of a fixed set the server writes (`runKeyDetailSchema`: `key_only`,
+`key_unset`, `key_changed`, `key_rejected`, `key_forbidden`; never the
+provider's text), which the asker's copy follows (02 §3.3).
 
 `bill` is the payer label of K9: `included`, `key:anthropic`, `key:openai`,
 or `included+key:anthropic` for a run that crossed the allowance.
