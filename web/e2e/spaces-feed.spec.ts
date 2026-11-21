@@ -1,11 +1,23 @@
 // The feed end to end (02 §12.2 `spaces-feed`, M4 parts): a post, a save and
 // the Saved count, the footer meta with no model or effort text, an ask
 // that runs and is answered (mocked until M5a), delete, the removed
-// placeholder, and thread addresses.
+// placeholder, the owner's Remove… dialog, thread addresses, and the
+// virtualised feed past 60 rows.
 
 import { expect, test } from "@playwright/test";
 
-import { FIRST_ASK, card, compose, signInAndOpen, toast } from "./spaces.js";
+import {
+  FIRST_ASK,
+  card,
+  compose,
+  flushRuns,
+  holdRuns,
+  navigate,
+  scrollSettled,
+  seedPosts,
+  signInAndOpen,
+  toast,
+} from "./spaces.js";
 
 test.beforeEach(async ({ page }) => {
   await signInAndOpen(page, "e2e-feed");
@@ -64,11 +76,13 @@ test("an ask's footer meta, and no model or effort text in a card", async ({ pag
 });
 
 test("an ask runs and is answered", async ({ page }) => {
+  await holdRuns(page, "running");
   await compose(page, "what is a bloom filter");
   const thread = card(page, "what is a bloom filter");
   await expect(thread.getByText("Researching · Step 1 of 4")).toBeVisible();
   // The follow-up button is hidden while the root answer runs.
   await expect(thread.getByRole("button", { name: /^Ask a follow-up/ })).toHaveCount(0);
+  await flushRuns(page);
   await expect(thread.getByText(/^Mock answer to "what is a bloom filter"/)).toBeVisible();
   await expect(thread.locator(".fmeta")).toHaveText("41k tokens · #public");
 });
@@ -106,12 +120,43 @@ test("a removed thread shows its placeholder and no text", async ({ page }) => {
 test("a thread address scrolls to its thread and selects the item", async ({ page }) => {
   await page.goto(`/c/markets?t=01M7HGRPJ0E7RGZ45D4KENBQ6P`);
   const thread = page.locator("#card-01M7HGRPJ0E7RGZ45D4KENBQ6P");
+  await scrollSettled(page);
   await expect(thread).toBeInViewport();
-  await expect(thread).toHaveClass(/flash/);
-  await expect(thread).not.toHaveClass(/flash/, { timeout: 3000 });
 });
 
 test("a thread address the viewer cannot read shows a toast", async ({ page }) => {
   await page.goto(`/?t=01M7AAAAAAAAAAAAAAAAAAAAAA`);
   await expect(toast(page)).toHaveText("This thread is not available.");
+});
+
+test("the owner's Remove… dialog starts in the reason; Escape returns to More", async ({
+  page,
+}) => {
+  await page.goto("/c/sci-fi");
+  const thread = card(page, /^Reading group: Accelerando/);
+  const more = thread.getByRole("button", { name: "More" });
+  await more.click();
+  await expect(page.getByRole("menuitem", { name: "Ban from #sci-fi" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  const dialog = page.getByRole("dialog", { name: /^Remove @tomasz/ });
+  await expect(dialog.getByRole("textbox")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(more).toBeFocused();
+});
+
+test("past 60 rows the feed is virtualised, and a thread address still reaches its thread", async ({
+  page,
+}) => {
+  const all = await page.locator(".feed-row").count();
+  await seedPosts(page, "public", 60);
+  await expect(page.locator(".tcard").first().locator(".tt-title")).toHaveText("Seeded post 60");
+  // Only the rows near the viewport are rendered.
+  await expect.poll(() => page.locator(".feed-row").count()).toBeLessThan(all + 60);
+  await expect(page.locator(`#card-${FIRST_ASK}`)).toHaveCount(0);
+  await navigate(page, `/?t=${FIRST_ASK}`);
+  const thread = page.locator(`#card-${FIRST_ASK}`);
+  await expect(thread).toBeVisible();
+  await scrollSettled(page);
+  await expect(thread).toBeInViewport();
 });

@@ -92,7 +92,8 @@
   --text-subtle: #949d98;
   --text-faint: #8a938e;
   --text-disabled: #797d80;
-  --placeholder-color: #6b726d;
+  /* Lighter than the mockup (#6b726d) for 4.5:1 on cards and fields (W11.2). */
+  --placeholder-color: #858b86;
   /* Extended text ramp. --text-max is the maximum-contrast state text used by
      selected rows and hovered actions; tertiary sits between secondary and
      muted; dim/ghost are for hints that should barely register. */
@@ -217,7 +218,11 @@
   --avatar-5: #4f8a8b;
   --avatar-6: #9a6262;
   --avatar-fg: #f4f3ec;
-  --tree-rail: #373634;
+  /* The mockup draws rails in `--border-strong` (#373634); 3:1 against the
+     feed needs them lighter (W11.2). Dots and the hollow title node use
+     `--tree-node`, a 3:1 step of `--text-dim`. */
+  --tree-rail: #686766;
+  --tree-node: #676d6a;
   --tree-rail-on: color-mix(in srgb, var(--accent-color) 55%, var(--tree-rail));
   --tree-dot-selected: var(--accent-color);
   /* The mockup's card and focused-composer shadows (`--shadow`,
@@ -478,7 +483,8 @@
   --text-subtle: #67706b;
   --text-faint: #6b746f;
   --text-disabled: #8f9693;
-  --placeholder-color: #8e958f;
+  /* Darker than the mockup (#8e958f) for 4.5:1 on white (W11.2). */
+  --placeholder-color: #727773;
   --text-max: #000000;
   --text-tertiary: #5c655f;
   --text-dim: #9aa19d;
@@ -578,7 +584,8 @@
   --avatar-5: #3d7778;
   --avatar-6: #8a4f4f;
   --avatar-fg: #ffffff;
-  --tree-rail: #e1dcd6;
+  --tree-rail: #918d8a;
+  --tree-node: #8a908d;
   --tree-rail-on: color-mix(in srgb, var(--accent-color) 55%, var(--tree-rail));
   --tree-dot-selected: var(--accent-color);
   --card-shadow: 0 1px 2px rgba(60, 40, 20, 0.06), 0 0 0 1px rgba(60, 40, 20, 0.05);
@@ -659,7 +666,8 @@
   --folder-picker-status-border: #b9c6c2;
   --queued-turn-border: #c2ccc8;
 
-  --accent-color: #1f8a6f;
+  /* #1f8a6f before W11.2: 4.5:1 on the passage shade needs it darker. */
+  --accent-color: #1b7a62;
   --accent-shadow: rgba(31, 138, 111, 0.3);
   --accent-soft: rgba(31, 138, 111, 0.12);
   --accent-subtle: rgba(31, 138, 111, 0.07);

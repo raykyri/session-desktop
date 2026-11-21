@@ -1,7 +1,8 @@
 // The feed's toast (the mock's `toast`, `.toast`): one line in a dark pill at
 // the bottom centre for 4 s; a new toast replaces the shown one. Toasts that
-// confirm an action are `role="status"`; a refused write is `role="alert"`
-// (02 §10.1).
+// confirm an action are announced by a `role="status"` region, a refused
+// write by a `role="alert"` one (02 §10.1). Both regions stay mounted, empty
+// between toasts, so a screen reader is listening before the text arrives.
 
 import { useEffect } from "react";
 import { create } from "zustand";
@@ -39,10 +40,20 @@ export function ToastHost() {
     }, TOAST_MS);
     return () => clearTimeout(timer);
   }, [toast]);
-  if (!toast) return null;
+  const pill = (alert: boolean) =>
+    toast && toast.alert === alert ? (
+      <div key={toast.id} className="feed-toast">
+        {toast.text}
+      </div>
+    ) : null;
   return (
-    <div key={toast.id} className="feed-toast" role={toast.alert ? "alert" : "status"}>
-      {toast.text}
-    </div>
+    <>
+      <div role="status" aria-live="polite" data-toast-region="status">
+        {pill(false)}
+      </div>
+      <div role="alert" aria-live="assertive" data-toast-region="alert">
+        {pill(true)}
+      </div>
+    </>
   );
 }

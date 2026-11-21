@@ -12,7 +12,7 @@ test.serial(
     const app = await renderApp("/not-a-real-page");
     await waitUntil(
       t,
-      () => screen.queryByRole("alert")?.textContent?.includes("Not found") === true,
+      () => screen.queryAllByRole("alert").some((node) => node.textContent?.includes("Not found")),
       "the 404 panel is shown rather than a blank page",
     );
     // Inside the shell: the app bar is still mounted, so the tab has a way

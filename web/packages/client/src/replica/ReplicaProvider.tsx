@@ -10,13 +10,17 @@ import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalS
 
 import { queryKeys, useModels, useWeeklyUsage } from "../api/account.js";
 import type { Viewer } from "../features/shell/viewer.js";
+import { useThreadUiStore } from "../stores/threadUi.js";
 
 import { defaultOnlineData, withServerData, type OnlineData } from "./online.js";
-import { UNKNOWN, emptyReplica, type ReplicaSource, type Unknown } from "./source.js";
+import { UNKNOWN, emptyReplica, runQuery, type ReplicaSource, type Unknown } from "./source.js";
 
-/** How a build makes the viewer's replica. */
+/** How a build makes the viewer's replica. `create` may run more than once
+ * per viewer (React can discard a render, and does under StrictMode), so it
+ * should not start work: `activate` runs when the provider mounts with the
+ * replica and `dispose` when it unmounts, possibly more than once each. */
 export interface ReplicaConfig {
-  create: (viewer: Viewer) => ReplicaSource & { dispose?: () => void };
+  create: (viewer: Viewer) => ReplicaSource & { activate?: () => void; dispose?: () => void };
   online?: Partial<OnlineData>;
 }
 
@@ -64,7 +68,18 @@ export function ReplicaProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [key, given],
   );
-  useEffect(() => () => (made as { dispose?: () => void }).dispose?.(), [made]);
+  useEffect(() => {
+    const lifecycle = made as { activate?: () => void; dispose?: () => void };
+    lifecycle.activate?.();
+    return () => lifecycle.dispose?.();
+  }, [made]);
+  // Another viewer (a sign-in or sign-out without a reload): no selection or
+  // open composer of the previous one stays.
+  const previous = useRef(key);
+  useEffect(() => {
+    if (previous.current !== key) useThreadUiStore.getState().reset();
+    previous.current = key;
+  }, [key]);
   const member = viewer.kind === "member";
   const value = useMemo(
     () => ({ source: made, online: { ...defaultOnlineData(), ...config?.online }, member }),
@@ -159,7 +174,7 @@ export function useReplicaQuery<T>(
     const version = source.version();
     const hit = cache.current?.source === source ? cache.current : null;
     if (hit && hit.version === version && sameData(hit.deps, deps)) return hit.value;
-    const value = source.ready() ? select(source) : UNKNOWN;
+    const value = source.ready() ? runQuery(() => select(source)) : UNKNOWN;
     if (hit && sameData(hit.value, value)) {
       cache.current = { source, version, deps, value: hit.value };
       return hit.value;

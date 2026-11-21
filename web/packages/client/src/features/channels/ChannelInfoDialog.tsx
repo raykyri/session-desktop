@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 
 import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import { useNow, type ChannelView } from "../../replica/queries.js";
-import { UNKNOWN } from "../../replica/source.js";
+import { UNKNOWN, known } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { Avatar, ChannelGlyph } from "../../ui/Avatar.js";
 import { FeedDialog } from "../feed/FeedDialog.js";
@@ -138,9 +138,9 @@ export function ModerationLogDialog({
   const close = useRef<HTMLButtonElement>(null);
   const entries = useReplicaQuery(
     (source) =>
-      source
-        .list("modlog", { sp: channel.id })
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+      [...known(source.list("modlog", { sp: channel.id }))].sort((a, b) =>
+        a.createdAt < b.createdAt ? 1 : -1,
+      ),
     [channel.id],
   );
   const list = entries === UNKNOWN ? [] : entries;

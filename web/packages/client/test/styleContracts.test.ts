@@ -18,7 +18,39 @@ const appCss = readFileSync(join(stylesDirectory, "app.css"), "utf8");
 const shellCss = readFileSync(join(stylesDirectory, "shell.css"), "utf8");
 const spacesCss = readFileSync(join(stylesDirectory, "spaces.css"), "utf8");
 
-const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
+const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/;
+
+/** CSS named colours (CSS Color 4), matched as whole words in a value. */
+const NAMED_COLORS = new RegExp(
+  `(?<![-\\w])(?:${[
+    "aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue",
+    "blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk",
+    "crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki",
+    "darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen",
+    "darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue",
+    "dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite",
+    "gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki",
+    "lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan",
+    "lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen",
+    "lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen",
+    "magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen",
+    "mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream",
+    "mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid",
+    "palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum",
+    "powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown",
+    "seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen",
+    "steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen",
+  ]
+    .join(" ")
+    .split(" ")
+    .join("|")})(?![-\\w])`,
+  "i",
+);
+
+/** The values of a stylesheet's declarations, by line. */
+function declarationValues(line: string): string[] {
+  return [...line.matchAll(/^[\s]*[-a-z]+\s*:\s*([^;{}]+)/gi)].map((m) => m[1] ?? "");
+}
 
 /** Comments are stripped first: a file that documents a rule in prose ("the
  * `:root { background: transparent }` of the desktop") would otherwise have the
@@ -98,8 +130,9 @@ test("no color literals outside tokens.css", (t) => {
       // that must not change with the appearance (image scrims, the graphviz
       // paper canvas) and `::highlight()` pseudos, where custom properties
       // resolve unreliably so each appearance spells its own literal.
+      const named = declarationValues(line).some((value) => NAMED_COLORS.test(value));
       if (
-        COLOR_LITERAL.test(line) &&
+        (COLOR_LITERAL.test(line) || named) &&
         !line.includes("appearance-invariant") &&
         !line.includes("highlight-pseudo-literal")
       ) {
@@ -314,4 +347,16 @@ test("the reduced-motion block follows the OS preference and cancels Tailwind tr
   t.notRegex(proseCss, /\.reduce-motion,/);
   t.regex(proseCss, /transition-duration: 0\.01ms !important/);
   t.regex(proseCss, /translate: none/);
+});
+
+test("every rule of spaces.css starts with a class", (t) => {
+  const css = withoutComments(spacesCss);
+  const offenders: string[] = [];
+  for (const match of css.matchAll(/([^{};]+)\{/g)) {
+    const selector = (match[1] ?? "").trim();
+    if (selector.startsWith("@") || /^(from|to|\d+%)$/.test(selector)) continue;
+    for (const part of selector.split(","))
+      if (!part.trim().startsWith(".")) offenders.push(part.trim());
+  }
+  t.deepEqual(offenders, []);
 });

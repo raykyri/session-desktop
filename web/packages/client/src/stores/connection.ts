@@ -2,6 +2,7 @@
 // header and, while the stream is down, the snapshot-poll fallback for
 // displayed active nodes (05 §9).
 
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
@@ -37,3 +38,24 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => ({
     return now - disconnectedSince >= CONNECTION_FALLBACK_DELAY_MS;
   },
 }));
+
+function subscribeOnline(listener: () => void): () => void {
+  window.addEventListener("online", listener);
+  window.addEventListener("offline", listener);
+  return () => {
+    window.removeEventListener("online", listener);
+    window.removeEventListener("offline", listener);
+  };
+}
+
+/** Whether online-only actions can be sent (02 §9.2): the browser is online
+ * and the sync connection is not known to be down. */
+export function useOnline(): boolean {
+  const browser = useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+  const status = useConnectionStore((state) => state.status);
+  return browser && status !== "closed";
+}

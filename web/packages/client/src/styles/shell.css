@@ -95,15 +95,15 @@
   -webkit-mask-image: linear-gradient(
     to right,
     transparent,
-    black var(--fl),
-    black calc(100% - var(--fr)),
+    currentColor var(--fl),
+    currentColor calc(100% - var(--fr)),
     transparent
   );
   mask-image: linear-gradient(
     to right,
     transparent,
-    black var(--fl),
-    black calc(100% - var(--fr)),
+    currentColor var(--fl),
+    currentColor calc(100% - var(--fr)),
     transparent
   );
 }

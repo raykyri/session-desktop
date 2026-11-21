@@ -11,11 +11,12 @@ import type { ChannelView } from "../../replica/queries.js";
 import { useWrites } from "../../replica/writes.js";
 import { composerKey, useThreadUi, useThreadUiStore } from "../../stores/threadUi.js";
 import { Avatar } from "../../ui/Avatar.js";
-import { useFadeIn } from "../branches/BranchCard.js";
+import { useFadeIn, nextRowAfter } from "../branches/BranchCard.js";
 import { TreeRail, type TreeRow } from "../branches/TreeRail.js";
-import { InlineComposer } from "../composer/InlineComposer.js";
+import { InlineComposer, focusSoon, selectedRowOr } from "../composer/InlineComposer.js";
 import { useFeedViewer } from "../feed/FeedContext.js";
 import { ConfirmDelete } from "../feed/FeedDialog.js";
+import { ModerationNote, rowText } from "../feed/Moderated.js";
 import { MoreMenu } from "../feed/MoreMenu.js";
 import { plainReply, relTime } from "../feed/format.js";
 
@@ -54,6 +55,7 @@ export function ReplyTree({
 }) {
   const { writer, signedOut, signIn } = useFeedViewer();
   const ui = useThreadUi(thread.id);
+  const toggleCollapsed = useThreadUiStore((state) => state.toggleCollapsed);
   const toggle = useThreadUiStore((state) => state.toggle);
   const select = useThreadUiStore((state) => state.select);
   const open = useThreadUiStore((state) => state.open);
@@ -61,7 +63,8 @@ export function ReplyTree({
   const writes = useWrites();
   const author = thread.u ?? "";
   const rows = replyRows(replies, ui.collapsed);
-  const composer = ui.composer?.kind === "reply" ? ui.composer : null;
+  // Only a writer has composers (a sign-out leaves none behind).
+  const composer = writer && ui.composer?.kind === "reply" ? ui.composer : null;
 
   const replyBox = (parent: string | null, to: string) =>
     composer && composer.parent === parent ? (
@@ -78,6 +81,7 @@ export function ReplyTree({
           return id !== null;
         }}
         onClose={() => close(thread.id)}
+        returnFocus={selectedRowOr(thread.id, `[data-side="${thread.id}"] .rfoot button`)}
       />
     ) : null;
 
@@ -90,22 +94,40 @@ export function ReplyTree({
     path.add(selectedRow.reply.id);
     if (selectedRow.reply.parent) path.add(selectedRow.reply.parent);
   }
-  const treeRows: TreeRow[] = rows.map(({ reply, depth, hidden }) => ({
-    id: reply.id,
-    parent: depth === 0 ? null : reply.parent,
-    depth,
-    on: path.has(reply.id),
-    selected: reply.id === ui.selected,
-    content: (
-      <span className="gq gq-av">
-        <span className="rav" title={reply.u}>
-          <Avatar handle={reply.u} size="xs" />
+  const treeRows: TreeRow[] = rows.map(({ reply, depth, hidden }) => {
+    const parent = depth === 0 && replies.some((r) => r.parent === reply.id);
+    return {
+      id: reply.id,
+      parent: depth === 0 ? null : reply.parent,
+      depth,
+      on: path.has(reply.id),
+      selected: reply.id === ui.selected,
+      ...(parent ? { expanded: !ui.collapsed.includes(reply.id) } : {}),
+      content: (
+        <span className="gq gq-av">
+          <span className="rav" title={reply.u}>
+            <Avatar handle={reply.u} size="xs" />
+          </span>
+          <span className="sr-only">{reply.u}: </span>
+          <span className="gt">{rowText(reply, plainReply(reply.t))}</span>
+          {hidden ? (
+            <span className="rhid" aria-hidden="true">
+              +{hidden}
+            </span>
+          ) : null}
         </span>
-        <span className="gt">{reply.del ? "[deleted]" : plainReply(reply.t)}</span>
-        {hidden ? <span className="rhid">+{hidden}</span> : null}
-      </span>
-    ),
-  }));
+      ),
+      trailing: hidden ? (
+        <button
+          type="button"
+          className="rhid-btn"
+          tabIndex={-1}
+          aria-label={`Show ${hidden} more ${hidden === 1 ? "reply" : "replies"}`}
+          onClick={() => toggleCollapsed(thread.id, reply.id)}
+        />
+      ) : undefined,
+    };
+  });
 
   const toggleTop = () => {
     if (composer?.parent === null) close(thread.id);
@@ -118,7 +140,8 @@ export function ReplyTree({
         rows={treeRows}
         label="Replies"
         onSelect={(id) => toggle(thread.id, id)}
-        layoutKey={ui.selected ?? ""}
+        onExpand={(id) => toggleCollapsed(thread.id, id)}
+        layoutKey={`${ui.selected ?? ""}:${ui.collapsed.join()}`}
         lineSelector=".gq-av"
       />
       {selectedRow ? (
@@ -205,7 +228,14 @@ function ReplyCard({
           </span>
         ) : null}
       </div>
-      <ReplyText text={reply.t} channel={channel} />
+      {reply.del ? (
+        <p className="modln">[deleted]</p>
+      ) : (
+        <>
+          <ModerationNote mod={reply.mod} />
+          {reply.t ? <ReplyText text={reply.t} channel={channel} /> : null}
+        </>
+      )}
       <div className="pf">
         {writer ? (
           <button type="button" className="tlink" aria-pressed={replying} onClick={onToggleReply}>
@@ -219,8 +249,12 @@ function ReplyCard({
         onOpenChange={setDeleting}
         title="Delete this reply and your replies under it?"
         onConfirm={() => {
+          const gone = [reply.id, ...replies.filter((r) => r.parent === reply.id).map((r) => r.id)];
+          const next = nextRowAfter(thread, gone);
           void writes.deleteReply(reply.id).then((ok) => {
-            if (ok) select(thread, null);
+            if (!ok) return;
+            select(thread, null);
+            focusSoon(next);
           });
         }}
       />

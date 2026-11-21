@@ -103,6 +103,8 @@ export function NewChannelDialog({ online = true }: { online?: boolean }) {
             <span>#</span>
             <input
               ref={nameField}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "ns-err" : undefined}
               value={name}
               placeholder="reading-group"
               autoComplete="off"
@@ -143,8 +145,16 @@ export function NewChannelDialog({ online = true }: { online?: boolean }) {
             </label>
           ))}
         </div>
-        {error ? <p className="ferr">{error}</p> : null}
-        {!online ? <p className="ferr">Creating a channel needs a connection.</p> : null}
+        {error ? (
+          <p className="ferr" id="ns-err" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {!online ? (
+          <p className="ferr" role="status">
+            Creating a channel needs a connection.
+          </p>
+        ) : null}
         <div className="dacts">
           <button type="button" className="btn2" onClick={() => setOpen(false)}>
             Cancel

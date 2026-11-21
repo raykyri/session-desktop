@@ -17,4 +17,5 @@ export async function loadReplicaConfig(): Promise<void> {
   if (!fixturesEnabled) return;
   const fixtures = await import("./fixtureReplica.js");
   configureReplica(fixtures.fixtureReplicaConfig());
+  fixtures.exposeFixtureControls();
 }

@@ -231,7 +231,11 @@ test.serial(
         target: { value: KEY },
       });
       fireEvent.click(keyRow("anthropic").getByRole("button", { name: "Save" }));
-      await waitUntil(t, () => screen.queryByRole("alert")?.textContent === message, message);
+      await waitUntil(
+        t,
+        () => screen.queryAllByRole("alert").some((node) => node.textContent === message),
+        message,
+      );
       t.is(input(screen.getByLabelText("Anthropic API key")).value, KEY);
       t.is(keyRow("anthropic").queryByText("Valid"), null);
       app.unmount();
@@ -263,7 +267,11 @@ test.serial("each format error, before anything is sent", async (t) => {
     const name = provider === "openai" ? "OpenAI API key" : "Anthropic API key";
     fireEvent.change(await screen.findByLabelText(name), { target: { value } });
     fireEvent.click(row.getByRole("button", { name: "Save" }));
-    await waitUntil(t, () => row.queryByRole("alert")?.textContent === message, message);
+    await waitUntil(
+      t,
+      () => row.queryAllByRole("alert").some((node) => node.textContent === message),
+      message,
+    );
   }
   t.is(app.trpc.calls.filter((call) => call.path === "apiKeys.set").length, 0, "no key was sent");
 });
@@ -418,7 +426,10 @@ test.serial("Site Admin: a refused change restores the choice and shows the erro
   fireEvent.click(models.getByRole("radio", { name: /DeepSeek/ }));
   await waitUntil(
     t,
-    () => screen.queryByRole("alert")?.textContent === "That model is not available.",
+    () =>
+      screen
+        .queryAllByRole("alert")
+        .some((node) => node.textContent === "That model is not available."),
     "the error",
   );
   t.true(input(models.getByRole("radio", { name: /Gemini 3.8 Flash/ })).checked);
@@ -428,7 +439,7 @@ test.serial("a member who is not a site admin gets the not-found page at /admin"
   await renderApp("/admin", { user: testUser({ isAdmin: false }) });
   await waitUntil(
     t,
-    () => screen.queryByRole("alert")?.textContent?.includes("Not found") === true,
+    () => screen.queryAllByRole("alert").some((node) => node.textContent?.includes("Not found")),
     "not found",
   );
   t.is(screen.queryByRole("radiogroup", { name: "Default model" }), null);
