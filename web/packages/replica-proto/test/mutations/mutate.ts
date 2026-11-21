@@ -1942,6 +1942,66 @@ const MUTATIONS: Mutation[] = [
     packageOnly: true,
     files: ["test/auth.test.tsx"],
   },
+  // ---- M5b test-strength review, the client ----
+  // package only: the review's client rows (C4, C7, C8a, C13, C15b, C15d),
+  // re-derived against the code after the M5b fixes.
+  {
+    name: "M5b-CT1 (C4) the ring's circumference is half a circle",
+    file: "../client/src/features/shell/UsageRing.tsx",
+    from: "const CIRCUMFERENCE = 2 * Math.PI * RADIUS;",
+    to: "const CIRCUMFERENCE = Math.PI * RADIUS;",
+    packageOnly: true,
+    files: ["test/shell.test.tsx"],
+  },
+  {
+    name: "M5b-CT2 (C7) the Usage bar fills with what was used",
+    file: "../client/src/features/usage/UsagePage.tsx",
+    from: "Math.max(0, 1 - reading.used / reading.allowance)",
+    to: "Math.max(0, reading.used / reading.allowance)",
+    packageOnly: true,
+    files: ["test/usage.screens.test.tsx"],
+  },
+  {
+    // the weekday hard-coded to UTC is M5b-C4a
+    name: "M5b-CT3 (C8a) the reset's weekday ignores a given zone",
+    file: "../client/src/features/usage/usageText.ts",
+    from: '    weekday: short ? "short" : "long",\n    ...(timeZone === undefined ? {} : { timeZone }),',
+    to: '    weekday: short ? "short" : "long",\n    ...((true as boolean) || timeZone === undefined ? {} : { timeZone }),',
+    packageOnly: true,
+    files: ["test/billing.review.test.tsx", "test/usage.screens.test.tsx"],
+  },
+  {
+    name: "M5b-CT4 (C8a) a run's date ignores a given zone",
+    file: "../client/src/features/usage/usageText.ts",
+    from: '    day: "numeric",\n    ...(timeZone === undefined ? {} : { timeZone }),',
+    to: '    day: "numeric",\n    ...((true as boolean) || timeZone === undefined ? {} : { timeZone }),',
+    packageOnly: true,
+    files: ["test/billing.review.test.tsx"],
+  },
+  {
+    name: "M5b-CT5 (C13) an invalid key counts as a payer",
+    file: "../client/src/replica/online.ts",
+    from: '            .filter((key) => key.status === "valid")\n',
+    to: "",
+    packageOnly: true,
+    files: ["test/payer.screens.test.tsx"],
+  },
+  {
+    name: "M5b-CT6 (C15b) runs below 1 % read <1%",
+    file: "../client/src/features/usage/usageText.ts",
+    from: 'return run.share < 0.005 ? "<1%"',
+    to: 'return run.share < 0.01 ? "<1%"',
+    packageOnly: true,
+    files: ["test/usage.screens.test.tsx"],
+  },
+  {
+    name: "M5b-CT7 (C15d) a run of exactly 0.5 % reads <1%",
+    file: "../client/src/features/usage/usageText.ts",
+    from: 'return run.share < 0.005 ? "<1%"',
+    to: 'return run.share <= 0.005 ? "<1%"',
+    packageOnly: true,
+    files: ["test/usage.screens.test.tsx"],
+  },
 ];
 
 /** What one suite said about a mutation. */

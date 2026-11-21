@@ -18,7 +18,12 @@ import {
   runControl,
   type FixtureReplica,
 } from "../src/replica/fixtureReplica.js";
-import { outOfTokens, registryModels, type OnlineData } from "../src/replica/online.js";
+import {
+  outOfTokens,
+  registryModels,
+  withServerData,
+  type OnlineData,
+} from "../src/replica/online.js";
 import { channelByName } from "../src/replica/queries.js";
 import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
@@ -101,6 +106,21 @@ test("K8: the client's payer rule is the server's over usage.get", (t) => {
     outOfTokens(online({ usage: SPENT }), "no-such-model", NOW),
     "unknown model: the server decides",
   );
+});
+
+test("K8: a key usage.get reports invalid pays for nothing", (t) => {
+  // `usage.get` as the server answers it: the Anthropic key a run found
+  // rejected is listed `invalid` (03 E5)
+  const reading = (status: "valid" | "invalid") =>
+    withServerData(online({}), undefined, {
+      allowance: 2_000_000,
+      used: 2_000_000,
+      resetAt: NOW + 86_400_000,
+      billing: "key",
+      keys: [{ provider: "anthropic", status }],
+    });
+  t.false(outOfTokens(reading("valid"), "claude-fable", NOW), "a valid key pays");
+  t.true(outOfTokens(reading("invalid"), "claude-fable", NOW), "an invalid one does not");
 });
 
 test.serial(

@@ -55,10 +55,17 @@ const keyRow = (provider: string) =>
 test("the usage sentence, the run charge and a run without its question", (t) => {
   const now = Date.UTC(2026, 10, 24, 19);
   t.deepEqual(
-    usageSentence({ used: 500_000, allowance: 2_000_000, resetAt: Date.UTC(2026, 10, 27) }, now),
+    usageSentence(
+      { used: 500_000, allowance: 2_000_000, resetAt: Date.UTC(2026, 10, 27) },
+      now,
+      "UTC",
+    ),
     { percent: 75, weekday: "Fri", resetIn: "2d 5h" },
   );
   t.is(runCharge({ bill: "included", share: 0.004 }), "<1%");
+  // the cut-off is 0.5 %, which itself rounds to 1 % (03 K5)
+  t.is(runCharge({ bill: "included", share: 0.004_99 }), "<1%");
+  t.is(runCharge({ bill: "included", share: 0.005 }), "1%");
   t.is(runCharge({ bill: "included", share: 0.123 }), "12%");
   t.is(runCharge({ bill: "key:anthropic", share: 0 }), "Anthropic key");
   t.is(runCharge({ bill: "key:openai", share: 0 }), "OpenAI key");
@@ -85,7 +92,7 @@ test.serial("the usage line and bar in the ring's tones, and the recent runs", a
             tokens: 40_000,
             share: 0.02,
             bill: "included",
-            at: Date.UTC(2026, 10, 23),
+            at: Date.UTC(2026, 10, 23, 12),
           },
           {
             runId: "r2",
@@ -94,7 +101,7 @@ test.serial("the usage line and bar in the ring's tones, and the recent runs", a
             tokens: 900,
             share: 0,
             bill: "key:anthropic",
-            at: Date.UTC(2026, 10, 22),
+            at: Date.UTC(2026, 10, 22, 12),
           },
         ],
         nextCursor: null,
@@ -103,6 +110,9 @@ test.serial("the usage line and bar in the ring's tones, and the recent runs", a
   });
   const bar = await screen.findByRole("img", { name: "15% left" });
   t.true(bar.classList.contains("warn"));
+  // the bar's fill is what is left, not what was used
+  // (the page writes "15.0%"; the style reads it back as "15%")
+  t.is(bar.querySelector("span")?.style.width, "15%");
   t.regex(document.querySelector(".usent")?.textContent ?? "", /^You have 15% of usage left/);
   const runs = within(screen.getByRole("region", { name: "Recent runs" }));
   t.truthy(await runs.findByText("How do bloom filters trade memory for false positives?"));
