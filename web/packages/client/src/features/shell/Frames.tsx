@@ -139,13 +139,3 @@ export function PageFrame({
     </div>
   );
 }
-
-/** The body of a page whose content needs the replica or a procedure the
- * server does not have yet. */
-export function NotBuiltYet() {
-  return (
-    <p data-placeholder="" className="text-fg-faint m-0 text-sm">
-      Not available yet.
-    </p>
-  );
-}

@@ -79,7 +79,7 @@ function Citation({ n, page }: { n: string; page: readonly [string, string, stri
             </div>
             {note ? <p>{note}</p> : null}
             {href ? (
-              <a ref={link} href={href} target="_blank" rel="noopener noreferrer">
+              <a ref={link} href={href} target="_blank" rel="noopener noreferrer nofollow ugc">
                 {host} ↗
               </a>
             ) : null}
@@ -160,7 +160,7 @@ const COMPONENTS: Components = {
   a: ({ href, children }) => {
     const safe = safeHref(href);
     return safe ? (
-      <a href={safe} target="_blank" rel="noopener noreferrer">
+      <a href={safe} target="_blank" rel="noopener noreferrer nofollow ugc">
         {children}
       </a>
     ) : (

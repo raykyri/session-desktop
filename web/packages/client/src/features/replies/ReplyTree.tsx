@@ -199,7 +199,7 @@ function ReplyCard({
   onToggleReply: () => void;
   composer: React.ReactNode;
 }) {
-  const { writer, me } = useFeedViewer();
+  const { writer, active, me } = useFeedViewer();
   const writes = useWrites();
   const select = useThreadUiStore((state) => state.select);
   const fade = useFadeIn(thread, `r:${reply.id}`);
@@ -212,7 +212,7 @@ function ReplyCard({
         <Avatar handle={reply.u} size="xs" />
         <b>{reply.u}</b>
         <time dateTime={reply.createdAt}>{relTime(reply.createdAt, now)}</time>
-        {mine && writer ? (
+        {mine && active ? (
           <span className="ml-auto inline-flex self-center">
             <MoreMenu
               actions={[
