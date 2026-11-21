@@ -102,6 +102,21 @@ export class Replica {
     return full === null || full === undefined || full.has(th);
   }
 
+  /** Whether a log holds every thread in full (a `full` snapshot, or no
+   * tier). */
+  fullLog(log: LogId): boolean {
+    const s = this.adapter.get(log);
+    return s !== undefined && s.full === null;
+  }
+
+  /** Forget the seqs the logs were read at: they were another client id's. */
+  resetSeqs(): void {
+    for (const log of this.adapter.logs()) {
+      const s = this.adapter.get(log);
+      if (s) this.adapter.set(log, { ...s, seq: null });
+    }
+  }
+
   /** The log that holds a thread record, if any. */
   logOfThread(th: string): LogId | undefined {
     for (const log of this.holders.get(`thread:${th}`) ?? []) return log;
@@ -189,7 +204,10 @@ export class Replica {
     const s = this.adapter.get(log);
     const changed = new Set<string>();
     if (!s) return changed;
+    // merged by rev: a pull applied in between may hold a newer record
     for (const { key, record } of snap.records) {
+      const held = s.records.get(key);
+      if (held && held.rev > record.rev) continue;
       s.records.set(key, record);
       this.hold(log, key);
       changed.add(key);
@@ -214,6 +232,9 @@ export class Replica {
         continue;
       }
       const r = c.record;
+      // a record held at a newer rev (a promotion's snapshot) is kept
+      const held = s.records.get(c.key);
+      if (held && held.rev > r.rev) continue;
       if (s.full) {
         // a thread that first arrives by a pull is new: in the window
         if (r.kind === "thread" && !s.records.has(c.key)) s.full.add(r.id);

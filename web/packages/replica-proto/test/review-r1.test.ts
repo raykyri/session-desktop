@@ -235,7 +235,11 @@ test("R6: a client whose clock is behind gets CLOCK_SKEW for an online-only writ
   const refusal = c.sent[0];
   if (!refusal) return t.fail("nothing sent");
   t.deepEqual(c.sent[1]?.replaces, [refusal.mutationId]);
-  t.deepEqual(await w.server.apply(actor("eve"), { ...refusal, seq: 2 }), first);
+  // the recorded answer, given again without using a seq (`replay`)
+  t.deepEqual(await w.server.apply(actor("eve"), { ...refusal, seq: 2 }), {
+    ...first,
+    replay: true,
+  });
   // with a mutation id the server has no answer for, the slow clock is
   // CLOCK_SKEW with the server's time
   const r = await w.server.apply(actor("eve"), { ...refusal, mutationId: w.id(), seq: 2 });

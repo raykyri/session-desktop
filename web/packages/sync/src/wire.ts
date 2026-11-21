@@ -88,15 +88,22 @@ export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "TOO_LARGE",
 ]);
 
-/** An answer as the server keeps it for replays. */
-export type StoredAnswer = { ok: true; result: unknown } | { ok: false; error: ApiError };
+/** An answer as the server keeps it for replays (`replay` is set only on
+ * the way out, on an answer given again without using a seq). */
+export type StoredAnswer =
+  { ok: true; result: unknown; replay?: true } | { ok: false; error: ApiError; replay?: true };
 
 /** An answer as the server sends it (`spaces.spaceApplyAnswerSchema`): every
  * answer, a replayed one and a refusal included, carries `serverTime`, the
- * server's time when it answered. */
+ * server's time when it answered. `replay`: the answer recorded for this
+ * mutation id before (sent from any client id or seq, or stored for the id a
+ * reminted envelope replaced), given again without using the envelope's
+ * seq; the client keeps its acknowledged seq. Optional and additive: a
+ * client that does not read it learns the seq from OUT_OF_ORDER, so the
+ * protocol version is unchanged. */
 export type ApplyResult =
-  | { ok: true; result: unknown; serverTime: number }
-  | { ok: false; error: ApiError & { serverTime: number } };
+  | { ok: true; result: unknown; serverTime: number; replay?: true }
+  | { ok: false; error: ApiError & { serverTime: number }; replay?: true };
 
 /** The wire schema of an answer, for a client reading it over HTTP. */
 export const applyResultSchema = spaces.spaceApplyAnswerSchema;
@@ -162,9 +169,13 @@ export interface Snapshot {
    * full. A client drops pulled node, answer, reply, comment and run changes
    * of threads outside it (R2). Absent: every thread is full. */
   full?: string[];
+  /** The server's time when it read (optional: the prototype sends none). */
+  serverTime?: number;
 }
 
-export type Pull = { changes: Change[]; cursor: Cursor; lastSeq: LastSeq } | { resync: true };
+export type Pull =
+  | { changes: Change[]; cursor: Cursor; lastSeq: LastSeq; serverTime?: number }
+  | { resync: true; serverTime?: number };
 
 /** The server half as a client reaches it, for one caller. */
 export interface SyncTransport {

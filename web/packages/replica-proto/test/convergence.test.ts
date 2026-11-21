@@ -1093,7 +1093,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         out.push(
           `${x.dev.name}: ${x.name} ${local} left the outbox with no answer and was not shown`,
         );
-      if (answer?.ok && n !== 1 && !c.direct.has(local))
+      // a replay is the answer of the same write sent before under its
+      // mutation id (a device given someone's mutation id, the same user's
+      // and payload): applied then, not now
+      if (answer?.ok && n !== 1 && !c.direct.has(local) && !(answer.replay && n === 0))
         out.push(`${x.dev.name}: ${x.name} ${local} answered ok, applied ${n} times`);
       if (
         answer &&

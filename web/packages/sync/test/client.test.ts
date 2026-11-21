@@ -203,7 +203,7 @@ test("R2, R3: pulls drop the content of summary threads; opening one fetches it 
     { user: "mona", clock: w.clock, random: w.random, mutators: MUTATORS },
   );
   await off.sync(`space:${open}`, "window").catch(() => undefined);
-  t.is(await off.open(older), "full", "a thread the replica does not hold is not a summary");
+  t.is(await off.open(older), "missing", "a thread the replica does not hold");
   // online: promoted, kept, and pulls bring its replies from then on
   t.is(await mona.open(older), "full");
   t.true(mona.replica.isFull(`space:${open}`, older));

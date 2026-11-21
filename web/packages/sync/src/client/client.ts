@@ -37,14 +37,20 @@
 // Prediction and rebase. The confirmed state is the replica. The view is the
 // confirmed state with every pending write's prediction on top, re-run in
 // order with its mutator over the state before it whenever the confirmed
-// state or the pending writes change. A write the server applied stays
-// pending until every replicated log was read at its seq or later (the read
-// carries `lastSeq`); a refused one is rolled back at once. A prediction
-// that reads what the replica cannot know is `unknown`: shown as pending
-// without a predicted effect.
+// state or the pending writes change. When the server applies a write, its
+// predicted records stay in the view, each until a log that holds it was
+// read at the write's seq or later (the read carries `lastSeq`), so a record
+// already in the confirmed state is never counted twice; a refused write is
+// rolled back at once. A prediction that reads what the replica cannot know
+// is `unknown`: shown as pending without a predicted effect.
+//
+// Reads of one log run one at a time (a pull, a resync, a thread's
+// promotion), so an older answer is never applied over a newer one. A
+// listener that throws is reported and does not stop a flush or a read.
 
 import {
   StagedTx,
+  logsOf,
   memberKey,
   msToIso,
   predict,
@@ -53,12 +59,14 @@ import {
   type AnyMutator,
   type ApiError,
   type ErrorCode,
+  type Index,
   type LogId,
   type StoredRecord,
 } from "@session/mutators";
 
 import { CLOCK_MAX_SKEW, ulid, webRandom } from "../ulid.js";
 import {
+  MAX_OPENED_THREADS,
   MAX_REPLACES,
   PROTOCOL_VERSION,
   UNRECORDED,
@@ -169,10 +177,15 @@ export type WriteEvent =
   | { type: "discarded"; local: string; name: string; input: unknown };
 
 /** What the client tells the app besides writes: a protocol below the
- * server's minimum (reload, `01` S1), and the end of the person's access to
- * a private space (R4: "You are no longer a member of #name."). */
+ * server's minimum (reload, `01` S1); the end of the person's access to a
+ * private space (R4: "You are no longer a member of #name."); and a client
+ * id the client registered itself (after WRONG_CLIENT), for the tab to keep
+ * (`storeClientId`, Y3). */
 export type ClientEvent =
-  WriteEvent | { type: "upgrade" } | { type: "left"; log: LogId; space: string; name: string };
+  | WriteEvent
+  | { type: "upgrade" }
+  | { type: "left"; log: LogId; space: string; name: string }
+  | { type: "client"; clientId: string; lastSeq: number };
 
 export interface SyncClientOptions {
   /** The person this client reads and writes for; null: signed out. */
@@ -205,18 +218,43 @@ function remap(v: unknown, map: ReadonlyMap<string, string>): unknown {
 }
 
 /** What the client records when no answer arrived; `serverTime` is its own
- * estimate of the server's time (`now`). */
+ * estimate of the server's time (`now`). Nothing in it was said by the
+ * server. */
 const noAnswer = (now: number): ApplyResult => ({
   ok: false,
   error: { code: "SERVICE_UNAVAILABLE", message: "No answer from the server.", serverTime: now },
 });
 
-/** A pending write after the server applied it: kept in the view until the
- * replica has read every log at its seq. */
+/** The most envelopes and answers the client keeps for inspection
+ * (`sent`, `answered`), and threads opened in a tab (R2). */
+const HISTORY_MAX = 1000;
+const OPENED_MAX = MAX_OPENED_THREADS;
+
+/** A write after the server applied it: its predicted records, shown until
+ * each one's log was read at the write's seq or later. */
 interface Applied {
   p: Pending;
   seq: number;
+  staged: Map<string, StoredRecord | null>;
 }
+
+/** Report an exception a listener threw, without letting it stop the
+ * client (`reportError` in a browser). */
+function report(e: unknown): void {
+  const r = (globalThis as { reportError?: (e: unknown) => void }).reportError;
+  if (r) r(e);
+  else console.error(e);
+}
+
+/** Keep the newest `max` values of an array. */
+function trim<T>(xs: T[], max: number): void {
+  if (xs.length > max) xs.splice(0, xs.length - max);
+}
+
+/** Listener of the view: the keys that may have changed; `structural` when
+ * what the replica holds changed shape (a log, a thread's tier, the outbox),
+ * which can change what is known even when no key did. */
+export type ViewListener = (changed: ReadonlySet<string>, info: { structural: boolean }) => void;
 
 export class SyncClient {
   readonly replica: Replica;
@@ -224,34 +262,47 @@ export class SyncClient {
   private readonly outbox: Pending[];
   /** Writes whose request failed (`in-flight` policy): "Not sent". */
   private readonly unsentWrites: Pending[] = [];
-  private readonly appliedWrites: Applied[] = [];
+  private appliedWrites: Applied[] = [];
   private readonly owner: string | null;
   private readonly shown: Problem[];
   private clientIdValue: string | null;
   private acked: number;
   private offset: number;
   private known: boolean;
+  /** Milliseconds from the device's clock to the server's, learned from the
+   * server time of every answer and read; null before the first. */
+  private serverOffset: number | null = null;
   private readonly policy: OutboxPolicy;
   private readonly mutators: Readonly<Record<string, AnyMutator>>;
   private readonly random: () => number;
   /** The last seq the server reported as processed for this client. */
   lastSeq: LastSeq = null;
-  /** Every envelope this client sent, in order (for the suites). */
+  /** The newest envelopes this client sent, in order (for the suites). */
   readonly sent: Envelope[] = [];
-  /** Every recorded answer this client got, in order, by local id. */
+  /** The newest recorded answers this client got, in order, by local id. */
   readonly answered: { local: string; mutationId: string; name: string; result: ApplyResult }[] =
     [];
-  private readonly lastAnswer = new Map<string, ApplyResult>();
+  private readonly lastAnswer = new WeakMap<Pending, ApplyResult>();
   /** The threads opened in this tab, served in full by a `window` snapshot
-   * (R2). */
+   * (R2), newest last. */
   private readonly opened = new Set<string>();
   private flushing: Promise<ApplyResult[]> | null = null;
+  /** The write whose request is in flight. */
+  private inFlight: Pending | null = null;
+  /** Writes `send` waits for: never "Not sent", the caller has the answer. */
+  private readonly sending = new Set<Pending>();
+  /** Reads of each log, one at a time, in order. */
+  private readonly reads = new Map<LogId, Promise<unknown>>();
 
   // ---- the view ----
   private overlay = new Map<string, StoredRecord | null>();
   private readonly predictions = new Map<string, PredictionState>();
+  /** Each predicted write's staged records (its view), by local id. */
+  private readonly stagedOf = new Map<string, Map<string, StoredRecord | null>>();
   private stale = true;
-  private readonly listeners = new Set<(changed: ReadonlySet<string>) => void>();
+  /** Counts the view's changes (a query re-runs when it was made before). */
+  version = 0;
+  private readonly listeners = new Set<ViewListener>();
   private readonly eventListeners = new Set<(e: ClientEvent) => void>();
 
   constructor(
@@ -280,9 +331,23 @@ export class SyncClient {
     return this.clientIdValue;
   }
 
-  /** The client's time: its clock, corrected by what the server reported. */
+  /** The client's time: its clock, corrected by the offset learned from
+   * CLOCK_SKEW. Envelopes and new ids use it: the server measures the
+   * device's clock by it (Y4), so it moves only on CLOCK_SKEW. */
   now(): number {
     return this.options.clock.now() + this.offset;
+  }
+
+  /** The server's time as the client estimates it from the server time of
+   * its latest answer or read (the device's clock before any): for showing
+   * times ("2 min ago") against server-stamped records. */
+  serverNow(): number {
+    return this.options.clock.now() + (this.serverOffset ?? this.offset);
+  }
+
+  private heard(serverTime: number | undefined) {
+    if (typeof serverTime === "number" && serverTime > 0)
+      this.serverOffset = serverTime - this.options.clock.now();
   }
 
   /** A new ULID at the client's time. */
@@ -302,23 +367,58 @@ export class SyncClient {
     return () => this.eventListeners.delete(listener);
   }
 
+  /** Tell every listener; a listener that throws is reported and the
+   * others still hear, and the client goes on. */
   private emit(e: ClientEvent) {
-    for (const f of this.eventListeners) f(e);
+    for (const f of [...this.eventListeners])
+      try {
+        f(e);
+      } catch (x) {
+        report(x);
+      }
   }
 
   // ---- registration ----
 
-  /** Get a client id from the server if there is none: re-attach the one
-   * the tab kept, or register a new one (Y3). Never for an outbox restored
-   * from another person's state. */
-  async register(): Promise<string | null> {
-    if (this.clientIdValue === null && this.ownOutbox()) {
-      const r = await this.transport.register();
-      if (!r.ok) return null;
-      this.clientIdValue = r.clientId;
-      this.acked = r.lastSeq ?? 0;
+  /** A client id: the one held, or a new one from the server (Y3). Never
+   * for an outbox restored from another person's state. The error says
+   * why there is none (no answer: SERVICE_UNAVAILABLE). */
+  private async ensureClient(): Promise<
+    { ok: true; clientId: string } | { ok: false; error: ApiError & { serverTime: number } }
+  > {
+    if (this.clientIdValue !== null) return { ok: true, clientId: this.clientIdValue };
+    if (!this.ownOutbox())
+      return {
+        ok: false,
+        error: { ...refuse("WRONG_CLIENT").toError(), serverTime: this.now() },
+      };
+    let r: Awaited<ReturnType<SyncTransport["register"]>>;
+    try {
+      r = await this.transport.register();
+    } catch {
+      return {
+        ok: false,
+        error: (noAnswer(this.now()) as { error: ApiError & { serverTime: number } }).error,
+      };
     }
-    return this.clientIdValue;
+    if (!r.ok)
+      return { ok: false, error: { ...r.error, serverTime: r.error.serverTime ?? this.now() } };
+    const changed = this.clientIdValue !== r.clientId;
+    this.clientIdValue = r.clientId;
+    this.acked = r.lastSeq ?? 0;
+    if (changed) {
+      // the seqs read and applied so far were another id's
+      this.appliedWrites = [];
+      this.replica.resetSeqs();
+      this.emit({ type: "client", clientId: r.clientId, lastSeq: this.acked });
+    }
+    return { ok: true, clientId: r.clientId };
+  }
+
+  /** Get a client id from the server if there is none (Y3). */
+  async register(): Promise<string | null> {
+    const r = await this.ensureClient();
+    return r.ok ? r.clientId : null;
   }
 
   state(): ClientState {
@@ -349,28 +449,50 @@ export class SyncClient {
     };
   }
 
+  /** Run reads of one log one at a time, in the order they were asked for,
+   * so a later read never applies an older answer over a newer one. */
+  private serial<T>(log: LogId, f: () => Promise<T>): Promise<T> {
+    const before = this.reads.get(log) ?? Promise.resolve();
+    const run = before.then(f, f);
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.reads.set(log, settled);
+    void settled.then(() => {
+      if (this.reads.get(log) === settled) this.reads.delete(log);
+    });
+    return run;
+  }
+
   /** Bring one log's replica up to date: a snapshot the first time and after
    * a resync, a pull otherwise. `tier` applies to the snapshot (R1, R2). */
-  async sync(log: LogId, tier?: Tier): Promise<SyncOutcome> {
+  sync(log: LogId, tier?: Tier): Promise<SyncOutcome> {
+    return this.serial(log, () => this.syncNow(log, tier));
+  }
+
+  private async syncNow(log: LogId, tier?: Tier): Promise<SyncOutcome> {
     const r = this.replica.state(log);
     if (r) {
       const res = await this.transport.pull(log, r.cursor, this.readOptions());
+      this.heard(res.serverTime);
       if (!("resync" in res)) {
         const changed = this.replica.applyPull(log, res.changes, res.cursor, res.lastSeq);
         this.learn(res.lastSeq);
-        this.confirmed(changed);
+        this.confirmed(changed, false);
         return "pull";
       }
     }
     const before = r ? new Map(r.records) : null;
     const snap = await this.transport.snapshot(log, this.readOptions(tier));
+    this.heard(snap.serverTime);
     const after = new Map(snap.records.map((x) => [x.key, x.record]));
     if (before) this.lost(log, before, after);
     const frozen = this.frozenCopies.get(log);
     if (frozen) for (const k of after.keys()) frozen.delete(k);
     const changed = this.replica.applySnapshot(log, snap);
     this.learn(snap.lastSeq);
-    this.confirmed(changed);
+    this.confirmed(changed, true);
     return before ? "resync" : "snapshot";
   }
 
@@ -399,35 +521,47 @@ export class SyncClient {
   }
 
   /** Open a thread (R3): a summary thread's full records are fetched with a
-   * `threads` snapshot and kept for the life of the tab. `unavailable` when
-   * the fetch fails (offline): the summary is shown, "Available when
-   * online". */
-  async open(thread: string): Promise<"full" | "unavailable"> {
+   * `threads` snapshot, in turn with the log's other reads, and kept for the
+   * life of the tab. `unavailable` when the fetch fails (offline): the
+   * summary is shown, "Available when online". `missing` when the replica
+   * holds no such thread. */
+  async open(thread: string): Promise<"full" | "unavailable" | "missing"> {
+    this.opened.delete(thread);
     this.opened.add(thread);
-    const log = this.replica.logOfThread(thread);
-    if (!log || this.replica.isFull(log, thread)) return "full";
-    try {
-      const snap = await this.transport.snapshot(log, {
-        tier: "threads",
-        threads: [thread],
-        ...(this.clientIdValue !== null ? { clientId: this.clientIdValue } : {}),
-      });
-      this.confirmed(this.replica.addThreads(log, snap, [thread]));
-      return "full";
-    } catch {
-      return "unavailable";
+    for (const th of this.opened) {
+      if (this.opened.size <= OPENED_MAX) break;
+      this.opened.delete(th);
     }
+    const log = this.replica.logOfThread(thread);
+    if (!log) return "missing";
+    return this.serial(log, async () => {
+      if (this.replica.isFull(log, thread)) return "full";
+      try {
+        const snap = await this.transport.snapshot(log, {
+          tier: "threads",
+          threads: [thread],
+          ...(this.clientIdValue !== null ? { clientId: this.clientIdValue } : {}),
+        });
+        this.heard(snap.serverTime);
+        this.confirmed(this.replica.addThreads(log, snap, [thread]), true);
+        return "full";
+      } catch {
+        return "unavailable";
+      }
+    });
   }
 
   /** Forget a log (the person left a channel view, R5). */
   dropLog(log: LogId): void {
-    this.confirmed(this.replica.dropLog(log));
+    this.confirmed(this.replica.dropLog(log), true);
   }
 
-  /** Take a write out of the outbox before it is sent. */
+  /** Take a write out of the outbox before it is sent. A write whose
+   * request is in flight is not taken out (its answer is on its way). */
   drop(mutationId: string): boolean {
     const k = this.outbox.findIndex((p) => p.mutationId === mutationId);
-    if (k < 0) return false;
+    const p = this.outbox[k];
+    if (!p || p === this.inFlight) return false;
     this.outbox.splice(k, 1);
     this.pendingChanged();
     return true;
@@ -466,6 +600,25 @@ export class SyncClient {
     return this.replica.get(key);
   }
 
+  private source(): OverlaySource {
+    this.rebase();
+    return new OverlaySource(this.replica, this.overlay, this.options.user ?? "");
+  }
+
+  /** Whether the view can answer for `key`: it holds the record, or the log
+   * that would hold it. False means unknown, not absent (an adapter answers
+   * UNKNOWN). */
+  loaded(key: string): boolean {
+    return this.source().loaded(key);
+  }
+
+  /** Whether the view holds every record of an index: a space index needs
+   * the space's log (in full for threads and what is under them), a thread
+   * index the thread in full, a person index the person's own user log. */
+  loadedIndex(kind: StoredRecord["kind"], index: Index): boolean {
+    return this.source().loadedIndex(kind, index);
+  }
+
   /** Every record as the person sees it. */
   view(): Map<string, StoredRecord> {
     this.rebase();
@@ -495,33 +648,50 @@ export class SyncClient {
   }
 
   /** Listen for changes of the view: called once per confirming batch or
-   * outbox change, with the keys that may have changed. */
-  subscribe(listener: (changed: ReadonlySet<string>) => void): () => void {
+   * outbox change, with the keys that may have changed. A listener that
+   * throws is reported, and the client goes on. */
+  subscribe(listener: ViewListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  /** The writes in view order: applied awaiting their pull, queued, not sent. */
-  private viewWrites(): Pending[] {
-    return [...this.appliedWrites.map((a) => a.p), ...this.outbox, ...this.unsentWrites];
+  /** The logs a record (or the record a key held) is written to, of those
+   * the replica holds. */
+  private heldLogs(key: string, r: StoredRecord | null): LogId[] {
+    const rec = r ?? this.replica.get(key);
+    if (!rec) return [];
+    return logsOf(rec).filter((log) => this.replica.state(log) !== undefined);
   }
 
-  /** Re-run every pending write's prediction over the confirmed state. */
+  /** Whether an applied write's record at `key` is in the confirmed state:
+   * a log that holds it was read at the write's seq or later, or no log the
+   * replica holds has it. */
+  private covered(a: Applied, key: string, r: StoredRecord | null): boolean {
+    const logs = this.heldLogs(key, r);
+    return logs.length === 0 || logs.some((log) => (this.replica.state(log)?.seq ?? -1) >= a.seq);
+  }
+
+  /** Re-run every pending write's prediction over the confirmed state, on
+   * top of the applied writes' records not confirmed yet. */
   private rebase() {
     if (!this.stale) return;
     this.stale = false;
     this.overlay = new Map();
     this.predictions.clear();
+    this.stagedOf.clear();
     const me = this.options.user;
     if (me === null) return;
-    for (const p of this.viewWrites()) {
+    for (const a of this.appliedWrites)
+      for (const [k, r] of a.staged) if (!this.covered(a, k, r)) this.overlay.set(k, r);
+    for (const p of [...this.outbox, ...this.unsentWrites]) {
       const def = Object.hasOwn(this.mutators, p.name) ? this.mutators[p.name] : undefined;
       if (!def) {
         this.predictions.set(p.local, "unknown");
         continue;
       }
       const source = new OverlaySource(this.replica, this.overlay, me);
-      const tx = new StagedTx(source, me, msToIso(this.now()), p.mutationId, "client");
+      // stamped with the time it was queued: a rebase does not move it
+      const tx = new StagedTx(source, me, msToIso(p.queuedAt), p.mutationId, "client");
       let state: PredictionState;
       try {
         const r = predict(tx, def, p.input);
@@ -532,35 +702,41 @@ export class SyncClient {
       }
       this.predictions.set(p.local, state);
       if (state !== "applied") continue;
-      for (const [k, r] of predictedView(tx)) this.overlay.set(k, r);
+      const staged = predictedView(tx);
+      this.stagedOf.set(p.local, staged);
+      for (const [k, r] of staged) this.overlay.set(k, r);
     }
   }
 
-  /** The confirmed state changed: drop applied writes every log has read,
-   * rebase, and tell the listeners. */
-  private confirmed(changed: Set<string>) {
-    const logs = this.replica.logs();
-    for (let k = this.appliedWrites.length - 1; k >= 0; k--) {
-      const a = this.appliedWrites[k] as Applied;
-      if (logs.every((log) => (this.replica.state(log)?.seq ?? -1) >= a.seq))
-        this.appliedWrites.splice(k, 1);
-    }
-    this.notify(changed);
+  /** The confirmed state changed: drop the applied writes whose records
+   * are all confirmed, rebase, and tell the listeners. */
+  private confirmed(changed: Set<string>, structural: boolean) {
+    this.appliedWrites = this.appliedWrites.filter((a) =>
+      [...a.staged].some(([k, r]) => !this.covered(a, k, r)),
+    );
+    this.notify(changed, structural);
   }
 
   private pendingChanged() {
-    this.notify(new Set());
+    this.notify(new Set(), true);
   }
 
-  private notify(changed: Set<string>) {
+  private notify(changed: Set<string>, structural: boolean) {
     const old = this.overlay;
     this.stale = true;
+    this.version++;
     if (!this.listeners.size) return;
     this.rebase();
-    for (const k of old.keys()) changed.add(k);
-    for (const k of this.overlay.keys()) changed.add(k);
-    if (!changed.size) return;
-    for (const f of this.listeners) f(changed);
+    // the overlay's keys whose value changed
+    for (const k of new Set([...old.keys(), ...this.overlay.keys()]))
+      if (JSON.stringify(old.get(k)) !== JSON.stringify(this.overlay.get(k))) changed.add(k);
+    if (!changed.size && !structural) return;
+    for (const f of [...this.listeners])
+      try {
+        f(changed, { structural });
+      } catch (x) {
+        report(x);
+      }
   }
 
   // ---- writes ----
@@ -617,6 +793,14 @@ export class SyncClient {
     return this.shown;
   }
 
+  /** The person saw a problem: forget it. */
+  dismiss(local: string): boolean {
+    const k = this.shown.findIndex((x) => x.local === local);
+    if (k < 0) return false;
+    this.shown.splice(k, 1);
+    return true;
+  }
+
   /** Send a "Not sent" write again, with the same mutation id. */
   async retry(local: string): Promise<ApplyResult[]> {
     const k = this.unsentWrites.findIndex((p) => p.local === local);
@@ -636,9 +820,14 @@ export class SyncClient {
     return true;
   }
 
-  private giveUp(p: Pending, reason: Problem["reason"]) {
+  /** Take a write out of the outbox, wherever it is in it. */
+  private remove(p: Pending) {
     const k = this.outbox.indexOf(p);
     if (k >= 0) this.outbox.splice(k, 1);
+  }
+
+  private giveUp(p: Pending, reason: Problem["reason"]) {
+    this.remove(p);
     const problem: Problem = {
       local: p.local,
       mutationId: p.mutationId,
@@ -649,6 +838,7 @@ export class SyncClient {
       at: this.now(),
     };
     this.shown.push(problem);
+    trim(this.shown, HISTORY_MAX);
     this.emit({ type: "problem", problem });
     this.pendingChanged();
   }
@@ -679,14 +869,22 @@ export class SyncClient {
     for (const x of this.outbox) if (!x.sent) x.input = remap(x.input, map);
   }
 
-  /** A write's request failed (`in-flight` policy): "Not sent". */
+  /** A write's request failed (`in-flight` policy): "Not sent". A write
+   * `send` waits for only leaves the outbox: its caller has the answer. */
   private notSent(p: Pending, res: ApplyResult) {
-    const k = this.outbox.indexOf(p);
-    if (k >= 0) this.outbox.splice(k, 1);
-    this.unsentWrites.push(p);
-    if (!res.ok) {
-      if (res.error.code === "UPGRADE_REQUIRED") this.emit({ type: "upgrade" });
-      this.emit({ type: "unsent", local: p.local, name: p.name, input: p.input, error: res.error });
+    this.remove(p);
+    if (!this.sending.has(p)) {
+      this.unsentWrites.push(p);
+      if (!res.ok) {
+        if (res.error.code === "UPGRADE_REQUIRED") this.emit({ type: "upgrade" });
+        this.emit({
+          type: "unsent",
+          local: p.local,
+          name: p.name,
+          input: p.input,
+          error: res.error,
+        });
+      }
     }
     this.pendingChanged();
   }
@@ -697,6 +895,7 @@ export class SyncClient {
     if (this.flushing) return this.flushing.then(() => this.flush());
     const run = this.flushOnce().finally(() => {
       this.flushing = null;
+      this.inFlight = null;
     });
     this.flushing = run;
     return run;
@@ -706,16 +905,13 @@ export class SyncClient {
     const out: ApplyResult[] = [];
     this.expire();
     if (!this.outbox.length) return out;
-    let clientId = await this.register();
-    if (clientId === null) {
+    const reg = await this.ensureClient();
+    if (!reg.ok) {
       if (this.policy === "in-flight")
-        for (const p of [...this.outbox])
-          this.notSent(p, {
-            ok: false,
-            error: { ...refuse("UNAUTHORIZED").toError(), serverTime: this.now() },
-          });
+        for (const p of [...this.outbox]) this.notSent(p, { ok: false, error: reg.error });
       return out;
     }
+    let clientId = reg.clientId;
     let skews = 0;
     let gaps = 0;
     let fresh = 0;
@@ -739,17 +935,26 @@ export class SyncClient {
         queuedAt: Math.max(0, Math.round(p.queuedAt)),
       };
       this.sent.push(e);
+      trim(this.sent, HISTORY_MAX);
       let res: ApplyResult;
+      let answered = true;
+      this.inFlight = p;
       try {
         res = await this.transport.apply(e);
       } catch {
         res = noAnswer(this.now());
+        answered = false;
+      } finally {
+        this.inFlight = null;
       }
-      this.lastAnswer.set(p.local, res);
-      // an answer's server time that agrees with the client's clock: the
-      // clock is known to be right
-      const at = res.ok ? res.serverTime : res.error.serverTime;
-      if (Math.abs(at - this.now()) <= CLOCK_MAX_SKEW) this.known = true;
+      this.lastAnswer.set(p, res);
+      if (answered) {
+        // an answer's server time that agrees with the client's clock: the
+        // clock is known to be right (no answer says nothing about it)
+        const at = res.ok ? res.serverTime : res.error.serverTime;
+        if (Math.abs(at - this.now()) <= CLOCK_MAX_SKEW) this.known = true;
+        this.heard(at);
+      }
       if (!res.ok) {
         const { code, serverTime, expectedSeq } = res.error;
         if (code === "CLOCK_SKEW" && skews++ < 3) {
@@ -771,13 +976,15 @@ export class SyncClient {
           continue;
         }
         if (code === "WRONG_CLIENT" && this.ownOutbox() && fresh++ < 1) {
+          // registered again: the app keeps the new id (a `client` event)
           this.clientIdValue = null;
-          const id = await this.register();
-          if (id === null) {
+          const again = await this.ensureClient();
+          if (!again.ok) {
             out.push(res);
+            if (this.policy === "in-flight") this.notSent(p, { ok: false, error: again.error });
             break;
           }
-          clientId = id;
+          clientId = again.clientId;
           continue;
         }
         if (this.policy === "in-flight" && UNRECORDED.has(code)) {
@@ -809,13 +1016,20 @@ export class SyncClient {
           break;
         }
       }
-      // recorded: applied or refused
+      // recorded: applied or refused. A replay used no seq (it was answered
+      // before, under another envelope)
       out.push(res);
-      this.acked = e.seq;
-      this.outbox.shift();
+      if (!res.replay) this.acked = e.seq;
+      // the staged records of its prediction, before it leaves the outbox
+      this.rebase();
+      const staged = this.stagedOf.get(p.local);
+      this.remove(p);
       this.answered.push({ local: p.local, mutationId: p.mutationId, name: p.name, result: res });
+      trim(this.answered, HISTORY_MAX);
       if (res.ok) {
-        this.appliedWrites.push({ p, seq: e.seq });
+        if (staged?.size)
+          this.appliedWrites.push({ p, seq: res.replay ? this.acked : e.seq, staged });
+        this.confirmed(new Set(), true);
         this.emit({
           type: "applied",
           local: p.local,
@@ -823,11 +1037,11 @@ export class SyncClient {
           input: p.input,
           result: res.result,
         });
-        this.confirmed(new Set());
       } else if (res.error.code === "EXPIRED") {
         p.sent = true;
         this.giveUp(p, "EXPIRED");
       } else {
+        this.pendingChanged();
         this.emit({
           type: "refused",
           local: p.local,
@@ -835,7 +1049,6 @@ export class SyncClient {
           input: p.input,
           error: res.error,
         });
-        this.pendingChanged();
       }
       skews = 0;
       gaps = 0;
@@ -852,18 +1065,20 @@ export class SyncClient {
 
   /** Send one write now, after the writes already queued (online-only
    * writes). Answers the write's own answer; a write that got no recorded
-   * answer is not kept for later. */
+   * answer is not kept for later, and not shown as "Not sent". */
   async send(name: string, input: unknown, mutationId = this.newId()): Promise<ApplyResult> {
     const p = this.push(name, input, mutationId);
-    await this.flush();
+    this.sending.add(p);
+    try {
+      await this.flush();
+    } finally {
+      this.sending.delete(p);
+    }
     // this write only: another queued write may carry the same mutation id
-    const k = this.outbox.indexOf(p);
-    if (k >= 0) this.outbox.splice(k, 1);
-    const u = this.unsentWrites.indexOf(p);
-    if (u >= 0) this.unsentWrites.splice(u, 1);
+    this.remove(p);
     this.pendingChanged();
     return (
-      this.lastAnswer.get(p.local) ?? {
+      this.lastAnswer.get(p) ?? {
         ok: false,
         error: {
           ...refuse(this.options.user === null ? "UNAUTHORIZED" : "SERVICE_UNAVAILABLE").toError(),

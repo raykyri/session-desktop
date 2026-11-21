@@ -551,7 +551,11 @@ export class ProtoServer implements TestServer {
     const serverTime = this.store.time(this.clock.now());
     return a.ok
       ? { ...a, serverTime }
-      : { ok: false, error: { ...a.error, serverTime: a.error.serverTime ?? serverTime } };
+      : {
+          ok: false,
+          error: { ...a.error, serverTime: a.error.serverTime ?? serverTime },
+          ...(a.replay ? { replay: true as const } : {}),
+        };
   }
 
   private answer(actor: Actor | null, envelope: unknown): StoredAnswer {
@@ -615,7 +619,7 @@ export class ProtoServer implements TestServer {
     // or one a reminted envelope replaced: its recorded answer, and the seq
     // is not used (R7c)
     if (hit && (hit.digest === payload || hit.digest === REPLACED))
-      return structuredClone(hit.result);
+      return { ...structuredClone(hit.result), replay: true };
     // an answer recorded under this client's seq: the same envelope again
     const sk = `${m.clientId}\u0000${m.seq}`;
     const sent = digest(canonical([m.mutationId, m.name, m.input]));
@@ -630,7 +634,7 @@ export class ProtoServer implements TestServer {
         const prior = this.dedup.get(`${u}\u0000${id}`);
         if (!prior) continue;
         setLast(this.dedup, dk, { result: prior.result, digest: payload, at: now });
-        return structuredClone(prior.result);
+        return { ...structuredClone(prior.result), replay: true };
       }
     if (m.seq !== client.last + 1)
       return {
@@ -844,8 +848,9 @@ export class ProtoServer implements TestServer {
     const u = this.userOf(actor);
     const lastSeq = this.lastSeq(u, options.clientId, now);
     // a log id that cannot name a log: no token, so a pull resyncs
-    if (!logS.safeParse(log).success) return { records: [], cursor: "", lastSeq };
-    if (this.closedTo(log, u)) return { records: [], cursor: this.serve(log, u, 0, now), lastSeq };
+    if (!logS.safeParse(log).success) return { records: [], cursor: "", lastSeq, serverTime: now };
+    if (this.closedTo(log, u))
+      return { records: [], cursor: this.serve(log, u, 0, now), lastSeq, serverTime: now };
     const records: Snapshot["records"] = [];
     let version = 0;
     for (const row of this.rows(log).values()) {
@@ -874,7 +879,7 @@ export class ProtoServer implements TestServer {
       const y = createdOf(b.record);
       return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);
     });
-    return { records, cursor: this.serve(log, u, version, now), lastSeq };
+    return { records, cursor: this.serve(log, u, version, now), lastSeq, serverTime: now };
   }
 
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
@@ -897,7 +902,8 @@ export class ProtoServer implements TestServer {
       return { resync: true };
     const lastSeq = this.lastSeq(u, options.clientId, now);
     // another person's user log: nothing
-    if (this.closedTo(log, u)) return { changes: [], cursor: this.serve(log, u, 0, now), lastSeq };
+    if (this.closedTo(log, u))
+      return { changes: [], cursor: this.serve(log, u, 0, now), lastSeq, serverTime: now };
     if (u !== null && this.scopeChanged(log, u, c.v, c.h)) return { resync: true };
     const changes: Change[] = [];
     let to = c.v;
@@ -914,7 +920,7 @@ export class ProtoServer implements TestServer {
           : { key: row.key, op: "put", record: structuredClone(v) },
       );
     }
-    return { changes, cursor: this.serve(log, u, to, now), lastSeq };
+    return { changes, cursor: this.serve(log, u, to, now), lastSeq, serverTime: now };
   }
 
   /** Whether what `u` may read of `log` changed, after the token at

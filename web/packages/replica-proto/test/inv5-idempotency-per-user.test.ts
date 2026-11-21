@@ -311,12 +311,13 @@ test("a reminted write is not applied again when its original was applied after 
     replaces: [a.mutationId],
     input: { id: w.id(), space: open, kind: "post", q: "once" },
   };
-  t.deepEqual(await w.server.apply(actor("mel"), b), first);
+  // the original's answer, marked as given without using a seq
+  t.deepEqual(await w.server.apply(actor("mel"), b), { ...first, replay: true });
   // nothing applied twice, no seq used, and B's id keeps the answer
   const once = [...w.server.dump().values()].filter((r) => r.kind === "thread" && r.q === "once");
   t.is(once.length, 1);
   t.is(await w.nextSeq("mel", a.clientId), a.seq + 1);
-  t.deepEqual(await w.server.apply(actor("mel"), { ...b, seq: 99 }), first);
+  t.deepEqual(await w.server.apply(actor("mel"), { ...b, seq: 99 }), { ...first, replay: true });
 });
 
 test("a device clock days behind keeps its queued writes after CLOCK_SKEW, and their queue times move with it", async (t) => {

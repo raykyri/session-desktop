@@ -1099,8 +1099,14 @@ export const spaceErrorSchema = z.object({
 });
 
 /** The answer to one write (`01` Y2): applied with its result, or refused.
- * Every answer carries `serverTime`, a refusal's in its error. */
+ * Every answer carries `serverTime`, a refusal's in its error. `replay`: a
+ * recorded answer given again without using the envelope's seq. */
 export const spaceApplyAnswerSchema = z.union([
-  z.object({ ok: z.literal(true), result: z.unknown(), serverTime: z.number() }),
-  z.object({ ok: z.literal(false), error: spaceErrorSchema }),
+  z.object({
+    ok: z.literal(true),
+    result: z.unknown(),
+    serverTime: z.number(),
+    replay: z.literal(true).optional(),
+  }),
+  z.object({ ok: z.literal(false), error: spaceErrorSchema, replay: z.literal(true).optional() }),
 ]);

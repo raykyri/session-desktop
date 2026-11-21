@@ -398,8 +398,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "N33 an empty pull does not renew the token's serve time",
     file: "../sync/src/server/server.ts",
-    from: "    return { changes, cursor: this.serve(log, u, to, now), lastSeq };",
-    to: "    return { changes, cursor: this.serve(log, u, to, changes.length ? now : c.at), lastSeq };",
+    from: "    return { changes, cursor: this.serve(log, u, to, now), lastSeq, serverTime: now };",
+    to: "    return { changes, cursor: this.serve(log, u, to, changes.length ? now : c.at), lastSeq, serverTime: now };",
   },
   {
     name: "N34 the token key is a constant",
@@ -465,8 +465,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "R2-11 the client registers for another person's outbox",
     file: "../sync/src/client/client.ts",
-    from: "    if (this.clientIdValue === null && this.ownOutbox()) {",
-    to: "    if (this.clientIdValue === null) {",
+    from: "    if (!this.ownOutbox())\n",
+    to: "    if ((false as boolean) && !this.ownOutbox())\n",
     also: [
       {
         from: 'if (code === "WRONG_CLIENT" && this.ownOutbox() && fresh++ < 1) {',
@@ -540,8 +540,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "R2-23 the client gives up on a write after a lost answer",
     file: "../sync/src/client/client.ts",
-    from: "      } catch {\n        res = noAnswer(this.now());\n      }",
-    to: '      } catch {\n        res = { ok: false, error: { code: "NOT_FOUND", message: "", serverTime: 0 } };\n      }',
+    from: "      } catch {\n        res = noAnswer(this.now());\n        answered = false;",
+    to: '      } catch {\n        res = { ok: false, error: { code: "NOT_FOUND", message: "", serverTime: 0 } };\n        answered = false;',
   },
   // ---- the build's contract (`01` U6): saves, notifications, removal,
   // owner-only writes, look-ups, counts and protocol version 4 ----

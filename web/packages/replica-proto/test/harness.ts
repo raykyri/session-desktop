@@ -206,8 +206,8 @@ export async function refused(
   return JSON.stringify(b.ok ? null : b.error);
 }
 
-/** An answer without `serverTime`, the time it was given at: for comparing
- * what answers say. */
+/** An answer without `serverTime`, the time it was given at, and without
+ * `replay`: for comparing what answers say. */
 export function bare(r: ApplyResult) {
   if (r.ok) return { ok: true as const, result: r.result };
   const error: Partial<typeof r.error> = { ...r.error };
