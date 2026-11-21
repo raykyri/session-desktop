@@ -268,11 +268,20 @@ export class SyncHub {
     s.sink.send(e);
   }
 
-  /** An event without an id to every stream reading `log` (a run's delta,
-   * `03` T2). Not stored, not replayed on a reconnect. */
-  ephemeral(log: LogId, event: string, data: unknown): void {
-    const text = JSON.stringify(data);
-    for (const s of this.#byLog.get(log) ?? []) this.#send(s, { event, data: text });
+  /** An event without an id to every stream reading `log` whose reader may
+   * read it now (a run's delta, `03` T2). `audience` is asked per stream at
+   * send time, under the reader's current scope, as `pull` reads it: a
+   * reader who may not read the record the event is about (a non-member
+   * holding a cursor of a private space's log, a member removed within the
+   * coalesce window, a hidden ask's reader other than its author and the
+   * owner) gets nothing. Not stored, not replayed on a reconnect. */
+  ephemeral(log: LogId, event: string, data: unknown, audience: (u: string) => boolean): void {
+    let text: string | null = null;
+    for (const s of this.#byLog.get(log) ?? []) {
+      if (!audience(s.u)) continue;
+      text ??= JSON.stringify(data);
+      this.#send(s, { event, data: text });
+    }
   }
 
   /** Sign-out: end the streams of this session. */

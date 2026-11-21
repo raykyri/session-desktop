@@ -27,6 +27,7 @@ import {
   type SpaceRec,
   type SpaceRole,
   type ThreadRec,
+  type TurnRec,
 } from "./records.js";
 import type { PreCtx, ServerValues, Tx } from "./tx.js";
 
@@ -251,6 +252,12 @@ export function nodesUnder(nodes: readonly NodeRec[], id: string): Set<string> {
   return under;
 }
 
+/** The committed turns of `runs` (every attempt), in the thread `th`. */
+export function turnsOf(tx: Tx, th: string, runs: readonly RunRec[]): TurnRec[] {
+  const ids = new Set(runs.map((x) => x.id));
+  return tx.list("turn", { th }).filter((x) => ids.has(x.run));
+}
+
 /** Erase the thread a node was opened as (`promoted`), if it is not removed
  * already: removing a node removes its copies (M1b review 14). */
 function erasePromoted(tx: Tx, n: NodeRec, note: string | null): void {
@@ -286,6 +293,7 @@ export function erase(
       for (const x of tx.list("reply", th)) drop(`reply:${x.id}`);
       for (const x of tx.list("comment", th)) drop(`comment:${x.id}`);
       for (const x of tx.list("run", th)) drop(`run:${x.id}`);
+      for (const x of tx.list("turn", th)) drop(keyOf(x));
       for (const x of userLogRecords(tx, "save", r.id)) drop(saveKey(x.u, x.th));
       for (const x of userLogRecords(tx, "notif", r.id).filter((y) => y.type === "mention"))
         drop(`notif:${x.id}`);
@@ -324,7 +332,9 @@ export function erase(
       for (const x of tx.list("answer", th).filter((y) => under.has(y.node))) drop(keyOf(x));
       for (const x of tx.list("comment", th).filter((y) => under.has(y.node)))
         drop(`comment:${x.id}`);
-      for (const x of tx.list("run", th).filter((y) => under.has(y.node))) drop(`run:${x.id}`);
+      const runs = tx.list("run", th).filter((y) => under.has(y.node));
+      for (const x of runs) drop(`run:${x.id}`);
+      for (const x of turnsOf(tx, r.th, runs)) drop(keyOf(x));
       tx.put({ ...r, q: "", look: null, quote: null, mod: "removed" });
       recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);
       for (const x of nodes) if (under.has(x.id)) erasePromoted(tx, x, note);

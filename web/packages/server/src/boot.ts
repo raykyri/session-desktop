@@ -8,9 +8,8 @@
 // 2. the ledger rows a crash left `open` are closed with their last
 //    checkpoint;
 // 3. runs still `running` become `interrupted`;
-// 4. the run dispatcher starts, when there is one (it needs the `RunStore`
-//    over the run records of M5a; until then no run starts in this build),
-//    and the scheduled maintenance (the sync retention of Y8).
+// 4. the run dispatcher starts (`runs/runtime.ts`), when there is one, and
+//    the scheduled maintenance (the sync retention of Y8).
 //
 // `main.ts` calls it before it listens, so the health check stays `starting`
 // until every step is done.
@@ -27,7 +26,7 @@ export interface BootDeps {
   sync: SyncService;
   ledger: Ledger;
   logger: Logger;
-  /** Started last; absent until the run store lands (M5a). */
+  /** Started last; absent in the tests that boot without runs. */
   dispatcher?: Dispatcher;
   now?: () => number;
 }

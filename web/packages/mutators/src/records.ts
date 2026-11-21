@@ -55,6 +55,7 @@ export type ThreadRec = Spaces.ThreadRecord;
 export type CountsRec = Spaces.CountsRecord;
 export type NodeRec = Spaces.NodeRecord;
 export type RunRec = Spaces.RunRecord;
+export type TurnRec = Spaces.TurnRecord;
 export type AnswerRec = Spaces.AnswerRecord;
 export type ReplyRec = Spaces.ReplyRecord;
 export type CommentRec = Spaces.CommentRecord;
@@ -86,6 +87,7 @@ export type StoredRecord =
   | CountsRec
   | NodeRec
   | RunRec
+  | TurnRec
   | AnswerRec
   | ReplyRec
   | CommentRec
@@ -129,6 +131,9 @@ export const requestKey = (sp: string, u: string) => `request:${sp}:${u}`;
 export const banKey = (sp: string, u: string) => `ban:${sp}:${u}`;
 export const saveKey = (u: string, th: string) => `save:${u}:${th}`;
 export const prefsKey = (u: string) => `prefs:${u}`;
+/** A committed turn of a run's attempt (`03` §1): written by the server's
+ * run loop only (`serverApply`), never by a mutator's `run`. */
+export const turnKey = (run: string, attempt: number, n: number) => `turn:${run}:${attempt}:${n}`;
 
 export function keyOf(r: Draft | StoredRecord): string {
   switch (r.kind) {
@@ -148,6 +153,8 @@ export function keyOf(r: Draft | StoredRecord): string {
       return saveKey(r.u, r.th);
     case "prefs":
       return prefsKey(r.u);
+    case "turn":
+      return turnKey(r.run, r.attempt, r.n);
     default:
       return `${r.kind}:${r.id}`;
   }
@@ -173,6 +180,7 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
     case "reply":
     case "comment":
     case "run":
+    case "turn":
     case "answer":
       return r.s;
     case "stats":

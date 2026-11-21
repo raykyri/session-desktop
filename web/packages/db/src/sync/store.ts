@@ -118,9 +118,11 @@ export interface SqliteStoreOptions {
    * time the protocol reads; this one is for the columns nothing reads. */
   now?: () => number;
   /** Called after each outermost transaction commits, with the logs whose
-   * rows or history it wrote: the server wakes the event streams that read
-   * them (`01` Y7). Not called for a transaction that rolled back. */
-  onCommit?: (logs: ReadonlySet<LogId>) => void;
+   * rows or history it wrote and the record keys it wrote or deleted: the
+   * server wakes the event streams that read them (`01` Y7) and the run
+   * loop sees its runs cancelled, retried or removed (`03` E1, E4). Not
+   * called for a transaction that rolled back. */
+  onCommit?: (logs: ReadonlySet<LogId>, keys: ReadonlySet<string>) => void;
   /** How many parsed records the read cache keeps (`RECORD_CACHE_SIZE`);
    * 0 on a read-only connection, whatever is given. */
   cacheSize?: number;
@@ -139,12 +141,15 @@ export class SqliteStore implements ServerStore {
   private readonly now: () => number;
   private readonly cache = new Map<string, StoredRecord | null>();
   private readonly s;
-  private readonly onCommit: ((logs: ReadonlySet<LogId>) => void) | undefined;
+  private readonly onCommit:
+    ((logs: ReadonlySet<LogId>, keys: ReadonlySet<string>) => void) | undefined;
   private readonly cacheSize: number;
   /** The logs the open transaction wrote. */
   private touched = new Set<LogId>();
   /** Whether the open transaction deleted a record or wrote a tombstone. */
   private erased = false;
+  /** The record keys the open transaction wrote or deleted. */
+  private keys = new Set<string>();
 
   constructor(db: SessionDatabase | SqliteDatabase.Database, options: SqliteStoreOptions = {}) {
     this.sqlite = "$client" in db ? db.$client : db;
@@ -313,6 +318,7 @@ export class SqliteStore implements ServerStore {
       if (outer) {
         this.touched = new Set();
         this.erased = false;
+        this.keys = new Set();
       }
       throw e;
     }
@@ -320,10 +326,12 @@ export class SqliteStore implements ServerStore {
       this.erased = false;
       this.checkpoint();
     }
-    if (outer && this.touched.size) {
+    if (outer && (this.touched.size || this.keys.size)) {
       const logs = this.touched;
+      const keys = this.keys;
       this.touched = new Set();
-      this.onCommit?.(logs);
+      this.keys = new Set();
+      this.onCommit?.(logs, keys);
     }
     return out;
   }
@@ -444,6 +452,7 @@ export class SqliteStore implements ServerStore {
     else this.s.insertRecord.run({ ...row, createdV: 0, createdAt: 0 });
     if (record.kind === "save" && !existed) this.countSave(record.th, 1);
     this.remember(key, record);
+    this.keys.add(key);
   }
 
   deleteRecord(key: string): void {
@@ -453,6 +462,7 @@ export class SqliteStore implements ServerStore {
     this.erased = true;
     if (prev.kind === "save") this.countSave(prev.th, -1);
     this.remember(key, null);
+    this.keys.add(key);
   }
 
   /** `save_counts` (`01` C1, D3): the true save count of a thread in a

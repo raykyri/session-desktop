@@ -124,6 +124,7 @@ test("applies every migration to an empty database", (t) => {
         "run_attempts",
         "run_live",
         "run_queue",
+        "run_resumes",
         "run_turns",
         "save_counts",
         "server_head",
@@ -165,19 +166,26 @@ test("the history is the initial migration and the plan's numbered ones", (t) =>
   // history into one initial migration (runbooks/reset-database.md, plan
   // `01` D5). Each milestone adds its own numbered migration beside it:
   // `0003_api_keys` (M5b), `0004_accounts` (M6), `0005_spaces` (M3; the
-  // plan's `0001_spaces`, numbered after the ones that landed first).
+  // plan's `0001_spaces`, numbered after the ones that landed first),
+  // `0006_runs` (M5a).
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
   t.deepEqual(
     journal.entries.map((entry) => entry.tag),
-    ["0000_initial", "0003_api_keys", "0004_accounts", "0005_spaces"],
+    ["0000_initial", "0003_api_keys", "0004_accounts", "0005_spaces", "0006_runs"],
   );
   t.deepEqual(
     readdirSync(MIGRATIONS_FOLDER)
       .filter((name) => name.endsWith(".sql"))
       .sort(),
-    ["0000_initial.sql", "0003_api_keys.sql", "0004_accounts.sql", "0005_spaces.sql"],
+    [
+      "0000_initial.sql",
+      "0003_api_keys.sql",
+      "0004_accounts.sql",
+      "0005_spaces.sql",
+      "0006_runs.sql",
+    ],
   );
 });
 

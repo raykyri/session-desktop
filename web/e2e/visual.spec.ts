@@ -19,8 +19,12 @@ import { expect, test, type Page } from "@playwright/test";
 const VISUAL_PENDING = new URL("./visual.pending", import.meta.url);
 
 import { APP_ORIGIN } from "./constants.js";
-import { FIRST_ASK } from "./fixtureWorld.js";
 import { PROTOCOL_HEADERS, signIn } from "./helpers.js";
+
+/** The fixture replica's first thread (`fixtureData.ts`): an ask by @ines.v
+ * in #public with three passage trees. The baselines are rendered from the
+ * fixture build's threads. */
+const FIRST_ASK = "01M7HWGZJGT7JTFFVSYPX055KV";
 
 type Appearance = "dark" | "light";
 type ColorTheme = "green-blob" | "orange-blob";

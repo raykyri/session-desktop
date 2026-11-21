@@ -7,6 +7,7 @@
 //   POST /api/sync/read      { reads: [{ log, cursor? | tier?, threads? }], clientId? }
 //                            snapshots and pulls, several logs per request  Y5, R5
 //   GET  /api/sync/events    ?clientId, Session-Cursors, Last-Event-ID  Y7
+//   GET  /api/runs/:id/live                                       03 T3
 //
 // Every request carries `Session-Protocol`; POSTs carry the CSRF header. A
 // `426` on any route calls `onUpgrade` (`02` §9.2). A refusal of the
@@ -30,6 +31,8 @@ import {
   type Snapshot,
   type SyncTransport,
 } from "@session/sync/client";
+
+import type { LiveRead, RunDelta } from "./runLive.js";
 
 export const SYNC_BASE = "/api/sync";
 export const PROTOCOL_HEADER = "Session-Protocol";
@@ -230,6 +233,22 @@ export class HttpSyncTransport implements SyncTransport {
     }
   }
 
+  /** `GET /api/runs/:id/live` (`03` T3): a run's streaming text with its
+   * `seq`; null for a run the reader may not read (NOT_FOUND). */
+  async live(run: string): Promise<LiveRead | null> {
+    const res = await this.doFetch(`/api/runs/${encodeURIComponent(run)}/live`, {
+      headers: syncHeaders(false),
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (res.status === 426) this.onUpgrade();
+    if (res.status === 404) return null;
+    if (res.status !== 200) throw new SyncHttpError(res.status, null);
+    const body = (await json(res)) as LiveRead | null;
+    if (!body || typeof body.attempt !== "number") throw new SyncHttpError(res.status, null);
+    return { attempt: body.attempt, live: body.live ?? null };
+  }
+
   /** Open the event stream of `clientId` for `cursors` (Y7). Resolves once
    * the response headers are in; the events arrive through `onEvent` until
    * the stream ends, which `done` reports. */
@@ -328,6 +347,7 @@ export type SyncStreamEvent =
   | { type: "ready"; logs: LogId[] }
   | { type: "changes"; batches: StreamBatch[]; id: string | undefined }
   | { type: "resync"; log: LogId; id: string | undefined }
+  | { type: "delta"; delta: RunDelta }
   | { type: "ping" };
 
 export function parseStreamEvent(raw: RawEvent): SyncStreamEvent | null {
@@ -351,8 +371,24 @@ export function parseStreamEvent(raw: RawEvent): SyncStreamEvent | null {
         : null;
     case "ping":
       return { type: "ping" };
+    case "run.delta":
+      return typeof d["run"] === "string" &&
+        typeof d["attempt"] === "number" &&
+        typeof d["seq"] === "number" &&
+        typeof d["text"] === "string"
+        ? {
+            type: "delta",
+            delta: {
+              run: d["run"],
+              attempt: d["attempt"],
+              seq: d["seq"],
+              n: typeof d["n"] === "number" ? d["n"] : 0,
+              text: d["text"],
+            },
+          }
+        : null;
     default:
-      // run deltas (M5a) and events this build does not read
+      // events this build does not read
       return null;
   }
 }

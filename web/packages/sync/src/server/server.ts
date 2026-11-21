@@ -160,6 +160,7 @@ const CONTENT_KINDS: ReadonlySet<StoredRecord["kind"]> = new Set([
   "reply",
   "comment",
   "run",
+  "turn",
 ]);
 
 /** The logs a record with this audience is written to: its space's log

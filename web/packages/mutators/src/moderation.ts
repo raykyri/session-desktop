@@ -3,8 +3,8 @@
 
 import { refuse } from "./errors.js";
 import { Notifier } from "./notify.js";
-import { answerKey, threadKey } from "./records.js";
-import { M, erase, itemOf, removed, stale } from "./rules.js";
+import { answerKey, keyOf, threadKey } from "./records.js";
+import { M, erase, itemOf, removed, stale, turnsOf } from "./rules.js";
 import { define } from "./tx.js";
 
 export const MODERATION = {
@@ -37,6 +37,13 @@ export const MODERATION = {
         // removes it (M2 review 20); "shown" shows both
         const a = r.kind === "thread" || r.kind === "node" ? tx.byKey(answerKey(r.id)) : undefined;
         if (a?.kind === "answer") tx.put({ ...a, mod });
+        // the ask's turns follow it (`redact`): served again to every reader
+        if (r.kind === "thread" || r.kind === "node") {
+          const runs = tx
+            .list("run", { th: r.kind === "thread" ? r.id : r.th })
+            .filter((x) => x.node === (r.kind === "thread" ? "r" : r.id));
+          for (const x of turnsOf(tx, runs[0]?.th ?? "", runs)) tx.touch(keyOf(x));
+        }
         if (r.kind === "node" && r.promoted !== null) {
           const copy = tx.byKey(answerKey(r.promoted));
           // a copy whose own thread is hidden stays hidden

@@ -101,6 +101,16 @@ export class SyncService {
       (envelope as { name?: unknown } | null)?.name === this.#killAt.mutator;
   }
 
+  readonly #recordListeners = new Set<(keys: ReadonlySet<string>) => void>();
+
+  /** Called after every commit with the record keys it wrote or deleted:
+   * the run store watches its runs being cancelled, retried or removed and
+   * new runs being queued (`03` E1, E2, E4). Returns the unsubscribe. */
+  onRecords(listener: (keys: ReadonlySet<string>) => void): () => void {
+    this.#recordListeners.add(listener);
+    return () => this.#recordListeners.delete(listener);
+  }
+
   /** The after-commit test fault (`killAfterCommit`), called by the apply
    * route once a write is answered and before the answer is sent. */
   afterApply(envelope: unknown): void {
@@ -140,7 +150,10 @@ export class SyncService {
     let hub: SyncHub | null = null;
     this.store = new SqliteStore(options.db, {
       now: () => this.clock.now(),
-      onCommit: (logs) => hub?.wake(logs),
+      onCommit: (logs, keys) => {
+        hub?.wake(logs);
+        for (const listener of this.#recordListeners) listener(keys);
+      },
     });
     this.server = new SyncServer({
       store: this.store,
@@ -203,8 +216,12 @@ export class SyncService {
           ...r,
           status: "interrupted",
           fail: { why: "interrupted", at: null, cls: null },
+          finishedAt: tx.now,
         };
         tx.put(run);
+        // the root thread's `running` follows its run
+        const th = run.node === "r" ? tx.byKey(`thread:${run.th}`) : undefined;
+        if (th?.kind === "thread" && th.running) tx.put({ ...th, running: false });
         n += 1;
       }
       return n;

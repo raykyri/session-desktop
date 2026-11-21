@@ -1,25 +1,39 @@
-// Branches end to end (02 §12.2 `spaces-branches`; skipped until M5a's run
-// loop answers asks): a passage's count button, the
-// selected branch's card, Continue, Branch, the footer's follow-up, Comment,
-// Branch here and Look up over a selection, Open as its own thread, the
-// card's fade on a newly shown item only, and the rail's dots on their rows'
-// first lines.
+// Branches end to end (02 §12.2 `spaces-branches`) against the suite's
+// server, whose run loop answers with fixture providers: a passage's count
+// button, the selected branch's card, Continue, Branch, the footer's
+// follow-up, Comment, Branch here and Look up over a selection, Open as its
+// own thread, the card's fade on a newly shown item only, and the rail's
+// dots on their rows' first lines.
+//
+// The ask and its branches are written through the sync routes and answered
+// before the specs run (`world.ts` `branchedAsk`).
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { FIRST_ASK, flushRuns, holdRuns } from "./fixtureWorld.js";
-import { NO_RUNS, scrollSettled, signInAndOpen, toast } from "./spaces.js";
+import { scrollSettled, signInAndOpen, toast } from "./spaces.js";
+import { branchedAsk, channelName, person } from "./world.js";
 
-// The branches of an ask need its answer, and runs are answered from M5a:
-// until then this spec reads the fixture replica's asks, which the suite's
-// build does not load.
-test.skip(true, NO_RUNS);
+const w = { thread: "", name: "", sol: "" };
 
-const side = (page: Page) => page.locator(`[data-side="${FIRST_ASK}"]`);
-const answer = (page: Page) => page.locator(`#pr-${FIRST_ASK}`);
+test.beforeAll(async ({ browser }) => {
+  const olga = await person(browser, "e2e-branches-olga");
+  const sol = await person(browser, "e2e-branches-sol");
+  const me = await person(browser, "e2e-branches");
+  w.sol = sol.handle;
+  w.name = channelName("branches");
+  const space = await olga.channel(w.name);
+  for (const p of [me, sol]) await p.join(space);
+  w.thread = (await branchedAsk(olga, sol, space)).thread;
+});
+
+const side = (page: Page) => page.locator(`[data-side="${w.thread}"]`);
+const answer = (page: Page) => page.locator(`#pr-${w.thread}`);
+/** The text every branch is answered with (the root's fixture). */
+const ANSWERED = "Bloom filters answer set";
 
 test.beforeEach(async ({ page }) => {
   await signInAndOpen(page, "e2e-branches");
+  await page.locator(`#card-${w.thread}`).scrollIntoViewIfNeeded();
 });
 
 test("a passage's count button opens its first branch", async ({ page }) => {
@@ -27,11 +41,9 @@ test("a passage's count button opens its first branch", async ({ page }) => {
     .getByRole("button", { name: "3 branches on this passage. Open the first" })
     .click();
   const selected = side(page).getByRole("treeitem", { selected: true });
-  await expect(selected).toContainText("which of these actually let you trade");
+  await expect(selected).toContainText("which of these let you trade");
   await expect(selected).toBeFocused();
-  await expect(side(page).locator(".preview")).toContainText(
-    "Few of these works go past visibility",
-  );
+  await expect(side(page).locator(".preview")).toContainText(ANSWERED);
   await expect(side(page).getByRole("button", { name: "Continue" })).toBeVisible();
   await expect(side(page).getByRole("button", { name: "Branch", exact: true })).toBeVisible();
 });
@@ -39,7 +51,6 @@ test("a passage's count button opens its first branch", async ({ page }) => {
 test("Continue asks under the branch and the new row is selected and answered", async ({
   page,
 }) => {
-  await holdRuns(page, "running");
   await side(page)
     .getByRole("treeitem", { name: /how does the darknet/ })
     .click();
@@ -50,12 +61,10 @@ test("Continue asks under the branch and the new row is selected and answered", 
   await field.press("Control+Enter");
   const row = side(page).getByRole("treeitem", { name: /is the ranking public/ });
   await expect(row).toHaveAttribute("aria-selected", "true");
-  await expect(row).toHaveAttribute("aria-level", "3");
-  await expect(side(page).getByText("Researching · Step 1 of 4")).toBeVisible();
-  await flushRuns(page);
-  await expect(side(page).getByText(/^Mock answer\. In the app/)).toBeVisible();
+  await expect(row).toHaveAttribute("aria-level", "2");
+  await expect(side(page).locator(".preview")).toContainText(ANSWERED, { timeout: 30_000 });
   await expect(
-    page.locator(`#card-${FIRST_ASK}`).getByRole("button", { name: /^Ask a follow-up, 7/ }),
+    page.locator(`#card-${w.thread}`).getByRole("button", { name: /^Ask a follow-up, 5/ }),
   ).toBeVisible();
 });
 
@@ -70,13 +79,13 @@ test("Branch asks beside the branch", async ({ page }) => {
   // Beside: a child of the branch's parent, at the same level.
   await expect(
     side(page).getByRole("treeitem", { name: /what about cory doctorow/ }),
-  ).toHaveAttribute("aria-level", "2");
+  ).toHaveAttribute("aria-level", "1");
 });
 
 test("the footer's follow-up opens the answer's composer; Comment replaces it", async ({
   page,
 }) => {
-  const thread = page.locator(`#card-${FIRST_ASK}`);
+  const thread = page.locator(`#card-${w.thread}`);
   await thread.getByRole("button", { name: /^Ask a follow-up/ }).click();
   await expect(side(page).getByRole("textbox", { name: "Ask about the answer" })).toBeFocused();
   await expect(thread.getByRole("button", { name: /^Ask a follow-up/ })).toHaveAttribute(
@@ -95,10 +104,10 @@ test("the footer's follow-up opens the answer's composer; Comment replaces it", 
   await side(page).getByRole("button", { name: "Comment" }).click();
   await expect(side(page).getByRole("textbox", { name: "Continue ask" })).toHaveCount(0);
   const comment = side(page).getByRole("textbox", { name: "Comment here" });
-  await comment.fill("Worth adding the sequel. @hal_b");
+  await comment.fill(`Worth adding the sequel. @${w.sol}`);
   await side(page).getByRole("button", { name: "Comment", exact: true }).last().click();
   await expect(side(page).getByText("1 comment")).toBeVisible();
-  await expect(toast(page)).toHaveText("Notified @hal_b.");
+  await expect(toast(page)).toHaveText(`Notified @${w.sol}.`);
 });
 
 /** Drags across the first `words` words of a passage of the answer. */
@@ -129,22 +138,21 @@ test("Look up over two words writes a look-up under the answer and selects it", 
   await selectWords(page, 0, 2);
   await page.getByRole("button", { name: "Look up" }).click();
   const row = side(page).getByRole("treeitem", { selected: true });
-  await expect(row).toContainText("Science fiction");
+  await expect(row).toContainText("Bloom filters");
   await expect(row.getByTitle("Look up")).toBeVisible();
-  await expect(side(page).locator(".lookh")).toContainText("Look upScience fiction");
-  await expect(side(page).getByText(/Science fiction\*?\*?: mock description/)).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(side(page).locator(".lookh")).toContainText("Look upBloom filters");
+  await expect(side(page).locator(".preview")).toContainText(ANSWERED, { timeout: 30_000 });
+  await expect(side(page)).not.toContainText("as it is used in this answer");
 });
 
 test("Branch here quotes the selection in the answer's composer", async ({ page }) => {
-  await selectWords(page, 2, 6);
+  await selectWords(page, 1, 6);
   await expect(page.getByRole("button", { name: "Look up" })).toHaveCount(0);
   await page.getByRole("button", { name: "Branch here" }).click();
   const field = side(page).getByRole("textbox", { name: "Ask about this passage" });
   await expect(field).toBeFocused();
   await expect(side(page).locator(".bq")).toContainText("In these systems, a public score");
-  await expect(answer(page).locator(".qsel")).toHaveAttribute("data-passage", "2");
+  await expect(answer(page).locator(".qsel")).toHaveAttribute("data-passage", "1");
 });
 
 test("each dot sits on its row's first line, also when the row wraps", async ({ page }) => {
@@ -175,8 +183,11 @@ test("the card fades in for a newly shown item, not when it mounts again", async
   await darknet.click();
   await expect(side(page).locator(".preview")).toHaveClass(/fadein/);
   // Away and back by the bar: the same item, mounted again, does not fade.
-  await page.getByRole("banner").getByRole("link", { name: "#public" }).click();
-  await expect(page).toHaveURL(/\/c\/public$/);
+  await page
+    .getByRole("banner")
+    .getByRole("link", { name: `#${w.name}` })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/c/${w.name}$`));
   await page.getByRole("banner").getByRole("link", { name: "Session home" }).click();
   await expect(darknet).toHaveAttribute("aria-selected", "true");
   await expect(side(page).locator(".preview")).not.toHaveClass(/fadein/);

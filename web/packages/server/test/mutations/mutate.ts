@@ -498,8 +498,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M3-5 a commit wakes no stream",
     file: "src/sync/service.ts",
-    from: "      onCommit: (logs) => hub?.wake(logs),",
-    to: "      onCommit: () => undefined,",
+    from: "        hub?.wake(logs);\n",
+    to: "",
   },
   {
     name: "M3-6 a nested transaction is not a savepoint",

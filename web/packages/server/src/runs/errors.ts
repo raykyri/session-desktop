@@ -6,6 +6,7 @@
 // the node, and their mapped messages explain the failure in the document view.
 
 import { APICallError } from "@ai-sdk/provider";
+import { RUN_ERROR_COPY } from "@session/shared";
 
 import { errorText } from "./mapper.js";
 
@@ -56,19 +57,8 @@ const NETWORK_PATTERNS = [
   /stream closed/i,
 ];
 
-const COPY: Record<RunErrorClass, string> = {
-  rate_limited: "The model provider is rate limiting this deployment. The run will retry shortly.",
-  auth: "Provider authentication failed for this model. Please contact an administrator.",
-  content_filter:
-    "The model declined to answer this question. Rephrase the question or select another model.",
-  context_too_long: "Context window limit exceeded. Please start a new thread for this question.",
-  provider_unavailable:
-    "No zero-retention provider is available for this model. Try again or select another model.",
-  network: "The connection to the model provider was interrupted before the answer finished.",
-  timeout:
-    "The run exceeded the maximum duration allowed by this Session instance and was stopped.",
-  unknown: "The model provider returned an error.",
-};
+/** The copy of each class, shared with the client (`@session/shared`). */
+const COPY: Readonly<Record<RunErrorClass, string>> = RUN_ERROR_COPY;
 
 /** A refusal of the attempt's own input rather than a provider failure (an
  * attached image the model cannot read, or one that is gone). The document
