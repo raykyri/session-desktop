@@ -111,6 +111,12 @@ COPY --from=build /app/packages/client/dist/app ./packages/client/dist/app
 COPY --from=build /app/packages/server/dist/server.mjs ./packages/server/dist/server.mjs
 # The privacy check after a removal (`runbooks/privacy-check.md`).
 COPY --from=build /app/packages/server/dist/privacy-check.mjs ./packages/server/dist/privacy-check.mjs
+# The database reset, with the server stopped (`runbooks/reset-database.md`).
+COPY --from=build /app/packages/server/dist/reset-database.mjs ./packages/server/dist/reset-database.mjs
+# The operator commands of `packages/db/bin/admin.ts` (`npm run db:admin`), which
+# the runtime cannot run from source: root invites, site admins, account
+# deletion, a new sync history id (`runbooks/launch.md`, `delete-account.md`).
+COPY --from=build /app/packages/server/dist/admin.mjs ./packages/server/dist/admin.mjs
 # Resolved as `../../db/migrations` from the server bundle (`main.ts`).
 COPY --from=build /app/packages/db/migrations ./packages/db/migrations
 COPY --from=build /app/scripts ./scripts

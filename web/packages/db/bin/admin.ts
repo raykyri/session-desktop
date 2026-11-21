@@ -18,8 +18,14 @@
 //
 // Root invites have no creator: each person who runs Session redeems one,
 // chooses a handle at the profile step, and is then promoted by handle.
+//
+// The runtime image has no sources and no tsx; it holds this file bundled as
+// `packages/server/dist/admin.mjs`, run with the same arguments:
+//
+//   node /app/packages/server/dist/admin.mjs --invite
 
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { accountInviteLink } from "@session/shared";
 
@@ -49,7 +55,11 @@ if (!flags.has("--invite") && !flags.has("--new-history") && handle === undefine
 
 const dataDir = process.env["SESSION_DATA_DIR"];
 const path = dataDir ? resolve(dataDir, "session.db") : resolve(".data/session.db");
-const db = openDatabase(path);
+// `../../db/migrations` from this file names `packages/db/migrations` both
+// here (`packages/db/bin/admin.ts`, run with tsx) and from the bundle the
+// image holds (`packages/server/dist/admin.mjs`), as `main.ts` resolves it.
+const migrationsFolder = fileURLToPath(new URL("../../db/migrations", import.meta.url));
+const db = openDatabase(path, { migrationsFolder });
 try {
   if (flags.has("--new-history")) {
     requestNewHistory(db.$client);
