@@ -512,8 +512,10 @@ the same for streamed and final text (N12).
   "Source N" opening a popover (`role="dialog"`, label "Source N") with the
   number, title, note and host link ("host ↗", the link takes focus), and is wrapped with its preceding word in a `nowrap` span so it never
   starts a line alone. Built as `rehypeCitations`, not by DOM mutation.
-- **Passages**: `rehypePassages` gives each top-level block a `data-passage`
-  index. Passages with branches get the passage shade with 6 px side bleed; the
+- **Passages**: `rehypePassages` gives each passage a `data-passage` index: a
+  top-level block, or an item of a top-level list (the mockup's `blocksOf`:
+  top-level paragraphs, items of top-level lists, headings and tables); a
+  node's `b` is that index. Passages with branches get the passage shade with 6 px side bleed; the
   passage an open composer quotes gets the accent tint (`qsel`). The mock's
   word-overlap matching (`groupsFor`, `bestBlock`) does not ship; branches carry
   their passage index (N3).

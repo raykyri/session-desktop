@@ -1,9 +1,10 @@
 // Comments on an ask node (`01` C4; `03` G4): a discussion under a branch
-// that starts no run, nested like replies (a parent is a top-level comment on
-// the same node). The author edits (comparing the comment's rev) and
-// deletes: a top-level comment with someone else's comments under it stays
-// as an empty shell (`t: ""`, `del`); otherwise it is erased with the
-// author's own comments under it (M1b review 9).
+// that starts no run, nested like replies to any depth (a parent is any
+// comment on the same node the person may read and that is not removed).
+// The author edits (comparing the comment's rev) and deletes: a comment with
+// someone else's comment anywhere under it stays as an empty shell (`t: ""`,
+// `del`); otherwise it is erased with the author's own comments under it
+// (M1b review 9).
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -13,6 +14,7 @@ import {
   authorOf,
   bad,
   deleted,
+  itemsUnder,
   nodeOf,
   notAuthor,
   notFound,
@@ -43,9 +45,9 @@ export const COMMENTS = {
       const node = nodeOf(tx, p, i.node);
       if (node.mod === "removed") throw removed();
       if (i.parent !== undefined) {
-        const top = readable(tx, `comment:${i.parent}`, "comment");
-        if (top.th !== p.id || top.node !== i.node || top.parent !== null) throw notFound();
-        if (top.mod === "removed") throw removed();
+        const up = readable(tx, `comment:${i.parent}`, "comment");
+        if (up.th !== p.id || up.node !== i.node) throw notFound();
+        if (up.mod === "removed") throw removed();
       }
       const t = text(i.t, "t");
       tx.create({
@@ -106,8 +108,7 @@ export const COMMENTS = {
     run: (tx, i) => {
       const c = ownOrReadable(tx, `comment:${i.id}`, "comment");
       const reads = canRead(tx, c, tx.me);
-      const under =
-        c.parent === null ? tx.list("comment", { th: c.th }).filter((x) => x.parent === c.id) : [];
+      const under = itemsUnder(tx.list("comment", { th: c.th }), c.id);
       const kept = under.some((x) => x.u !== tx.me);
       if (kept) tx.put({ ...c, t: "", del: true });
       else {

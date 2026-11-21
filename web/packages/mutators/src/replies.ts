@@ -1,8 +1,10 @@
-// Replies to a post (`01` C5, C15): one level of nesting, a reply's parent
-// is a top-level reply. The author edits (comparing the reply's rev) and
-// deletes: a top-level reply with someone else's replies under it stays as
-// an empty shell (`t: ""`, `del`); otherwise it is erased with the author's
-// own replies under it (M1b review 9).
+// Replies to a post (`01` C5, C15), nested to any depth as the mockup and
+// `02` §4.2 have them (the client caps the indent): a reply's parent is any
+// reply of the same post the person may read and that is not removed. The
+// author edits (comparing the reply's rev) and deletes: a reply with someone
+// else's reply anywhere under it stays as an empty shell (`t: ""`, `del`);
+// otherwise it is erased with the author's own replies under it (M1b review
+// 9).
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -11,6 +13,7 @@ import {
   M,
   bad,
   deleted,
+  itemsUnder,
   notAuthor,
   notFound,
   notGone,
@@ -40,9 +43,9 @@ export const REPLIES = {
       if (p.mod === "removed") throw removed();
       notGone(p);
       if (i.parent !== undefined) {
-        const top = readable(tx, `reply:${i.parent}`, "reply");
-        if (top.th !== p.id || top.parent !== null) throw notFound();
-        if (top.mod === "removed") throw removed();
+        const up = readable(tx, `reply:${i.parent}`, "reply");
+        if (up.th !== p.id) throw notFound();
+        if (up.mod === "removed") throw removed();
       }
       const t = text(i.t, "t");
       tx.create({
@@ -102,8 +105,7 @@ export const REPLIES = {
     run: (tx, i) => {
       const r = ownOrReadable(tx, `reply:${i.id}`, "reply");
       const reads = canRead(tx, r, tx.me);
-      const under =
-        r.parent === null ? tx.list("reply", { th: r.th }).filter((x) => x.parent === r.id) : [];
+      const under = itemsUnder(tx.list("reply", { th: r.th }), r.id);
       const kept = under.some((x) => x.u !== tx.me);
       if (kept) tx.put({ ...r, t: "", del: true });
       else {

@@ -265,3 +265,58 @@ test("a mention's trailing . _ or - is punctuation", async (t) => {
   );
   t.like(r, { notified: ["otto", "mona"], notMembers: [] });
 });
+
+test("replies and comments nest to any depth; a removal erases what is under it and a delete keeps a shell for another's grandchild", async (t) => {
+  const { w, open } = await cast(t);
+  const p = await thread(t, w, "mel", open, "post");
+  const chain = async (people: string[], parent?: string) => {
+    const ids: string[] = [];
+    let up = parent;
+    for (const u of people) {
+      const id = w.id();
+      await ok(
+        t,
+        w.as(u, "research.createPostFollowUp", {
+          id,
+          thread: p,
+          t: `by ${u}`,
+          ...(up ? { parent: up } : {}),
+        }),
+      );
+      ids.push(id);
+      up = id;
+    }
+    return ids;
+  };
+  // three levels deep, and a fourth
+  const [, b, c, d] = await chain(["otto", "mona", "otto", "mel"]);
+  t.like(w.get(`reply:${d}`), { parent: c });
+  t.is((w.get(`counts:${p}`) as Rec<"counts">).r, 4);
+  await ok(t, w.as("olga", "moderation.decide", { item: `r:${p}:${b}`, decision: "removed" }));
+  t.is(w.get(`reply:${c}`), undefined);
+  t.is(w.get(`reply:${d}`), undefined);
+  t.is((w.get(`counts:${p}`) as Rec<"counts">).r, 2);
+  const [e, f, g] = await chain(["otto", "otto", "mona"]);
+  t.deepEqual(await ok(t, w.as("otto", "replies.delete", { id: e ?? "" })), { kept: true });
+  t.like(w.get(`reply:${e}`), { t: "", del: true });
+  t.truthy(w.get(`reply:${f}`));
+  t.truthy(w.get(`reply:${g}`));
+  // comments: three deep on one node
+  const ask = await thread(t, w, "mel", open, "ask");
+  let up: string | undefined;
+  for (const u of ["otto", "mona", "otto"]) {
+    const id = w.id();
+    await ok(
+      t,
+      w.as(u, "comments.create", {
+        id,
+        thread: ask,
+        node: "r",
+        t: u,
+        ...(up ? { parent: up } : {}),
+      }),
+    );
+    up = id;
+  }
+  t.like(w.get(`comment:${up ?? ""}`), { u: "otto" });
+});

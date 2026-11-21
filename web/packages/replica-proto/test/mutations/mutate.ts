@@ -937,6 +937,19 @@ const MUTATIONS: Mutation[] = [
     from: "          ).length,\n      };",
     to: "          ).length * 0,\n      };",
   },
+  // ---- replies and comments to any depth ----
+  {
+    name: "M1b-28 a removal keeps the replies below its children",
+    file: "../mutators/src/rules.ts",
+    from: '      for (const x of itemsUnder(tx.list("reply", { th: r.th }), r.id)) drop(`reply:${x.id}`);',
+    to: '      for (const x of tx.list("reply", { th: r.th }).filter((y) => y.parent === r.id))\n        drop(`reply:${x.id}`);',
+  },
+  {
+    name: "M1b-29 a delete ignores another's reply below its children",
+    file: "../mutators/src/replies.ts",
+    from: '      const under = itemsUnder(tx.list("reply", { th: r.th }), r.id);',
+    to: '      const under = tx.list("reply", { th: r.th }).filter((x) => x.parent === r.id);',
+  },
 ];
 
 /** What one suite said about a mutation. */

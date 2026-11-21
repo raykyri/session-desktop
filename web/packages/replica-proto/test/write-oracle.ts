@@ -610,13 +610,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     if (i["parent"] !== undefined) {
       const top = f.dump.get(`reply:${i["parent"] as string}`);
-      if (
-        top?.kind !== "reply" ||
-        !mayRead(f.dump, top, f.me) ||
-        top.th !== p.id ||
-        top.parent !== null
-      )
-        no("NOT_FOUND");
+      if (top?.kind !== "reply" || !mayRead(f.dump, top, f.me) || top.th !== p.id) no("NOT_FOUND");
       if ((top as Extract<StoredRecord, { kind: "reply" }>).mod === "removed")
         no("PRECONDITION_FAILED");
     }
@@ -636,8 +630,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
         top?.kind !== "comment" ||
         !mayRead(f.dump, top, f.me) ||
         top.th !== p.id ||
-        top.node !== i["node"] ||
-        top.parent !== null
+        top.node !== i["node"]
       )
         no("NOT_FOUND");
       if ((top as Extract<StoredRecord, { kind: "comment" }>).mod === "removed")

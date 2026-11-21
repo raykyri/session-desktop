@@ -773,8 +773,9 @@ which `02-client-app.md` §4.4 does not ship. `researchNodeSchema` has none of
 these; `forkNodeInputSchema` takes `parent`, `q`, `uses`, `pay`. Change, with
 the full field list in 03 §1:
 - ask nodes get `kind: "ask" | "lookup"`, optional `quote` (at most 2,000
-  characters), optional `b` (passage index: the top-level block of the
-  parent's answer that holds the quote, used to place the branch tree and
+  characters), optional `b` (passage index: the passage of the parent's
+  answer that holds the quote, a top-level block or an item of a top-level
+  list, as the mockup's `blocksOf` counts them, used to place the branch tree and
   shade the passage; absent for asks from the footer) and, for look-ups,
   `look` (1-4 words, at most 80 characters) and `tpl` (template version);
 - every node records `model` and `effort` (03 K12); every new run carries
@@ -801,7 +802,11 @@ replies. The schema has replies only for posts (`rp` keyed by thread). Change:
 a `comment` record kind `{ id, th, s, node, parent, u, t, createdAt, mod }`,
 `comments.create`, `comments.update`, `comments.delete`, moderation key
 `c:<thread>:<comment>`. Comments are full-tier records and are erased with
-their thread.
+their thread. Replies and comments nest to any depth, as the mockup and 02
+§4.2 have them: a parent is any reply of the post (any comment of the node)
+the person may read and that is not removed; the client caps the indent.
+Removing one erases everything under it at any depth, and an author's
+delete leaves a shell only while someone else's item is somewhere under it.
 
 **C5. Counts shown on the footer.** The ask footer shows the number of
 branches in the whole tree (`T.count`), and the post footer the number of

@@ -15,7 +15,7 @@ test("G4: a comment writes a comment record and never a run, and changes no coun
   t.like(w.get(`comment:${c}`), { th, node: n, parent: null, u: "otto", t: "Nice." });
   t.is(w.all("run").length, runs);
   t.deepEqual(w.get(`counts:${th}`), counts);
-  // nested one level, on the same node
+  // nested to any depth, on the same node
   const sub = w.id();
   ok(t, w.apply("mel", "comments.create", { id: sub, thread: th, node: n, t: "x", parent: c }));
   refused(
@@ -23,11 +23,9 @@ test("G4: a comment writes a comment record and never a run, and changes no coun
     w.apply("mel", "comments.create", { id: w.id(), thread: th, node: "r", t: "x", parent: c }),
     "NOT_FOUND",
   );
-  refused(
-    t,
-    w.apply("mel", "comments.create", { id: w.id(), thread: th, node: n, t: "x", parent: sub }),
-    "NOT_FOUND",
-  );
+  const deep = w.id();
+  ok(t, w.apply("mel", "comments.create", { id: deep, thread: th, node: n, t: "x", parent: sub }));
+  t.like(w.get(`comment:${deep}`), { parent: sub });
   const p = post(t, w, "mel", open);
   refused(
     t,

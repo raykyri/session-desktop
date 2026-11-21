@@ -377,7 +377,8 @@ const GENERATORS: Record<string, Gen> = {
   "comments.create": (c, u, d) => {
     const thread = askThreadId(c, u ?? "");
     const node = nodeRef(c, thread);
-    const tops = records(c, "comment").filter((x) => x.parent === null && x.th === thread);
+    // a comment to any comment of the thread, at any depth
+    const tops = records(c, "comment").filter((x) => x.th === thread);
     const top = tops.length && chance(c.r, 0.3) ? pick(c.r, tops) : null;
     const id = newId(c, d);
     const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
@@ -435,7 +436,8 @@ const GENERATORS: Record<string, Gen> = {
     };
   },
   "research.createPostFollowUp": (c, _u, d) => {
-    const replies = records(c, "reply").filter((x) => x.parent === null);
+    // a reply to any reply, at any depth
+    const replies = records(c, "reply");
     const top = replies.length && chance(c.r, 0.3) ? pick(c.r, replies) : null;
     const id = newId(c, d);
     const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
@@ -678,7 +680,7 @@ function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
       if (r.q || r.look || r.quote) out.push(`removed ${k} keeps its text`);
     }
     if ((r.kind === "reply" || r.kind === "comment") && r.mod === "removed") {
-      if (r.parent === null) tops.add(r.id);
+      tops.add(`${r.kind}:${r.id}`);
       if (r.t) out.push(`removed ${k} keeps its text`);
     }
   }
@@ -696,8 +698,16 @@ function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
       out.push(`${k} is stored under a removed thread`);
     if ((r.kind === "answer" && nodes.has(r.node)) || (r.kind === "comment" && nodes.has(r.node)))
       out.push(`${k} is stored under a removed node`);
-    if ((r.kind === "reply" || r.kind === "comment") && r.parent !== null && tops.has(r.parent))
-      out.push(`${k} is stored under a removed ${r.kind}`);
+    // nothing is stored under a removed reply or comment, at any depth
+    if (r.kind === "reply" || r.kind === "comment")
+      for (let up = r.parent; up !== null;) {
+        if (tops.has(`${r.kind}:${up}`)) {
+          out.push(`${k} is stored under a removed ${r.kind}`);
+          break;
+        }
+        const x = dump.get(`${r.kind}:${up}`);
+        up = x && (x.kind === "reply" || x.kind === "comment") ? x.parent : null;
+      }
   }
   return out;
 }

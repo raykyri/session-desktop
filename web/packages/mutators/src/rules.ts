@@ -220,6 +220,23 @@ export function itemOf(tx: Tx, key: string): ThreadRec | NodeRec | ReplyRec | Co
   throw notFound();
 }
 
+/** The replies or comments under `id`, at any depth (not `id` itself). */
+export function itemsUnder<T extends { id: string; parent: string | null }>(
+  items: readonly T[],
+  id: string,
+): T[] {
+  const under = new Set([id]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const x of items)
+      if (x.parent !== null && !under.has(x.id) && under.has(x.parent)) {
+        under.add(x.id);
+        grew = true;
+      }
+  }
+  return items.filter((x) => x.id !== id && under.has(x.id));
+}
+
 /** The ids of a node and every node under it, at any depth. */
 export function nodesUnder(nodes: readonly NodeRec[], id: string): Set<string> {
   const under = new Set([id]);
@@ -245,7 +262,7 @@ function erasePromoted(tx: Tx, n: NodeRec, note: string | null): void {
 /** Remove a moderated item for good: its text is erased from storage, and so
  * is everything under it (a thread's nodes, answers, runs, replies,
  * comments, saves and the mention notifications about it; a node's answer
- * and comments; a top-level reply's or comment's replies), and so is every
+ * and comments; a reply's or comment's replies at any depth), and so is every
  * thread opened from an erased node (`from`), with the same placeholder
  * rules. The item stays as a placeholder; a thread's keeps who removed it
  * and the reason. */
@@ -314,16 +331,13 @@ export function erase(
       break;
     }
     case "reply":
-      if (r.parent === null)
-        for (const x of tx.list("reply", { th: r.th }).filter((y) => y.parent === r.id))
-          drop(`reply:${x.id}`);
+      // every reply under it, at any depth
+      for (const x of itemsUnder(tx.list("reply", { th: r.th }), r.id)) drop(`reply:${x.id}`);
       tx.put({ ...r, t: "", mod: "removed" });
       recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);
       break;
     case "comment":
-      if (r.parent === null)
-        for (const x of tx.list("comment", { th: r.th }).filter((y) => y.parent === r.id))
-          drop(`comment:${x.id}`);
+      for (const x of itemsUnder(tx.list("comment", { th: r.th }), r.id)) drop(`comment:${x.id}`);
       tx.put({ ...r, t: "", mod: "removed" });
       break;
   }

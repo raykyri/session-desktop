@@ -222,6 +222,20 @@ export function predictEffects(
   /** The author of the node a reference names in a thread: `r` the thread's. */
   const authorAt = (th: string, ref: string) =>
     String(get(ref === "r" ? `thread:${th}` : `node:${ref}`)?.["u"]);
+  /** The replies or comments under `id` in thread `th`, at any depth. */
+  const below = (kind: "reply" | "comment", th: string, id: string) => {
+    const all = [...dump.values()].filter(
+      (x): x is Extract<StoredRecord, { kind: "reply" | "comment" }> =>
+        x.kind === kind && x.th === th,
+    );
+    const ids = new Set([id]);
+    let size = 0;
+    while (size !== ids.size) {
+      size = ids.size;
+      for (const x of all) if (x.parent !== null && ids.has(x.parent)) ids.add(x.id);
+    }
+    return all.filter((x) => x.id !== id && ids.has(x.id));
+  };
   const ofThread = (th: string, ...kinds: string[]) =>
     [...dump.entries()].filter(
       ([, r]) => kinds.includes(r.kind) && "th" in r && (r as { th: string }).th === th,
@@ -582,10 +596,8 @@ export function predictEffects(
       // other goes, with the author's own under it (M1b review 9)
       const kind = name === "replies.delete" ? "reply" : "comment";
       const r = get(`${kind}:${str("id")}`) as Extract<StoredRecord, { kind: "reply" | "comment" }>;
-      const children = [...dump.values()].filter(
-        (x): x is Extract<StoredRecord, { kind: "reply" | "comment" }> =>
-          x.kind === kind && x.th === r.th && r.parent === null && x.parent === r.id,
-      );
+      // everything under it, at any depth
+      const children = below(kind, r.th, r.id);
       const kept = children.some((x) => x.u !== me);
       if (kept) keys.set(`${kind}:${r.id}`, { t: "", del: true });
       else {
@@ -804,8 +816,7 @@ export function predictEffects(
         for (const x of dump.values()) if (x.kind === "node" && under.has(x.id)) copies(x);
       } else if (r.kind === "reply" || r.kind === "comment") {
         keys.set(key, { mod: "removed", t: "" });
-        if (r.parent === null)
-          for (const [ck, x] of dump) if (x.kind === r.kind && x.parent === r.id) drop(ck);
+        for (const x of below(r.kind, r.th, r.id)) drop(`${r.kind}:${x.id}`);
         if (r.kind === "reply")
           keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - (erased.size - 1) });
       }
