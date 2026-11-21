@@ -61,8 +61,22 @@ export const channelName = (base: string) => `${base}-${runTag()}`;
 interface Answer {
   ok: boolean;
   result?: unknown;
-  error?: { code: string; message: string; expectedSeq?: number };
+  replay?: true;
+  error?: { code: string; message: string; expectedSeq?: number } | undefined;
 }
+
+/** The refusals that use no seq (`@session/sync` `UNRECORDED`). */
+const UNRECORDED: ReadonlySet<string> = new Set([
+  "UPGRADE_REQUIRED",
+  "UNAUTHORIZED",
+  "WRONG_CLIENT",
+  "OUT_OF_ORDER",
+  "CLOCK_SKEW",
+  "TOO_MANY_REQUESTS",
+  "SERVICE_UNAVAILABLE",
+  "INTERNAL_SERVER_ERROR",
+  "TOO_LARGE",
+]);
 
 /** A person writing through the sync routes from their own context. */
 export class Writer {
@@ -108,8 +122,18 @@ export class Writer {
       headers: SYNC_HEADERS,
       data: { envelopes },
     });
-    const { answers } = (await res.json()) as { answers: Answer[] };
-    this.seq = first + writes.length - 1;
+    const body = (await res.json()) as { answers?: Answer[]; code?: string; message?: string };
+    const answers =
+      body.answers ?? writes.map(() => ({ ok: false, error: body as Answer["error"] }));
+    // the seq advances by the answers that used one: in order, up to the
+    // first unrecorded refusal (the envelopes after it are out of order) or
+    // replay; a refusal of the whole request (429, 503) used none
+    let used = 0;
+    for (const a of body.answers ?? []) {
+      if (a.replay || (!a.ok && UNRECORDED.has(a.error?.code ?? ""))) break;
+      used += 1;
+    }
+    this.seq = first + used - 1;
     return answers;
   }
 

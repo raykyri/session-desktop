@@ -1,35 +1,47 @@
 // The M3 load check (`05-delivery.md` M3; `runbooks/load-check.md`): 200
-// event-stream clients and 20 writes a second for 10 minutes against one
+// event-stream clients and 20 writes a second for 30 minutes against one
 // server, measuring
 //
-// - apply: the round trip of `POST /api/sync/apply`, one envelope each;
-// - pull: the round trip of `GET /api/sync/pull`, 20 a second from random
-//   clients on a log they read;
-// - delivery: from the moment a write's answer arrives to the moment its
-//   `changes` event reaches each stream that reads the space;
-// - the server's resident memory every 10 s (a spawned server's, or the pid
-//   given with `--pid`);
+// - apply: from the send of `POST /api/sync/apply` (one envelope) to its
+//   answer;
+// - pull: the reads a client makes: `POST /api/sync/read` of every log it
+//   reads with its cursors (70 %), a `threads` read of one thread, as an
+//   opened thread is (20 %), and `GET /api/sync/pull` of one log (10 %);
+// - delivery: from the send of a write to its `changes` event on each
+//   stream that reads the space (it includes the stream's 100 ms batching);
+// - window snapshots under load, one a second, and a reconnect storm half
+//   way through: every client takes a `window` snapshot of its space at
+//   once;
+// - the server's memory every 10 s through `/metrics?gc=1`: the heap after
+//   garbage collection, the memory outside the heap, and the resident set;
+// - the generator's own event-loop delay, so that a slow generator is not
+//   taken for a slow server;
 // - the size of a `window` snapshot of a space at the web window's cap (`01`
 //   R1: 500 full threads), made before the run.
 //
+// Each latency is reported for the whole run and per minute (p50, p95, p99),
+// and the report ends with a verdict against the plan's thresholds
+// (`THRESHOLDS`). The script exits 1 when a check fails.
+//
 // Usage, from `web/packages/server`:
 //
-//   npx tsx scripts/load.ts                      # spawns a server on a temp database
-//   npx tsx scripts/load.ts --minutes 3          # a shorter run
-//   npx tsx scripts/load.ts --url https://staging.example --minutes 10
+//   npx tsx scripts/load.ts                      # a server on a temp database, under tsx
+//   npx tsx scripts/load.ts --bundle             # the production bundle (`npm run build` first)
+//   npx tsx scripts/load.ts --minutes 10         # a shorter run
+//   npx tsx scripts/load.ts --url http://127.0.0.1:8080 --metrics-token T
 //
-// A spawned server runs with `NODE_ENV=test`: `/auth/test-login` makes the
-// accounts, the test routes write run answers for the snapshot's threads,
-// and the transport limits are raised so that the load is not refused.
-// Against `--url`, the server must have `SESSION_TEST_AUTH=1` and
-// `NODE_ENV=test` (the staging procedure in the runbook) and the limits
-// raised the same way.
+// A started server (either kind) runs with `NODE_ENV=test`,
+// `SESSION_TEST_AUTH=1`, `SESSION_TEST_ROUTES=1`, a loopback origin, the
+// transport limits raised, a metrics token, and `--expose-gc` for the heap
+// samples. A server given with `--url` must have the same switches.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -38,13 +50,15 @@ import { PROTOCOL_VERSION, ulid, type ApplyResult, type Envelope } from "@sessio
 const { values: opt } = parseArgs({
   options: {
     url: { type: "string" },
-    minutes: { type: "string", default: "10" },
+    bundle: { type: "boolean", default: false },
+    minutes: { type: "string", default: "30" },
     clients: { type: "string", default: "200" },
     rate: { type: "string", default: "20" },
     "pull-rate": { type: "string", default: "20" },
+    "snapshot-rate": { type: "string", default: "1" },
     spaces: { type: "string", default: "10" },
     "window-threads": { type: "string", default: "520" },
-    pid: { type: "string" },
+    "metrics-token": { type: "string" },
     json: { type: "string" },
   },
 });
@@ -53,10 +67,27 @@ const MINUTES = Number(opt.minutes);
 const CLIENTS = Number(opt.clients);
 const RATE = Number(opt.rate);
 const PULL_RATE = Number(opt["pull-rate"]);
+const SNAPSHOT_RATE = Number(opt["snapshot-rate"]);
 const SPACES = Number(opt.spaces);
 const WINDOW_THREADS = Number(opt["window-threads"]);
 const MODEL = { model: "claude-fable", effort: "medium" } as const;
 const PACKAGE = fileURLToPath(new URL("..", import.meta.url));
+
+/** The plan's thresholds (`05-delivery.md` M3, `01` R1). */
+export const THRESHOLDS = {
+  applyP95Ms: 50,
+  pullP95Ms: 100,
+  /** "Memory flat after the first minute": the least-squares slopes of the
+   * heap after GC from minute 1 on, and of the resident set from a minute
+   * after the reconnect storm on (the storm raises the resident set to a new
+   * plateau, which V8 does not hand back; a leak is a slope, not a step). */
+  heapSlopeMbPerMinute: 0.5,
+  rssSlopeMbPerMinute: 1,
+  windowSnapshotBytes: 5_000_000,
+  /** Above this the generator itself lagged, and the latencies are not the
+   * server's: the run is inconclusive. */
+  generatorLagP99Ms: 50,
+} as const;
 
 const id = () => ulid(Date.now(), Math.random);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,6 +95,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // ---- the server ----
 
 let origin = opt.url ?? "";
+let metricsToken = opt["metrics-token"] ?? "";
 let child: ChildProcess | null = null;
 let dataDir: string | null = null;
 
@@ -83,9 +115,19 @@ async function startServer(): Promise<void> {
   const port = await freePort();
   dataDir = mkdtempSync(join(tmpdir(), "session-load-"));
   origin = `http://127.0.0.1:${port}`;
+  metricsToken = randomBytes(16).toString("hex");
   const big = String(1_000_000_000);
-  child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
-    cwd: PACKAGE,
+  // the bundle of the package the script is run from (`web/packages/server`,
+  // or `/app/packages/server` in the image), so a bundled copy of this
+  // script finds it too
+  const bundle = join(process.cwd(), "dist", "server.mjs");
+  if (opt.bundle && !existsSync(bundle))
+    throw new Error(`no ${bundle}: run npm run build --workspace @session/server first`);
+  const args = opt.bundle
+    ? ["--expose-gc", bundle]
+    : ["--expose-gc", "--import", "tsx", "src/index.ts"];
+  child = spawn(process.execPath, args, {
+    cwd: opt.bundle ? process.cwd() : PACKAGE,
     env: {
       ...process.env,
       NODE_ENV: "test",
@@ -94,10 +136,14 @@ async function startServer(): Promise<void> {
       SESSION_PUBLIC_ORIGIN: origin,
       SESSION_DATA_DIR: dataDir,
       SESSION_TEST_AUTH: "1",
+      SESSION_TEST_ROUTES: "1",
+      SESSION_METRICS_TOKEN: metricsToken,
       SESSION_LIMIT_WRITES_PER_MINUTE: big,
       SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: big,
+      SESSION_LIMIT_THREAD_READS_PER_MINUTE: big,
       SESSION_LIMIT_REGISTER_PER_MINUTE: big,
       SESSION_LIMIT_AUTH_PER_MINUTE: big,
+      SESSION_LIMIT_STREAM_OPENS_PER_MINUTE: big,
       TSX_TSCONFIG_PATH: "tsconfig.json",
     },
     stdio: ["ignore", "ignore", "inherit"],
@@ -113,10 +159,18 @@ async function startServer(): Promise<void> {
   throw new Error("the server did not start");
 }
 
-function rssOf(pid: number): number | null {
+/** The server's memory from `/metrics?gc=1`, in bytes, or null. */
+async function memoryOf(): Promise<{ heap: number; external: number; rss: number } | null> {
+  if (!metricsToken) return null;
   try {
-    const m = /VmRSS:\s+(\d+) kB/.exec(readFileSync(`/proc/${pid}/status`, "utf8"));
-    return m ? Number(m[1]) * 1024 : null;
+    const res = await fetch(`${origin}/metrics?gc=1`, {
+      headers: { Authorization: `Bearer ${metricsToken}` },
+    });
+    const text = await res.text();
+    const kind = (k: string) =>
+      Number(new RegExp(`session_process_memory_bytes\\{kind="${k}"\\} (\\d+)`).exec(text)?.[1]);
+    const out = { heap: kind("heap_used"), external: kind("external"), rss: kind("rss") };
+    return Number.isFinite(out.heap) ? out : null;
   } catch {
     return null;
   }
@@ -183,10 +237,28 @@ class Account {
     };
   }
 
-  async write(name: string, input: unknown): Promise<ApplyResult> {
+  /** The account's writes are sent one after another, as a client's outbox
+   * sends them, so that two of them never race on the seq. */
+  private writes: Promise<unknown> = Promise.resolve();
+
+  /** One write when the account's earlier ones are answered; `onSend` is
+   * called as it is sent. */
+  write(name: string, input: unknown, onSend?: () => void): Promise<ApplyResult> {
+    const next = this.writes.then(() => {
+      onSend?.();
+      return this.send(name, input);
+    });
+    this.writes = next.catch(() => undefined);
+    return next;
+  }
+
+  private async send(name: string, input: unknown): Promise<ApplyResult> {
     const res = await this.post("/api/sync/apply", { envelopes: [this.envelope(name, input)] });
     const a = ((await res.json()) as { answers?: ApplyResult[] }).answers?.[0];
-    if (!a) throw new Error(`apply: ${res.status}`);
+    if (!a) {
+      this.seq -= 1;
+      throw new Error(`apply: ${res.status}`);
+    }
     if (!a.ok && a.error.code === "OUT_OF_ORDER")
       this.seq = (a.error.expectedSeq ?? this.seq + 1) - 1;
     return a;
@@ -220,28 +292,56 @@ class Account {
 
 // ---- measurements ----
 
+const round = (x: number) => Math.round(x * 10) / 10;
+
+function percentiles(values: readonly number[]) {
+  const v = [...values].sort((a, b) => a - b);
+  const q = (p: number) => v[Math.min(v.length - 1, Math.floor(p * v.length))] ?? 0;
+  return {
+    n: v.length,
+    p50: round(q(0.5)),
+    p95: round(q(0.95)),
+    p99: round(q(0.99)),
+    max: round(v.at(-1) ?? 0),
+  };
+}
+
+/** Latencies, for the whole run and by the minute of the run they began in. */
 class Series {
   readonly values: number[] = [];
+  readonly byMinute = new Map<number, number[]>();
   errors = 0;
-  add(v: number) {
-    this.values.push(v);
+  constructor(readonly start: () => number) {}
+  add(ms: number, at = performance.now()) {
+    this.values.push(ms);
+    const minute = Math.max(0, Math.floor((at - this.start()) / 60_000));
+    const list = this.byMinute.get(minute) ?? [];
+    list.push(ms);
+    this.byMinute.set(minute, list);
   }
   summary() {
-    const v = [...this.values].sort((a, b) => a - b);
-    const q = (p: number) => v[Math.min(v.length - 1, Math.floor(p * v.length))] ?? 0;
-    const r = (x: number) => Math.round(x * 10) / 10;
     return {
-      n: v.length,
+      ...percentiles(this.values),
       errors: this.errors,
-      p50: r(q(0.5)),
-      p95: r(q(0.95)),
-      p99: r(q(0.99)),
-      max: r(v.at(-1) ?? 0),
+      perMinute: [...this.byMinute.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([minute, v]) => ({ minute, ...percentiles(v) })),
     };
   }
 }
 
-/** A stream reader: records when each marked write's event arrives. */
+/** The least-squares slope of `y` over `x`. */
+function slope(points: readonly { x: number; y: number }[]): number {
+  const n = points.length;
+  if (n < 2) return 0;
+  const mx = points.reduce((s, p) => s + p.x, 0) / n;
+  const my = points.reduce((s, p) => s + p.y, 0) / n;
+  const num = points.reduce((s, p) => s + (p.x - mx) * (p.y - my), 0);
+  const den = points.reduce((s, p) => s + (p.x - mx) ** 2, 0);
+  return den === 0 ? 0 : num / den;
+}
+
+/** A stream reader: calls `onEvent` with each `changes` event's data. */
 async function stream(
   a: Account,
   onEvent: (data: string, at: number) => void,
@@ -278,11 +378,10 @@ async function stream(
   }
 }
 
-async function main() {
+async function main(): Promise<boolean> {
   if (!origin) await startServer();
-  const pid = child?.pid ?? (opt.pid ? Number(opt.pid) : null);
   const started = Date.now();
-  console.log(`server ${origin}${pid ? ` (pid ${pid})` : ""}`);
+  console.log(`server ${origin}${opt.bundle ? " (production bundle)" : ""}`);
 
   // ---- setup: spaces, members, and the window snapshot's space ----
   const owner = new Account(`load-owner-${started}`);
@@ -321,7 +420,7 @@ async function main() {
   const reply = "A reply of a few sentences, as members write them. ".repeat(6);
   const writer = accounts[0] ?? owner;
   await writer.ok("spaces.join", { space: big });
-  const testRoutes = !opt.url || process.env["SESSION_LOAD_TEST_ROUTES"] === "1";
+  const testRoutes = (await owner.post("/api/sync/test/finish", { key: "none", text: "" })).ok;
   for (let k = 0; k < WINDOW_THREADS; k++) {
     const th = id();
     if (k % 2 === 0) {
@@ -367,10 +466,16 @@ async function main() {
 
   // ---- the run ----
   const stop = new AbortController();
-  const apply = new Series();
-  const pull = new Series();
-  const delivery = new Series();
-  const rss: { s: number; mb: number }[] = [];
+  let runStarted = performance.now();
+  const since = () => runStarted;
+  const apply = new Series(since);
+  const pull = new Series(since);
+  const delivery = new Series(since);
+  const snapshots = new Series(since);
+  const storm = new Series(since);
+  const lag = monitorEventLoopDelay({ resolution: 10 });
+  const lagByMinute: { minute: number; p50: number; p99: number; max: number }[] = [];
+  const memory: { s: number; heapMb: number; externalMb: number; rssMb: number }[] = [];
   const sentAt = new Map<string, number>();
   let events = 0;
   let resyncs = 0;
@@ -382,7 +487,7 @@ async function main() {
         events += 1;
         for (const m of data.matchAll(/LOADMARK-([0-9A-Z]{26})/g)) {
           const t = sentAt.get(m[1] ?? "");
-          if (t !== undefined) delivery.add(at - t);
+          if (t !== undefined) delivery.add(at - t, t);
         }
       },
       stop.signal,
@@ -391,16 +496,31 @@ async function main() {
     }),
   );
   await sleep(2000);
-  const runStarted = Date.now();
-  const end = runStarted + MINUTES * 60_000;
-  const sample = () => {
-    if (pid === null) return;
-    const v = rssOf(pid);
-    if (v !== null)
-      rss.push({ s: Math.round((Date.now() - runStarted) / 1000), mb: Math.round(v / 1e5) / 10 });
+  runStarted = performance.now();
+  const wallStarted = Date.now();
+  const end = wallStarted + MINUTES * 60_000;
+  lag.enable();
+  const sample = async () => {
+    const m = await memoryOf();
+    if (m)
+      memory.push({
+        s: Math.round((Date.now() - wallStarted) / 1000),
+        heapMb: round(m.heap / 1e6),
+        externalMb: round(m.external / 1e6),
+        rssMb: round(m.rss / 1e6),
+      });
   };
-  sample();
-  const sampler = setInterval(sample, 10_000);
+  await sample();
+  const sampler = setInterval(() => void sample(), 10_000);
+  const lagSampler = setInterval(() => {
+    lagByMinute.push({
+      minute: lagByMinute.length,
+      p50: round(lag.percentile(50) / 1e6),
+      p99: round(lag.percentile(99) / 1e6),
+      max: round(lag.max / 1e6),
+    });
+    lag.reset();
+  }, 60_000);
   const threads = new Map<string, string[]>(spaces.map((s) => [s, []]));
   const writers = accounts.slice(0, 40);
   let inFlight = 0;
@@ -432,46 +552,96 @@ async function main() {
               },
             ];
     inFlight += 1;
-    const t0 = performance.now();
+    let t0 = performance.now();
     try {
-      const res = await a.write(name, input);
-      const t1 = performance.now();
-      apply.add(t1 - t0);
+      // apply and delivery are timed from the send
+      const res = await a.write(name, input, () => {
+        t0 = performance.now();
+        sentAt.set(mark, t0);
+      });
+      apply.add(performance.now() - t0, t0);
       if (!res.ok) {
+        sentAt.delete(mark);
         apply.errors += 1;
         refusals.set(res.error.code, (refusals.get(res.error.code) ?? 0) + 1);
-      } else {
-        sentAt.set(mark, t1);
-        if (name === "threads.create") list.push(mark);
-      }
+      } else if (name === "threads.create") list.push(mark);
     } catch {
+      sentAt.delete(mark);
       apply.errors += 1;
     } finally {
       inFlight -= 1;
     }
   };
+  /** A client's read: every log it reads with its cursors (70 %), one
+   * thread (20 %), or one log by `GET /pull` (10 %). */
   const onePull = async () => {
     const a = accounts[Math.floor(Math.random() * accounts.length)] ?? owner;
     const logs = [...a.cursors.keys()];
-    const log = logs[Math.floor(Math.random() * logs.length)] ?? "";
-    const q = new URLSearchParams({ log, cursor: a.cursors.get(log) ?? "", clientId: a.clientId });
+    const r = Math.random();
     const t0 = performance.now();
     try {
-      const res = await fetch(`${origin}/api/sync/pull?${q.toString()}`, { headers: a.headers() });
-      const p = (await res.json()) as { cursor?: string; resync?: boolean };
-      pull.add(performance.now() - t0);
-      if (p.cursor) a.cursors.set(log, p.cursor);
-      // a resync (the setup's joins after a user log's snapshot): take a
-      // snapshot, as a client does
-      if (p.resync) {
-        resyncs += 1;
-        a.cursors.set(log, (await a.snapshot(log)).cursor);
+      if (r < 0.7) {
+        const res = await a.post("/api/sync/read", {
+          reads: logs.map((log) => ({ log, cursor: a.cursors.get(log) ?? "" })),
+          clientId: a.clientId,
+        });
+        const body = (await res.json()) as { answers?: { cursor?: string; resync?: boolean }[] };
+        pull.add(performance.now() - t0, t0);
+        if (!body.answers) throw new Error(`read: ${res.status}`);
+        for (const [k, p] of body.answers.entries()) {
+          const log = logs[k] ?? "";
+          if (p.cursor) a.cursors.set(log, p.cursor);
+          if (p.resync) {
+            resyncs += 1;
+            a.cursors.set(log, (await a.snapshot(log)).cursor);
+          }
+        }
+      } else if (r < 0.9) {
+        const sp = logs.find((l) => l.startsWith("space:")) ?? "";
+        const list = threads.get(sp.slice(6)) ?? [];
+        const th = list[Math.floor(Math.random() * list.length)];
+        if (!th) return;
+        const res = await a.post("/api/sync/read", {
+          reads: [{ log: sp, tier: "threads", threads: [th] }],
+          clientId: a.clientId,
+        });
+        await res.text();
+        if (!res.ok) throw new Error(`read: ${res.status}`);
+        pull.add(performance.now() - t0, t0);
+      } else {
+        const log = logs[Math.floor(Math.random() * logs.length)] ?? "";
+        const q = new URLSearchParams({
+          log,
+          cursor: a.cursors.get(log) ?? "",
+          clientId: a.clientId,
+        });
+        const res = await fetch(`${origin}/api/sync/pull?${q.toString()}`, {
+          headers: a.headers(),
+        });
+        const p = (await res.json()) as { cursor?: string; resync?: boolean };
+        pull.add(performance.now() - t0, t0);
+        if (p.cursor) a.cursors.set(log, p.cursor);
+        if (p.resync) {
+          resyncs += 1;
+          a.cursors.set(log, (await a.snapshot(log)).cursor);
+        }
       }
     } catch {
       pull.errors += 1;
     }
   };
-  // open-loop schedules: a write every 1/RATE s and a pull every 1/PULL_RATE s
+  const oneSnapshot = async (series: Series, a: Account) => {
+    const sp = [...a.cursors.keys()].find((l) => l.startsWith("space:")) ?? "";
+    const t0 = performance.now();
+    try {
+      const s = await a.snapshot(sp, "window");
+      series.add(s.ms, t0);
+    } catch {
+      series.errors += 1;
+    }
+  };
+  // open-loop schedules: a write every 1/RATE s, a read every 1/PULL_RATE s
+  // and a window snapshot every 1/SNAPSHOT_RATE s
   const tick = (rate: number, fn: () => Promise<void>) =>
     (async () => {
       for (let next = Date.now(); next < end; next += 1000 / rate) {
@@ -480,36 +650,100 @@ async function main() {
         void fn();
       }
     })();
-  let lastLog = Date.now();
+  // the reconnect storm: every client takes a window snapshot at once
+  const stormAt = wallStarted + (MINUTES * 60_000) / 2;
+  const stormed = (async () => {
+    await sleep(Math.max(0, stormAt - Date.now()));
+    const t0 = performance.now();
+    await Promise.all(accounts.map((a) => oneSnapshot(storm, a)));
+    return round(performance.now() - t0);
+  })();
   const progress = setInterval(() => {
-    const s = Math.round((Date.now() - runStarted) / 1000);
+    const s = Math.round((Date.now() - wallStarted) / 1000);
+    const m = memory.at(-1);
     console.log(
-      `${s} s: ${apply.values.length} writes (p95 ${apply.summary().p95} ms), ${pull.values.length} pulls (p95 ${pull.summary().p95} ms), ${events} events, rss ${rss.at(-1)?.mb ?? "?"} MB, in flight ${inFlight}`,
+      `${s} s: ${apply.values.length} writes (p95 ${percentiles(apply.values).p95} ms), ${pull.values.length} reads (p95 ${percentiles(pull.values).p95} ms), ${events} events, heap ${m?.heapMb ?? "?"} MB, rss ${m?.rssMb ?? "?"} MB, in flight ${inFlight}`,
     );
-    lastLog = Date.now();
   }, 30_000);
-  await Promise.all([tick(RATE, oneWrite), tick(PULL_RATE, onePull)]);
+  await Promise.all([
+    tick(RATE, oneWrite),
+    tick(PULL_RATE, onePull),
+    tick(SNAPSHOT_RATE, () =>
+      oneSnapshot(snapshots, accounts[Math.floor(Math.random() * accounts.length)] ?? owner),
+    ),
+  ]);
+  const stormMs = await stormed;
   while (inFlight > 0) await sleep(50);
   await sleep(1000);
-  void lastLog;
   clearInterval(progress);
   clearInterval(sampler);
-  sample();
+  clearInterval(lagSampler);
+  lag.disable();
+  await sample();
   stop.abort();
   await Promise.all(streams);
 
-  const firstMinute = rss.filter((x) => x.s <= 60).at(-1)?.mb ?? null;
+  // ---- the verdict ----
+  const after = memory.filter((m) => m.s >= 60);
+  const heapSlope = round(slope(after.map((m) => ({ x: m.s / 60, y: m.heapMb }))) * 100) / 100;
+  const externalSlope =
+    round(slope(after.map((m) => ({ x: m.s / 60, y: m.externalMb }))) * 100) / 100;
+  const stormS = (stormAt - wallStarted) / 1000;
+  const settled = memory.filter((m) => m.s >= stormS + 60);
+  const rssSlope = round(slope(settled.map((m) => ({ x: m.s / 60, y: m.rssMb }))) * 100) / 100;
+  const before = after.filter((m) => m.s < stormS);
+  const rssBeforeStorm = round(slope(before.map((m) => ({ x: m.s / 60, y: m.rssMb }))) * 100) / 100;
+  const applyS = apply.summary();
+  const pullS = pull.summary();
+  const generatorLagP99 = Math.max(0, ...lagByMinute.map((m) => m.p99));
+  const checks = [
+    {
+      check: "apply p95",
+      value: applyS.p95,
+      limit: THRESHOLDS.applyP95Ms,
+      pass: applyS.p95 < THRESHOLDS.applyP95Ms,
+    },
+    {
+      check: "pull p95",
+      value: pullS.p95,
+      limit: THRESHOLDS.pullP95Ms,
+      pass: pullS.p95 < THRESHOLDS.pullP95Ms,
+    },
+    {
+      check: "heap after GC, slope from minute 1 (MB/min)",
+      value: heapSlope,
+      limit: THRESHOLDS.heapSlopeMbPerMinute,
+      pass: memory.length > 2 && heapSlope <= THRESHOLDS.heapSlopeMbPerMinute,
+    },
+    {
+      check: "resident set, slope from a minute after the storm (MB/min)",
+      value: rssSlope,
+      limit: THRESHOLDS.rssSlopeMbPerMinute,
+      pass: settled.length > 2 && rssSlope <= THRESHOLDS.rssSlopeMbPerMinute,
+    },
+    {
+      check: "window snapshot bytes",
+      value: win.bytes,
+      limit: THRESHOLDS.windowSnapshotBytes,
+      pass: win.bytes <= THRESHOLDS.windowSnapshotBytes,
+    },
+  ];
+  const conclusive = generatorLagP99 <= THRESHOLDS.generatorLagP99Ms;
+  const pass = conclusive && checks.every((c) => c.pass);
   const report = {
     origin,
+    bundle: opt.bundle,
     minutes: MINUTES,
     clients: CLIENTS,
     writesPerSecond: RATE,
-    pullsPerSecond: PULL_RATE,
-    apply: apply.summary(),
+    readsPerSecond: PULL_RATE,
+    apply: applyS,
     applyRefusals: Object.fromEntries(refusals),
-    pull: pull.summary(),
+    pull: pullS,
     pullResyncs: resyncs,
     delivery: delivery.summary(),
+    windowSnapshotsUnderLoad: snapshots.summary(),
+    reconnectStorm: { clients: accounts.length, totalMs: stormMs, ...storm.summary() },
     events,
     windowSnapshot: {
       threads: WINDOW_THREADS,
@@ -518,19 +752,27 @@ async function main() {
       fullBytes: full.bytes,
       answers: testRoutes,
     },
-    rss,
-    rssAfterFirstMinuteMb: firstMinute,
-    rssEndMb: rss.at(-1)?.mb ?? null,
+    memory,
+    heapAfterGcSlopeMbPerMinute: heapSlope,
+    rssSlopeMbPerMinute: { beforeStorm: rssBeforeStorm, afterStorm: rssSlope },
+    externalSlopeMbPerMinute: externalSlope,
+    generatorLag: { p99MaxMs: generatorLagP99, perMinute: lagByMinute },
+    verdict: { pass, conclusive, checks },
   };
   console.log(JSON.stringify(report, null, 2));
-  if (opt.json) {
-    const { writeFileSync } = await import("node:fs");
-    writeFileSync(opt.json, JSON.stringify(report, null, 2));
-  }
+  if (opt.json) writeFileSync(opt.json, JSON.stringify(report, null, 2));
+  console.log(
+    pass ? "PASS" : conclusive ? "FAIL" : "INCONCLUSIVE: the generator lagged",
+    checks
+      .map((c) => `${c.check}: ${String(c.value)} (limit ${c.limit}) ${c.pass ? "ok" : "over"}`)
+      .join("; "),
+  );
+  return pass;
 }
 
+let passed = false;
 try {
-  await main();
+  passed = await main();
 } finally {
   const started = child as ChildProcess | null;
   if (started) {
@@ -539,3 +781,4 @@ try {
   }
   if (dataDir) rmSync(dataDir, { recursive: true, force: true });
 }
+process.exitCode = passed ? 0 : 1;

@@ -129,6 +129,10 @@ export interface ServerStore extends Source {
   logRows(log: LogId, after: number): LogRow[];
   epoch(log: LogId): Epoch;
   setEpoch(log: LogId, epoch: Epoch): void;
+  /** The database's history id: 32 hex digits sealed into every cursor
+   * token, which a detected restore replaces (`01` D6), so every token served
+   * before it resyncs, whatever the log. */
+  history(): string;
 
   // ---- clients ----
 

@@ -19,6 +19,9 @@ export interface WindowSettings {
   threads: number;
   /** `SESSION_WEB_WINDOW_CAP` (500). */
   cap: number;
+  /** `SESSION_WEB_SUMMARY_DAYS`: how far back summaries reach (730, the
+   * default when absent). */
+  summaryDays?: number;
 }
 
 export const WEB_WINDOW: WindowSettings = { days: 30, threads: 100, cap: 500 };
@@ -67,7 +70,7 @@ export function windowOf(
     if (s?.kind === "save" && isoToMs(s.createdAt) >= now - OWN_WINDOW) full.add(t.id);
   }
   const summary = new Set<string>();
-  for (const t of threads)
-    if (!full.has(t.id) && createdMs(t) >= now - SUMMARY_WINDOW) summary.add(t.id);
+  const horizon = settings.summaryDays === undefined ? SUMMARY_WINDOW : settings.summaryDays * DAY;
+  for (const t of threads) if (!full.has(t.id) && createdMs(t) >= now - horizon) summary.add(t.id);
   return { full, summary };
 }

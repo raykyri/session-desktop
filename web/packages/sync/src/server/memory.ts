@@ -11,6 +11,8 @@
 // The store has no users table: a handle is an account once it registered a
 // client (the prototype's rule), or after `setAccount`.
 
+import { randomBytes } from "node:crypto";
+
 import {
   indexOf,
   uniqueOf,
@@ -280,6 +282,19 @@ export class MemoryStore implements ServerStore {
     const out: LogRow[] = [];
     for (const r of this.logs.get(log)?.values() ?? []) if (r.version > after) out.push({ ...r });
     return out;
+  }
+
+  /** The history id; a store in memory has one for its lifetime unless a
+   * test replaces it (`newHistory`). */
+  private historyId = randomBytes(16).toString("hex");
+
+  history(): string {
+    return this.historyId;
+  }
+
+  /** A new history id, as a detected restore makes one. */
+  newHistory(): void {
+    this.historyId = randomBytes(16).toString("hex");
   }
 
   epoch(log: LogId): Epoch {

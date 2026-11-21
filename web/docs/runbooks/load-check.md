@@ -1,117 +1,142 @@
 # Load check of the sync server
 
 The M3 load check (`15-implementation-plan/05-delivery.md` M3): 200 event
-stream clients and 20 writes a second for 10 minutes against one server, on
+stream clients and 20 writes a second for 30 minutes against one server, on
 the production machine size (`shared-cpu-2x`, 2 GB). It passes with apply
-p95 under 50 ms, pull p95 under 100 ms and resident memory flat after the
-first minute, and it records the snapshot size of a space at the web
-window's cap (`01` R1: 500 full threads); above 5 MB the window settings
-(`SESSION_WEB_WINDOW_*`) are lowered before M4's end-to-end work.
+p95 under 50 ms, pull p95 under 100 ms and memory flat after the first
+minute, and it records the snapshot size of a space at the web window's cap
+(`01` R1: 500 full threads); above 5 MB the window settings
+(`SESSION_WEB_WINDOW_*`) are lowered.
 
 The script is `web/packages/server/scripts/load.ts`. It measures, from the
 client side:
 
-- `apply`: the round trip of `POST /api/sync/apply`, one envelope each, at
-  `--rate` writes a second (posts, replies and saves in 10 open channels);
-- `pull`: the round trip of `GET /api/sync/pull`, `--pull-rate` a second,
-  from random clients on a log they read (a resync takes a snapshot, as a
-  client does, and is counted apart);
-- `delivery`: from a write's answer to its `changes` event on each stream
+- `apply`: from the send of `POST /api/sync/apply` (one envelope) to its
+  answer, at `--rate` writes a second (posts, replies and saves in 10 open
+  channels);
+- `pull`: the reads clients make, `--pull-rate` a second from random
+  clients: `POST /api/sync/read` of every log the client reads, with its
+  cursors and client id (70 %); a `threads` read of one thread, as opening
+  a thread does (20 %); `GET /api/sync/pull` of one log (10 %). A resync
+  takes a snapshot, as a client does, and is counted apart;
+- `delivery`: from the send of a write to its `changes` event on each stream
   that reads the channel (it includes the stream's 100 ms batching);
-- `rss`: the server's resident memory every 10 s, read from
-  `/proc/<pid>/status` (a server the script started, or `--pid`);
+- `windowSnapshotsUnderLoad`: a `window` snapshot of a client's channel,
+  `--snapshot-rate` a second;
+- `reconnectStorm`: half way through, every client takes a `window`
+  snapshot at once, as after a deploy;
+- `memory`: every 10 s, through `/metrics?gc=1` (`session_process_memory_bytes`):
+  the heap after garbage collection, the memory outside the heap
+  (`external`: buffers and sockets) and the resident set. The server is
+  started with `--expose-gc`; without it `?gc=1` does nothing;
+- `generatorLag`: the load generator's own event-loop delay, per minute;
 - `windowSnapshot`: the bytes of a `window` snapshot of a channel with
   `--window-threads` threads (520 by default, so the window is at its cap of
   500), read by a member who wrote none of them. Half are asks with their
   answer and one branch with its answer (about 1.5 KB of Markdown each), half
   posts with three replies.
 
-It prints progress every 30 s and a JSON report at the end (`--json <file>`
-writes it too).
+Every latency is reported for the whole run and per minute (p50, p95, p99,
+max). The report ends with a verdict against these thresholds
+(`THRESHOLDS` in the script), and the script exits 1 on a failed check:
+
+| Check | Limit |
+|---|---|
+| apply p95 | under 50 ms |
+| pull p95 | under 100 ms |
+| heap after GC, least-squares slope from minute 1 | at most 0.5 MB a minute |
+| resident set, least-squares slope from a minute after the reconnect storm | at most 1 MB a minute |
+| window snapshot at the cap | at most 5 MB |
+
+The storm raises the resident set to a new plateau once (200 window
+snapshots at once), which V8 keeps rather than hands back; the check is on
+the slope after it, and the report gives the slope before it too. The run
+is reported `INCONCLUSIVE` instead when the generator's event-loop
+delay p99 exceeds 50 ms in any minute: the latencies are then the
+generator's as much as the server's. It prints progress every 30 s and a
+JSON report at the end (`--json <file>` writes it too).
 
 ## Locally
 
 From `web/packages/server`:
 
 ```sh
-npx tsx scripts/load.ts                # 10 minutes, a server on a temp database
-npx tsx scripts/load.ts --minutes 3    # shorter
+npx tsx scripts/load.ts                    # 30 minutes, a server on a temp database, under tsx
+npm run build && npx tsx scripts/load.ts --bundle   # the production bundle, dist/server.mjs
+npx tsx scripts/load.ts --minutes 10       # shorter
 ```
 
-The script starts the server itself (`src/index.ts` under tsx) with
-`NODE_ENV=test`, `SESSION_TEST_AUTH=1` and the transport limits raised, so
+The script starts the server itself on a temp data directory and a
+loopback origin, with `NODE_ENV=test`, `SESSION_TEST_AUTH=1`,
+`SESSION_TEST_ROUTES=1`, a metrics token and the transport limits raised, so
 the load is not refused by the limits of `04` Z1 and `01` A3. Accounts are
 made with `/auth/test-login`; the run answers of the window's asks are
 written with the test route `/api/sync/test/finish`. The load generator runs
 in the same machine as the server, so a local run measures both on shared
-cores.
+cores; the generator's lag says how much that mattered.
 
-## On staging
+## On the production machine size
 
-Staging runs the production image on the production machine size
-(`05` §3.2). The check needs accounts and run answers that only a test
-server makes, so it runs against a staging deploy started for it, and the
-database is reset afterwards.
+The check needs accounts and run answers that only a test server makes:
+`SESSION_TEST_AUTH` is refused in production and `SESSION_TEST_ROUTES` is
+refused outside `NODE_ENV=test` and a loopback origin. The deployed staging
+app keeps `NODE_ENV=production`. The check runs a second server process from
+the same image on a staging machine, on a scratch data directory and a
+loopback port, so it measures the production bundle on the production
+machine size without changing the deployed app's configuration or data.
 
-While `NODE_ENV=test` is set, the server mounts the acceptance suite's test
-routes (`/api/sync/test/*`, unauthenticated, one of them a dump of every
-table) and the test sign-in. Staging holds no real data, but keep the window
-short and never set these on production (`loadConfig` refuses the test
-sign-in there; the test routes follow `NODE_ENV`).
-
-1. Deploy the build to staging with the test switches for the check:
+1. Build the load script into one file on a workstation, from
+   `web/packages/server`:
 
    ```sh
-   fly secrets set -a session-staging --stage \
-     NODE_ENV=test SESSION_TEST_AUTH=1 \
-     SESSION_LIMIT_WRITES_PER_MINUTE=1000000000 \
-     SESSION_LIMIT_SNAPSHOTS_PER_MINUTE=1000000000 \
-     SESSION_LIMIT_REGISTER_PER_MINUTE=1000000000 \
-     SESSION_LIMIT_AUTH_PER_MINUTE=1000000000
-   fly deploy -a session-staging
+   npx esbuild scripts/load.ts --bundle --platform=node --format=esm --target=node22 \
+     --alias:@session/sync/server=../sync/src/server/index.ts \
+     --alias:@session/mutators=../mutators/src/index.ts \
+     --alias:@session/shared=../shared/src --outfile=/tmp/load.mjs
    ```
 
-2. Run the script on the staging machine, so that the latency measured is the
-   server's and not the network's, with the server's pid for the memory
-   samples:
+2. Copy it to a staging machine and run it there against a server it
+   starts from the image's bundle:
 
    ```sh
+   fly ssh sftp shell -a session-staging   # put /tmp/load.mjs /tmp/load.mjs
    fly ssh console -a session-staging
    # inside:
    cd /app/packages/server
-   pid=$(pgrep -f 'node .*server.mjs' | head -1)
-   npx tsx scripts/load.ts --url http://127.0.0.1:8080 --pid "$pid" --minutes 10 --json /tmp/load.json
+   node /tmp/load.mjs --bundle --minutes 30 --json /tmp/load.json
    ```
 
-   The image has no `tsx` and no sources: copy `scripts/load.ts` and run it
-   with a Node that has `tsx` (`npm i -g tsx` in the machine's shell), or run
-   it from a workstation against the staging URL (`--url
-   https://session-staging.fly.dev`, without `--pid`; read memory from
-   `fly machine status` and `/metrics` instead) and note that the latencies
-   include the network round trip.
+   `--bundle` starts `node --expose-gc dist/server.mjs` with the test
+   switches above on a temp directory under `/tmp` and a free loopback port;
+   the deployed server on port 8080 is not touched, and both share the
+   machine's two cores, as a deployed server shares them with its own
+   Litestream. Stop the deployed app's machine first (`fly machine stop`)
+   for a measurement of the server alone.
 
-3. Record the report (apply, pull and delivery percentiles, the memory
-   series, the window snapshot's bytes) in the M3 notes.
+3. Record the report (the verdict, the apply, pull, delivery and snapshot
+   percentiles per minute, the memory series and its slopes, the reconnect
+   storm, the window snapshot's bytes) in the M3 notes.
 
-4. Remove the test switches and reset the database
-   (`runbooks/reset-database.md`):
+4. Delete `/tmp/load.json`, `/tmp/load.mjs` and the scratch directory
+   (`/tmp/session-load-*`, which the script removes itself unless it was
+   killed).
 
-   ```sh
-   fly secrets unset -a session-staging NODE_ENV SESSION_TEST_AUTH \
-     SESSION_LIMIT_WRITES_PER_MINUTE SESSION_LIMIT_SNAPSHOTS_PER_MINUTE \
-     SESSION_LIMIT_REGISTER_PER_MINUTE SESSION_LIMIT_AUTH_PER_MINUTE
-   ```
+Against a server it did not start (`--url`), the script needs that server's
+metrics token (`--metrics-token`) for the memory samples, and the server
+must run with the same test switches, which only a local test server can.
 
 ## Options
 
 | Option | Default | |
 |---|---|---|
 | `--url` | none: start a server | the server's origin |
-| `--minutes` | 10 | length of the measured run |
+| `--bundle` | off | start `dist/server.mjs` instead of `src/index.ts` under tsx |
+| `--minutes` | 30 | length of the measured run |
 | `--clients` | 200 | accounts, each with one client id and one event stream |
 | `--rate` | 20 | writes a second |
-| `--pull-rate` | 20 | pulls a second |
+| `--pull-rate` | 20 | reads a second |
+| `--snapshot-rate` | 1 | window snapshots a second |
 | `--spaces` | 10 | open channels the load writes to; each account reads three |
 | `--window-threads` | 520 | threads of the window snapshot's channel |
-| `--pid` | the started server | the process whose memory is sampled |
+| `--metrics-token` | the started server's | the bearer token of `/metrics` |
 | `--json` | none | also write the report to this file |

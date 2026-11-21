@@ -120,6 +120,10 @@ export default defineConfig({
       SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: "100000",
       SESSION_LIMIT_JOINS_PER_HOUR: "100000",
       SESSION_LIMIT_DIRECTORY_PER_MINUTE: "100000",
+      SESSION_LIMIT_STREAM_OPENS_PER_MINUTE: "100000",
+      SESSION_LIMIT_THREAD_READS_PER_MINUTE: "100000",
+      SESSION_LIMIT_THREAD_READS_PER_IP_PER_MINUTE: "100000",
+      SESSION_LIMIT_BY_NAME_PER_MINUTE: "100000",
       // A channel past 100 threads keeps its oldest out of the window, for
       // the thread address of a thread outside it (`spaces-feed`, 01 R1).
       SESSION_WEB_WINDOW_CAP: "100",

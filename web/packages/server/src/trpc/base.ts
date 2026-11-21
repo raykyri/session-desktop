@@ -12,7 +12,7 @@ import type { Config } from "../config.js";
 import type { ServerDeps } from "../deps.js";
 import type { Logger } from "../logger.js";
 import type { AbuseBucket, RateLimiter } from "../middleware/rateLimit.js";
-import { abuseBuckets } from "../middleware/rateLimit.js";
+import { abuseBuckets, writesKey } from "../middleware/rateLimit.js";
 import type { Ledger } from "../runs/ledger.js";
 import { MemoryLedger } from "../runs/memoryLedger.js";
 import type { RunTexts } from "../runs/runTexts.js";
@@ -108,11 +108,12 @@ export function takeOrRefuse(ctx: AppContext, bucket: AbuseBucket, key: string):
 }
 
 /** 60 mutations a minute per account (`06` §8, `04` Z1 "Replicated
- * writes"). Queries are cheap and cacheable; a mutation is a write. */
+ * writes"), in the one bucket `/api/sync/apply` takes from too
+ * (`writesKey`). Queries are cheap and cacheable; a mutation is a write. */
 const mutationBudget = t.middleware(({ ctx, type, next }) => {
   if (type === "mutation" && ctx.user !== null) {
     const spec = abuseBuckets(ctx.config.abuse).writes;
-    const result = ctx.limiter.take(`mutations:${ctx.user.id}`, spec);
+    const result = ctx.limiter.take(writesKey(ctx.user.id), spec);
     if (!result.allowed) {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",

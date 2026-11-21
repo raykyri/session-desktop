@@ -9,6 +9,10 @@
 //   npm run db:admin -- --delete <handle>      the account-deletion job, with
 //                                              the server stopped
 //                                              (`web/docs/runbooks/delete-account.md`)
+//   npm run db:admin -- --new-history          replace the sync history id at
+//                                              the next boot, after a restore
+//                                              that kept the file's identity
+//                                              (`runbooks/restore.md`)
 //
 // Root invites have no creator: each person who runs Session redeems one,
 // chooses a handle at the profile step, and is then promoted by handle.
@@ -17,18 +21,26 @@ import { resolve } from "node:path";
 
 import { accountInviteLink } from "@session/shared";
 
-import { accountInvites, accounts, closeDatabase, openDatabase, users } from "../src/index.js";
+import {
+  accountInvites,
+  accounts,
+  closeDatabase,
+  openDatabase,
+  requestNewHistory,
+  users,
+} from "../src/index.js";
 
 const USAGE =
   "usage: npm run db:admin -- <handle> [--revoke]\n" +
   "       npm run db:admin -- --invite\n" +
-  "       npm run db:admin -- --delete <handle>\n";
+  "       npm run db:admin -- --delete <handle>\n" +
+  "       npm run db:admin -- --new-history\n";
 
 const args = process.argv.slice(2);
 const flags = new Set(args.filter((argument) => argument.startsWith("--")));
 const handle = args.find((argument) => !argument.startsWith("--"))?.replace(/^@/, "");
 
-if (!flags.has("--invite") && handle === undefined) {
+if (!flags.has("--invite") && !flags.has("--new-history") && handle === undefined) {
   process.stderr.write(USAGE);
   process.exit(1);
 }
@@ -37,7 +49,12 @@ const dataDir = process.env["SESSION_DATA_DIR"];
 const path = dataDir ? resolve(dataDir, "session.db") : resolve(".data/session.db");
 const db = openDatabase(path);
 try {
-  if (flags.has("--invite")) {
+  if (flags.has("--new-history")) {
+    requestNewHistory(db.$client);
+    process.stdout.write(
+      "the next boot replaces the sync history id: every cursor served before it resyncs\n",
+    );
+  } else if (flags.has("--invite")) {
     const { code } = accountInvites.createRoot(db);
     const origin = process.env["SESSION_PUBLIC_ORIGIN"];
     process.stdout.write(
