@@ -33,23 +33,29 @@ test("private channels are not read", async ({ page }) => {
   await expect(page.getByText("This channel is private. Ask @sol to add you.")).toBeVisible();
 });
 
-test("write controls open sign-in", async ({ page }) => {
+test("write controls open the auth dialog", async ({ page }) => {
+  const dialog = page.getByRole("dialog", { name: "Sign in to Session" });
+  const close = async () => {
+    await expect(dialog.getByRole("button", { name: "Sign in with X" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
+  };
   const cover = page.getByRole("button", { name: "Sign in to ask or post" });
   await expect(page.locator(`textarea[aria-label="Ask or post"]`)).toHaveAttribute(
     "placeholder",
     "Sign in to ask or post",
   );
   await cover.click();
-  await expect(page).toHaveURL(/\/login\?redirect=/);
+  await close();
 
-  await openFeed(page);
   await page.locator(`#card-${FIRST_ASK}`).getByRole("button", { name: /^Save/ }).click();
-  await expect(page).toHaveURL(/\/login\?redirect=/);
+  await close();
 
-  await openFeed(page);
   await page
     .locator(`#card-${FIRST_ASK}`)
     .getByRole("button", { name: /^Ask a follow-up/ })
     .click();
-  await expect(page).toHaveURL(/\/login\?redirect=/);
+  await close();
 });

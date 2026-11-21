@@ -4,35 +4,34 @@ import { auth, closeDatabase, openDatabase, users } from "../src/index.js";
 
 import { createFixture } from "./helpers.js";
 
-test("retains user account association when GitHub username is renamed", (t) => {
+test("an identity keeps its account when the provider username changes", (t) => {
   const db = openDatabase(":memory:");
-  const first = users.upsertFromGitHub(db, { githubId: 7, login: "old", name: "A" });
+  const identity = { provider: "github" as const, providerUserId: "7", login: "old", name: "A" };
+  const first = users.createWaiting(db, identity);
   t.true(first.created);
-  const second = users.upsertFromGitHub(db, { githubId: 7, login: "new", name: "B" });
-  t.false(second.created);
-  t.is(second.user.id, first.user.id);
-  t.is(second.user.login, "new");
+  const renamed = users.refreshIdentity(db, { ...identity, login: "new", name: "B" });
+  t.is(renamed?.id, first.user.id);
+  t.is(renamed?.login, "new");
+  const again = users.createWaiting(db, { ...identity, login: "newer" });
+  t.false(again.created);
+  t.is(again.user.id, first.user.id);
   t.is(users.listUsers(db).length, 1);
   closeDatabase(db);
 });
 
-test("records sign-up context on creation only", (t) => {
+test("records sign-up context on creation only and the email on every sign-in", (t) => {
   const db = openDatabase(":memory:");
-  const { user } = users.upsertFromGitHub(db, { githubId: 8, login: "a" }, { signupIpHash: "h1" });
-  users.upsertFromGitHub(db, { githubId: 8, login: "a" }, { signupIpHash: "h2" });
-  const row = db.$client.prepare(`SELECT signup_ip_hash AS h FROM users WHERE id = ?`).get(user.id);
-  t.deepEqual(row, { h: "h1" });
-  closeDatabase(db);
-});
-
-test("sets admin role by login without granting on regular sign-in", (t) => {
-  const db = openDatabase(":memory:");
-  users.upsertFromGitHub(db, { githubId: 9, login: "raymond" });
-  t.false(users.findByLogin(db, "raymond")?.isAdmin ?? true);
-  t.true(users.setAdmin(db, "raymond", true).isAdmin);
-  users.upsertFromGitHub(db, { githubId: 9, login: "raymond" });
-  t.true(users.findByLogin(db, "raymond")?.isAdmin ?? false);
-  t.throws(() => users.setAdmin(db, "nobody", true), { message: /Account not found/ });
+  const identity = { provider: "x" as const, providerUserId: "8", login: "a" };
+  const { user } = users.createWaiting(
+    db,
+    { ...identity, email: "one@example.com" },
+    { signupIpHash: "h1" },
+  );
+  users.createWaiting(db, { ...identity, email: "two@example.com" }, { signupIpHash: "h2" });
+  const row = db.$client
+    .prepare(`SELECT signup_ip_hash AS h, email FROM users WHERE id = ?`)
+    .get(user.id);
+  t.deepEqual(row, { h: "h1", email: "two@example.com" });
   closeDatabase(db);
 });
 
@@ -78,10 +77,18 @@ test("throttles last_seen_at updates to at most once per 5-minute window", (t) =
 
 test("invalidates OAuth state after single use or expiration", (t) => {
   const fixture = createFixture(t);
-  auth.createOAuthState(fixture.db, { state: "s1", codeVerifier: "v1", returnTo: "/r/1" });
+  auth.createOAuthState(fixture.db, {
+    state: "s1",
+    codeVerifier: "v1",
+    returnTo: "/r/1",
+    provider: "x",
+    codeHash: "h",
+  });
   t.deepEqual(auth.consumeOAuthState(fixture.db, "s1"), {
     codeVerifier: "v1",
     returnTo: "/r/1",
+    provider: "x",
+    codeHash: "h",
   });
   t.is(auth.consumeOAuthState(fixture.db, "s1"), null);
 
@@ -90,18 +97,6 @@ test("invalidates OAuth state after single use or expiration", (t) => {
     .prepare(`UPDATE oauth_states SET created_at = ? WHERE state = ?`)
     .run(Date.now() - auth.OAUTH_STATE_TTL_MS - 1, "s2");
   t.is(auth.consumeOAuthState(fixture.db, "s2"), null);
-});
-
-test("debits inviter quota and redeems invite codes once", (t) => {
-  const fixture = createFixture(t);
-  users.setInvitesRemaining(fixture.db, fixture.userId, 2);
-  const codes = auth.createInvites(fixture.db, fixture.userId, 5);
-  t.is(codes.length, 2);
-  t.deepEqual(auth.createInvites(fixture.db, fixture.userId, 1), []);
-  const code = codes[0] ?? "";
-  t.true(auth.redeemInvite(fixture.db, code, fixture.userId));
-  t.false(auth.redeemInvite(fixture.db, code, fixture.userId));
-  t.false(auth.redeemInvite(fixture.db, "unknown", fixture.userId));
 });
 
 test("counts sign-up attempts by IP address and time window", (t) => {

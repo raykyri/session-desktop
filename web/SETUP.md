@@ -216,13 +216,16 @@ every stored API key unreadable, and members have to add theirs again.
 Three of those are not optional before real traffic. Without
 `LITESTREAM_REPLICA_URL` the database has no backup. Without
 `SESSION_METRICS_TOKEN` the metrics endpoint is disabled and token spend is
-unobservable. And sign-up is open to any GitHub account unless you gate it —
-`SESSION_REQUIRE_INVITE=1` is already set in `fly.toml`, and
-`SESSION_ALLOWED_GITHUB_LOGINS` is the stricter alternative.
+unobservable. `SESSION_SECRET_KEY` also seals open invite codes. Session is invite-only: a new GitHub or X identity without an invite becomes
+a waiting account that can only read. The first site admins redeem root
+invites printed by `npm run db:admin -- --invite` and are promoted by handle
+with `npm run db:admin -- <handle>`.
 
 Edit `fly.toml` before deploying to set `GOOGLE_VERTEX_PROJECT` to your real
 project id; it ships with a placeholder. Register the production OAuth
-callback as `https://session.dev/auth/github/callback`.
+callbacks as `https://session.dev/auth/github/callback` (GitHub OAuth app)
+and `https://session.dev/auth/x/callback` (X developer app, OAuth 2.0,
+scopes `users.read`, `tweet.read`, `users.email`).
 
 ### 4. Deploy
 

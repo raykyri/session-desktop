@@ -36,13 +36,39 @@ export function checkOrigin(headers: Headers, publicOrigin: string): OriginCheck
   return { ok: true };
 }
 
+/** The API prefixes whose GETs are guarded too: tRPC subscriptions, the sync
+ * snapshot, pull and event stream, and run reads, so a cross-site page cannot
+ * open a cookie SSE stream or read a snapshot (plan `04` Z2). */
+const GUARDED_GET_PREFIXES = ["/api/trpc", "/api/sync/", "/api/runs/"];
+
 /** Determines whether the request requires same-origin CSRF verification. */
 function isGuarded(method: string, path: string): boolean {
   if (!SAFE_METHODS.has(method)) {
     return true;
   }
-  // Subscriptions are GETs and are guarded too (`03-api-and-events.md` §1).
-  return path.startsWith("/api/trpc");
+  return GUARDED_GET_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+/** Paths whose only credential is the session cookie (plan `04` Z4). */
+const COOKIE_ONLY_PREFIXES = ["/api/trpc", "/api/sync/", "/api/runs/"];
+
+/**
+ * A request to the API that carries an `Authorization` header answers 400:
+ * the session cookie is the only credential the web server accepts, and a
+ * bearer token it does not accept is refused rather than ignored (04 Z4).
+ * `/metrics` keeps its own bearer token and is not under these prefixes.
+ */
+export function rejectAuthorizationHeader(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const path = new URL(c.req.url).pathname;
+    if (
+      c.req.header("authorization") !== undefined &&
+      COOKIE_ONLY_PREFIXES.some((prefix) => path.startsWith(prefix))
+    ) {
+      return c.json({ error: "This API accepts the session cookie only." }, 400);
+    }
+    return next();
+  };
 }
 
 export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {

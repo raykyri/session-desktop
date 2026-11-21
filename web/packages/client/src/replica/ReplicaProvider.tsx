@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import { queryKeys, useModels, useWeeklyUsage } from "../api/account.js";
-import type { Viewer } from "../features/shell/viewer.js";
+import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
 import { useThreadUiStore } from "../stores/threadUi.js";
 
 import { defaultOnlineData, withServerData, type OnlineData } from "./online.js";
@@ -63,7 +63,7 @@ export function ReplicaProvider({
     () =>
       given ??
       config?.create(viewer) ??
-      emptyReplica(viewer.kind === "signedOut" ? null : viewer.user.login),
+      emptyReplica(viewer.kind === "signedOut" ? null : viewerHandle(viewer.user)),
     // One replica per viewer: a sign-in or sign-out makes a new one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [key, given],

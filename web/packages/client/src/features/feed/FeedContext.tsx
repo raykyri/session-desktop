@@ -2,13 +2,13 @@
 // viewer can write, their handle in the replica, how a signed-out control
 // opens sign-in, and the model and effort new asks run on.
 
-import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { createContext, useCallback, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 import { create } from "zustand";
 
 import { useOnlineData, useReplica } from "../../replica/ReplicaProvider.js";
 import { stepDownEffort, type Effort } from "../../replica/online.js";
+import { openAuthDialog } from "../auth/authDialog.js";
 import { canWrite, type Viewer } from "../shell/viewer.js";
 
 export interface FeedViewer {
@@ -31,13 +31,9 @@ const FeedViewerContext = createContext<FeedViewer>({
 });
 
 export function FeedViewerProvider({ viewer, children }: { viewer: Viewer; children: ReactNode }) {
-  const navigate = useNavigate();
-  const href = useRouterState({ select: (state) => state.location.href });
   const source = useReplica();
-  // Sign-in is the `/login` page until the auth dialog (02 W7.2, M6).
-  const signIn = useCallback(() => {
-    void navigate({ to: "/login", search: { redirect: href } });
-  }, [navigate, href]);
+  // A signed-out write control opens the auth dialog (02 W7.2, §9.5).
+  const signIn = useCallback(() => openAuthDialog({ step: "landing" }), []);
   const value = useMemo(
     () => ({
       viewer,

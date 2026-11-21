@@ -1,0 +1,521 @@
+/* The account screens (02 W7.1-W7.3): the auth dialog (`authdlg`,
+   `authScreen`), the "Invite required" page (`statusPage`) and the Invites
+   page (`membersPage`), drawn as the members mockup draws them. The mockup's
+   roles map to tokens as `tokens.css` says: `--canvas` is
+   `--research-feed-bg`, `--card` is `--content-card-bg`, `--shadow` is
+   `--card-shadow`, `--inset` is `--content-inset-bg`, `--bad` is
+   `--status-attention-fg`, `--good` is `--status-success-fg`, the
+   `--border-strong` of the tree is `--tree-rail`. */
+
+/* ---- the auth dialog ---- */
+
+.auth-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+}
+
+:root[data-appearance="light"] .auth-scrim {
+  background: rgba(10, 12, 14, 0.45);
+}
+
+.authdlg {
+  position: fixed;
+  z-index: 51;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100% - 40px);
+  overflow-y: auto;
+  border-radius: 12px;
+  padding: 36px 44px 32px;
+  background: var(--research-feed-bg);
+  box-shadow: var(--card-shadow), var(--popover-shadow);
+  outline: none;
+}
+
+@media (max-width: 520px) {
+  .authdlg {
+    padding: 28px 22px 24px;
+  }
+}
+
+.authdlg .dclose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.auth-page {
+  display: flex;
+  justify-content: center;
+  padding: 72px 16px 40px;
+}
+
+.auth-page .auth-c {
+  max-width: 420px;
+}
+
+.auth-c {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-c h2 {
+  margin: 6px 0 0;
+  font-size: 22px;
+  line-height: 1.25;
+  color: var(--text-heading);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  outline: none;
+}
+
+.auth-c p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
+.auth-c .brand-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-lg);
+  color: var(--text-heading);
+}
+
+.auth-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.xbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 42px;
+  border-radius: 21px;
+  background: var(--text-heading);
+  color: var(--research-feed-bg);
+  font-weight: 600;
+  font-size: var(--fs-md);
+}
+
+.xbtn:hover {
+  opacity: 0.9;
+}
+
+.xbtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.auth-acts .btn2,
+.auth-acts .btn1 {
+  height: 42px;
+  border-radius: 21px;
+  font-size: var(--fs-md);
+}
+
+.auth-c .back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.auth-c p.fine,
+.fine {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.auth-c p.ferr {
+  color: var(--status-attention-fg);
+  font-size: var(--fs-sm);
+}
+
+.code-f {
+  display: flex;
+  gap: 8px;
+}
+
+.code-f input,
+.pform input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--control-border);
+  background: var(--field-bg);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: var(--fs-md);
+  outline: none;
+}
+
+.code-f input {
+  text-transform: uppercase;
+}
+
+.code-f input::placeholder {
+  text-transform: none;
+}
+
+.code-f input:focus,
+.pform input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.code-f .btn1 {
+  height: 40px;
+  border-radius: 20px;
+}
+
+.inviter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--content-card-bg);
+  box-shadow: var(--card-shadow);
+}
+
+.inviter b {
+  display: block;
+  color: var(--text-heading);
+  font-size: var(--fs-sm);
+}
+
+.inviter small {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.pform {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pform label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+.pform label input {
+  flex: none;
+}
+
+.pform label small {
+  font-weight: 400;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.hwrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  padding-left: 12px;
+  color: var(--text-faint);
+}
+
+.hwrap:focus-within {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.pform .hwrap input {
+  flex: 1;
+  border: 0;
+  box-shadow: none;
+  padding-left: 2px;
+  background: transparent;
+}
+
+.btn1.wide,
+.btn2.wide {
+  width: 100%;
+}
+
+/* ---- Invite required ---- */
+
+.lede {
+  margin: 0 0 18px;
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
+.pend-a .code-f {
+  margin: 4px 0 24px;
+}
+
+.pend-a .ferr {
+  margin: -16px 0 24px;
+}
+
+.pcard {
+  background: var(--content-card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.checks li.ok {
+  color: var(--text-heading);
+}
+
+.checks li.ok svg {
+  width: 14px;
+  height: 14px;
+  color: var(--status-success-fg);
+}
+
+.checks .ring {
+  width: 12px;
+  height: 12px;
+  margin: 1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-dim);
+}
+
+/* ---- Invites ---- */
+
+.mcols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  gap: 24px;
+  align-items: start;
+}
+
+.mside {
+  position: sticky;
+  top: 49px;
+}
+
+@media (max-width: 860px) {
+  .mcols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mside {
+    position: static;
+  }
+}
+
+.mcols section {
+  margin-bottom: 26px;
+}
+
+.mcols h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-md);
+  color: var(--text-heading);
+}
+
+.mcols h4 {
+  margin: 18px 0 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-heading);
+}
+
+.tcopy {
+  margin: 6px 0 14px;
+  max-width: 640px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.ttree {
+  position: relative;
+  background: var(--content-card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  padding: 6px 12px;
+}
+
+.ttree svg {
+  position: absolute;
+  left: 12px;
+  top: 6px;
+  width: calc(100% - 24px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ttree svg path {
+  fill: none;
+  stroke: var(--tree-rail);
+  stroke-width: 1.5;
+}
+
+.trow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+}
+
+.trole {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.trow.me .tn b::after {
+  content: " (you)";
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.tn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.tn b {
+  font-size: var(--fs-sm);
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.tn small {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trow.gone .tn b {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.invbox {
+  background: var(--content-card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  padding: 16px 18px;
+}
+
+.invbox .ishead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.invbox .ishead small {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.ilink {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 6px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 10px;
+  background: var(--content-inset-bg);
+}
+
+.ilink + .ilink {
+  margin-top: 0;
+}
+
+.ilink code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-heading);
+}
+
+.ilink .btn1 {
+  margin-right: 2px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 11px;
+}
+
+.invbox > .btn1,
+.invbox > .btn2 {
+  margin-top: 6px;
+}
+
+.ippl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+
+.ip b {
+  color: var(--text-heading);
+  font-weight: 500;
+}
+
+.ip .grow {
+  flex: 1;
+}
+
+.ip small {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}

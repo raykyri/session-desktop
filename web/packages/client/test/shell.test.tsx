@@ -14,9 +14,16 @@ import type { ShellChannel } from "../src/features/shell/shellData.js";
 import { viewerOf } from "../src/features/shell/viewer.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
-import { renderApp, renderInRouter, resetDocumentRoot, testUser, waitUntil } from "./helpers.js";
+import {
+  renderApp,
+  renderInRouter,
+  resetDocumentRoot,
+  testUser,
+  waitUntil,
+  waitingTestUser,
+} from "./helpers.js";
 
-const waitingUser = () => ({ ...testUser({ login: "new.one" }), status: "waiting" });
+const waitingUser = () => waitingTestUser();
 
 test.beforeEach(() => {
   localStorage.clear();
@@ -56,11 +63,17 @@ test.serial("signed out: name, strip of open channels, Join with invite and Sign
   t.is(header.queryByRole("button", { name: "New channel" }), null, "not a writer");
 });
 
-test.serial("Sign in opens the sign-in page and comes back to this page", async (t) => {
+test.serial("Sign in and Join with invite open the auth dialog over this page", async (t) => {
   const app = await renderApp("/browse", { user: null });
   fireEvent.click(within(bar()).getByRole("button", { name: "Sign in" }));
-  await waitUntil(t, () => app.router.state.location.pathname === "/login", "at /login");
-  t.is(app.router.state.location.search.redirect, "/browse");
+  const dialog = await screen.findByRole("dialog", { name: "Sign in to Session" });
+  t.truthy(within(dialog).getByRole("button", { name: "Sign in with X" }));
+  t.truthy(within(dialog).getByRole("button", { name: "Sign in with GitHub" }));
+  t.is(app.router.state.location.pathname, "/browse");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  await waitUntil(t, () => screen.queryByRole("dialog") === null, "closed");
+  fireEvent.click(within(bar()).getByRole("button", { name: "Join with invite" }));
+  t.truthy(await screen.findByRole("heading", { name: "Join with invite?" }));
 });
 
 test.serial("without an invite: only the account menu, with Enter an invite code", async (t) => {

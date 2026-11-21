@@ -86,22 +86,40 @@ test("applies every migration to an empty database", (t) => {
   }
 });
 
-test("the history is the initial migration and the API keys migration", (t) => {
+test("the history is the initial migration and the plan's numbered ones", (t) => {
   // The database has never been deployed with this schema; M8a squashes the
   // history into one initial migration (runbooks/reset-database.md, plan
-  // `01` D5). `0003_api_keys` is numbered apart from the migrations other
-  // milestones add beside it.
+  // `01` D5). Each milestone adds its own numbered migration beside it:
+  // `0003_api_keys` (M5b), `0004_accounts` (M6).
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
   t.deepEqual(
     journal.entries.map((entry) => entry.tag),
-    ["0000_initial", "0003_api_keys"],
+    ["0000_initial", "0003_api_keys", "0004_accounts"],
   );
   t.deepEqual(
-    readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql")),
-    ["0000_initial.sql", "0003_api_keys.sql"],
+    readdirSync(MIGRATIONS_FOLDER)
+      .filter((name) => name.endsWith(".sql"))
+      .sort(),
+    ["0000_initial.sql", "0003_api_keys.sql", "0004_accounts.sql"],
   );
+});
+
+test("journal entries ascend in idx and strictly in when", (t) => {
+  // The migrator applies only entries whose `when` is later than the last
+  // applied one, so an entry out of order would be skipped silently on a
+  // database that already has a later one.
+  const journal = JSON.parse(
+    readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { idx: number; when: number; tag: string }[] };
+  for (let index = 1; index < journal.entries.length; index += 1) {
+    const previous = journal.entries[index - 1]!;
+    const entry = journal.entries[index]!;
+    t.true(entry.idx > previous.idx, `${entry.tag} idx after ${previous.tag}`);
+    t.true(entry.when > previous.when, `${entry.tag} when after ${previous.tag}`);
+    t.true(entry.tag.startsWith(String(entry.idx).padStart(4, "0")), `${entry.tag} matches idx`);
+  }
 });
 
 test("applies the file pragmas", (t) => {

@@ -14,10 +14,10 @@ import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
-import { renderApp, testUser, waitUntil } from "./helpers.js";
+import { renderApp, waitUntil, waitingTestUser } from "./helpers.js";
 
 const FIRST = "01M7HWGZJGT7JTFFVSYPX055KV";
-const waiting = () => ({ ...testUser({ login: "new.one" }), status: "waiting" }) as never;
+const waiting = () => waitingTestUser();
 
 let made: FixtureReplica[] = [];
 test.beforeEach(() => {
@@ -75,7 +75,8 @@ test.serial("signed out: the composer is a cover that opens sign-in", async (t) 
   await waitUntil(t, () => document.querySelector(".tcard") !== null, "threads render");
   const cover = screen.getByRole("button", { name: "Sign in to ask or post" });
   fireEvent.click(cover);
-  await waitUntil(t, () => result.router.state.location.pathname === "/login", "sign-in opens");
+  t.truthy(await screen.findByRole("dialog", { name: "Sign in to Session" }), "sign-in opens");
+  t.is(result.router.state.location.pathname, "/");
 });
 
 test.serial(

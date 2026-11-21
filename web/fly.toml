@@ -5,13 +5,14 @@
 # The positional `web` is the build context; without it flyctl hands Docker
 # the repository root, where `package.json` is the desktop's.
 #
-# Enables token quota limits and invitation-only registration to restrict access and control LLM provider costs.
+# Enables token quota limits to control LLM provider costs.
 # `SESSION_ENFORCE_LIMITS = "1"` makes the daily token and run limits refuse
-# rather than merely record; `SESSION_REQUIRE_INVITE = "1"` means an account is
-# created only against a code an admin minted. Turning either off is a
-# deliberate act, which is why they are here rather than defaulted in the code.
+# rather than merely record. Turning it off is a deliberate act, which is why
+# it is here rather than defaulted in the code. Session is invite-only in
+# every deployment: an account without an invite waits (plan `04` I4).
 #
 # Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+# SESSION_X_CLIENT_ID, SESSION_X_CLIENT_SECRET,
 # GOOGLE_APPLICATION_CREDENTIALS_JSON, OPENROUTER_API_KEY, ANTHROPIC_API_KEY,
 # PARALLEL_API_KEY, TAVILY_API_KEY, LITESTREAM_REPLICA_URL, AWS_ACCESS_KEY_ID,
 # AWS_SECRET_ACCESS_KEY, SESSION_METRICS_TOKEN, SESSION_ALLOWED_GITHUB_LOGINS,
@@ -43,7 +44,6 @@ kill_timeout = "30s"
   SESSION_ENFORCE_LIMITS = "1"
   SESSION_DAILY_TOKENS = "1000000"
   SESSION_DAILY_RUNS = "10"
-  SESSION_REQUIRE_INVITE = "1"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"

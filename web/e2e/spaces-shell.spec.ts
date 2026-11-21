@@ -261,8 +261,12 @@ test.describe("signed out", () => {
     const signIn = bar.getByRole("button", { name: "Sign in" });
     await expect(signIn).toHaveCSS("color", "rgb(255, 255, 255)");
 
+    // Sign in opens the auth dialog over the page (02 W7.2).
     await signIn.click();
-    await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+    const dialog = page.getByRole("dialog", { name: "Sign in to Session" });
+    await expect(dialog.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Sign in with X" })).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
   });
 
   test("the site footer ends the feeds and Browse", async ({ page }) => {

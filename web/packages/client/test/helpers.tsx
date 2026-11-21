@@ -15,19 +15,37 @@ import { queryClientDefaults } from "../src/api/account.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { AppProviders } from "../src/app/providers.js";
 import { createAppRouter } from "../src/app/router.js";
+import { useAuthDialog } from "../src/features/auth/authDialog.js";
 
 import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
 
+/** An active account; its handle is its login unless given. */
 export function testUser(overrides: Partial<User> = {}): User {
+  const login = overrides.login ?? "raymond";
   return {
     id: "u1",
-    login: "raymond",
+    login,
     name: "Raymond",
     avatarUrl: null,
     isAdmin: false,
     createdAt: 1_700_000_000_000,
+    handle: login,
+    displayName: overrides.name ?? "Raymond",
+    status: "active",
+    provider: "github",
     ...overrides,
   };
+}
+
+/** A waiting account: signed in, no invite, no handle (04 §3.1). */
+export function waitingTestUser(overrides: Partial<User> = {}): User {
+  return testUser({
+    login: "new.one",
+    handle: null,
+    displayName: null,
+    status: "waiting",
+    ...overrides,
+  });
 }
 
 /** What the shell reads over tRPC. Every one of them has to answer with
@@ -102,6 +120,8 @@ export async function renderApp(
   options: RenderAppOptions = {},
 ): Promise<RenderAppResult> {
   const user = options.user === undefined ? testUser() : options.user;
+  // The auth dialog's store outlives a test's render.
+  useAuthDialog.getState().close();
   const stub = createTrpcStub({ ...defaultResponses(user), ...options.responses });
   setTrpcClient(stub.client);
 

@@ -11,6 +11,7 @@ import { documentBackupsConfigured, documentsBackupAgeSeconds } from "./backups.
 import type { Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
 import type { HealthState } from "./health.js";
+import type { RateLimiter } from "./middleware/rateLimit.js";
 
 /** Seconds. The long tail matters here — a research run's SSE stream is minutes
  * long — but the buckets stop at 30s because anything past that is the stream
@@ -175,6 +176,8 @@ export interface RenderMetricsOptions {
   config: Config;
   registry: MetricsRegistry;
   health: HealthState;
+  /** The abuse limiter, for `session_rate_limited_total{bucket}`. */
+  limiter?: RateLimiter;
   at?: number;
 }
 
@@ -182,6 +185,14 @@ export interface RenderMetricsOptions {
 export function renderMetrics(options: RenderMetricsOptions): string {
   const { deps, config, registry, health } = options;
   const lines = [...registry.render()];
+
+  if (options.limiter) {
+    lines.push("# HELP session_rate_limited_total Requests refused by an abuse limit (04 Z1).");
+    lines.push("# TYPE session_rate_limited_total counter");
+    for (const [bucket, total] of options.limiter.refusals()) {
+      lines.push(`session_rate_limited_total${labels({ bucket })} ${total}`);
+    }
+  }
 
   lines.push("# HELP session_ready 1 when the server is admitting requests.");
   lines.push("# TYPE session_ready gauge");

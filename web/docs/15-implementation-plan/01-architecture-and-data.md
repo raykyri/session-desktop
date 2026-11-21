@@ -214,7 +214,7 @@ expires; there is no retention requirement for backups (§9 q3; 05 §6 S1).
 
 **D5. Migration sequence.** Following `02-domain-model-and-database.md` §4,
 on the build branch (`05` §3.0): a generated migration `0001_spaces.sql`
-adds D1-D3 in M3; `0002_accounts.sql` adds the C8 columns and the
+adds D1-D3 in M3; `0004_accounts.sql` adds the C8 columns and the
 provider columns of 04 I1 in M6 (`05` §1.2). Once the
 research schema files are deleted (with A2 and `02` W1.1 in M4), the
 migrations are squashed into one generated `0000_initial.sql` in M8a. No

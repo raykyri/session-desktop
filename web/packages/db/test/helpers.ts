@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { User } from "@session/shared";
 import type { ExecutionContext } from "ava";
 
 import type { SessionDatabase } from "../src/index.js";
@@ -34,11 +35,43 @@ export function createFixture(t: ExecutionContext): Fixture {
     closeDatabase(db);
     rmSync(directory, { recursive: true, force: true });
   });
-  githubIdCounter += 1;
-  const { user } = users.upsertFromGitHub(db, {
-    githubId: githubIdCounter,
-    login: `user${githubIdCounter}`,
-    name: "Test User",
-  });
+  const user = addActiveUser(db, `user${githubIdCounter + 1}`);
   return { db, directory, userId: user.id };
+}
+
+/** An active account with `handle`, made directly (no invite). */
+export function addActiveUser(
+  db: SessionDatabase,
+  handle: string,
+  options: { invitedBy?: string | null } = {},
+): User {
+  githubIdCounter += 1;
+  return users.createActive(
+    db,
+    {
+      provider: "github",
+      providerUserId: String(githubIdCounter),
+      login: handle,
+      name: "Test User",
+    },
+    { handle, displayName: handle, invitedBy: options.invitedBy ?? null },
+  );
+}
+
+/** A waiting account for a new identity. */
+export function addWaitingUser(
+  db: SessionDatabase,
+  options: { provider?: "github" | "x"; providerUserId?: string; pendingInviteId?: string } = {},
+): User {
+  githubIdCounter += 1;
+  return users.createWaiting(
+    db,
+    {
+      provider: options.provider ?? "github",
+      providerUserId: options.providerUserId ?? String(githubIdCounter),
+      login: `waiting${githubIdCounter}`,
+      name: "Waiting User",
+    },
+    { pendingInviteId: options.pendingInviteId ?? null },
+  ).user;
 }

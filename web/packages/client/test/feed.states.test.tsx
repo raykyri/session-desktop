@@ -317,7 +317,7 @@ test.serial("a private channel shows no save count below 3", async (t) => {
 });
 
 test.serial("signed out, Sign in to reply opens sign-in", async (t) => {
-  const result = await renderApp("/", { user: null });
+  await renderApp("/", { user: null });
   await waitUntil(
     t,
     () => screen.queryAllByText(new RegExp(REPLY_POST_TEXT)).length > 0,
@@ -326,7 +326,11 @@ test.serial("signed out, Sign in to reply opens sign-in", async (t) => {
   const row = screen.getAllByText(new RegExp(REPLY_POST_TEXT))[0]?.closest(".feed-row");
   if (!(row instanceof HTMLElement)) throw new Error("no row");
   fireEvent.click(within(row).getByRole("button", { name: "Sign in to reply" }));
-  await waitUntil(t, () => result.router.state.location.pathname === "/login", "sign-in opens");
+  await waitUntil(
+    t,
+    () => screen.queryByRole("dialog", { name: "Sign in to Session" }) !== null,
+    "the sign-in dialog opens",
+  );
 });
 
 test.serial("a write to one thread re-renders that row only (W9.1)", async (t) => {
