@@ -246,6 +246,9 @@ test("Y8: retention prunes each table at its boundary millisecond", (t) => {
   ok(t, w.as("otto", "saved.set", { kind: "thread", id: saved.split(":")[2], on: false }));
   const tomb = w.store.tombstone(saved);
   if (!tomb) return t.fail("no tombstone");
+  // an answer under (client, seq): a malformed mutation id
+  refused(t, w.as("otto", "prefs.set", { layout: "wide" }, "not-a-ulid"), "BAD_REQUEST");
+  t.is(w.store.seqAnswers.size, 1);
   const answers = w.store.answers.size;
   const t0 = w.clock.now();
   // answers: 7 days; clients: 7 days idle; tombstones: 30 days
@@ -253,6 +256,7 @@ test("Y8: retention prunes each table at its boundary millisecond", (t) => {
   t.is(w.store.answers.size, answers, "an answer recorded 1 ms less than 7 days ago is kept");
   w.server.retain(t0 + 7 * DAY);
   t.is(w.store.answers.size, 0);
+  t.is(w.store.seqAnswers.size, 0);
   t.is(w.store.clients.size, 0);
   w.server.retain(tomb.at + 30 * DAY);
   t.truthy(w.store.tombstone(saved), "a tombstone committed exactly 30 days ago is kept");

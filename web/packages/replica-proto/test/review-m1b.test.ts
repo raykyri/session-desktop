@@ -320,3 +320,22 @@ test("replies and comments nest to any depth; a removal erases what is under it 
   }
   t.like(w.get(`comment:${up ?? ""}`), { u: "otto" });
 });
+
+test("answers under (client, seq) expire after 7 days like those under (user, mutation id)", async (t) => {
+  // N15 on the sync server: a pruned table is seen only at rest
+  const { w, open } = await cast(t);
+  const p = await thread(t, w, "mel", open, "post");
+  const e = await w.envelope(
+    "otto",
+    "saved.set",
+    { kind: "thread", id: p, on: true },
+    "not-a-ulid",
+  );
+  await refused(t, w.server.apply(actor("otto"), e), "BAD_REQUEST");
+  const bySeq = async () => (await w.server.scanStorage()).answers.filter((a) => a.clientId);
+  t.is((await bySeq()).length, 1);
+  w.clock.advance(7 * 86_400_000 - 1);
+  t.is((await bySeq()).length, 1);
+  w.clock.advance(1);
+  t.is((await bySeq()).length, 0);
+});
