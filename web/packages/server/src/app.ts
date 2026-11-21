@@ -24,6 +24,7 @@ import { RateLimiter, abuseBuckets, rateLimitByUserOrIp } from "./middleware/rat
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
+import { storeDirectory } from "./sync/directory.js";
 import { protocolCheck } from "./sync/protocol.js";
 import { syncRoutes } from "./sync/routes.js";
 import { SyncService } from "./sync/service.js";
@@ -62,6 +63,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   const logger = deps.logger ?? defaultLogger(deps.config.env);
   const sync = deps.sync ?? new SyncService({ db: deps.db, config: deps.config, logger });
   deps.sync = sync;
+  deps.directory ??= storeDirectory(sync.store);
   const app = new Hono<AppEnv>();
 
   app.use("*", requestContext(logger));
