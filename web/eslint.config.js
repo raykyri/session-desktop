@@ -54,6 +54,37 @@ const nondeterministic = {
       group: ["crypto", "node:crypto", "node:perf_hooks", "perf_hooks"],
       message: `${DETERMINISTIC}: randomness comes from ctx.random().`,
     },
+    {
+      group: ["@session/shared/*"],
+      message: `${DETERMINISTIC}: import only the spaces contract and the model registry from @session/shared.`,
+    },
+  ],
+  /** `@session/shared` holds formatting and Markdown code too: the mutators
+   * import only the spaces contract and the model registry from it. */
+  paths: [
+    {
+      name: "@session/shared",
+      allowImportNames: ["spaces", "Spaces", "MODEL_REGISTRY", "ReasoningEffort"],
+      message: `${DETERMINISTIC}: import only the spaces contract and the model registry from @session/shared.`,
+    },
+  ],
+  /** Locale-dependent methods, and the global object, through which a
+   * computed name (`globalThis["Da" + "te"]`) reaches what the global and
+   * property bans name. */
+  syntax: [
+    {
+      selector: "MemberExpression[property.name='localeCompare']",
+      message: `${DETERMINISTIC}: compare with < and >, not the locale.`,
+    },
+    {
+      selector: "MemberExpression[property.name=/^toLocale/]",
+      message: `${DETERMINISTIC}: no locale formatting.`,
+    },
+    {
+      // the global object itself, so no global is reached by a computed name
+      selector: "Identifier[name=/^(globalThis|window|self|global)$/]",
+      message: `${DETERMINISTIC}: no global object (a computed name reaches any global).`,
+    },
   ],
 };
 
@@ -70,6 +101,7 @@ const boundaries = Object.entries(forbidden).map(([directory, packages]) => ({
           })),
           ...(directory === "packages/mutators" ? nondeterministic.imports : []),
         ],
+        ...(directory === "packages/mutators" ? { paths: nondeterministic.paths } : {}),
       },
     ],
   },
@@ -185,13 +217,18 @@ export default tseslint.config(
     rules: {
       "no-restricted-globals": ["error", ...nondeterministic.globals],
       "no-restricted-properties": ["error", ...nondeterministic.properties],
+      "no-restricted-syntax": ["error", ...nondeterministic.syntax],
     },
   },
   // the test that mutators read no clock, random source or Intl replaces
   // them with traps, so it names them
   {
     files: ["packages/mutators/test/determinism.test.ts"],
-    rules: { "no-restricted-globals": "off", "no-restricted-properties": "off" },
+    rules: {
+      "no-restricted-globals": "off",
+      "no-restricted-properties": "off",
+      "no-restricted-syntax": "off",
+    },
   },
   // The tRPC client imports the server router's type. `verbatimModuleSyntax`
   // erases an

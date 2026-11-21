@@ -10,8 +10,10 @@ import { MUTATORS } from "../src/index.js";
 import { everyMutator } from "./scenario.js";
 import { World } from "./world.js";
 
-test("mutators read no clock, no random source and no Intl while they apply", (t) => {
-  const w = new World();
+/** Run `f` with the clock, the random source, Intl, crypto and performance
+ * trapped; `outside` (given to `f`) runs code with the real globals, as the
+ * run loop writes outside the mutators. */
+function trapped(f: (outside: (g: () => void) => void) => void): void {
   const trap = (what: string) => () => {
     throw new Error(`a mutator read ${what}`);
   };
@@ -30,16 +32,6 @@ test("mutators read no clock, no random source and no Intl while they apply", (t
     get: trap("Date"),
   });
   const getter = (what: string) => ({ get: trap(what), configurable: true });
-  let applied: string[] = [];
-  // the run loop writes outside the mutators, with the real globals
-  const outside = (f: () => void) => {
-    restore();
-    try {
-      f();
-    } finally {
-      install();
-    }
-  };
   const install = () => {
     globalThis.Date = Trapped;
     Math.random = trap("Math.random");
@@ -55,13 +47,44 @@ test("mutators read no clock, no random source and no Intl while they apply", (t
       if (d) Object.defineProperty(globalThis, k, d);
     }
   };
+  const outside = (g: () => void) => {
+    restore();
+    try {
+      g();
+    } finally {
+      install();
+    }
+  };
   try {
     install();
-    applied = everyMutator(t, w, outside);
+    f(outside);
   } finally {
     restore();
   }
+}
+
+test("mutators read no clock, no random source and no Intl while they apply", (t) => {
+  const w = new World();
+  let applied: string[] = [];
+  trapped((outside) => {
+    applied = everyMutator(t, w, outside);
+  });
   t.deepEqual([...new Set(applied)].sort(), Object.keys(MUTATORS).sort());
+});
+
+test("nor while a client predicts them (M1b review 4)", (t) => {
+  const w = new World();
+  let predicted = 0;
+  trapped((outside) => {
+    everyMutator(t, w, outside, (u, name, input) => {
+      // the prediction runs trapped; the world's apply makes ids from its
+      // own counter and reads no global either
+      const { prediction } = w.predict(u, name, input);
+      if (!("unknown" in prediction)) predicted++;
+      return w.apply(u, name, input);
+    });
+  });
+  t.true(predicted > 30);
 });
 
 test("every record a mutator writes has the stored shape and no per-viewer field", (t) => {
