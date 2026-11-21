@@ -192,9 +192,11 @@ test("a thread address outside the window fetches the thread and shows it in its
   page,
 }) => {
   const fetched = page.waitForRequest((req) => {
-    if (!req.url().endsWith("/api/sync/snapshot")) return false;
-    const body = (req.postDataJSON() ?? {}) as { tier?: string; threads?: string[] };
-    return body.tier === "threads" && (body.threads ?? []).includes(w.outside);
+    if (!req.url().endsWith("/api/sync/read")) return false;
+    const body = (req.postDataJSON() ?? {}) as { reads?: { tier?: string; threads?: string[] }[] };
+    return (body.reads ?? []).some(
+      (read) => read.tier === "threads" && (read.threads ?? []).includes(w.outside),
+    );
   });
   await page.goto(`/c/${w.many.name}?t=${w.outside}`);
   await fetched;

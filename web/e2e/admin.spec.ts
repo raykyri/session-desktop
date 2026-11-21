@@ -8,6 +8,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import { mutation, query, signIn, signedInContext } from "./helpers.js";
 import { toast } from "./spaces.js";
+import { channelName, person } from "./world.js";
 
 /** The registry's models payable with included tokens, in registry order. */
 const INCLUDED_MODELS = [
@@ -91,7 +92,9 @@ test("a site admin sets the default model and effort; a member's composer starts
   await expect(models.getByRole("radio", { name: /DeepSeek V4\.1 Flash/ })).toBeChecked();
   await expect(efforts.getByRole("radio", { name: "Low" })).toBeChecked();
 
-  // A member's composer starts on both, and again after a reload.
+  // A member's composer starts on both, and again after a reload. The member
+  // has a channel, so Home shows the composer.
+  await (await person(browser, "e2e-admin-member")).channel(channelName("admin"));
   const member = await signedInContext(browser, "e2e-admin-member");
   await member.page.goto("/");
   await expect

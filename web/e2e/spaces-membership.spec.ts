@@ -13,6 +13,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 
 import { APP_ORIGIN } from "./constants.js";
 import { e2eLogin, signIn } from "./helpers.js";
+import { channelName, person } from "./world.js";
 
 const UNUSABLE = "This invite code doesn't work. Ask the person who invited you for a new one.";
 
@@ -68,6 +69,26 @@ async function createAccount(page: Page, name: string, handle: string) {
   await expect(dialog).toHaveCount(0);
 }
 
+/** An open channel with a post, written through the sync routes
+ * (`world.ts`): a waiting account reads it, and a new member joins it. */
+const lounge = { name: "" };
+
+test.beforeAll(async ({ browser }) => {
+  const olga = await person(browser, "e2e-membership-olga");
+  lounge.name = channelName("members");
+  await olga.post(await olga.channel(lounge.name), "Welcome, read anything here");
+});
+
+/** A member can join a channel and then ask in it. */
+async function expectMember(page: Page) {
+  await page.goto(`/c/${lounge.name}`);
+  await page.locator(".sphead").getByRole("button", { name: "Join" }).click();
+  await expect(page.getByRole("textbox", { name: "Ask or post" })).toHaveAttribute(
+    "placeholder",
+    "Ask anything",
+  );
+}
+
 test("a member's link signs a new person up, who appears under the member", async ({
   browser,
   page,
@@ -95,11 +116,8 @@ test("a member's link signs a new person up, who appears under the member", asyn
   await expect(joiner.locator(".feed-toast")).toHaveText(
     `Account created. ${inviter.login} invited you.`,
   );
-  // A member: the composer asks.
-  await expect(joiner.getByRole("textbox", { name: "Ask or post" })).toHaveAttribute(
-    "placeholder",
-    "Ask anything",
-  );
+  // A member: joins a channel and the composer asks.
+  await expectMember(joiner);
   await context.close();
 
   await page.reload();
@@ -157,10 +175,7 @@ test("without a code an account waits, reads, then redeems a code and can ask", 
     `You're in. ${inviter.login} invited you.`,
   );
   await expect(waiter).toHaveURL(/\/$/);
-  await expect(waiter.getByRole("textbox", { name: "Ask or post" })).toHaveAttribute(
-    "placeholder",
-    "Ask anything",
-  );
+  await expectMember(waiter);
   await context.close();
 });
 
