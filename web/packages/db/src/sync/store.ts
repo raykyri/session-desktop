@@ -98,6 +98,10 @@ export interface SqliteStoreOptions {
    * The sync server passes its own times to every method that stores a
    * time the protocol reads; this one is for the columns nothing reads. */
   now?: () => number;
+  /** Called after each outermost transaction commits, with the logs whose
+   * rows or history it wrote: the server wakes the event streams that read
+   * them (`01` Y7). Not called for a transaction that rolled back. */
+  onCommit?: (logs: ReadonlySet<LogId>) => void;
 }
 
 export class SqliteStore implements ServerStore {
@@ -105,10 +109,14 @@ export class SqliteStore implements ServerStore {
   private readonly now: () => number;
   private readonly cache = new Map<string, StoredRecord | null>();
   private readonly s;
+  private readonly onCommit: ((logs: ReadonlySet<LogId>) => void) | undefined;
+  /** The logs the open transaction wrote. */
+  private touched = new Set<LogId>();
 
   constructor(db: SessionDatabase | SqliteDatabase.Database, options: SqliteStoreOptions = {}) {
     this.sqlite = "$client" in db ? db.$client : db;
     this.now = options.now ?? Date.now;
+    this.onCommit = options.onCommit;
     const c = this.sqlite;
     this.s = {
       byKey: c.prepare<[string], RecordRow>("SELECT body FROM records WHERE key = ?"),
@@ -177,15 +185,17 @@ export class SqliteStore implements ServerStore {
         "UPDATE server_head SET version = version + 1 WHERE id = 1 RETURNING version",
       ),
       seedHead: c.prepare("INSERT OR IGNORE INTO server_head (id, version) VALUES (1, 0)"),
+      // a write moves the key's row to the end of its version's rows (a new
+      // rowid), so rows of one commit read back in the order they were written
+      dropLogRow: c.prepare<[string, string]>("DELETE FROM change_log WHERE log = ? AND key = ?"),
       putLogRow: c.prepare<[string, string, string, number]>(
-        `INSERT INTO change_log (log, key, op, version) VALUES (?, ?, ?, ?)
-         ON CONFLICT (log, key) DO UPDATE SET op = excluded.op, version = excluded.version`,
+        "INSERT INTO change_log (log, key, op, version) VALUES (?, ?, ?, ?)",
       ),
       logRow: c.prepare<[string, string], LogRow>(
         "SELECT key, op, version FROM change_log WHERE log = ? AND key = ?",
       ),
       logRows: c.prepare<[string, number], LogRow>(
-        "SELECT key, op, version FROM change_log WHERE log = ? AND version > ? ORDER BY version",
+        "SELECT key, op, version FROM change_log WHERE log = ? AND version > ? ORDER BY version, rowid",
       ),
       epoch: c.prepare<[string], { n: number; start: number }>(
         "SELECT epoch AS n, start_version AS start FROM log_epochs WHERE log = ?",
@@ -242,13 +252,24 @@ export class SqliteStore implements ServerStore {
   }
 
   transaction<T>(fn: () => T): T {
+    const outer = !this.sqlite.inTransaction;
+    let out: T;
     try {
-      return this.sqlite.transaction(fn)();
+      // nested: better-sqlite3 runs it in a savepoint, rolled back to on a
+      // throw before the exception reaches the caller
+      out = this.sqlite.transaction(fn)();
     } catch (e) {
       // the rows went back; so do the parsed copies of what was written
       this.cache.clear();
+      if (outer) this.touched = new Set();
       throw e;
     }
+    if (outer && this.touched.size) {
+      const logs = this.touched;
+      this.touched = new Set();
+      this.onCommit?.(logs);
+    }
+    return out;
   }
 
   // ---- Source ----
@@ -417,7 +438,9 @@ export class SqliteStore implements ServerStore {
   }
 
   putLogRow(log: LogId, row: LogRow): void {
+    this.s.dropLogRow.run(log, row.key);
     this.s.putLogRow.run(log, row.key, row.op, row.version);
+    this.touched.add(log);
   }
 
   logRow(log: LogId, key: string): LogRow | undefined {
@@ -434,6 +457,7 @@ export class SqliteStore implements ServerStore {
 
   setEpoch(log: LogId, epoch: Epoch): void {
     this.s.setEpoch.run(log, epoch.n, epoch.start);
+    this.touched.add(log);
   }
 
   // ---- clients ----

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { SessionDatabase } from "@session/db";
 import { auth, closeDatabase, openDatabase, users } from "@session/db";
 import type { User } from "@session/shared";
+import { PROTOCOL_VERSION } from "@session/sync/server";
 import type { ExecutionContext } from "ava";
 import type { Hono } from "hono";
 
@@ -21,6 +22,7 @@ import { createLogger } from "../src/logger.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
 import type { NoopRunsService, RunsService } from "../src/runs/service.js";
 import { createNoopRunsService } from "../src/runs/service.js";
+import { SyncService, type SyncServiceOptions } from "../src/sync/service.js";
 import { createAppContext } from "../src/trpc/base.js";
 import { appRouter, createCallerFactory } from "../src/trpc/router.js";
 
@@ -38,6 +40,8 @@ export interface Harness {
   /** The recording stand-in, unless `createRuns` replaced it. */
   runs: NoopRunsService;
   limiter: RateLimiter;
+  /** The sync core the app serves (`/api/sync`). */
+  sync: SyncService;
   app: Hono<AppEnv>;
   directory: string;
   /** A caller bound to `user`, or anonymous when it is null. */
@@ -63,6 +67,9 @@ export interface HarnessOptions {
   /** The ledger, run texts, registry, key check timeout and clock the
    * procedures read (`deps.ts`). */
   deps?: Pick<ServerDeps, "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now">;
+  /** The sync core's options besides the database and config: its clock and
+   * mutators (`sync/service.ts`). */
+  sync?: Omit<SyncServiceOptions, "db" | "config">;
 }
 
 let githubIdCounter = 5000;
@@ -98,9 +105,12 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
   const logger = createLogger({ level: "error", write: () => undefined });
   const runs = createNoopRunsService();
   const limiter = new RateLimiter(options.limiterNow);
+  const sync = new SyncService({ db, config, logger, ...options.sync });
+  t.teardown(() => sync.drain());
   const base = {
     config,
     db,
+    sync,
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...options.deps,
@@ -119,6 +129,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     logger,
     runs,
     limiter,
+    sync,
     app,
     directory,
     caller: (user) =>
@@ -149,6 +160,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
         headers: {
           Origin: PUBLIC_ORIGIN,
           "X-Requested-With": "session",
+          "Session-Protocol": String(PROTOCOL_VERSION),
           ...(cookie ? { Cookie: `session=${cookie}` } : {}),
           ...(headers as Record<string, string> | undefined),
         },

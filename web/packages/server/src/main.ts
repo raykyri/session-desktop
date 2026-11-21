@@ -2,30 +2,41 @@
 // `05-run-lifecycle-and-streaming.md` §7).
 //
 // Startup sequence: validate configuration, write credentials to disk, open
-// and migrate the database, and begin listening on the configured port.
+// and migrate the database, then the boot steps of `boot.ts` (`01` S5: the
+// restore check, closing `usage_events` rows left open, marking runs still
+// `running` as `interrupted`, then the dispatcher and the maintenance
+// jobs), and begin listening on the configured port.
 //
-// Runs are not started in this build. The run loop (`runs/loop.ts`) has no
-// store until M5a implements `RunStore` over the run records; M5a also adds
-// the dispatcher, closes `usage_events` rows left open and marks runs still
-// `running` as `interrupted` at boot (plan `01` S5, `03` E2).
+// Runs are not started in this build: the dispatcher needs the `RunStore`
+// over the run records, which M5a implements; the ledger (`usage_events`)
+// and the stored allowances it will read are wired here.
+//
+// Shutdown (`SIGTERM`): the health check fails, later envelopes answer
+// SERVICE_UNAVAILABLE and the sync streams close, the run drain runs, the WAL
+// is checkpointed and the database closed.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve } from "@hono/node-server";
-import { accounts, auth, closeDatabase, openDatabase } from "@session/db";
+import { accounts, auth, closeDatabase, openDatabase, users } from "@session/db";
 
 import { createApp } from "./app.js";
 import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
+import { bootServer } from "./boot.js";
 import { loadConfig, loadDotenvForDevelopment, type Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
 import { createReadiness } from "./health.js";
+import { storedAllowances } from "./keys/allowances.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { fixturePageFetch } from "./runs/fixtureProvider.js";
-import { MemoryLedger } from "./runs/memoryLedger.js";
+import { recordRunTexts } from "./runs/recordRunTexts.js";
 import { createNoopRunsService } from "./runs/service.js";
+import { SqliteLedger } from "./runs/sqliteLedger.js";
+import { createSecretBox } from "./secretBox.js";
+import { SyncService, type SyncServiceOptions } from "./sync/service.js";
 
 /**
  * Path to database migrations directory. Specified explicitly because the bundled
@@ -117,6 +128,22 @@ export async function drainWithin(
   }
 }
 
+/** The restart tests' faults (`test/restart.test.ts`): a server whose
+ * `NODE_ENV` is `test` kills itself with `SIGKILL` inside the commit of a
+ * write of the named mutator (`SESSION_TEST_KILL_BEFORE_COMMIT`) or after
+ * its commit, before the response (`SESSION_TEST_KILL_AFTER_COMMIT`). */
+function testFaults(
+  config: Config,
+): Pick<SyncServiceOptions, "killBeforeCommit" | "killAfterCommit"> {
+  if (config.env !== "test") return {};
+  const before = process.env["SESSION_TEST_KILL_BEFORE_COMMIT"];
+  const after = process.env["SESSION_TEST_KILL_AFTER_COMMIT"];
+  return {
+    ...(before ? { killBeforeCommit: before } : {}),
+    ...(after ? { killAfterCommit: after } : {}),
+  };
+}
+
 export interface RunningServer {
   close(): Promise<void>;
 }
@@ -129,21 +156,39 @@ export function main(): RunningServer {
   writeVertexCredentials(config);
 
   const db = openDatabase(config.databasePath, { migrationsFolder: MIGRATIONS_DIRECTORY });
+  const sync = new SyncService({ db, config, logger, ...testFaults(config) });
+  const ledger = new SqliteLedger(db);
+  // What the run loop and the dispatcher read of a member's allowance, keys
+  // and billing (`03` K4, K7, K9); handed to the dispatcher with the run
+  // store in M5a.
+  const allowances = storedAllowances({
+    db,
+    box: createSecretBox(config.secretKey),
+    logger,
+    config,
+  });
   const deps: ServerDeps = {
     config,
     db,
+    sync,
     // No attempt runs before M5a, so there is nothing to drain yet.
     runs: createNoopRunsService(),
-    // `usage.get` and `usage.listRuns` read the ledger (`03` K5). No run
-    // starts in this build, so it stays empty until the SQLite ledger and
-    // the run store replace it.
-    ledger: new MemoryLedger(),
+    // `usage.get` and `usage.listRuns` read the ledger and the run records
+    // (`03` K1, K5).
+    ledger,
+    allowances,
+    runTexts: recordRunTexts({
+      source: sync.store,
+      handleOf: (userId) => users.findById(db, userId)?.handle ?? null,
+    }),
     logger,
     // Under fixture providers outbound requests are answered in process, so
     // an end-to-end run makes no outbound request at all
     // (`12-testing-linting-ci.md` §3.6).
     ...(config.fixtureProviders ? { fetch: fixturePageFetch } : {}),
   };
+
+  bootServer({ databasePath: config.databasePath, sync, ledger, logger });
 
   const limiter = new RateLimiter();
   const maintenance = setInterval(() => {
@@ -175,6 +220,7 @@ export function main(): RunningServer {
     closing = true;
     // Marks readiness as draining so the proxy stops routing new requests.
     readiness.drain();
+    sync.drain();
     clearInterval(maintenance);
     clearInterval(nightly);
     logger.info({ signal }, "shutting down");

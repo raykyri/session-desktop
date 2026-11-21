@@ -19,7 +19,7 @@ import { expect, test, type Page } from "@playwright/test";
 const VISUAL_PENDING = new URL("./visual.pending", import.meta.url);
 
 import { APP_ORIGIN } from "./constants.js";
-import { signIn } from "./helpers.js";
+import { PROTOCOL_HEADERS, signIn } from "./helpers.js";
 import { FIRST_ASK } from "./spaces.js";
 
 type Appearance = "dark" | "light";
@@ -34,7 +34,11 @@ const COMBINATIONS: { appearance: Appearance; colorTheme: ColorTheme }[] = [
 
 async function setTheme(page: Page, appearance: Appearance, colorTheme: ColorTheme) {
   const response = await page.request.post(`${APP_ORIGIN}/api/trpc/settings.update`, {
-    headers: { "x-requested-with": "session", "content-type": "application/json" },
+    headers: {
+      "x-requested-with": "session",
+      "content-type": "application/json",
+      ...PROTOCOL_HEADERS,
+    },
     data: { settings: { appearance, colorTheme } },
   });
   expect(response.ok()).toBe(true);

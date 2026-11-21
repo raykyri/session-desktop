@@ -93,8 +93,16 @@ const nondeterministic = {
   ],
 };
 
+/** Test code that may import what its package's source may not: the server's
+ * conformance target runs replica-proto's suite (`01` A1, M3), and its load
+ * script drives the server the same way. */
+const exempt = {
+  "packages/server": ["packages/server/test/conformance/**", "packages/server/scripts/**"],
+};
+
 const boundaries = Object.entries(forbidden).map(([directory, packages]) => ({
   files: [`${directory}/**/*.{ts,tsx}`],
+  ...(exempt[directory] ? { ignores: exempt[directory] } : {}),
   rules: {
     "@typescript-eslint/no-restricted-imports": [
       "error",

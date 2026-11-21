@@ -7,6 +7,7 @@
 // forbidden everywhere.
 
 import type { AppRouter } from "@session/server/router";
+import { PROTOCOL_VERSION } from "@session/sync/client";
 import {
   createTRPCClient,
   httpBatchLink,
@@ -22,8 +23,13 @@ export const TRPC_ENDPOINT = "/api/trpc";
 export const REQUESTED_WITH_HEADER = "X-Requested-With";
 export const REQUESTED_WITH_VALUE = "session";
 
+/** Every API request names the protocol version this build speaks; a server
+ * whose minimum is above it answers 426 (`01` S1, `05` §3.4). */
+export const PROTOCOL_HEADER = "Session-Protocol";
+
 export const REQUESTED_WITH_HEADERS: Readonly<Record<string, string>> = {
   [REQUESTED_WITH_HEADER]: REQUESTED_WITH_VALUE,
+  [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
 };
 
 export type SessionTrpcClient = TRPCClient<AppRouter>;
