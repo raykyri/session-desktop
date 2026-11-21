@@ -747,6 +747,14 @@ export function predictEffects(
         const answer = `answer:${String(r["id"])}`;
         if ((r.kind === "thread" || r.kind === "node") && dump.has(answer))
           keys.set(answer, { mod, md: (get(answer) as Fields)["md"] });
+        // and so is the answer of the thread a node was opened as
+        const copy = r.kind === "node" && r.promoted !== null ? `answer:${r.promoted}` : null;
+        // unless showing it while the copy's own thread is hidden
+        const copyThread =
+          r.kind === "node" && r.promoted !== null ? get(`thread:${r.promoted}`) : undefined;
+        const keep = mod === null && copyThread !== undefined && copyThread["mod"] !== null;
+        if (copy && dump.has(copy) && !keep)
+          keys.set(copy, { mod, md: (get(copy) as Fields)["md"] });
         break;
       }
       // removed: erased for good, with everything under it (owner decision,

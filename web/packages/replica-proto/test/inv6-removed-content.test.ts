@@ -581,3 +581,26 @@ test("removing an ask whose run is still queued erases the run, and no reader ge
   if ("resync" in p) return t.fail("resync");
   t.true(p.changes.some((c) => c.op === "del" && c.key.startsWith("run:")));
 });
+
+test("a hidden node hides the answer of the thread opened from it, for everyone but its author and the owner (M2 review 20)", async (t) => {
+  const { w, open } = await cast(t);
+  const ask = await thread(t, w, "mel", open, "ask");
+  const node = w.id();
+  await ok(t, w.as("mona", "research.forkNode", forkInput(node, ask, "MK-HN-Q")));
+  await w.server.finishJob(`node:${node}`, "MK-HN-A");
+  // opened as its own thread before it was hidden
+  const copy = w.id();
+  await ok(t, w.as("otto", "threads.create", { id: copy, from: { th: ask, node } }));
+  const item = `f:${ask}:${node}`;
+  await ok(t, w.as("olga", "moderation.decide", { item, decision: "hidden", base: w.item(item) }));
+  const answers = async (u: string | null) =>
+    (await w.server.snapshot(actor(u), `space:${open}`)).records.flatMap((x) =>
+      x.record.kind === "answer" && JSON.stringify(x.record).includes("MK-HN-A") ? [x.key] : [],
+    );
+  t.deepEqual(await answers("eve"), []);
+  t.deepEqual(await answers(null), []);
+  t.deepEqual((await answers("olga")).sort(), [`answer:${copy}`, `answer:${node}`].sort());
+  // shown again: both are served
+  await ok(t, w.as("olga", "moderation.decide", { item, decision: "shown", base: w.item(item) }));
+  t.deepEqual((await answers("eve")).sort(), [`answer:${copy}`, `answer:${node}`].sort());
+});
