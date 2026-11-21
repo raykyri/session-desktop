@@ -503,11 +503,9 @@ svg.i {
   vertical-align: 1px;
   background: var(--accent-soft);
   color: var(--accent-color);
+  /* The mockup's `button.anc { font: inherit }` wins over its 10.5 px: the
+     count is drawn in the passage's own type. */
   font: inherit;
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 18px;
   cursor: pointer;
 }
 
