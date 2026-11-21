@@ -5,7 +5,8 @@
 // first in a dialog that names the person and the channel. A removal sends
 // `members.remove` with the admission id the owner saw: a person let in
 // again since answers STALE, the toast says so and the row shows the member
-// as they are now.
+// as they are now; a person who had already left answers `removed: false`,
+// and the toast says that instead of a removal.
 // Under the list the owner sees who is banned, each with Unban. There are no
 // role controls: a channel has only its owner and members (01 C18).
 
@@ -55,6 +56,15 @@ export function memberActions(
     : [`Ban from #${channel.name}`];
 }
 
+/** The toast of an applied removal: `members.remove` answers `removed:
+ * false` when the person was no longer a member, and nothing changed. */
+export function removalToast(result: unknown, user: string, channel: string): string {
+  const removed = (result as { removed?: unknown } | null)?.removed;
+  return removed === false
+    ? `@${user} had already left #${channel}.`
+    : `Removed @${user} from #${channel}.`;
+}
+
 export function MembersDialog({
   channel,
   me,
@@ -94,7 +104,7 @@ export function MembersDialog({
       user: m.u,
       base: { adm: m.adm },
     });
-    if (o.ok && !o.unsent) showToast(`Removed @${m.u} from #${channel.name}.`);
+    if (o.ok && !o.unsent) showToast(removalToast(o.result, m.u, channel.name));
   };
   const unban = async (b: BanRec) => {
     const o = await writes.send("members.unban", { space: channel.id, user: b.u });

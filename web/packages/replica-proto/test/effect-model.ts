@@ -673,7 +673,10 @@ export function predictEffects(
     case "members.remove": {
       const sp = str("space");
       const user = str("user");
-      if (dump.has(`member:${sp}:${user}`)) members(sp, new Map([[user, null]]));
+      const member = dump.has(`member:${sp}:${user}`);
+      if (member) members(sp, new Map([[user, null]]));
+      // whether it removed anyone: false for a person who had already left (C12)
+      out.result = (r) => sameJson(r, { removed: member });
       break;
     }
     case "members.ban": {

@@ -131,8 +131,7 @@ export interface SyncReplicaOptions {
   beforeReload?: (keep: () => void) => () => void;
   /** The person lost access to a private channel (01 R4). */
   onLeft?: (name: string) => void;
-  /** The person's membership of an open channel went without a Leave from
-   * this tab: the owner banned them (04 §6.4). */
+  /** The owner banned the person: their ban record arrived (04 §6.4). */
   onBanned?: (name: string) => void;
   /** The event stream opened or closed. */
   onConnection?: (status: "open" | "closed") => void;
@@ -241,13 +240,15 @@ export class SyncReplica implements ReplicaSource {
     string,
     { promise: Promise<WriteOutcome>; resolve: (o: WriteOutcome) => void }
   >();
-  /** Channels this tab left with `spaces.leave`: a private one's resync and
-   * an open one's lost membership are no news to the person. By space, with
-   * the write's local id. */
+  /** Channels this tab left with `spaces.leave`: a private one's resync is
+   * no news to the person. By space, with the write's local id. */
   private readonly leaving = new Map<string, string>();
-  /** The open channels the person is a member of (not the owner), by id
-   * with the name, as of the last change; null until the user log is read. */
-  private openMemberships: Map<string, string> | null = null;
+  /** The channels the person is banned from (their own `ban` records), as
+   * of the last change; null until the user log is read. */
+  private ownBans: Set<string> | null = null;
+  /** Bans that arrived after the user log was read and are not told yet:
+   * their channel's name was not held. */
+  private readonly bansUntold = new Set<string>();
   private unsentCache: { version: number; list: UnsentWrite[] } | null = null;
 
   private active = false;
@@ -377,7 +378,7 @@ export class SyncReplica implements ReplicaSource {
     this.unsubscribe.push(
       client.subscribe(() => {
         this.pruneRunTexts();
-        this.checkOpenMemberships(client);
+        this.checkOwnBans(client);
         this.changed();
         this.scheduleRecompute();
       }),
@@ -439,6 +440,8 @@ export class SyncReplica implements ReplicaSource {
         const r = await this.persist(gen, () => client.sync(log));
         if (!this.live(gen) || r === null || r === "dropped") return;
         this.loadedLogs.add(log);
+        // the bans the first read holds are not news
+        this.checkOwnBans(client);
       }
       await this.recompute(gen);
     } else {
@@ -755,7 +758,7 @@ export class SyncReplica implements ReplicaSource {
         break;
       case "left":
         // a Leave made in this tab has its own toast ("Left #name.")
-        if (!this.leaving.delete(e.space)) this.options.onLeft?.(e.name);
+        if (!this.leaving.delete(e.space)) void this.tellLeft(e.space, e.name);
         break;
       case "client":
         if (this.options.userId !== null)
@@ -772,38 +775,60 @@ export class SyncReplica implements ReplicaSource {
   }
 
   /**
-   * A ban in an open channel (04 §6.4): the banned person can still read the
-   * channel, so no resync drops it (`left` is for private channels); what
-   * reaches their replica is the deletion of their membership. The ban
-   * record is the owner's only. A membership of an open channel that goes
-   * from the server's records (not a prediction, which an acknowledged write
-   * drops before the server's change arrives) without a Leave from this tab
-   * is told as a ban, with the server's wording. A Leave from another tab of
-   * the same account looks the same.
+   * A ban (04 §6.4): the server serves the banned person their own
+   * `ban:<space>:<user>` record, in their user log, and the client tells
+   * them once it arrives ("You are banned from #name."). The bans the first
+   * read of the user log holds are not news, and a membership that ends any
+   * other way (a Leave from another tab of the same account, a removal) is
+   * not told as a ban. A ban is told once its channel's name is held: in a
+   * private channel the resync of its log (`left`) may come first and names
+   * it (`tellLeft`).
    */
-  private checkOpenMemberships(client: SyncClient): void {
+  private checkOwnBans(client: SyncClient): void {
     const me = this.me;
     if (!this.writer || me === null || !this.userLogLoaded()) return;
     const server = client.replica;
-    const before = this.openMemberships;
-    const now = new Map<string, string>();
-    for (const key of server.keysIn("member", { u: me })) {
-      const m = server.get(key);
-      if (m?.kind !== "member" || m.role !== "member") continue;
-      const s = this.get(`space:${m.sp}`);
-      if (s !== UNKNOWN && s?.kind === "space" && s.vis === "open") now.set(m.sp, s.name);
+    const now = new Set<string>();
+    for (const key of server.keysIn("ban", { u: me })) {
+      const b = server.get(key);
+      if (b?.kind === "ban" && b.u === me) now.add(b.sp);
     }
-    for (const [sp, name] of before ?? []) {
-      if (now.has(sp)) continue;
-      // still a member: the space record is not loaded at the moment
-      if (server.get(`member:${sp}:${me}`)) {
-        now.set(sp, name);
+    const before = this.ownBans;
+    this.ownBans = now;
+    if (before === null) return;
+    for (const sp of now) if (!before.has(sp)) this.bansUntold.add(sp);
+    for (const sp of [...this.bansUntold]) {
+      if (!now.has(sp)) {
+        this.bansUntold.delete(sp);
         continue;
       }
-      if (this.leaving.delete(sp)) continue;
-      this.options.onBanned?.(name);
+      const s = this.get(`space:${sp}`);
+      if (s === UNKNOWN || s?.kind !== "space") continue;
+      this.bansUntold.delete(sp);
+      this.options.onBanned?.(s.name);
     }
-    this.openMemberships = now;
+  }
+
+  /**
+   * A private channel the person lost without a Leave from this tab (01 R4):
+   * "You are no longer a member of #name.", unless a ban removed them, which
+   * is told as the ban. The space log's resync and the ban in the user log
+   * arrive in either order, so the user log is read first.
+   */
+  private async tellLeft(space: string, name: string): Promise<void> {
+    const client = this.client;
+    const me = this.me;
+    if (client && me !== null && this.userLogLoaded() && !this.ownBans?.has(space))
+      try {
+        await client.sync(userLog(me));
+      } catch {
+        // not read: told as a lost membership
+      }
+    if (this.ownBans?.has(space)) {
+      if (this.bansUntold.delete(space)) this.options.onBanned?.(name);
+      return;
+    }
+    this.options.onLeft?.(name);
   }
 
   /** A Leave that was refused or discarded: its resync, if one comes, is
