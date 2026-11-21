@@ -113,11 +113,13 @@ export interface PreCtx {
   inviteCodeTaken(code: string): boolean;
   /** How many runs the actor has with status `queued` (`03` L1). */
   queuedRuns(): number;
-  /** Takes one use of the actor's `pre`-stage limit (`04` Z1): false when
-   * it is used up, and the write is refused with TOO_MANY_REQUESTS, which is
-   * not recorded. Absent where a server applies no limits (the prototype's
-   * suite). */
-  allow?(limit: PreLimit): boolean;
+  /** Whether the actor has a use of a `pre`-stage limit left (`04` Z1):
+   * true, or the message of the TOO_MANY_REQUESTS refusal, which is not
+   * recorded (it names the limit and when a use is free again). The server
+   * takes the use only when the write commits a change, so a refused write
+   * or one that changes nothing uses none. Absent where a server applies no
+   * limits (the prototype's suite). */
+  allow?(limit: PreLimit): true | string;
 }
 
 /** The limits of `04` Z1 that a mutator's `pre` stage applies, per person:

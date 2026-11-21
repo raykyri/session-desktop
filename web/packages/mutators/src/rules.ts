@@ -396,10 +396,12 @@ export function checkQueue(ctx: PreCtx): void {
     );
 }
 
-/** Takes one use of a `pre`-stage limit (`04` Z1), or refuses with
- * TOO_MANY_REQUESTS, which the server does not record. */
+/** Asks for one use of a `pre`-stage limit (`04` Z1), or refuses with
+ * TOO_MANY_REQUESTS and the server's message, which the server does not
+ * record. */
 export function within(ctx: PreCtx, limit: PreLimit): void {
-  if (ctx.allow && !ctx.allow(limit)) throw refuse("TOO_MANY_REQUESTS");
+  const left = ctx.allow?.(limit) ?? true;
+  if (left !== true) throw refuse("TOO_MANY_REQUESTS", left);
 }
 
 /** The pre-check of a write that queues a run: room in the person's queue

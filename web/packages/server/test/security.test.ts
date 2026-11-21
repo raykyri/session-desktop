@@ -21,6 +21,15 @@ function pinned(t: Parameters<typeof createHarness>[0], env: Record<string, stri
   return createHarness(t, { limiterNow: () => at, env });
 }
 
+/** A harness whose limiter clock moves only when the test moves it. */
+function stepped(t: Parameters<typeof createHarness>[0], env: Record<string, string> = {}) {
+  const clock = { at: Date.now() };
+  return { harness: createHarness(t, { limiterNow: () => clock.at, env }), clock };
+}
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+
 function trpcPost(harness: Harness, path: string, body: unknown, ip = "7.7.7.7", cookie?: string) {
   return harness.request(`/api/trpc/${path}`, {
     method: "POST",
@@ -263,6 +272,14 @@ async function refusedUnrecorded(
 
 const recordCount = (h: Harness) => rowCount(h, "records");
 
+/** A write the server answers without recording it (a `pre`-stage
+ * refusal): its seq is the client's next one still. */
+async function unrecorded(p: Person, name: string, input: unknown) {
+  const answer = await p.write(name, input);
+  p.seq -= 1;
+  return answer;
+}
+
 test("limit: spaces.create, 5 a day per user (pre)", async (t) => {
   const harness = pinned(t);
   const olga = new Person(harness, harness.addUser("olga"));
@@ -315,6 +332,93 @@ test("limit: spaces.join, 60 an hour per user (pre)", async (t) => {
     await mel.ok("spaces.leave", { space: lounge });
   }
   await refusedUnrecorded(t, mel, "spaces.join", { space: lounge });
+  // the join's own limit refused it: another write still goes through
+  await t.notThrowsAsync(
+    mel.ok("threads.create", { id: newId(), space: lounge, kind: "post", q: "Still here" }),
+  );
+});
+
+test("limit: the pre-stage limits hold for their whole window, and say which limit and when", async (t) => {
+  const { harness, clock } = stepped(t, { SESSION_LIMIT_WRITES_PER_MINUTE: "10000" });
+  const olga = new Person(harness, harness.addUser("olga"));
+  for (let index = 0; index < 5; index += 1)
+    await olga.ok("spaces.create", { id: newId(), name: `room-${index}` });
+  const lab = newId();
+  t.like(await unrecorded(olga, "spaces.create", { id: lab, name: "lab", vis: "private" }), {
+    ok: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "You can create 5 channels a day. Try again in 24 hours.",
+    },
+  });
+  clock.at += 2 * HOUR;
+  t.like(await unrecorded(olga, "spaces.create", { id: newId(), name: "lab" }), {
+    ok: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "You can create 5 channels a day. Try again in 22 hours.",
+    },
+  });
+  // a full day after the first five
+  clock.at += 22 * HOUR;
+  await olga.ok("spaces.create", { id: lab, name: "lab", vis: "private" });
+
+  for (let index = 0; index < 20; index += 1)
+    await olga.ok("invites.create", { id: newId(), space: lab, days: 7 });
+  clock.at += 2 * HOUR;
+  t.like(await unrecorded(olga, "invites.create", { id: newId(), space: lab, days: 7 }), {
+    ok: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "You can make 20 channel invite links a day. Try again in 22 hours.",
+    },
+  });
+
+  const mel = new Person(harness, harness.addUser("mel"));
+  const lounge = newId();
+  await mel.ok("spaces.create", { id: lounge, name: "lounge" });
+  const ada = new Person(harness, harness.addUser("ada"));
+  for (let index = 0; index < 60; index += 1) {
+    await ada.ok("spaces.join", { space: lounge });
+    await ada.ok("spaces.leave", { space: lounge });
+  }
+  clock.at += 2 * MINUTE;
+  t.like(await unrecorded(ada, "spaces.join", { space: lounge }), {
+    ok: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "You can join 60 channels an hour. Try again in 58 minutes.",
+    },
+  });
+});
+
+test("limit: a refused write and a write that changes nothing take no pre-stage use", async (t) => {
+  const harness = pinned(t, { SESSION_LIMIT_WRITES_PER_MINUTE: "1000" });
+  const olga = new Person(harness, harness.addUser("olga"));
+  const lounge = newId();
+  await olga.ok("spaces.create", { id: lounge, name: "lounge" });
+  // five creates refused for a taken name (recorded), then four more
+  // channels: five in all
+  for (let index = 0; index < 5; index += 1)
+    t.like(await olga.write("spaces.create", { id: newId(), name: "lounge" }), {
+      ok: false,
+      error: { code: "CONFLICT" },
+    });
+  for (let index = 0; index < 4; index += 1)
+    await olga.ok("spaces.create", { id: newId(), name: `room-${index}` });
+  await refusedUnrecorded(t, olga, "spaces.create", { id: newId(), name: "room-5" });
+
+  // one join, then 59 joins of the channel already joined, which change
+  // nothing: the 60 joins of the hour are not spent
+  const mel = new Person(harness, harness.addUser("mel"));
+  await mel.ok("spaces.join", { space: lounge });
+  for (let index = 0; index < 59; index += 1) await mel.ok("spaces.join", { space: lounge });
+  for (let index = 0; index < 59; index += 1) {
+    await mel.ok("spaces.leave", { space: lounge });
+    await mel.ok("spaces.join", { space: lounge });
+  }
+  await mel.ok("spaces.leave", { space: lounge });
+  await refusedUnrecorded(t, mel, "spaces.join", { space: lounge });
 });
 
 test("limit: spaces.directory and spaces.byName, 60 a minute per user or per IP, IPv6 by /64", async (t) => {
@@ -347,6 +451,9 @@ test("limit: admin.models.*, 60 a minute per site admin", async (t) => {
   await t.throwsAsync(admin.admin.models.setDefaultEffort({ effort: "low" }), {
     code: "TOO_MANY_REQUESTS",
   } as never);
+  await t.throwsAsync(admin.admin.models.setDefault({ model: "claude-fable" }), {
+    code: "TOO_MANY_REQUESTS",
+  } as never);
   const other = harness.caller(harness.addUser("other.admin", { isAdmin: true }));
   await t.notThrowsAsync(other.admin.models.list());
 });
@@ -372,13 +479,39 @@ test("limit: About and the removal note, 300 characters, BAD_REQUEST and recorde
   t.true(again.ok && again.lastSeq === sent);
 });
 
-test("the pre-stage refusals are counted per bucket for /metrics", async (t) => {
-  const harness = pinned(t, { SESSION_METRICS_TOKEN: "m", SESSION_LIMIT_SPACES_PER_DAY: "1" });
+test("the pre-stage and procedure refusals are counted per bucket for /metrics", async (t) => {
+  const harness = pinned(t, {
+    SESSION_METRICS_TOKEN: "m",
+    SESSION_LIMIT_SPACES_PER_DAY: "1",
+    SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: "1",
+    SESSION_LIMIT_JOINS_PER_HOUR: "1",
+    SESSION_LIMIT_DIRECTORY_PER_MINUTE: "1",
+    SESSION_LIMIT_ADMIN_PER_MINUTE: "1",
+  });
   const olga = new Person(harness, harness.addUser("olga"));
-  await olga.ok("spaces.create", { id: newId(), name: "one" });
-  await olga.write("spaces.create", { id: newId(), name: "two" });
+  const lab = newId();
+  await olga.ok("spaces.create", { id: lab, name: "lab", vis: "private" });
+  await unrecorded(olga, "spaces.create", { id: newId(), name: "two" });
+  await olga.ok("invites.create", { id: newId(), space: lab, days: 7 });
+  await unrecorded(olga, "invites.create", { id: newId(), space: lab, days: 7 });
+  const mona = new Person(harness, harness.addUser("mona"));
+  const lounge = newId();
+  await mona.ok("spaces.create", { id: lounge, name: "lounge" });
+  const mel = new Person(harness, harness.addUser("mel"));
+  await mel.ok("spaces.join", { space: lounge });
+  await mel.ok("spaces.leave", { space: lounge });
+  await unrecorded(mel, "spaces.join", { space: lounge });
+  for (let index = 0; index < 2; index += 1)
+    await harness.request("/api/trpc/spaces.directory", {
+      headers: { "Fly-Client-IP": "9.9.9.9" },
+    });
+  const admin = harness.caller(harness.addUser("site.admin", { isAdmin: true }));
+  await admin.admin.models.list();
+  await admin.admin.models.list().catch(() => undefined);
   const metrics = await harness.app.request("/metrics", { headers: { Authorization: "Bearer m" } });
-  t.regex(await metrics.text(), /session_rate_limited_total\{bucket="spacesCreated"\} 1/);
+  const text = await metrics.text();
+  for (const bucket of ["spacesCreated", "channelInvites", "joins", "directory", "adminModels"])
+    t.regex(text, new RegExp(`session_rate_limited_total\\{bucket="${bucket}"\\} 1`), bucket);
 });
 
 /* ------------------------------------------------------------- IP key */
