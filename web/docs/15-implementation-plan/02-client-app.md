@@ -848,8 +848,10 @@ boxes:
   key. Add it under Anthropic." and "<Provider> keys start with <prefix> and
   are longer than this. Copy the whole key from your <Provider> account."
   Save calls `apiKeys.set`, which checks the key with the provider during the
-  request (03 K4): while it runs the row shows the key with the chip
-  "Checking…" and Save is busy; on success the chip becomes "Valid" and the
+  request (03 K4): while it runs the form closes and the row shows the
+  masked key with the chip "Checking…", as the mockup draws it; each row
+  has one polite live region that announces "Checking…", "Valid" or
+  "Invalid" as the status changes; on success the chip becomes "Valid" and the
   toast "<Provider> key works." shows; a refusal saves nothing, reopens the
   form with the text kept, and shows "That key was rejected by <Provider>."
   or "Couldn't reach <Provider> to check the key. Try again." under the

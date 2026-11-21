@@ -162,8 +162,10 @@ Scope:
   "Scope of this build" note on ADR-19 to ADR-22 naming the desktop, phone
   and device-run parts that are not built and the removal of the effect
   queue (question Q1); ADR-5 amended for
-  X sign-in (`04` Z2); ADR-23 (user API keys, model payers, the weekly
-  allowance, runtime model settings; `03` §6, K15), accepted before M5b.
+  X sign-in (`04` Z2); ADR-23 (member API keys, model payers, explicit
+  effort, the site default model and effort, the payer in `pre`; `03` §6,
+  K4, K11, K12, K15), accepted before M5b. The weekly allowance itself is
+  `03` K3, not part of ADR-23.
 
 Exit criteria:
 - `cd web/packages/replica-proto && npm test && npm run mutate` exits 0.

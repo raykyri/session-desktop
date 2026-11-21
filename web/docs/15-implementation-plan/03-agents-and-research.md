@@ -414,8 +414,12 @@ again." An accepted key is encrypted with AES-256-GCM under
 provider adapter for the duration of a call, never logged and never
 returned; reads return the prefix and last 4 characters (`mask()`). The page
 shows "Checking…" while the request runs, then the "Valid" chip and the
-toast "<Provider> key works." A key rejected later during a run becomes
-`invalid` (E5). The page shows "Not set" with Add key for a missing key.
+toast "<Provider> key works." At save, a 401 or a 403 from the provider
+refuses the save with "That key was rejected by <Provider>.". During a run,
+only a 401 or the provider's `authentication_error` marks the key `invalid`
+and returns billing from `key` to `pause` (E5); a 403 (a permission error on
+a key that still authenticates) fails the run `failed { why: "key" }` with
+the provider's message as its detail and leaves the key `valid`. The page shows "Not set" with Add key for a missing key.
 Removing a key asks "Remove the <provider> key? Asks billed to it will stop."
 (`kConfirm`); runs already using it end `failed { why: "key" }` at their next
 step. Acceptance: a test greps the database file for a stored raw key and
