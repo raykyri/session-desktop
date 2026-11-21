@@ -1,7 +1,7 @@
 // `system.health` and `system.runtimeConfig` (`03-api-and-events.md` §2).
 
 import type { ModelInfo } from "@session/shared";
-import { MODEL_REGISTRY, canUseModel, modelInfo, version } from "@session/shared";
+import { MODEL_REGISTRY, modelInfo, version } from "@session/shared";
 
 import type { Config } from "../../config.js";
 import { publicProcedure, router } from "../base.js";
@@ -52,16 +52,12 @@ export function searchFeatures(config: Config): RuntimeFeatures {
   return { webSearch: true, searchVendor: vendor };
 }
 
-export function runtimeConfigFor(config: Config, user: { isAdmin: boolean } | null): RuntimeConfig {
+export function runtimeConfigFor(config: Config): RuntimeConfig {
   const available = modelAvailability(config);
   return {
     version,
-    // Gated models are omitted entirely for non-admins: a hidden model the
-    // client never sees cannot be launched by a stale UI either, because the
-    // server checks `canUseModel` again at launch.
-    models: MODEL_REGISTRY.filter((model) => canUseModel(user, model.id)).map((model) =>
-      modelInfo(model, available(model.provider)),
-    ),
+    // Every registry entry is open to every member (ADR-23, `03` K11).
+    models: MODEL_REGISTRY.map((model) => modelInfo(model, available(model.provider))),
     limits: {
       runsPerUser: config.limits.perUser,
       runTimeoutSeconds: Math.round(config.limits.runTimeoutMs / 1000),
@@ -75,5 +71,5 @@ export function runtimeConfigFor(config: Config, user: { isAdmin: boolean } | nu
 
 export const systemRouter = router({
   health: publicProcedure.query(() => ({ ok: true, version })),
-  runtimeConfig: publicProcedure.query(({ ctx }) => runtimeConfigFor(ctx.config, ctx.user)),
+  runtimeConfig: publicProcedure.query(({ ctx }) => runtimeConfigFor(ctx.config)),
 });

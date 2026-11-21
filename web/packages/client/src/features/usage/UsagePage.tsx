@@ -62,13 +62,16 @@ function UsageTop({
 }) {
   const tone = usageTone(reading.used, reading.allowance);
   const { percent, weekday, resetIn } = usageSentence(reading, now);
+  // The bar is drawn to one decimal; the sentence rounds to a whole percent.
+  const left =
+    reading.allowance > 0 ? Math.min(1, Math.max(0, 1 - reading.used / reading.allowance)) : 0;
   return (
     <section className="box">
       <p className={`usent ${tone}`}>
         You have <b>{percent}%</b> of usage left this week. Next reset on {weekday}, in {resetIn}.
       </p>
       <div className={`utrack ${tone}`} role="img" aria-label={`${percent}% left`}>
-        <span style={{ width: `${percent}%` }} />
+        <span style={{ width: `${(left * 100).toFixed(1)}%` }} />
       </div>
     </section>
   );

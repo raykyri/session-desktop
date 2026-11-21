@@ -37,7 +37,6 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
   return {
     "auth.me": user,
     "auth.logout": { ok: true },
-    "admin.listUsers": [],
     "settings.get": { ...DEFAULT_USER_SETTINGS },
     "system.runtimeConfig": { version: "0.0.0", models: [], limits: {}, features: {} },
     // The fixture build's site defaults (`fixtureOnlineData`), so a screen

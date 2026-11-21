@@ -354,6 +354,10 @@ test("remove deletes the key; without an Anthropic key billing returns to pause"
   t.deepEqual(await caller.usage.setBilling({ mode: "key" }), { billing: "key" });
   t.is((await caller.usage.get()).billing, "key");
 
+  // Removing the OpenAI key leaves billing on the Anthropic key.
+  t.deepEqual(await caller.apiKeys.remove({ provider: "openai" }), { removed: true });
+  t.is((await caller.usage.get()).billing, "key");
+  await caller.apiKeys.set({ provider: "openai", raw: OPENAI_KEY });
   t.deepEqual(await caller.apiKeys.remove({ provider: "anthropic" }), { removed: true });
   t.is((await caller.usage.get()).billing, "pause");
   t.deepEqual(

@@ -131,7 +131,6 @@ export const modelInfoSchema = z.object({
   id: z.string(),
   label: z.string(),
   provider: modelProviderSchema,
-  adminOnly: z.boolean(),
   available: z.boolean(),
   supportsFiles: z.boolean(),
   supportsImages: z.boolean(),

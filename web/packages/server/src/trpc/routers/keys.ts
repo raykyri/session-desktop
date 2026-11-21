@@ -111,15 +111,24 @@ export interface UsageRunsPage {
 
 const cursorOf = (run: { startedAt: number; runId: string }) => `${run.startedAt}:${run.runId}`;
 
+/** A cursor as `cursorOf` writes it: `<startedAt>:<runId>`, both parts
+ * present. Anything else is `BAD_REQUEST`. */
+function parseCursor(cursor: string): { at: number; runId: string } {
+  const match = /^(\d+):(.+)$/.exec(cursor);
+  if (!match?.[1] || !match[2]) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That page cursor is not valid." });
+  }
+  return { at: Number(match[1]), runId: match[2] };
+}
+
 /** Whether `run` comes after the cursor's run in the listing's order
  * (newest `startedAt` first, then run id descending). A cursor whose run is
- * gone still pages from where it was; a malformed one starts over. */
-function isAfterCursor(run: { startedAt: number; runId: string }, cursor: string): boolean {
-  const split = cursor.indexOf(":");
-  const at = Number(cursor.slice(0, split));
-  const runId = cursor.slice(split + 1);
-  if (split < 0 || !Number.isFinite(at)) return true;
-  return run.startedAt < at || (run.startedAt === at && run.runId < runId);
+ * gone still pages from where it was. */
+function isAfterCursor(
+  run: { startedAt: number; runId: string },
+  cursor: { at: number; runId: string },
+): boolean {
+  return run.startedAt < cursor.at || (run.startedAt === cursor.at && run.runId < cursor.runId);
 }
 
 /** `key` billing needs an Anthropic key that is `valid` and still opens
@@ -156,7 +165,8 @@ export const usageProcedures = {
       const allowance = ctx.config.limits.weeklyTokens;
       const all = ctx.ledger.runsOf(ctx.user.id, weekOf(ctx.now()));
       const after = input?.cursor ?? null;
-      const found = after === null ? 0 : all.findIndex((run) => isAfterCursor(run, after));
+      const position = after === null ? null : parseCursor(after);
+      const found = position === null ? 0 : all.findIndex((run) => isAfterCursor(run, position));
       const start = found < 0 ? all.length : found;
       const page = all.slice(start, start + limit);
       const last = page.at(-1);

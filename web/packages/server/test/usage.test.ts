@@ -128,6 +128,11 @@ test("usage.listRuns: this week's runs newest first, with the share or the payer
   t.is(page.nextCursor, null);
 });
 
+// TODO(M3, M5a: the SQLite ledger and the RunTexts over the run and node
+// records): run this test again against the real store, where removal erases
+// the thread's text and `questionOf` reads through the person's current
+// scope. Here both halves are the in-memory stand-ins (`MemoryLedger`,
+// `MemoryRunTexts`), so the test covers the procedure, not the erasure.
 test("a removed thread's run is listed without its question; so is one the person can no longer read", async (t) => {
   const ledger = new MemoryLedger();
   const texts = new MemoryRunTexts();
@@ -190,6 +195,9 @@ test("usage.listRuns pages with a cursor; the default page is 6", async (t) => {
   const small = await caller.usage.listRuns({ limit: 3 });
   t.is(small.runs.length, 3);
   await t.throwsAsync(caller.usage.listRuns({ limit: 0 }));
+  for (const cursor of [":run-1", "run-1", "x:run-1", "12:", ""]) {
+    await t.throwsAsync(caller.usage.listRuns({ cursor }), { code: "BAD_REQUEST" }, cursor);
+  }
 });
 
 test("no runs this week lists nothing", async (t) => {

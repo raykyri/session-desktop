@@ -11,11 +11,7 @@ import {
   estimateCostMicros,
   findModel,
   modelInfo,
-  modelsFor,
 } from "../src/models/registry.js";
-
-const admin = { isAdmin: true };
-const member = { isAdmin: false };
 
 test("registers exactly the four models in 04-agent-runtime.md", (t) => {
   t.deepEqual(
@@ -59,35 +55,21 @@ test("only the Gemini entry uses native search", (t) => {
   );
 });
 
-test("claude-fable is the only admin-only model", (t) => {
+test("every registry model is open to every member; an unknown id is not", (t) => {
+  for (const model of MODEL_REGISTRY) t.true(canUseModel(model.id), model.id);
+  t.false(canUseModel("gpt-astra"));
+});
+
+test("payers: included for every model, and Fable on an Anthropic key too", (t) => {
   t.deepEqual(
-    MODEL_REGISTRY.filter((model) => model.adminOnly).map((model) => model.id),
-    ["claude-fable"],
+    MODEL_REGISTRY.map((model) => [model.id, model.payers]),
+    [
+      ["gemini-flash", ["included"]],
+      ["deepseek-flash", ["included"]],
+      ["gpt-luna", ["included"]],
+      ["claude-fable", ["included", "key:anthropic"]],
+    ],
   );
-});
-
-test("canUseModel gates admin-only models", (t) => {
-  t.true(canUseModel(member, "gemini-flash"));
-  t.false(canUseModel(member, "claude-fable"));
-  t.true(canUseModel(admin, "claude-fable"));
-});
-
-test("canUseModel rejects an unknown id for everyone", (t) => {
-  t.false(canUseModel(admin, "gpt-astra"));
-  t.false(canUseModel(member, "gpt-astra"));
-});
-
-test("canUseModel treats a signed-out caller as a non-admin", (t) => {
-  t.true(canUseModel(null, "gemini-flash"));
-  t.false(canUseModel(null, "claude-fable"));
-});
-
-test("modelsFor hides admin-only models and preserves registry order", (t) => {
-  t.deepEqual(
-    modelsFor(member).map((model) => model.id),
-    ["gemini-flash", "deepseek-flash", "gpt-luna"],
-  );
-  t.is(modelsFor(admin).length, MODEL_REGISTRY.length);
 });
 
 test("deepseek-flash takes no file or image parts", (t) => {
@@ -160,7 +142,6 @@ test("modelInfo projects the registry entry the client renders", (t) => {
     id: "claude-fable",
     label: "Claude Fable 5.1",
     provider: "anthropic",
-    adminOnly: true,
     available: false,
     supportsFiles: true,
     supportsImages: true,

@@ -1,14 +1,14 @@
 // `auth`, `settings`, `usage`, and `admin`
 // (`03-api-and-events.md` §2, `06-auth-and-users.md` §6, §8).
 
-import { auth, preferences, usage, users } from "@session/db";
+import { auth, preferences, usage } from "@session/db";
 import type { User, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
 
 import { endSession } from "../../auth/session.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../base.js";
-import { repo, required } from "../errors.js";
+import { repo } from "../errors.js";
 
 import { usageProcedures } from "./keys.js";
 import { adminModelsRouter } from "./models.js";
@@ -81,69 +81,9 @@ export const usageRouter = router({
   ),
 });
 
-/** One UTC day of usage, restated here rather than inferred from the
- * repository: the router's type is what the client compiles against, and it
- * must not name a type inside `@session/db` (ADR-1). */
-export interface DailyUsageTotals {
-  day: number;
-  inputTokens: number;
-  outputTokens: number;
-  reasoningTokens: number;
-  cachedTokens: number;
-  costEstimateMicros: number;
-  runs: number;
-}
-
-export interface DailyLimits {
-  dailyTokens: number | null;
-  dailyRuns: number | null;
-}
-
-export interface AdminUser extends User {
-  usage: DailyUsageTotals;
-  limits: DailyLimits;
-}
-
 export const adminRouter = router({
   /** The Site Admin settings: default model and default effort (`03` K15). */
   models: adminModelsRouter,
-  listUsers: adminProcedure.query(({ ctx }): AdminUser[] =>
-    repo(() =>
-      users.listUsers(ctx.db).map((user) => ({
-        ...user,
-        usage: usage.dailyTotals(ctx.db, user.id),
-        limits: usage.effectiveLimits(ctx.db, user.id, {
-          dailyTokens: ctx.config.limits.dailyTokens,
-          dailyRuns: ctx.config.limits.dailyRuns,
-        }),
-      })),
-    ),
-  ),
-  setLimits: adminProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-        dailyTokens: z.number().int().min(0).nullable().optional(),
-        dailyRuns: z.number().int().min(0).nullable().optional(),
-      }),
-    )
-    .mutation(({ ctx, input }): DailyLimits => {
-      required(
-        repo(() => users.findById(ctx.db, input.userId)),
-        `account ${input.userId} was not found`,
-      );
-      const patch: { dailyTokens?: number | null; dailyRuns?: number | null } = {};
-      if (input.dailyTokens !== undefined) {
-        patch.dailyTokens = input.dailyTokens;
-      }
-      if (input.dailyRuns !== undefined) {
-        patch.dailyRuns = input.dailyRuns;
-      }
-      // Runs held for the old limits are not released here: the run queue
-      // that held them was removed with the research model, and the run
-      // dispatcher of plan `03` E2 (M5a) checks limits when it claims a run.
-      return repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
-    }),
   /** Generates administrative invite codes. Leaves createdBy null so admin codes do not decrement personal invite allowances. */
   createInvites: adminProcedure
     .input(z.object({ count: z.number().int().min(1).max(100) }))

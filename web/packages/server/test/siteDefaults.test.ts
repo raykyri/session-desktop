@@ -119,6 +119,39 @@ test("a stored default the registry no longer has reads as the registry's defaul
     defaultModel: DEFAULT_MODEL_ID,
     defaultEffort: findModel(DEFAULT_MODEL_ID)?.defaultEffort,
   });
+  // Read once, the invalid values are cleared.
+  t.is(siteSettings.get(harness.db, "default_model"), undefined);
+  t.is(siteSettings.get(harness.db, "default_effort"), undefined);
+});
+
+test("an unset effort reads as the default model's own default effort", async (t) => {
+  const registry = MODEL_REGISTRY.map((entry) =>
+    entry.id === "deepseek-flash" ? { ...entry, defaultEffort: "low" as const } : entry,
+  );
+  const harness = createHarness(t, { deps: { models: registry } });
+  const admin = harness.caller(harness.addUser("sol", { isAdmin: true }));
+  await admin.admin.models.setDefault({ model: "deepseek-flash" });
+  t.like(await admin.models.list(), { defaultModel: "deepseek-flash", defaultEffort: "low" });
+});
+
+test("every change is logged with the admin's id", async (t) => {
+  const harness = createHarness(t);
+  const user = harness.addUser("sol", { isAdmin: true });
+  const admin = harness.caller(user);
+  await admin.admin.models.setDefault({ model: "gpt-luna" });
+  await admin.admin.models.setDefaultEffort({ effort: "high" });
+  const lines = harness.logs
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter(
+      (line) => line["message"] === "default model set" || line["message"] === "default effort set",
+    );
+  t.deepEqual(
+    lines.map((line) => [line["message"], line["adminId"], line["model"] ?? line["effort"]]),
+    [
+      ["default model set", user.id, "gpt-luna"],
+      ["default effort set", user.id, "high"],
+    ],
+  );
 });
 
 test("a stored default that became key-only reads as the registry's default", async (t) => {

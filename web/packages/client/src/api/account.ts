@@ -33,7 +33,6 @@ export const queryKeys = {
   settings: () => ["settings"] as const,
   runtimeConfig: () => ["runtimeConfig"] as const,
   usage: () => ["usage"] as const,
-  adminUsers: () => ["adminUsers"] as const,
   /** `usage.get` (03 K5, K6): the ring and the Usage page. */
   weeklyUsage: () => ["usage", "week"] as const,
   usageRuns: () => ["usage", "runs"] as const,
@@ -102,22 +101,6 @@ export function setDefaultModel(model: string) {
 
 export function setDefaultEffort(effort: string) {
   return trpc().admin.models.setDefaultEffort.mutate({ effort });
-}
-
-export function listUsers() {
-  return trpc().admin.listUsers.query();
-}
-
-export function setUserLimits(input: {
-  userId: string;
-  dailyTokens?: number | null;
-  dailyRuns?: number | null;
-}) {
-  return trpc().admin.setLimits.mutate(input);
-}
-
-export function createInvites(count: number) {
-  return trpc().admin.createInvites.mutate({ count });
 }
 
 /** The GitHub OAuth start URL. The server validates `return_to`; `signupCode`
@@ -306,15 +289,6 @@ export function useSetDefaultEffort() {
   });
 }
 
-export function useAdminUsers(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.adminUsers(),
-    queryFn: () => listUsers(),
-    refetchInterval: USAGE_REFRESH_MS,
-    enabled,
-  });
-}
-
 export function useUpdateSettings() {
   const client = useQueryClient();
   return useMutation({
@@ -336,16 +310,4 @@ export function useLogout() {
       clearLocalAccountState();
     },
   });
-}
-
-export function useSetUserLimits() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: setUserLimits,
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.adminUsers() }),
-  });
-}
-
-export function useCreateInvites() {
-  return useMutation({ mutationFn: createInvites });
 }

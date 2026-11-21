@@ -89,7 +89,8 @@ function endedRunsOf(source: ReplicaSource): number {
 /**
  * The online-only data (02 §9.1): for a member, `models.list` and
  * `usage.get` from the server over the build's values (03 K6, K15). The
- * usage is refetched when one of the member's runs ends in the replica.
+ * usage and the recent runs are refetched when one of the member's runs
+ * ends in the replica.
  * Must be rendered inside the app's query client.
  */
 export function useOnlineData(): OnlineData {
@@ -102,7 +103,9 @@ export function useOnlineData(): OnlineData {
   useEffect(() => {
     if (ended === UNKNOWN) return;
     if (seen.current !== null && seen.current !== ended) {
+      // The ring's reading and the Usage page's recent runs both moved.
       void client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() });
+      void client.invalidateQueries({ queryKey: queryKeys.usageRuns() });
     }
     seen.current = ended;
   }, [ended, client]);

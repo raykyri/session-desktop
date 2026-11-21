@@ -8,14 +8,18 @@
 // is a newline. Signed out it is a disabled cover that opens sign-in.
 
 import { Menu } from "@base-ui/react/menu";
+import { useNavigate } from "@tanstack/react-router";
 import type { MouseEvent, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { useOnlineData } from "../../replica/ReplicaProvider.js";
 import {
+  composerModel,
   effortLabel,
+  keyOnlyProvider,
   stepDownEffort,
   type Effort,
+  type KeyProvider,
   type ModelOption,
 } from "../../replica/online.js";
 import type { ChannelView } from "../../replica/queries.js";
@@ -113,16 +117,20 @@ export function ModelPicker({
   models,
   model,
   effort,
+  keys = [],
   onChange,
   field,
 }: {
   models: readonly ModelOption[];
   model: ModelOption;
   effort: Effort;
+  /** The providers the member has a valid key for (03 K11). */
+  keys?: readonly KeyProvider[];
   onChange: (choice: { model: string; effort: Effort }) => void;
   field: RefObject<HTMLTextAreaElement | null>;
 }) {
   const narrow = useNarrow(600);
+  const navigate = useNavigate();
   return (
     <Menu.Root>
       <Menu.Trigger className="pick" title="Model and effort">
@@ -149,14 +157,40 @@ export function ModelPicker({
                   onChange({ model: next.id, effort: stepDownEffort(effort, next.efforts) });
               }}
             >
-              {models.map((m) => (
-                <Menu.RadioItem closeOnClick key={m.id} value={m.id} className={SHELL_MENU_ITEM}>
-                  <span className="flex-1">{m.label}</span>
-                  <Menu.RadioItemIndicator className="text-accent inline-flex">
-                    <CheckMark />
-                  </Menu.RadioItemIndicator>
-                </Menu.RadioItem>
-              ))}
+              {models.map((m) => {
+                // A key-only model (03 K11): without its key, a row that
+                // opens Usage to add one; with it, the key it runs on.
+                const keyOnly = keyOnlyProvider(m);
+                if (keyOnly !== null && !keys.includes(keyOnly)) {
+                  return (
+                    <Menu.Item
+                      key={m.id}
+                      className={SHELL_MENU_ITEM}
+                      onClick={() => void navigate({ to: "/usage" })}
+                    >
+                      <span className="flex-1">
+                        {m.label}
+                        <span className="mi-src">Add a key</span>
+                      </span>
+                    </Menu.Item>
+                  );
+                }
+                return (
+                  <Menu.RadioItem closeOnClick key={m.id} value={m.id} className={SHELL_MENU_ITEM}>
+                    <span className="flex-1">
+                      {m.label}
+                      {keyOnly !== null ? (
+                        <span className="mi-src">
+                          your {keyOnly === "openai" ? "OpenAI" : "Anthropic"} key
+                        </span>
+                      ) : null}
+                    </span>
+                    <Menu.RadioItemIndicator className="text-accent inline-flex">
+                      <CheckMark />
+                    </Menu.RadioItemIndicator>
+                  </Menu.RadioItem>
+                );
+              })}
             </Menu.RadioGroup>
             <div className={SHELL_MENU_SEPARATOR} />
             <Menu.SubmenuRoot>
@@ -299,8 +333,7 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
   const [mode, setMode] = useState<Mode>("ask");
   const [space, setSpace] = useState<string | null>(null);
 
-  const model =
-    online.models.find((m) => m.id === (chosen.model ?? online.defaultModel)) ?? online.models[0];
+  const model = composerModel(online, chosen.model);
   const effort = model
     ? stepDownEffort(chosen.effort ?? online.defaultEffort, model.efforts)
     : "low";
@@ -395,6 +428,7 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
           models={online.models}
           model={model}
           effort={effort}
+          keys={online.keys}
           onChange={(next) => chosen.set(next)}
           field={field}
         />
