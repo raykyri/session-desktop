@@ -34,6 +34,11 @@
 // the clock, replays, client ids, prediction fullness, savepoints, hidden
 // copies).
 //
+// M6-C1 on are the M6 review's faults in the web client: a slot holds a copy
+// of `@session/client` as well (linked to the copies of the two packages
+// above), and a client mutation runs the client test files it names
+// (`files`), not this package's suite, which does not import the client.
+//
 // Before the mutations, the suites run in an unmutated slot: a failure there
 // stops the run (a mutation is not killed by a test that fails anyway). A
 // mutation's type check does not decide whether it is killed: the suites
@@ -46,6 +51,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -64,6 +70,10 @@ interface Mutation {
    * client-only path, a package's own helper): killed by that package's
    * suite. Every other mutation must fail this package's suite. */
   packageOnly?: boolean;
+  /** For a fault in `@session/client` (always `packageOnly`): the client
+   * test files that hold the tests meant to kill it. Only these run, not
+   * this package's suite, which does not import the client. */
+  files?: string[];
 }
 
 const edits = (m: Mutation) => [{ from: m.from, to: m.to }, ...(m.also ?? [])];
@@ -1297,6 +1307,375 @@ const MUTATIONS: Mutation[] = [
     to: "      void limits;",
     packageOnly: true,
   },
+  // ---- M6 review, the client (`@session/client`) ----
+  // package only: the screens of the web client, which the acceptance suite
+  // does not import; each runs the client test files named in `files`.
+  // M6-C1 to M6-C21 are the review's test-strength rows (J10 to M8), moved
+  // with the M6 fixes where these changed the code; M6-C22 on take back each
+  // fix of the review's findings (C1 to C19).
+  {
+    name: "M6-C1 (J10) a member's list shows the Banned section",
+    file: "../client/src/features/channels/MembersDialog.tsx",
+    from: "{channel.owned && bans !== UNKNOWN ? (",
+    to: "{bans !== UNKNOWN ? (",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C2 (J11) Unban names the viewer",
+    file: "../client/src/features/channels/MembersDialog.tsx",
+    from: 'writes.send("members.unban", { space: channel.id, user: b.u });',
+    to: 'writes.send("members.unban", { space: channel.id, user: me ?? b.u });',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    // since the M6 fixes the ban runs from the confirmation
+    name: "M6-C3 (J12) Ban names the viewer",
+    file: "../client/src/features/channels/MembersDialog.tsx",
+    from: 'asking.action === "ban" ? ban(asking.member.u) :',
+    to: 'asking.action === "ban" ? ban(me ?? asking.member.u) :',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C4 (J15) the channel link carries its code in the search",
+    file: "../client/src/features/channels/InviteLinksDialog.tsx",
+    from: "  return `${origin}/c/${name}#${code}`;",
+    to: "  return `${origin}/c/${name}?invite=${code}`;",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C5 (J16) expired links are listed",
+    file: "../client/src/features/channels/InviteLinksDialog.tsx",
+    from: 'links.filter((l) => linkState(l, now) !== "expired")',
+    to: "links",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C6 (J17) a used link reads as revoked",
+    file: "../client/src/features/channels/InviteLinksDialog.tsx",
+    from: '  if (link.dead === "Used") return "used";\n',
+    to: "",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C7 (J19) a link join sends no code",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: 'source.mutate("spaces.join", { space: id, invite: invite.code })',
+    to: 'source.mutate("spaces.join", { space: id })',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C8 (J20) a sent link's code stays pending",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: "    clearPendingInvite();\n    if (joined) return;",
+    to: "    if (joined) return;",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    // since the M6 fixes a FORBIDDEN is the link message by its message
+    // (C7): the fault is the same, FORBIDDEN is not an unusable link
+    name: "M6-C9 (J21) a FORBIDDEN link join is not the link message",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: '    error.code === "FORBIDDEN" &&\n',
+    to: "    (false as boolean) &&\n",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C10 (J22) a link for another channel joins this one",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: '    if (invite?.kind !== "channel" || id === undefined || invite.channel !== name) return;',
+    to: '    if (invite?.kind !== "channel" || id === undefined) return;',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C11 (J27a) a frozen channel drops Delete on one's reply",
+    file: "../client/src/features/replies/ReplyTree.tsx",
+    from: "        {mine && active ? (",
+    to: "        {mine && writer ? (",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C12 (J27b) a frozen channel drops Delete on one's branch",
+    file: "../client/src/features/branches/BranchCard.tsx",
+    from: "  if (active && mine) {",
+    to: "  if (writer && mine) {",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C13 (J27c) a frozen channel drops Delete on one's thread",
+    file: "../client/src/features/feed/ThreadRow.tsx",
+    from: "  if (mine && !deleted && others !== null) {",
+    to: "  if (writer && mine && !deleted && others !== null) {",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C14 (J28) a frozen channel disables Save",
+    file: "../client/src/features/feed/ThreadRow.tsx",
+    from: "    : active\n      ? { onClick: () => void writes.save(thread.id, !saved) }",
+    to: "    : writer\n      ? { onClick: () => void writes.save(thread.id, !saved) }",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C15 (J30) a frozen open channel offers Join",
+    file: "../client/src/features/channels/ChannelHeader.tsx",
+    from: "    else if (!channel.frozen)\n",
+    to: "    else\n",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C16 (J35a) the owner's own thread offers Remove… and Ban",
+    file: "../client/src/features/feed/ThreadRow.tsx",
+    from: "  if (writer && !mine && space?.owned && thread.u) {",
+    to: "  if (writer && space?.owned && thread.u) {",
+    packageOnly: true,
+    files: ["test/feed.states.test.tsx"],
+  },
+  {
+    name: "M6-C17 (J35b) a member's menu offers Remove… and Ban",
+    file: "../client/src/features/feed/ThreadRow.tsx",
+    from: "  if (writer && !mine && space?.owned && thread.u) {",
+    to: "  if (writer && !mine && space && thread.u) {",
+    packageOnly: true,
+    files: ["test/feed.states.test.tsx"],
+  },
+  {
+    name: "M6-C18 (K16) an invite_used row opens Home",
+    file: "../client/src/features/notifications/NotificationsPage.tsx",
+    from: 'if (target?.kind === "invites") void navigate({ to: "/invites" });',
+    to: 'if (target?.kind === "invites") void navigate({ to: "/" });',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C19 (L1) a citation's link drops rel tokens",
+    file: "../client/src/features/feed/AnswerProse.tsx",
+    from: '<a ref={link} href={href} target="_blank" rel="noopener noreferrer nofollow ugc">',
+    to: '<a ref={link} href={href} target="_blank" rel="noopener">',
+    packageOnly: true,
+    files: ["test/untrustedText.test.tsx"],
+  },
+  {
+    name: "M6-C20 (L4) an external image's link drops rel tokens",
+    file: "../client/src/features/markdown/ResearchMarkdown.tsx",
+    from: '      rel="noopener noreferrer nofollow ugc"\n    >\n      {alt ? `Open image: ${alt}`',
+    to: '      rel="noopener"\n    >\n      {alt ? `Open image: ${alt}`',
+    packageOnly: true,
+    files: ["test/markdown.test.tsx"],
+  },
+  {
+    name: "M6-C21 (M8) a reply's text is set as HTML",
+    file: "../client/src/features/replies/ReplyText.tsx",
+    from: "          <span key={i}>{part.text}</span>",
+    to: "          <span key={i} dangerouslySetInnerHTML={{ __html: part.text }} />",
+    packageOnly: true,
+    files: ["test/untrustedText.test.tsx"],
+  },
+  {
+    name: "M6-C22 (C1) the channel route keeps a link's fragment",
+    file: "../client/src/app/router.tsx",
+    from: '    if (location.hash === "") return;',
+    to: '    if ((true as boolean) || location.hash === "") return;',
+    packageOnly: true,
+    files: ["test/router.test.tsx"],
+  },
+  {
+    name: "M6-C23 (C1) the sign-in's return address keeps the fragment",
+    file: "../client/src/features/auth/AuthDialog.tsx",
+    from: "  const href = hash < 0 ? location : location.slice(0, hash);",
+    to: "  const href = hash < 0 ? location : location;",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C24 (C2) the sign-in does not keep the channel link's code",
+    file: "../client/src/features/auth/AuthDialog.tsx",
+    from: "            keepChannelInviteForSignIn();\n",
+    to: "",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C25 (C2) a kept channel link's code does not expire",
+    file: "../client/src/lib/pendingInvite.ts",
+    from: "    now - kept.at >= CHANNEL_INVITE_TTL_MS",
+    to: "    (false as boolean)",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C26 (C2) the landing step does not name the channel",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: '{ step: "landing", channel: name }',
+    to: '{ step: "landing" }',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C27 (C3) a single write reads as others",
+    file: "../client/src/features/notifications/notifications.ts",
+    from: "      others: n.n > 1,",
+    to: "      others: n.n > 0,",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C28 (C4) a missing title is not quoted",
+    file: "../client/src/features/notifications/notifications.ts",
+    from: "    quote: titleOf(row),",
+    to: "    quote: row.title ?? null,",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C29 (C5) an unloaded comment does not fetch its thread",
+    file: "../client/src/features/notifications/notifications.ts",
+    from: "(source.get(threadKey(n.th)) === UNKNOWN || commentOf(source, n) === UNKNOWN)",
+    to: "source.get(threadKey(n.th)) === UNKNOWN",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C30 (C6) a non-member's private member count is a button",
+    file: "../client/src/features/channels/ChannelInfoDialog.tsx",
+    from: "{channel.private && !channel.joined ? (",
+    to: "{(false as boolean) ? (",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C31 (C7) a ban on a link join shows the link message",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: "(error.message === LINK_UNUSABLE || error.message === frozenMessage(channel))",
+    to: "(true as boolean)",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C32 (C8) a refused copy shows nothing",
+    file: "../client/src/features/channels/InviteLinksDialog.tsx",
+    from: "      () => showToast(COPY_FAILED, { alert: true }),",
+    to: "      () => undefined,",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C33 (C9) /notifications lets a waiting account in",
+    file: "../client/src/app/router.tsx",
+    from: '  path: "/notifications",\n  beforeLoad: requireMember,',
+    to: '  path: "/notifications",\n  beforeLoad: requireSignedIn,',
+    packageOnly: true,
+    files: ["test/router.test.tsx"],
+  },
+  {
+    name: "M6-C34 (C10) every link's buttons share one name",
+    file: "../client/src/features/channels/InviteLinksDialog.tsx",
+    from: "const which = `link ${i + 1}, expires ${expiryDate(l)}`;",
+    to: 'const which = "link";',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C35 (C11) Undo on a revoked link past its expiry",
+    file: "../client/src/features/channels/InviteLinksDialog.tsx",
+    from: 'state === "revoked" && isoToMs(l.expiresAt) > now ? (',
+    to: 'state === "revoked" ? (',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C36 (C14) an invite_used row shows the code",
+    file: "../client/src/features/notifications/notifications.ts",
+    from: "      code: null,\n      channel: space?.name ?? null,",
+    to: '      code: n.type === "invite_used" ? n.note : null,\n      channel: space?.name ?? null,',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C37 (C17) the member list bans without asking",
+    file: "../client/src/features/channels/MembersDialog.tsx",
+    from: '{ label, danger: true, onSelect: () => ask("ban", m) }',
+    to: "{ label, danger: true, onSelect: () => void ban(m.u) }",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C38 (C17) a thread's menu bans without asking",
+    file: "../client/src/features/feed/ThreadRow.tsx",
+    from: "      onSelect: () => setBanning(true),",
+    to: '      onSelect: () => ban(thread.u ?? "", space),',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C39 (C17) the member list removes without asking",
+    file: "../client/src/features/channels/MembersDialog.tsx",
+    from: '{ label, danger: true, onSelect: () => ask("remove", m) }',
+    to: "{ label, danger: true, onSelect: () => void remove(m) }",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C40 (C18) a ban in an open channel is not told",
+    file: "../client/src/replica/syncReplica.ts",
+    from: "      this.options.onBanned?.(name);",
+    to: "      void name;",
+    packageOnly: true,
+    files: ["test/replica.sync.test.ts"],
+  },
+  {
+    name: "M6-C41 (C18) a Leave's dropped prediction reads as a ban",
+    file: "../client/src/replica/syncReplica.ts",
+    from: "    const server = client.replica;",
+    to: "    const server = client;",
+    packageOnly: true,
+    files: ["test/replica.sync.test.ts"],
+  },
+  {
+    name: "M6-C42 (C19) the viewer's comment has no Delete",
+    file: "../client/src/features/branches/BranchCard.tsx",
+    from: "                        onSelect: () => setDeleting(c.id),",
+    to: "                        onSelect: () => undefined,",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C43 (C19) a frozen channel drops Delete on one's comment",
+    file: "../client/src/features/branches/BranchCard.tsx",
+    from: "              {mine && active ? (",
+    to: "              {mine && writer ? (",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C44 (C2) a channel link opens the code step over the profile step",
+    file: "../client/src/features/channels/useChannelInvite.ts",
+    from: "    if (holdsInvite) return;\n",
+    to: "",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C45 (item 14) an address without its channel asks every held log",
+    file: "../client/src/replica/syncReplica.ts",
+    from: "    if (space === undefined && lookUp) {",
+    to: "    if ((false as boolean) && space === undefined && lookUp) {",
+    packageOnly: true,
+    files: ["test/replica.sync.test.ts"],
+  },
 ];
 
 /** What one suite said about a mutation. */
@@ -1318,7 +1697,11 @@ const PKG = process.cwd();
 const WEB = resolve(PKG, "../..");
 /** The workspace packages a slot holds a copy of, besides this one: a
  * mutation in one of them is type-checked there and runs its suite too. */
-const COPIED = ["mutators", "sync"] as const;
+const COPIED = ["mutators", "sync", "client"] as const;
+
+/** The packages this package's suite imports: a mutation in any other
+ * (the client) runs that package's suite only. */
+const REACHED: ReadonlySet<string> = new Set(["mutators", "sync"]);
 
 /** A copy of the package beside links to the workspace's modules, base
  * config and shared package, so it type-checks and runs as the package does.
@@ -1330,12 +1713,13 @@ function makeSlot(root: string, n: number): string {
   symlinkSync(join(WEB, "node_modules"), join(web, "node_modules"));
   symlinkSync(join(WEB, "tsconfig.base.json"), join(web, "tsconfig.base.json"));
   symlinkSync(join(WEB, "packages", "shared"), join(web, "packages", "shared"));
-  // the package's own copies of `@session/mutators` and `@session/sync`, with
-  // their declarations
+  // the package's own copies of `@session/mutators`, `@session/sync` and
+  // `@session/client`, with their declarations (the client without its build)
   for (const name of COPIED)
     cpSync(join(WEB, "packages", name), join(web, "packages", name), {
       recursive: true,
-      filter: (src) => !/[/\\]node_modules$/.test(src),
+      filter: (src) =>
+        !/[/\\]node_modules$/.test(src) && !(name === "client" && /[/\\]dist$/.test(src)),
     });
   const link = (from: string, name: string) => {
     mkdirSync(join(web, "packages", from, "node_modules", "@session"), { recursive: true });
@@ -1345,6 +1729,19 @@ function makeSlot(root: string, n: number): string {
     );
   };
   link("sync", "mutators");
+  // the client imports the copies; its own modules (versions its workspace
+  // pins apart) are the workspace's, and its type check names the server's
+  // and the database's projects
+  link("client", "mutators");
+  link("client", "sync");
+  const own = join(WEB, "packages", "client", "node_modules");
+  for (const entry of readdirSync(own))
+    if (entry !== "@session")
+      symlinkSync(join(own, entry), join(web, "packages", "client", "node_modules", entry));
+  for (const name of ["server", "db"])
+    symlinkSync(join(WEB, "packages", name), join(web, "packages", name));
+  // the client's fixture replica reads the mockups' fixtures file
+  symlinkSync(join(WEB, "..", "docs"), join(root, `slot${n}`, "docs"));
   const dir = join(web, "packages", "replica-proto");
   cpSync(PKG, dir, {
     recursive: true,
@@ -1374,7 +1771,12 @@ function results(out: string): SuiteResult {
   ];
   return {
     passed: [...out.matchAll(/(\d+) tests? passed/g)].reduce((n, x) => n + Number(x[1]), 0),
-    failed: [...out.matchAll(/(\d+) tests? failed/g)].reduce((n, x) => n + Number(x[1]), 0),
+    // a test file that throws before its tests run counts as a failure, so
+    // a baseline whose file cannot load stops the run
+    failed: [...out.matchAll(/(\d+) (?:tests? failed|uncaught exceptions?)/g)].reduce(
+      (n, x) => n + Number(x[1]),
+      0,
+    ),
     tests: tests.map((x) => x.slice(0, 140)),
   };
 }
@@ -1395,8 +1797,14 @@ async function run(m: Mutation, dir: string): Promise<Outcome> {
     const pkg = name === null ? dir : join(dir, "..", name);
     const tc = await sh("npx", ["tsc", "-p", "tsconfig.test.json", "--noEmit"], pkg);
     const own =
-      name === null ? null : results((await sh("npx", ["ava", "--timeout=600s"], pkg)).out);
-    const suite = results((await sh("npx", ["ava", "--timeout=600s"], dir)).out);
+      name === null
+        ? null
+        : results((await sh("npx", ["ava", "--timeout=600s", ...(m.files ?? [])], pkg)).out);
+    // a package this suite does not import: its own suite decides
+    const suite =
+      name === null || REACHED.has(name)
+        ? results((await sh("npx", ["ava", "--timeout=600s"], dir)).out)
+        : { passed: 0, failed: 0, tests: [] };
     return {
       typecheck: tc.code === 0 ? "ok" : (tc.out.split("\n")[0] ?? "failed"),
       suite,
@@ -1471,7 +1879,8 @@ try {
     dirs.map(async (dir) => {
       for (let m = queue.shift(); m; m = queue.shift()) {
         const o = await run(m, dir);
-        const broken = o.suite.passed + o.suite.failed === 0;
+        const ran = o.suite.passed + o.suite.failed > 0 ? o.suite : (o.own ?? o.suite);
+        const broken = ran.passed + ran.failed === 0;
         const dead = killed(m, o);
         if (!dead) survived++;
         if (o.typecheck !== "ok") untyped.push(idOf(m));
