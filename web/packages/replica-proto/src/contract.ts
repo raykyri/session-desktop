@@ -242,6 +242,9 @@ export interface ServerOptions {
    * The suite passes a set with a faulty definition to test that a fault
    * writes nothing. */
   mutators?: Readonly<Record<string, AnyMutator>>;
+  /** The web window of `window` snapshots (`01` R1); the prototype server
+   * has no window and ignores it. */
+  window?: { days: number; threads: number; cap: number };
 }
 
 export type ServerFactory = (options: ServerOptions) => TestServer;
