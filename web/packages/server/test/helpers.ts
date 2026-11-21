@@ -56,6 +56,9 @@ export interface HarnessOptions {
   createOAuthClient?: (deps: ServerDeps) => OAuthClient;
   /** Swaps the recording stand-in for another runs service. */
   createRuns?: (deps: Omit<ServerDeps, "runs">) => RunsService;
+  /** The rate limiter's clock; a test of a budget pins it so the bucket does
+   * not refill while the test runs. */
+  limiterNow?: () => number;
 }
 
 let githubIdCounter = 5000;
@@ -90,7 +93,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
   });
   const logger = createLogger({ level: "error", write: () => undefined });
   const runs = createNoopRunsService();
-  const limiter = new RateLimiter();
+  const limiter = new RateLimiter(options.limiterNow);
   const base = {
     config,
     db,

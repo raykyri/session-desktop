@@ -166,7 +166,8 @@ test("without a built client an unknown path is a 404", async (t) => {
 });
 
 test("the mutation budget is per account", async (t) => {
-  const harness = createHarness(t);
+  const pinned = Date.now();
+  const harness = createHarness(t, { limiterNow: () => pinned });
   const user = harness.addUser("budget");
   const caller = harness.caller(user);
   for (let attempt = 0; attempt < 60; attempt += 1) {
