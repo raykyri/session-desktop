@@ -11,7 +11,9 @@ import { NewChannelDialog, useNewChannelDialog } from "../../features/channels/N
 import { FeedViewerProvider } from "../../features/feed/FeedContext.js";
 import { AppBar } from "../../features/shell/AppBar.js";
 import { PageHeadingFocusContext } from "../../features/shell/Frames.js";
+import { OutboxToast } from "../../features/shell/NotSent.js";
 import { ToastHost } from "../../features/shell/Toast.js";
+import { UpgradeNotice } from "../../features/shell/UpgradeNotice.js";
 import { channelOfPath, isFeedPath, showsChannelStrip } from "../../features/shell/screens.js";
 import { scopesFor, useLayoutPreference, useShellData } from "../../features/shell/shellData.js";
 import { useBarAlign } from "../../features/shell/useBarAlign.js";
@@ -180,6 +182,8 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
       <NewChannelDialog online={online} />
       <AuthDialog />
       <ToastHost />
+      <OutboxToast />
+      <UpgradeNotice />
       <ImageLightbox />
       <DiagramLightbox />
       <NotificationStack notifications={notifications} onDismiss={dismiss} />

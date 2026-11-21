@@ -10,6 +10,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
 import type { ChannelView } from "../../replica/queries.js";
+import type { DraftRef } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { composerKey, useThreadUi, useThreadUiStore } from "../../stores/threadUi.js";
 import { Avatar } from "../../ui/Avatar.js";
@@ -114,8 +115,9 @@ export function AskSide({
   const style = (i: number) => (layout.tops[i] === undefined ? undefined : { top: layout.tops[i] });
   const selectedPath = new Set(ui.selected ? index.path(ui.selected) : []);
 
-  const submitRoot = async (text: string) => {
+  const submitRoot = async (text: string, draft: DraftRef) => {
     const id = await writes.fork({
+      draft,
       thread: thread.id,
       parent: "r",
       q: text,

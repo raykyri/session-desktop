@@ -11,7 +11,7 @@ import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useSt
 
 import { RouteNotFoundPanel } from "../../app/RouteBoundary.js";
 import { prefersReducedMotion } from "../../lib/motion.js";
-import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import {
   channelByName,
   channelsOf,
@@ -198,7 +198,9 @@ function useReveal(
   t: string | undefined,
   sel: string | undefined,
   handle: React.RefObject<ListHandle | null>,
+  space: string | undefined,
 ) {
+  const source = useReplica();
   const select = useThreadUiStore((state) => state.select);
   const request = useRevealStore((state) => state.reveal);
   const done = useRevealStore((state) => state.done);
@@ -213,6 +215,13 @@ function useReveal(
     (source) => (target ? (threadOf(source, target.thread) ? "found" : "absent") : "none"),
     [target?.thread],
   );
+  // A thread outside the window is fetched from its channel's log (02 §2.1,
+  // 01 R3); one the replica holds in full needs nothing.
+  const wanted = target?.thread;
+  const waitsForChannel = ids === null;
+  useEffect(() => {
+    if (wanted && !waitsForChannel) source.open?.(wanted, space);
+  }, [source, wanted, space, waitsForChannel]);
   useEffect(() => {
     if (!target || !key || !ids || handled.current === key) return;
     if (status === UNKNOWN) return;
@@ -258,7 +267,11 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
       : { kind };
   const ids = useReplicaQuery((source) => (feed ? feedOf(source, feed) : []), [feed]);
   const handle = useRef<ListHandle | null>(null);
-  useReveal(ids === UNKNOWN ? null : ids, t, sel, handle);
+  const channelId = channel && channel !== UNKNOWN ? channel.id : undefined;
+  useReveal(ids === UNKNOWN ? null : ids, t, sel, handle, channelId);
+  // A channel's log is read while its view is open (01 R5).
+  const source = useReplica();
+  useEffect(() => (channelId ? source.watch?.(channelId) : undefined), [source, channelId]);
 
   if (ids === UNKNOWN || channel === UNKNOWN || joined === UNKNOWN)
     return (

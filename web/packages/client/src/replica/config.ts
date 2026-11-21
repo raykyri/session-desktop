@@ -1,11 +1,12 @@
-// Which replica this build uses (02 §9.6). A build made with
-// `VITE_SESSION_FIXTURES=1` (the development server's default, and the
-// end-to-end build) loads the fixture replica as a separate chunk; in any
-// other build `__SESSION_FIXTURES__` is `false` at build time, so the
-// bundler drops the import and no fixture text is in the output. Until
-// `@session/sync` lands such a build reads the empty replica.
+// Which replica this build uses (02 §9.1, §9.6). A build made with
+// `VITE_SESSION_FIXTURES=1` (the development server's default) loads the
+// fixture replica as a separate chunk; in any other build
+// `__SESSION_FIXTURES__` is `false` at build time, so the bundler drops the
+// import and no fixture text is in the output, and the build reads the
+// sync replica over the sync routes (`live.ts`).
 
 import { configureReplica } from "./ReplicaProvider.js";
+import { liveReplicaConfig } from "./live.js";
 
 declare const __SESSION_FIXTURES__: boolean | undefined;
 
@@ -14,7 +15,10 @@ declare const __SESSION_FIXTURES__: boolean | undefined;
 export const fixturesEnabled = typeof __SESSION_FIXTURES__ === "boolean" && __SESSION_FIXTURES__;
 
 export async function loadReplicaConfig(): Promise<void> {
-  if (!fixturesEnabled) return;
+  if (!fixturesEnabled) {
+    configureReplica(liveReplicaConfig());
+    return;
+  }
   const fixtures = await import("./fixtureReplica.js");
   configureReplica(fixtures.fixtureReplicaConfig());
   fixtures.exposeFixtureControls();

@@ -64,7 +64,10 @@ export interface HarnessOptions {
   limiterNow?: () => number;
   /** The ledger, run texts, registry, key check timeout and clock the
    * procedures read (`deps.ts`). */
-  deps?: Pick<ServerDeps, "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now">;
+  deps?: Pick<
+    ServerDeps,
+    "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now" | "directory"
+  >;
 }
 
 let githubIdCounter = 5000;

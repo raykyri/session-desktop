@@ -50,6 +50,7 @@
 
 import {
   StagedTx,
+  inIndex,
   logsOf,
   memberKey,
   msToIso,
@@ -71,6 +72,7 @@ import {
   PROTOCOL_VERSION,
   UNRECORDED,
   type ApplyResult,
+  type Change,
   type Clock,
   type Cursor,
   type Envelope,
@@ -524,30 +526,55 @@ export class SyncClient {
    * `threads` snapshot, in turn with the log's other reads, and kept for the
    * life of the tab. `unavailable` when the fetch fails (offline): the
    * summary is shown, "Available when online". `missing` when the replica
-   * holds no such thread. */
-  async open(thread: string): Promise<"full" | "unavailable" | "missing"> {
+   * holds no such thread. With `log`, the space log a thread's address names
+   * (`/c/<name>?t=<id>`, `02` §2.1): a thread the replica does not hold
+   * (older than the window) is fetched from that log the same way when the
+   * replica holds the log, and is `missing` when the server serves the
+   * reader no such thread. */
+  async open(thread: string, log?: LogId): Promise<"full" | "unavailable" | "missing"> {
     this.opened.delete(thread);
     this.opened.add(thread);
     for (const th of this.opened) {
       if (this.opened.size <= OPENED_MAX) break;
       this.opened.delete(th);
     }
-    const log = this.replica.logOfThread(thread);
-    if (!log) return "missing";
-    return this.serial(log, async () => {
-      if (this.replica.isFull(log, thread)) return "full";
+    const from =
+      this.replica.logOfThread(thread) ?? (log && this.replica.state(log) ? log : undefined);
+    if (!from) return "missing";
+    return this.serial(from, async () => {
+      const held = this.replica.logOfThread(thread);
+      if (held && this.replica.isFull(held, thread)) return "full";
+      if (!this.replica.state(from)) return "missing";
       try {
-        const snap = await this.transport.snapshot(log, {
+        const snap = await this.transport.snapshot(from, {
           tier: "threads",
           threads: [thread],
           ...(this.clientIdValue !== null ? { clientId: this.clientIdValue } : {}),
         });
         this.heard(snap.serverTime);
-        this.confirmed(this.replica.addThreads(log, snap, [thread]), true);
+        if (!held && !snap.records.some((x) => x.key === `thread:${thread}`)) return "missing";
+        this.confirmed(this.replica.addThreads(from, snap, [thread]), true);
         return "full";
       } catch {
         return "unavailable";
       }
+    });
+  }
+
+  /** Apply a batch of changes the server pushed for a log (the event stream,
+   * `01` Y7) as a pull's answer, in turn with the log's other reads. Ignored
+   * (false) when the replica no longer holds the log. */
+  receive(
+    log: LogId,
+    batch: { changes: Change[]; cursor: Cursor; lastSeq: LastSeq; serverTime?: number },
+  ): Promise<boolean> {
+    return this.serial(log, () => {
+      if (!this.replica.state(log)) return Promise.resolve(false);
+      this.heard(batch.serverTime);
+      const changed = this.replica.applyPull(log, batch.changes, batch.cursor, batch.lastSeq);
+      this.learn(batch.lastSeq);
+      this.confirmed(changed, false);
+      return Promise.resolve(true);
     });
   }
 
@@ -628,6 +655,19 @@ export class SyncClient {
       else out.set(k, r);
     }
     return out;
+  }
+
+  /** The keys of `kind` in an index as the person sees them, confirmed and
+   * predicted, of what the replica holds (`loadedIndex` says whether that is
+   * the whole index). */
+  keysIn(kind: StoredRecord["kind"], index: Index): string[] {
+    this.rebase();
+    const keys = new Set(this.replica.keysIn(kind, index));
+    for (const [k, r] of this.overlay) {
+      if (r === null) keys.delete(k);
+      else if (r.kind === kind && inIndex(r, index)) keys.add(k);
+    }
+    return [...keys];
   }
 
   /** The keys of `kind` as the person sees them (for `list` queries). */

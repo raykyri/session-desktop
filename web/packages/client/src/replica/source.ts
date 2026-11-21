@@ -2,18 +2,19 @@
 //
 // Screens never read records directly: they read named queries
 // (`queries.ts`) through `useReplicaQuery`, and write through `writes.ts`.
-// Both go through one object, a `ReplicaSource`. Until `@session/sync` lands
-// (05 M2), the client provides two:
+// Both go through one object, a `ReplicaSource`. The client provides three:
 //
+// - the sync replica (`syncReplica.ts`): `@session/sync`'s client over the
+//   sync routes, which every build without the fixtures reads;
 // - the fixture replica (`fixtureReplica.ts`): the members mockup's fixtures
 //   converted to the stored shape, with writes applied by the real mutators
-//   of `@session/mutators` and runs answered by a scripted executor;
+//   of `@session/mutators` and runs answered by a scripted executor, for the
+//   fixture build and the unit tests;
 // - the empty replica (`emptyReplica` below): nothing is loaded, every query
-//   answers `UNKNOWN`, and a write is refused. A build without the fixtures
-//   shows the loading row.
+//   answers `UNKNOWN`, and a write is refused (a provider with no
+//   configuration).
 //
-// The sync library's client replica replaces both by implementing this
-// interface; nothing above this file changes. The contract:
+// The contract:
 //
 // - `me`: the handle the replica belongs to (null signed out: the
 //   ephemeral read-only replica of 02 §9.5).
@@ -53,8 +54,29 @@ import type { Spaces } from "@session/shared";
 type SpaceMutatorName = Spaces.SpaceMutatorName;
 
 /** A write's outcome. `result` is the mutator's (with the server's values,
- * such as the mentions it notified, 02 N16). */
-export type WriteOutcome = { ok: true; result: unknown } | { ok: false; error: ApiError };
+ * such as the mentions it notified, 02 N16). `unsent`: the request failed
+ * and the write is "Not sent" (02 §9.2): its prediction stays, and the
+ * person retries or discards it from the outbox. */
+export type WriteOutcome =
+  { ok: true; result: unknown; unsent?: true } | { ok: false; error: ApiError };
+
+/** The composer a write's text came from, to put it back when the write is
+ * discarded or refused (02 §9.2). */
+export interface DraftRef {
+  key: string;
+  text: string;
+}
+
+/** A write whose request failed: "Not sent" (02 §9.2). `item`: the id of
+ * the thread, branch, reply or comment it created, under which it is shown;
+ * null for a write with no item (a save, a join), shown in a toast. */
+export interface UnsentWrite {
+  local: string;
+  name: SpaceMutatorName;
+  input: unknown;
+  item: string | null;
+  error: ApiError | null;
+}
 
 /** What a read answers when the replica has not loaded it. */
 export const UNKNOWN: unique symbol = Symbol("unknown");
@@ -78,9 +100,29 @@ export interface ReplicaSource {
   /** Increments on every change of any record and every index loaded. */
   version(): number;
   subscribe(listener: () => void): () => void;
-  mutate(name: SpaceMutatorName, input: unknown): Promise<WriteOutcome>;
+  mutate(
+    name: SpaceMutatorName,
+    input: unknown,
+    options?: { draft?: DraftRef },
+  ): Promise<WriteOutcome>;
   /** The server's clock, in milliseconds. */
   now(): number;
+  // ---- the sync replica's (the fixture replica answers every write at
+  // once and holds every record, so it has none of these) ----
+  /** The writes that are "Not sent", in outbox order. */
+  unsent?(): readonly UnsentWrite[];
+  /** Send a "Not sent" write again with the same mutation id; resolves its
+   * new outcome. */
+  retry?(local: string): Promise<WriteOutcome>;
+  /** Drop a "Not sent" write: its prediction is rolled back and its text
+   * returns to its composer. */
+  discard?(local: string): void;
+  /** Ask for a thread's full records (01 R3): a summary thread, or a thread
+   * of a thread address outside the window (`space` names its channel). */
+  open?(thread: string, space?: string): void;
+  /** Read a channel's records while its view is open (01 R5); the returned
+   * function ends the view. */
+  watch?(space: string): () => void;
 }
 
 /** Thrown by `known` for a read the replica cannot answer; `useReplicaQuery`

@@ -12,6 +12,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { scrollIntoPadded } from "../../lib/motion.js";
+import type { DraftRef } from "../../replica/source.js";
 import { useDraftsStore } from "../../stores/drafts.js";
 import { OVERLAY_PRIORITY, useOverlaysStore } from "../../stores/overlays.js";
 import { CloseIcon } from "../feed/icons.js";
@@ -37,7 +38,9 @@ export interface InlineComposerProps {
   placeholder: string;
   submitLabel: string;
   /** Resolves true when the write was accepted: the field empties. */
-  onSubmit: (text: string) => Promise<boolean>;
+  /** Sends the text; `draft` names this composer and the text sent, for
+   * the write to return it here when it is discarded or refused. */
+  onSubmit: (text: string, draft: DraftRef) => Promise<boolean>;
   /** Closes the composer (Escape, and Close when it is shown). */
   onClose: () => void;
   /** Whether the composer draws its own Close button (a quoted composer's
@@ -104,7 +107,7 @@ export function InlineComposer({
     busy.current = true;
     setSending(true);
     const sent = text;
-    const ok = await onSubmit(value);
+    const ok = await onSubmit(value, { key: draftKey, text: sent });
     busy.current = false;
     setSending(false);
     if (ok) {

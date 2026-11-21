@@ -7,6 +7,7 @@
 // forbidden everywhere.
 
 import type { AppRouter } from "@session/server/router";
+import { PROTOCOL_VERSION } from "@session/sync/client";
 import {
   createTRPCClient,
   httpBatchLink,
@@ -15,6 +16,8 @@ import {
   type TRPCClient,
 } from "@trpc/client";
 
+import { upgradeRequired } from "../replica/upgrade.js";
+
 /** Where `createApp` mounts the procedure endpoint (`server/src/app.ts`). */
 export const TRPC_ENDPOINT = "/api/trpc";
 
@@ -22,8 +25,13 @@ export const TRPC_ENDPOINT = "/api/trpc";
 export const REQUESTED_WITH_HEADER = "X-Requested-With";
 export const REQUESTED_WITH_VALUE = "session";
 
+/** Every API request names the protocol version this build speaks; a server
+ * whose minimum is above it answers 426 (`01` S1, `05` §3.4). */
+export const PROTOCOL_HEADER = "Session-Protocol";
+
 export const REQUESTED_WITH_HEADERS: Readonly<Record<string, string>> = {
   [REQUESTED_WITH_HEADER]: REQUESTED_WITH_VALUE,
+  [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
 };
 
 export type SessionTrpcClient = TRPCClient<AppRouter>;
@@ -56,7 +64,12 @@ export function createSessionTrpcClient(options: TrpcClientOptions = {}): Sessio
           url,
           headers: () => REQUESTED_WITH_HEADERS,
           // Explicit credentials so auth cookies still ride along when `url` points at another origin (tests, preview deploys).
-          fetch: (input, init) => doFetch(input, { ...init, credentials: "include" }),
+          // A 426 reloads the tab once (`replica/upgrade.ts`, 02 §9.2).
+          fetch: async (input, init) => {
+            const res = await doFetch(input, { ...init, credentials: "include" });
+            if (res.status === 426) upgradeRequired();
+            return res;
+          },
         }),
       }),
     ],
