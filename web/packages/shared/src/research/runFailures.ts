@@ -33,11 +33,14 @@ export const RUN_ERROR_COPY: Readonly<Record<RunErrorCopyClass, string>> = {
   unknown: "The model provider returned an error.",
 };
 
-/** `03` K8: the toast of an ask sent with no payer, and the reason of a run
- * that ended `tokens`. */
+/** `03` K8: the reason of a run that ended `tokens`, for a reset read in
+ * UTC (`OUT_OF_TOKENS_TEXT` of `spaces.ts`). */
 export const OUT_OF_TOKENS_TEXT = SPACES_OUT_OF_TOKENS_TEXT;
 
-/** The reason a failed run shows, by `fail.why`. */
+/** The reason a failed run shows, by `fail.why`, as its asker reads it.
+ * The web client words `tokens` and `key` from the reading and the run's
+ * `detail`, and every reason for a reader who is not the asker
+ * (`client/src/features/branches/runFailureText.ts`). */
 export function runFailureText(fail: Pick<RunFailure, "why" | "cls">): string {
   switch (fail.why) {
     case "tokens":

@@ -17,6 +17,7 @@ import {
   testModelListing,
   testUser,
   testWeeklyUsage,
+  trpcRefusal,
   waitUntil,
 } from "./helpers.js";
 
@@ -221,7 +222,7 @@ test.serial(
       const app = await renderApp("/usage", {
         responses: {
           "apiKeys.set": () => {
-            throw new Error(message);
+            throw trpcRefusal(message);
           },
         },
       });
@@ -418,7 +419,7 @@ test.serial("Site Admin: a refused change restores the choice and shows the erro
     responses: {
       "models.list": KEY_ONLY_LISTING,
       "admin.models.setDefault": () => {
-        throw new Error("That model is not available.");
+        throw trpcRefusal("That model is not available.");
       },
     },
   });

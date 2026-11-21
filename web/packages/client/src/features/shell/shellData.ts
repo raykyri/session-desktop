@@ -6,13 +6,14 @@
 
 import { useCallback, useEffect } from "react";
 
-import { useOnlineData, useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { useOnlineData, useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import { savedCountOf, unreadCountOf, useChannels, usePrefsLayout } from "../../replica/queries.js";
 import { UNKNOWN } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
+import { useOnline } from "../../stores/connection.js";
 import { useNavigationStore, type ChannelScope, type FeedLayout } from "../../stores/navigation.js";
 
-import type { UsageReading } from "./usage.js";
+import { currentReading, type UsageReading } from "./usage.js";
 import { canWrite, type Viewer } from "./viewer.js";
 
 /** One channel as the strip lists it. */
@@ -32,11 +33,11 @@ export interface ShellData {
   channels: ShellChannel[];
   savedCount: number;
   unreadCount: number;
-  usage: UsageReading;
+  /** The current week's reading; null while unknown (`currentReading`). */
+  usage: UsageReading | null;
+  /** Offline the ring names when its reading was taken (02 §2.2 item 4). */
+  usageOffline: boolean;
 }
-
-/** Included tokens per member per week (03 K3). */
-export const WEEKLY_ALLOWANCE = 2_000_000;
 
 /** The scopes the picker offers (`SCOPES`): signed out only All, which is
  * then the same list Joined would be; "Channels you manage" only for
@@ -78,6 +79,8 @@ export function useShellData(viewer: Viewer): ShellData & { scope: ChannelScope 
   const savedCount = useReplicaQuery(savedCountOf, []);
   const unreadCount = useReplicaQuery(unreadCountOf, []);
   const online = useOnlineData();
+  const source = useReplica();
+  const connected = useOnline();
   const all =
     channels === UNKNOWN
       ? EMPTY_CHANNELS
@@ -93,7 +96,8 @@ export function useShellData(viewer: Viewer): ShellData & { scope: ChannelScope 
     channels: channelsInScope(all, scope),
     savedCount: savedCount === UNKNOWN ? 0 : savedCount,
     unreadCount: unreadCount === UNKNOWN ? 0 : unreadCount,
-    usage: online.usage ?? { used: 0, allowance: WEEKLY_ALLOWANCE, resetsAt: null },
+    usage: currentReading(online.usage, source.now()),
+    usageOffline: !connected,
   };
 }
 

@@ -8,7 +8,7 @@
 import { payerFor } from "@session/mutators";
 import { MODEL_REGISTRY, type ModelPayer, type ReasoningEffort } from "@session/shared";
 
-import type { UsageReading } from "../features/shell/usage.js";
+import { currentReading, type UsageReading } from "../features/shell/usage.js";
 
 export type Effort = ReasoningEffort;
 
@@ -36,7 +36,7 @@ export interface OnlineData {
   models: readonly ModelOption[];
   defaultModel: string;
   defaultEffort: Effort;
-  /** Null until known: the ring reads an unused allowance. */
+  /** Null until known: the ring reads "unknown" and nothing is refused. */
   usage: UsageReading | null;
   /** The providers the member has a `valid` key for (`usage.get`). */
   keys: readonly KeyProvider[];
@@ -193,18 +193,21 @@ export function defaultOnlineData(): OnlineData {
  * (`payerFor`) over the member's `usage.get` reading, so the composer sends
  * no Ask, follow-up, Continue, Branch, Branch here, Look up or Run again
  * whose run the server would write `failed { why: "tokens" }`. False while
- * the reading is
- * unknown, and for a model the client does not know: the server decides.
- * A key-only model without its key is not offered (`composerModel`).
+ * the reading is unknown, when its week has reset by `now` (the server's
+ * clock; `currentReading`), and for a model the client does not know: the
+ * server decides. A key-only model without its key is not offered
+ * (`composerModel`).
  */
 export function outOfTokens(
   online: Pick<OnlineData, "models" | "usage" | "keys" | "billing">,
   model: string,
+  now: number,
 ): boolean {
   const entry = online.models.find((m) => m.id === model);
-  if (!entry || online.usage === null) return false;
+  const usage = currentReading(online.usage, now);
+  if (!entry || usage === null) return false;
   const facts = {
-    includedLeft: online.usage.used < online.usage.allowance,
+    includedLeft: usage.used < usage.allowance,
     billing: online.billing,
     keys: online.keys,
   };

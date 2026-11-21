@@ -40,6 +40,12 @@ for (const name of ["localStorage", "sessionStorage"] as const) {
 // render in it.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// Node's own `navigator` outranks jsdom's and has no `onLine`, which would
+// read as offline (`useOnline`). A browser that has a connection says true;
+// a test of the offline state sets it itself.
+if (typeof navigator.onLine !== "boolean")
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+
 // jsdom implements no layout, so selection code that measures a range fails
 // without these stubs.
 if (!Range.prototype.getClientRects) {
