@@ -136,7 +136,7 @@ export function MembersDialog({
                   {m.u === me ? <small>You</small> : null}
                 </span>
                 {m.role === "owner" ? <span className="chip">Owner</span> : null}
-                <MoreMenu actions={actionsOf(m)} />
+                <MoreMenu actions={actionsOf(m)} inDialog />
               </li>
             ))}
           </ul>
