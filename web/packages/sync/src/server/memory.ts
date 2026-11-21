@@ -4,9 +4,9 @@
 // expired from its front and stops at the first value that has not.
 //
 // A transaction keeps an undo log: every write inside it records how to
-// take it back, and a throw takes back every write of the outermost
-// transaction, so a fault mid-commit leaves the store as it was (as SQLite's
-// rollback does).
+// take it back, and a throw takes back every write since the transaction (or
+// a nested one, a savepoint) began, so a fault mid-commit leaves the store as
+// it was (as SQLite's rollback and ROLLBACK TO do).
 //
 // The store has no users table: a handle is an account once it registered a
 // client (the prototype's rule), or after `setAccount`.
@@ -107,17 +107,21 @@ export class MemoryStore implements ServerStore {
     });
   }
 
+  /** A nested call is a savepoint: a throw inside it takes back the writes
+   * made since it began, and the outer transaction goes on (as SQLite's
+   * SAVEPOINT). */
   transaction<T>(fn: () => T): T {
-    if (this.undo) return fn();
-    const undo: (() => void)[] = [];
+    const outer = this.undo === null;
+    const undo = this.undo ?? [];
+    const mark = undo.length;
     this.undo = undo;
     try {
       const out = fn();
-      this.undo = null;
+      if (outer) this.undo = null;
       return out;
     } catch (e) {
-      this.undo = null;
-      for (const f of undo.reverse()) f();
+      for (const f of undo.splice(mark).reverse()) f();
+      if (outer) this.undo = null;
       throw e;
     }
   }

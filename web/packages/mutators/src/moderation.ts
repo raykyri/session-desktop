@@ -32,9 +32,18 @@ export const MODERATION = {
       if (i.decision !== "removed") {
         const mod = i.decision === "hidden" ? "hidden" : null;
         tx.put({ ...r, mod });
-        // a hidden ask's answer is hidden with it
+        // a hidden ask's answer is hidden with it, and so is the answer of
+        // the thread a hidden node was opened as (its copy), as removal
+        // removes it (M2 review 20); "shown" shows both
         const a = r.kind === "thread" || r.kind === "node" ? tx.byKey(answerKey(r.id)) : undefined;
         if (a?.kind === "answer") tx.put({ ...a, mod });
+        if (r.kind === "node" && r.promoted !== null) {
+          const copy = tx.byKey(answerKey(r.promoted));
+          // a copy whose own thread is hidden stays hidden
+          const own = tx.byKey(threadKey(r.promoted));
+          const keep = mod === null && own?.kind === "thread" && own.mod !== null;
+          if (copy?.kind === "answer" && !keep) tx.put({ ...copy, mod });
+        }
         return null;
       }
       const note = (i.note ?? "").trim() || null;

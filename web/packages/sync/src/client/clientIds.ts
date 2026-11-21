@@ -73,15 +73,24 @@ async function tryLock(locks: LockManagerLike, clientId: string): Promise<(() =>
   const held = new Promise<void>((done) => (release = done));
   let got = false;
   const granted = new Promise<boolean>((answer) => {
-    void locks.request(
-      clientLockName(clientId),
-      { mode: "exclusive", ifAvailable: true },
-      (lock) => {
-        got = lock !== null;
-        answer(got);
-        return got ? held : Promise.resolve();
-      },
-    );
+    let request: Promise<unknown>;
+    try {
+      request = locks.request(
+        clientLockName(clientId),
+        { mode: "exclusive", ifAvailable: true },
+        (lock) => {
+          got = lock !== null;
+          answer(got);
+          return got ? held : Promise.resolve();
+        },
+      );
+    } catch {
+      // no lock manager: no lock, and no claim of the stored id
+      answer(false);
+      return;
+    }
+    // a request refused (a security error, an aborted request): no lock
+    request.catch(() => answer(false));
   });
   return (await granted) ? release : null;
 }
@@ -100,7 +109,13 @@ export async function claimClientId(o: {
   if (stored && stored.userId === o.userId) {
     const release = await tryLock(o.locks, stored.clientId);
     if (release) {
-      const r = await o.register({ clientId: stored.clientId });
+      let r: RegisterResult;
+      try {
+        r = await o.register({ clientId: stored.clientId });
+      } catch (e) {
+        release();
+        throw e;
+      }
       if (r.ok) return { clientId: r.clientId, lastSeq: r.lastSeq, reattached: true, release };
       release();
       if (r.error.code !== "WRONG_CLIENT") return { error: r.error };
@@ -119,4 +134,21 @@ export async function claimClientId(o: {
 export function forgetClientId(storage: SessionStorageLike, held?: HeldClientId): void {
   storage.removeItem(CLIENT_ID_KEY);
   held?.release();
+}
+
+/** A client id the client registered itself (its `client` event, after
+ * WRONG_CLIENT): the tab keeps it in sessionStorage and holds its lock
+ * instead of the previous one's. */
+export async function storeClientId(o: {
+  userId: string;
+  clientId: string;
+  lastSeq: number;
+  storage: SessionStorageLike;
+  locks: LockManagerLike;
+  previous?: HeldClientId;
+}): Promise<HeldClientId> {
+  o.previous?.release();
+  o.storage.setItem(CLIENT_ID_KEY, JSON.stringify({ clientId: o.clientId, userId: o.userId }));
+  const release = (await tryLock(o.locks, o.clientId)) ?? (() => {});
+  return { clientId: o.clientId, lastSeq: o.lastSeq, reattached: false, release };
 }

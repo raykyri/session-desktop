@@ -76,8 +76,11 @@ export type AccountStatus = "active" | "waiting";
 
 export interface ServerStore extends Source {
   /** Run `fn` in one transaction: every write it makes commits together, or
-   * none does when it throws (the exception is rethrown). Calls may nest
-   * (SQLite: a savepoint). */
+   * none does when it throws (the exception is rethrown). Calls nest as
+   * savepoints: a throw inside a nested call takes back only its own writes
+   * and the outer transaction goes on (SQLite: SAVEPOINT / ROLLBACK TO;
+   * better-sqlite3's nested `transaction()` does this). `serverApply` inside
+   * a caller's transaction relies on it. */
   transaction<T>(fn: () => T): T;
 
   // ---- records (`records`; Source: byKey, keysIn, uniqueKey, idTaken, lastRev) ----

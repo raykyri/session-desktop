@@ -392,8 +392,11 @@ const GENERATORS: Record<string, Gen> = {
   },
   // the author's edit of a node's question, as they saw it
   "followups.update": (c, u) => {
-    const own = records(c, "node").filter((n) => n.u === u);
-    const n = own.length && chance(c.r, 0.7) ? pick(c.r, own) : null;
+    // mostly one of the person's own asks that is not removed or deleted
+    const own = records(c, "node").filter(
+      (n) => n.u === u && n.k === "ask" && n.mod !== "removed" && !n.del,
+    );
+    const n = own.length && chance(c.r, 0.9) ? pick(c.r, own) : null;
     const thread = n ? n.th : threadId(c);
     const node = n ? n.id : nodeRef(c, thread);
     return {
@@ -557,10 +560,11 @@ const GENERATORS: Record<string, Gen> = {
 /** An author's edit of a reply or a comment: usually their own, as they saw it. */
 function edit(c: Ctx, u: Who, kind: "reply" | "comment") {
   const all = records(c, kind);
-  const own = all.filter((x) => x.u === u);
+  // mostly one of the person's own that is not removed or a shell
+  const own = all.filter((x) => x.u === u && x.mod !== "removed" && !x.del);
   const id = some(
     c,
-    (own.length && chance(c.r, 0.7) ? own : all).map((x) => x.id),
+    (own.length && chance(c.r, 0.9) ? own : all).map((x) => x.id),
   );
   return {
     id,
@@ -588,7 +592,19 @@ const WEIGHTED = [
   "comments.create",
   "research.createPostFollowUp",
   "saved.set",
+  // edits, retries and deletes of one's own items (M2 review 26)
+  "followups.update",
+  "followups.update",
+  "comments.update",
+  "comments.update",
+  "research.retryNode",
+  "research.retryNode",
+  "research.cancelNode",
+  "followups.delete",
 ];
+/** Generators whose names no device write reaches successfully by design
+ * (none at the moment). */
+const RAW_ONLY: ReadonlySet<string> = new Set<string>();
 
 const OWNER_WRITES = new Set([
   "spaces.update",
@@ -788,11 +804,12 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     if (!set) knowable.set(k, (set = new Set()));
     return set;
   };
-  /** Whether the marker is stored now, in the record and field it was
-   * written to, and that record is not removed. */
+  /** The records that store the marker now, in the field it was written
+   * (or copied) to, and are not removed. */
   const storedNow = (m: string) => {
     const o = c.origins.get(m);
-    if (!o) return null;
+    const out: Record<string, unknown>[] = [];
+    if (!o) return out;
     for (const at of [o, ...(o.also ?? [])]) {
       // a key ending in "*": any record whose key starts with the rest
       const recs = at.key.endsWith("*")
@@ -801,10 +818,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       for (const r of recs) {
         const rec = r as Record<string, unknown> | undefined;
         if (rec && JSON.stringify(rec[at.field] ?? null).includes(m) && rec["mod"] !== "removed")
-          return rec;
+          out.push(rec);
       }
     }
-    return null;
+    return out;
   };
   const isOwner = (sp: string, reader: string | null) =>
     reader !== null && roleNow(c, sp, reader) === "owner";
@@ -817,9 +834,11 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     );
   };
   /** The secret check: may `reader` see the text that carries `m`, now? */
-  const mayShow = (reader: string | null, m: string): boolean => {
-    const rec = storedNow(m);
-    if (!rec) return false;
+  const mayShow = (reader: string | null, m: string): boolean =>
+    // a text copied to another record (a hidden ask's question, in the
+    // thread opened from it) shows wherever one of its records may be read
+    storedNow(m).some((rec) => mayRead(reader, rec));
+  const mayRead = (reader: string | null, rec: Record<string, unknown>): boolean => {
     // a space's About is public, with the space record
     if (rec["kind"] === "space") return true;
     // a request's decline reason: its person and the space's owner
@@ -903,6 +922,52 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       if (e.name === "members.ban") {
         const i = e.input as { space: string; user: Person };
         afterBan(c, i.space, i.user);
+      }
+      // the author's later edit or delete of a new reply, comment or ask,
+      // and a stopped run run again: few of these exist at a random step,
+      // so these follow-ups reach the writes (M2 review 26)
+      const author = PEOPLE.find((x) => x === u);
+      const later = (name: string, input: (c: Ctx) => unknown) =>
+        author && c.plan.push({ u: author, name, input, what: `${name} of its own` });
+      const item = {
+        "research.createPostFollowUp": "reply",
+        "comments.create": "comment",
+      } as const;
+      if (e.name in item) {
+        const kind = item[e.name as keyof typeof item];
+        const id = (e.input as { id: string }).id;
+        const roll = c.r();
+        if (roll < 0.2)
+          later(`${kind === "reply" ? "replies" : "comments"}.delete`, () => ({ id }));
+        else if (roll < 0.4)
+          later(`${kind === "reply" ? "replies" : "comments"}.update`, (c) => ({
+            id,
+            t: marked(c, `${kind}:${id}`, "t"),
+            base: { rev: c.w.rev(`${kind}:${id}`) },
+          }));
+      }
+      if (e.name === "research.forkNode") {
+        const i = e.input as { id: string; thread: string; kind: string };
+        const roll = c.r();
+        if (roll < 0.15) later("followups.delete", () => ({ thread: i.thread, node: i.id }));
+        else if (roll < 0.3 && i.kind === "ask")
+          later("followups.update", (c) => ({
+            thread: i.thread,
+            node: i.id,
+            q: marked(c, `node:${i.id}`, "q"),
+            base: { rev: c.w.rev(`node:${i.id}`) },
+          }));
+      }
+      if (e.name === "research.cancelNode" && chance(c.r, 0.9)) {
+        const i = e.input as { thread: string; node: string };
+        later("research.retryNode", (c) => ({
+          ...i,
+          ...model(c),
+          base: {
+            attempt:
+              records(c, "run").find((r) => r.th === i.thread && r.node === i.node)?.attempt ?? 1,
+          },
+        }));
       }
       if (e.name === "joinRequests.decide" && chance(c.r, 0.7)) {
         const i = e.input as { space: string; users: Person[]; decision: string };
@@ -995,7 +1060,9 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       // a device's envelope that got a recorded answer may be replayed later
       // (one answered CLOCK_SKEW is not: see the report on reminted ids)
       if (res.ok || !UNRECORDED.has(res.error.code)) c.sent.push({ u: d.u, e });
+      if (e.replaces?.length) tally("client remint");
       if (faults.loss && chance(c.r, 0.3)) {
+        tally("client lost answer");
         if (chance(c.r, 0.5)) throw new Error("the connection dropped");
         return {
           ok: false,
@@ -1093,7 +1160,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         out.push(
           `${x.dev.name}: ${x.name} ${local} left the outbox with no answer and was not shown`,
         );
-      if (answer?.ok && n !== 1 && !c.direct.has(local))
+      // a replay is the answer of the same write sent before under its
+      // mutation id (a device given someone's mutation id, the same user's
+      // and payload): applied then, not now
+      if (answer?.ok && n !== 1 && !c.direct.has(local) && !(answer.replay && n === 0))
         out.push(`${x.dev.name}: ${x.name} ${local} answered ok, applied ${n} times`);
       if (
         answer &&
@@ -1137,7 +1207,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   const check = async (step: number, what: string, cl: ReplicaClient): Promise<boolean> => {
     const u = (cl.actor?.u ?? null) as Person | null;
     for (const log of logsFor(u)) {
-      await cl.sync(log);
+      if ((await cl.sync(log)) === "resync") tally("client resync");
       const want = expected(w.server.dump(), u, log);
       if (failures.length) return failed(step, what, failures.slice(0, 3).join("\n"));
       const d = diff(cl.records(log), want);
@@ -1199,7 +1269,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     }
     for (const [table, values] of Object.entries(scan))
       for (const m of JSON.stringify(values).match(MARKER) ?? [])
-        if (!storedNow(m))
+        if (!storedNow(m).length)
           out.push(
             `step ${step}: ${m} is at rest in ${table} (${JSON.stringify(c.origins.get(m))})`,
           );
@@ -1568,6 +1638,20 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   const end = [...(await invariants(STEPS)), ...outcomes(true), ...unparsed(w.server.dump())];
   if (end.length) return failed(STEPS, "drain", end.slice(0, 3).join("\n"));
   for (const cl of eager.values()) if (!(await check(STEPS, "drain", cl))) return false;
+  // once the outboxes are drained and the logs read, a device's view (its
+  // predictions and applied writes over its replica) is the oracle's
+  // projection: nothing it predicted lingers or is counted twice (M2 review 22)
+  for (const d of c.devices) {
+    if (d.cl.pending().length) continue;
+    const want = new Map<string, StoredRecord>();
+    for (const log of logsFor(d.u)) {
+      await d.cl.sync(log);
+      for (const [k, v] of expected(w.server.dump(), d.u, log)) want.set(k, v);
+    }
+    const delta = diff(d.cl.view(), want);
+    if (delta) return failed(STEPS, "drain", `${d.name}'s view\n${delta}`);
+    for (const x of d.cl.problems()) tally(`client ${x.reason}`);
+  }
   return true;
 }
 
@@ -1591,6 +1675,11 @@ test.after(() => {
  * the generators must reach the node tree, not only refuse it (M1b review
  * 18). Checked only on the fixed run. */
 const MIN_APPLIED: Record<string, number> = {
+  // every generator applies at least once
+  ...Object.fromEntries(NAMES.filter((n) => !RAW_ONLY.has(n)).map((n) => [n, 1])),
+  "followups.update": 3,
+  "research.retryNode": 3,
+  "comments.update": 3,
   "threads.create": 100,
   "threads.create from a node": 1,
   "research.forkNode": 20,
@@ -1602,6 +1691,14 @@ const MIN_APPLIED: Record<string, number> = {
   "moderation.decide": 20,
   "saved.set": 50,
   "spaces.create": 10,
+};
+/** The client's outcomes the fixed sequences must reach. */
+const MIN_CLIENT: Record<string, number> = {
+  "client remint": 5,
+  "client lost answer": 20,
+  "client DROPPED": 1,
+  "client EXPIRED": 1,
+  "client resync": 20,
 };
 
 // REPLICA_PROTO_SEED runs that one seed only (to debug a failure)
@@ -1622,8 +1719,14 @@ if (!ONE && SEQUENCES === 200)
     "the fixed sequences apply every write of the node tree some number of times",
     (t) => {
       const short = Object.entries(MIN_APPLIED).filter(([k, n]) => (TALLY.get(`ok ${k}`) ?? 0) < n);
+      const outcomes = Object.entries(MIN_CLIENT).filter(([k, n]) => (TALLY.get(k) ?? 0) < n);
       t.deepEqual(
-        short.map(([k, n]) => `${k}: ${TALLY.get(`ok ${k}`) ?? 0} applied, at least ${n} expected`),
+        [
+          ...short.map(
+            ([k, n]) => `${k}: ${TALLY.get(`ok ${k}`) ?? 0} applied, at least ${n} expected`,
+          ),
+          ...outcomes.map(([k, n]) => `${k}: ${TALLY.get(k) ?? 0}, at least ${n} expected`),
+        ],
         [],
       );
     },

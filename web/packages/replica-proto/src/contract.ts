@@ -72,15 +72,16 @@ export interface Envelope {
  * mutation id, and the client may send the write again with `expectedSeq`. */
 
 /** An answer as the server keeps it for replays (`StorageScan.answers`). */
-export type StoredAnswer = { ok: true; result: unknown } | { ok: false; error: ApiError };
+export type StoredAnswer =
+  { ok: true; result: unknown; replay?: true } | { ok: false; error: ApiError; replay?: true };
 
 /** An answer as the server sends it: every answer, a replayed one and a
  * refusal included, carries `serverTime`, the server's time when it answered
  * (milliseconds since the epoch; `01` Y2). A replay carries the time of the
  * replay, not of the first answer. */
 export type ApplyResult =
-  | { ok: true; result: unknown; serverTime: number }
-  | { ok: false; error: ApiError & { serverTime: number } };
+  | { ok: true; result: unknown; serverTime: number; replay?: true }
+  | { ok: false; error: ApiError & { serverTime: number }; replay?: true };
 
 /** A new client id; or TOO_MANY_REQUESTS (the person registered 20 clients
  * in the past day), UNAUTHORIZED or INTERNAL_SERVER_ERROR. */
@@ -131,6 +132,8 @@ export interface Snapshot {
   lastSeq: LastSeq;
   /** The threads a tiered snapshot served in full. */
   full?: string[];
+  /** The server's time when it read. */
+  serverTime?: number;
 }
 
 export type Pull =
@@ -138,8 +141,9 @@ export type Pull =
       changes: Change[];
       cursor: Cursor;
       lastSeq: LastSeq;
+      serverTime?: number;
     }
-  | { resync: true };
+  | { resync: true; serverTime?: number };
 
 export interface ServerHalf {
   /** A new client id, bound to the caller, or the caller's own re-attached
@@ -238,6 +242,9 @@ export interface ServerOptions {
    * The suite passes a set with a faulty definition to test that a fault
    * writes nothing. */
   mutators?: Readonly<Record<string, AnyMutator>>;
+  /** The web window of `window` snapshots (`01` R1); the prototype server
+   * has no window and ignores it. */
+  window?: { days: number; threads: number; cap: number };
 }
 
 export type ServerFactory = (options: ServerOptions) => TestServer;
