@@ -103,10 +103,11 @@ and that Litestream reports replicating to the new prefix in the same log.
 
 ## 5. Recreate what was in the database
 
-- Sign in through the browser so the first account exists, then grant admin
-  as in `SETUP.md` §5.
-- With `SESSION_REQUIRE_INVITE=1`, every sign-up code is gone; issue new ones
-  (`06-auth-and-users.md` §3).
+- Print a root invite per site admin with `npm run db:admin -- --invite`;
+  each redeems one, chooses a handle at the profile step, and is promoted
+  with `npm run db:admin -- <handle>` (plan `05` §3.5).
+- Every account invite is gone; members create new links on their Invites
+  page.
 - Every browser session is invalid; users sign in again.
 
 ## Local development

@@ -25,7 +25,7 @@ const TABLE: Record<string, Row> = {
   "followups.update": ["author", "base.rev", "queued", ""],
   "followups.delete": ["author", "as is", "queued", "frozen ok"],
   "research.cancelNode": ["author", "as is", "queued", ""],
-  "research.retryNode": ["author", "as is", "queued", ""],
+  "research.retryNode": ["author", "base.attempt", "queued", ""],
   "research.createPostFollowUp": ["member", "none", "queued", ""],
   "replies.update": ["author", "base.rev", "queued", ""],
   "replies.delete": ["author", "as is", "queued", "frozen ok"],

@@ -1,8 +1,8 @@
 // `auth`, `settings`, `usage`, and `admin`
 // (`03-api-and-events.md` §2, `06-auth-and-users.md` §6, §8).
 
-import { auth, preferences, usage } from "@session/db";
-import type { User, UserSettings } from "@session/shared";
+import { accountInvites, preferences, usage } from "@session/db";
+import type { Me, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
 
@@ -11,6 +11,7 @@ import { adminProcedure, protectedProcedure, publicProcedure, router } from "../
 import { repo } from "../errors.js";
 
 import { usageProcedures } from "./keys.js";
+import { checkInviteProcedure, meOf } from "./membership.js";
 import { adminModelsRouter } from "./models.js";
 
 export interface StoredSettings extends UserSettings {
@@ -31,7 +32,9 @@ function readSettings(
 }
 
 export const authRouter = router({
-  me: publicProcedure.query(({ ctx }): User | null => ctx.user),
+  /** The account, with the invite its profile step will redeem. */
+  me: publicProcedure.query(({ ctx }): Me | null => meOf(ctx)),
+  checkInvite: checkInviteProcedure,
   logout: publicProcedure.mutation(({ ctx }) => {
     // Deletes the current session record, invalidating the session token.
     // Other sessions for the account remain active.
@@ -84,11 +87,22 @@ export const usageRouter = router({
 export const adminRouter = router({
   /** The Site Admin settings: default model and default effort (`03` K15). */
   models: adminModelsRouter,
-  /** Generates administrative invite codes. Leaves createdBy null so admin codes do not decrement personal invite allowances. */
+  /** Account invites made by a site admin, who is exempt from the open-links
+   * limit (04 I2); they are the admin's own links and appear on their
+   * Invites page. */
   createInvites: adminProcedure
     .input(z.object({ count: z.number().int().min(1).max(100) }))
     .mutation(({ ctx, input }) => {
       ctx.logger.info({ adminId: ctx.user.id, count: input.count }, "created invite codes");
-      return { codes: repo(() => auth.createInvites(ctx.db, null, input.count)) };
+      const codes: string[] = [];
+      for (let index = 0; index < input.count; index += 1) {
+        const made = accountInvites.create(ctx.db, {
+          createdBy: ctx.user.id,
+          exempt: true,
+          encrypt: (code) => ctx.box.seal(code, `account-invite:${ctx.user.id}`),
+        });
+        if (made.ok) codes.push(made.code);
+      }
+      return { codes };
     }),
 });

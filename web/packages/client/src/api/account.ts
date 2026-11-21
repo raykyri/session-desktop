@@ -4,7 +4,7 @@
 // spaces screens read (channels, threads, saves, notifications) comes from
 // the replica (`02` §9), which is not part of this module.
 
-import type { ApiKeyProvider, User, UserSettings } from "@session/shared";
+import type { ApiKeyProvider, Me, UserSettings } from "@session/shared";
 import {
   queryOptions,
   useMutation,
@@ -43,7 +43,7 @@ export const queryKeys = {
  * Calls
  * ---------------------------------------------------------------------- */
 
-export function getMe(): Promise<User | null> {
+export function getMe(): Promise<Me | null> {
   return trpc().auth.me.query();
 }
 
@@ -101,21 +101,6 @@ export function setDefaultModel(model: string) {
 
 export function setDefaultEffort(effort: string) {
   return trpc().admin.models.setDefaultEffort.mutate({ effort });
-}
-
-/** The GitHub OAuth start URL. The server validates `return_to`; `signupCode`
- * is an account invite code, sent as `invite`. */
-export function gitHubSignInUrl(returnTo?: string, signupCode?: string): string {
-  const params = new URLSearchParams();
-  if (returnTo) params.set("return_to", returnTo);
-  if (signupCode) params.set("invite", signupCode);
-  const query = params.toString();
-  return `/auth/github${query === "" ? "" : `?${query}`}`;
-}
-
-/** Navigates the whole page to the GitHub OAuth start. */
-export function startGitHubSignIn(returnTo?: string, signupCode?: string): void {
-  window.location.assign(gitHubSignInUrl(returnTo, signupCode));
 }
 
 /* -------------------------------------------------------------------------

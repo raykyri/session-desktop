@@ -87,7 +87,7 @@ const lookupPrompt = (p: string) =>
   '" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.';
 
 /** The handles a text mentions: "@" after the start or a character that
- * cannot be in a handle, then a handle's characters, without trailing dots;
+ * cannot be in a handle, then a handle's characters, without trailing ".", "_" or "-";
  * each once. */
 function mentioned(t: string): string[] {
   const inHandle = (ch: string) => /[a-z0-9._-]/.test(ch);
@@ -100,7 +100,7 @@ function mentioned(t: string): string[] {
     for (let j = k + 1; j < t.length && inHandle(t[j] as string) && h.length < 64; j++)
       h += t[j] as string;
     if (!/^[a-z0-9]/.test(h)) continue;
-    while (h.endsWith(".")) h = h.slice(0, -1);
+    while (h.endsWith(".") || h.endsWith("_") || h.endsWith("-")) h = h.slice(0, -1);
     if (h && !out.includes(h)) out.push(h);
   }
   return out;
@@ -222,6 +222,20 @@ export function predictEffects(
   /** The author of the node a reference names in a thread: `r` the thread's. */
   const authorAt = (th: string, ref: string) =>
     String(get(ref === "r" ? `thread:${th}` : `node:${ref}`)?.["u"]);
+  /** The replies or comments under `id` in thread `th`, at any depth. */
+  const below = (kind: "reply" | "comment", th: string, id: string) => {
+    const all = [...dump.values()].filter(
+      (x): x is Extract<StoredRecord, { kind: "reply" | "comment" }> =>
+        x.kind === kind && x.th === th,
+    );
+    const ids = new Set([id]);
+    let size = 0;
+    while (size !== ids.size) {
+      size = ids.size;
+      for (const x of all) if (x.parent !== null && ids.has(x.parent)) ids.add(x.id);
+    }
+    return all.filter((x) => x.id !== id && ids.has(x.id));
+  };
   const ofThread = (th: string, ...kinds: string[]) =>
     [...dump.entries()].filter(
       ([, r]) => kinds.includes(r.kind) && "th" in r && (r as { th: string }).th === th,
@@ -351,7 +365,9 @@ export function predictEffects(
         if (st) keys.set(`stats:${n.s}`, { posts: Number(st["posts"]) + 1 });
         keys.set(`answer:${id}`, { node: "r", th: id, s: n.s, u: n.u, md: a.md, mod: null });
         keys.set(`node:${n.id}`, { promoted: id, q: n.q });
-        out.result = (r) => JSON.stringify(r) === JSON.stringify({ id, run: null });
+        // a promotion notifies nobody: no mentions (M1b review 18)
+        out.result = (r) =>
+          JSON.stringify(r) === JSON.stringify({ id, run: null, notified: [], notMembers: [] });
         break;
       }
       const sp = str("space");
@@ -485,19 +501,40 @@ export function predictEffects(
       break;
     }
     case "followups.delete": {
-      // a node with nodes or comments under it stays as a shell without
-      // text; one without goes with its answer. Its run, if it has not
-      // ended, is cancelled first (`03` G6).
+      // a node someone else wrote under (a node or a comment at any depth
+      // below it) stays as a shell without text, its run cancelled if it
+      // has not ended; otherwise the node and everything below it goes, with
+      // their answers, comments and runs (`03` G6; M1b review 9, 12)
       const n = get(`node:${str("node")}`) as Extract<StoredRecord, { kind: "node" }>;
-      const kept = [...dump.values()].some(
-        (r) => (r.kind === "node" && r.par === n.id) || (r.kind === "comment" && r.node === n.id),
+      const nodes = ofThread(n.th, "node").map(
+        ([, x]) => x as Extract<StoredRecord, { kind: "node" }>,
       );
-      stopRun(get(`run:${n.run}`));
-      if (kept) keys.set(`node:${n.id}`, { q: "", look: null, quote: null, del: true });
-      else {
-        keys.set(`node:${n.id}`, null);
-        if (dump.has(`answer:${n.id}`)) keys.set(`answer:${n.id}`, null);
-        keys.set(`counts:${n.th}`, { r: ofThread(n.th, "node").length - 1 });
+      const below = new Set<string>([n.id]);
+      let size = 0;
+      while (size !== below.size) {
+        size = below.size;
+        for (const x of nodes) if (below.has(x.par)) below.add(x.id);
+      }
+      const comments = ofThread(n.th, "comment")
+        .map(([, x]) => x as Extract<StoredRecord, { kind: "comment" }>)
+        .filter((x) => below.has(x.node));
+      const kept =
+        nodes.some((x) => below.has(x.id) && x.u !== me) || comments.some((x) => x.u !== me);
+      if (kept) {
+        stopRun(get(`run:${n.run}`));
+        keys.set(`node:${n.id}`, { q: "", look: null, quote: null, del: true });
+      } else {
+        for (const id of below) {
+          keys.set(`node:${id}`, null);
+          if (dump.has(`answer:${id}`)) keys.set(`answer:${id}`, null);
+        }
+        for (const x of comments) keys.set(`comment:${x.id}`, null);
+        for (const [, x] of ofThread(n.th, "run") as [
+          string,
+          Extract<StoredRecord, { kind: "run" }>,
+        ][])
+          if (below.has(x.node)) keys.set(`run:${x.id}`, null);
+        keys.set(`counts:${n.th}`, { r: nodes.length - below.size });
       }
       const reads = mayRead(dump, n, me);
       out.result = (r) => JSON.stringify(r) === JSON.stringify(reads ? { kept } : null);
@@ -538,11 +575,16 @@ export function predictEffects(
     case "replies.update":
     case "comments.update": {
       const kind = name === "replies.update" ? "reply" : "comment";
-      const old = get(`${kind}:${str("id")}`) as { t: string; edited: boolean };
+      const old = get(`${kind}:${str("id")}`) as {
+        t: string;
+        edited: boolean;
+        mod: string | null;
+      };
       const t = str("t").trim();
+      // an author may edit a hidden item: it stays hidden
       keys.set(`${kind}:${str("id")}`, {
         t,
-        mod: null,
+        mod: old.mod,
         del: false,
         edited: old.edited || t !== old.t,
       });
@@ -550,16 +592,21 @@ export function predictEffects(
     }
     case "replies.delete":
     case "comments.delete": {
-      // a top-level one with others under it stays, emptied; any other goes
+      // a top-level one with someone else's under it stays, emptied; any
+      // other goes, with the author's own under it (M1b review 9)
       const kind = name === "replies.delete" ? "reply" : "comment";
       const r = get(`${kind}:${str("id")}`) as Extract<StoredRecord, { kind: "reply" | "comment" }>;
-      const kept =
-        r.parent === null &&
-        [...dump.values()].some((x) => x.kind === kind && x.th === r.th && x.parent === r.id);
+      // everything under it, at any depth
+      const children = below(kind, r.th, r.id);
+      const kept = children.some((x) => x.u !== me);
       if (kept) keys.set(`${kind}:${r.id}`, { t: "", del: true });
       else {
         keys.set(`${kind}:${r.id}`, null);
-        if (kind === "reply") keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - 1 });
+        for (const x of children) keys.set(`${kind}:${x.id}`, null);
+        if (kind === "reply")
+          keys.set(`counts:${r.th}`, {
+            r: ofThread(r.th, "reply").length - 1 - children.length,
+          });
       }
       const reads = mayRead(dump, r, me);
       out.result = (x) => JSON.stringify(x) === JSON.stringify(reads ? { kept } : null);
@@ -711,9 +758,12 @@ export function predictEffects(
         erased.add(ck);
         keys.set(ck, null);
       };
-      if (r.kind === "thread") {
-        // nothing else of the removed content is kept (C12)
-        keys.set(key, {
+      /** A removed thread: nothing else of its content is kept (C12); the
+       * threads opened from its nodes are removed the same way (M1b review
+       * 14). */
+      const eraseThread = (t: StoredRecord & Fields) => {
+        const tk = `thread:${String(t["id"])}`;
+        keys.set(tk, {
           mod: "removed",
           q: "",
           t: null,
@@ -728,11 +778,22 @@ export function predictEffects(
           modBy: me,
           modNote: note,
         });
-        keys.set(`counts:${r.id}`, { r: 0, saves: 0 });
-        for (const [ck] of ofThread(r.id, "node", "answer", "reply", "comment", "run", "save"))
+        const id = String(t["id"]);
+        keys.set(`counts:${id}`, { r: 0, saves: 0 });
+        for (const [ck] of ofThread(id, "node", "answer", "reply", "comment", "run", "save"))
           drop(ck);
         for (const [ck, x] of dump)
-          if (x.kind === "notif" && x.type === "mention" && x.th === r.id) keys.set(ck, null);
+          if (x.kind === "notif" && x.type === "mention" && x.th === id) keys.set(ck, null);
+        for (const [, x] of ofThread(id, "node")) copies(x);
+      };
+      /** The thread a node was opened as, unless it is removed already. */
+      const copies = (n: StoredRecord) => {
+        if (n.kind !== "node" || n.promoted === null) return;
+        const p = get(`thread:${n.promoted}`);
+        if (p?.kind === "thread" && p["mod"] !== "removed") eraseThread(p);
+      };
+      if (r.kind === "thread") {
+        eraseThread(r);
         notify(String(r.u), "removed", r.s, r.id, key, note);
       } else if (r.kind === "node") {
         // the node's subtree: its descendants go, and every answer, comment
@@ -752,10 +813,10 @@ export function predictEffects(
           if (x.kind === "answer" && x.th === r.th && under.has(x.node)) drop(ck);
         }
         keys.set(`counts:${r.th}`, { r: ofThread(r.th, "node").length - (under.size - 1) });
+        for (const x of dump.values()) if (x.kind === "node" && under.has(x.id)) copies(x);
       } else if (r.kind === "reply" || r.kind === "comment") {
         keys.set(key, { mod: "removed", t: "" });
-        if (r.parent === null)
-          for (const [ck, x] of dump) if (x.kind === r.kind && x.parent === r.id) drop(ck);
+        for (const x of below(r.kind, r.th, r.id)) drop(`${r.kind}:${x.id}`);
         if (r.kind === "reply")
           keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - (erased.size - 1) });
       }

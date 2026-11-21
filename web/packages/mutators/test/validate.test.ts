@@ -76,11 +76,19 @@ test("a look-up phrase is 1 to 4 whole words of its quote", (t) => {
   t.false(onWordBoundaries("ide gauge", quote));
   t.false(onWordBoundaries("tide gaug", quote));
   t.false(onWordBoundaries("ocean", quote));
+  // combining marks are part of a word (M1b review 13): "cafe" + U+0301 keeps
+  // its accent, and "cafe" alone is not a whole word of "cafe\u0301 noir"
+  t.is(lookPhrase("«cafe\u0301»"), "cafe\u0301");
+  t.true(onWordBoundaries("cafe\u0301", "un cafe\u0301 noir"));
+  t.false(onWordBoundaries("cafe", "un cafe\u0301 noir"));
 });
 
 test("mentions are handles after @, once each", (t) => {
   t.deepEqual(mentionsIn("@mona and @otto, @mona. mail@example.com @x."), ["mona", "otto", "x"]);
+  t.deepEqual(mentionsIn("@mona_ and @otto-- @mel._ @a.b_c"), ["mona", "otto", "mel", "a.b_c"]);
 });
+
+const msToIsoInverse = (iso: string) => isoToMs(msToIso(isoToMs(iso)));
 
 test("stored times are computed without Date", (t) => {
   const cases: [string, number][] = [
@@ -95,7 +103,25 @@ test("stored times are computed without Date", (t) => {
   }
   t.is(isoToMs("2026-11-16T10:00:00.250Z"), 1_794_823_200_250);
   t.is(msToIso(1_794_823_200_999), "2026-11-16T10:00:00Z");
-  t.true(Number.isNaN(isoToMs("not a time")));
+  // an offset is read; a malformed or out-of-range time throws (M1b review 7)
+  t.is(isoToMs("2026-11-16T11:30:00+01:30"), 1_794_823_200_000);
+  t.is(isoToMs("2026-11-16T08:00:00-02:00"), 1_794_823_200_000);
+  t.is(isoToMs("2026-11-16T10:00:00+00:00"), 1_794_823_200_000);
+  for (const bad of [
+    "not a time",
+    "2026-13-01T00:00:00Z",
+    "2026-02-29T00:00:00Z",
+    "2026-04-31T00:00:00Z",
+    "2026-00-10T00:00:00Z",
+    "2026-11-00T00:00:00Z",
+    "2026-11-16T24:00:00Z",
+    "2026-11-16T10:60:00Z",
+    "2026-11-16T10:00:60Z",
+    "2026-11-16T10:00:00+24:00",
+    "2026-11-16T10:00:00",
+  ])
+    t.throws(() => isoToMs(bad), { instanceOf: RangeError }, bad);
+  t.is(isoToMs("2028-02-29T00:00:00Z"), msToIsoInverse("2028-02-29T00:00:00Z"));
   t.is(addDays("2028-02-28T23:00:00Z", 1), "2028-02-29T23:00:00Z");
   t.is(addDays("2026-12-31T08:00:00Z", 30), "2027-01-30T08:00:00Z");
 });

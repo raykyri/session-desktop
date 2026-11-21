@@ -32,8 +32,8 @@ export default defineConfig({
   testDir: "./e2e",
   outputDir: "./test-results",
   // `{platform}` is kept: a baseline rendered by macOS's rasterizer does not
-  // match Linux's, so the two sets live side by side. Outside CI a platform
-  // without one skips the visual test rather than failing it
+  // match Linux's, so the two sets live side by side. Outside CI a missing
+  // baseline is written; in CI it fails unless `e2e/visual.pending` exists
   // (`visual.spec.ts`). The Linux set is rendered by CI's e2e job
   // (`.github/workflows/web.yml`, `12-testing-linting-ci.md` §4).
   snapshotPathTemplate: "{testDir}/__screenshots__/{platform}/{arg}{ext}",
@@ -95,6 +95,9 @@ export default defineConfig({
       SESSION_DATA_DIR: E2E_DATA_DIR,
       SESSION_FIXTURE_PROVIDERS: "1",
       SESSION_TEST_AUTH: "1",
+      // The auth dialog's sign-in runs the real OAuth handshake against this
+      // server's fixture provider endpoints (`auth/fixtureOAuth.ts`).
+      SESSION_FIXTURE_OAUTH: "1",
       // Every provider reports a credential so no model is hidden as
       // unavailable; the fixture provider answers instead of any of them.
       GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',

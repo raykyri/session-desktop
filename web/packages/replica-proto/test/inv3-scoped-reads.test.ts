@@ -549,3 +549,16 @@ test("lists come in the server's creation order, not the time a client put in an
     .map((x) => x.key);
   t.deepEqual(order, [`thread:${early}`, `thread:${late}`]);
 });
+
+test("a queued run is served with its thread: to readers of the space only (M1b review 20)", async (t) => {
+  const { w, open, closed } = await cast(t);
+  const a = await thread(t, w, "ada", closed, "ask", "queued here", true);
+  const b = await thread(t, w, "mel", open, "ask", "queued there", true);
+  const runs = async (u: string | null, sp: string) =>
+    (await w.server.snapshot(actor(u), `space:${sp}`)).records.flatMap((x) =>
+      x.record.kind === "run" ? [[x.record.th, x.record.status]] : [],
+    );
+  t.deepEqual(await runs("mona", closed), [[a, "queued"]]);
+  t.deepEqual(await runs("eve", closed), []);
+  t.deepEqual(await runs(null, open), [[b, "queued"]]);
+});

@@ -19,7 +19,11 @@
 //
 // The mutators, the stored shape and the read rules moved to
 // `@session/mutators` in M1b: their patterns name `../mutators/src/<file>`,
-// with the faults kept. Each slot holds a copy of that package too, which the
+// with the faults kept. In M2 the suite moved to `@session/sync`'s server and
+// client halves, and the patterns that named `src/server.ts`, `src/client.ts`
+// and `src/contract.ts` name `../sync/src/<file>` (or `src/sync-target.ts`
+// for the test access), with the faults kept: the store's expiry loops are
+// `MemoryStore`'s, the token code is `tokens.ts`'s. Each slot holds a copy of that package too, which the
 // copy of this one imports; a mutation in it is type-checked there and runs
 // that package's suite as well as this one. M1b-1 on cover the checks M1b
 // added (the model registry, the run queue limit, frozen spaces, a parent
@@ -45,6 +49,10 @@ interface Mutation {
   to: string;
   /** Further places in the same file, for a fault that two checks guard. */
   also?: { from: string; to: string }[];
+  /** A fault in a copied package that the acceptance suite cannot reach (a
+   * client-only path, a package's own helper): killed by that package's
+   * suite. Every other mutation must fail this package's suite. */
+  packageOnly?: boolean;
 }
 
 const edits = (m: Mutation) => [{ from: m.from, to: m.to }, ...(m.also ?? [])];
@@ -54,7 +62,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X1 a ban keeps the membership",
     file: "../mutators/src/members.ts",
-    from: "      if (tx.byKey(memberKey(i.space, i.user))) tx.del(memberKey(i.space, i.user));\n      if (!tx.byKey(banKey",
+    from: "      if (member) tx.del(memberKey(i.space, i.user));\n      if (!tx.byKey(banKey",
     to: "      if (!tx.byKey(banKey",
   },
   {
@@ -71,9 +79,9 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "X5 lastSeq of anyone's client",
-    file: "src/server.ts",
-    from: "    if (!c || c.u !== u) return null;\n    this.touch(clientId, c, now);",
-    to: "    if (!c) return null;\n    this.touch(clientId, c, now);",
+    file: "../sync/src/server/server.ts",
+    from: "    if (!c || c.u !== u || c.seen <= now - this.clientIdleTtl) return null;\n    this.store.putClient({ ...c, seen: now });",
+    to: "    if (!c || c.seen <= now - this.clientIdleTtl) return null;\n    this.store.putClient({ ...c, seen: now });",
   },
   {
     name: "X6 the invite code is taken from the client's id",
@@ -89,19 +97,19 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "X8 a snapshot sorted by key only",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);",
     to: "      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;",
   },
   {
     name: "X10 a del sent for tombstones the reader may not read",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "return t && readsAudience(this.store, t, u) ? true : null;",
     to: "return t ? true : null;",
   },
   {
     name: "X12 idempotency kept 5 days",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "export const DEDUP_TTL = 7 * DAY;",
     to: "export const DEDUP_TTL = 5 * DAY;",
   },
@@ -134,9 +142,9 @@ const MUTATIONS: Mutation[] = [
   {
     // follow-ups are nodes now (`01` U6)
     name: "X19 node tombstones are never pruned",
-    file: "src/server.ts",
-    from: "      if (t.at >= cutoff) break;\n      this.tombs.delete(key);",
-    to: '      if (t.at >= cutoff) break;\n      if (t.kind !== "node") this.tombs.delete(key);',
+    file: "../sync/src/server/memory.ts",
+    from: "      if (t.at >= at) break;\n      this.remove(this.tombs, key);",
+    to: '      if (t.at >= at) break;\n      if (t.kind !== "node") this.remove(this.tombs, key);',
   },
   {
     name: "X20 threads.delete gets kept wrong",
@@ -148,13 +156,13 @@ const MUTATIONS: Mutation[] = [
     // round 1's fault was a version that showed the server's head. Versions
     // are sealed in tokens now; the same leak is a token in the clear.
     name: "X21 a cursor token is not encrypted",
-    file: "src/server.ts",
+    file: "../sync/src/server/tokens.ts",
     from: '    const body = Buffer.concat([cipher.update(plain), cipher.final()]);\n    return Buffer.concat([iv, body, cipher.getAuthTag()]).toString("base64url");',
     to: '    void cipher;\n    return Buffer.concat([iv, plain, Buffer.alloc(TOKEN_TAG)]).toString("base64url");',
     also: [
       {
-        from: '      const decipher = createDecipheriv("aes-256-gcm", this.key, raw.subarray(0, TOKEN_IV));\n      decipher.setAuthTag(raw.subarray(raw.length - TOKEN_TAG));\n      plain = Buffer.concat([\n        decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG)),\n        decipher.final(),\n      ]);',
-        to: "      void createDecipheriv;\n      plain = raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG);",
+        from: '      const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, TOKEN_IV));\n      decipher.setAuthTag(raw.subarray(raw.length - TOKEN_TAG));\n      plain = Buffer.concat([\n        decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG)),\n        decipher.final(),\n      ]);',
+        to: "      void createDecipheriv;\n      void key;\n      plain = raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG);",
       },
     ],
   },
@@ -179,9 +187,9 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "X25 a tombstone keeps the whole record",
-    file: "src/server.ts",
-    from: "const tomb: Tombstone = { key, ...audience(this, old), at };",
-    to: "const tomb = { ...old, key, ...audience(this, old), at } as Tombstone;",
+    file: "../sync/src/server/server.ts",
+    from: "const tomb: Tombstone = { key, ...audience(store, old), at };",
+    to: "const tomb = { ...old, key, ...audience(store, old), at } as Tombstone;",
   },
   {
     // likes are gone; saves and notifications share the rule
@@ -192,13 +200,13 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "X27 INTERNAL_SERVER_ERROR is recorded",
-    file: "src/contract.ts",
+    file: "../sync/src/wire.ts",
     from: '  "INTERNAL_SERVER_ERROR",\n  "TOO_LARGE",\n]);',
     to: '  "TOO_LARGE",\n]);',
   },
   {
     name: "X28 the client does not follow OUT_OF_ORDER's expected seq",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: 'code === "OUT_OF_ORDER" && expectedSeq !== undefined',
     to: 'code === "OUT_OF_ORDER" && expectedSeq === -1',
   },
@@ -206,19 +214,19 @@ const MUTATIONS: Mutation[] = [
     // an online-only write that waited was a recorded refusal in round 1's
     // fault; it is one now (EXPIRED), so the fault is that it is applied
     name: "X29 an online-only write that waited in an outbox is applied",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      if (def.online && m.clientTime - ulidTime(m.mutationId) > ONLINE_MAX_AGE)",
     to: "      if (def.online && m.clientTime - ulidTime(m.mutationId) > 1000 * ONLINE_MAX_AGE)",
   },
   {
     name: "X30 a cursor's age is not checked",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      c.at < now - TOMBSTONE_TTL\n",
     to: "      false\n",
   },
   {
     name: "X31 the client drops a write after a transient answer",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "          p.notBefore = now + Math.min(RETRY_MAX, RETRY_MIN * 2 ** (p.attempts - 1));\n          break;",
     to: "          this.outbox.shift();\n          break;",
   },
@@ -229,19 +237,19 @@ const MUTATIONS: Mutation[] = [
   // being written again (a new version). It is left out.
   {
     name: "N2 a token is accepted from another reader",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      c.u !== u ||\n",
     to: "",
   },
   {
     name: "N3 a token is accepted for another log",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      c.log !== log ||\n",
     to: "",
   },
   {
     name: "N4 a token is accepted after the log's history was replaced",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      c.n !== this.store.epoch(log).n ||\n",
     to: "",
   },
@@ -249,39 +257,40 @@ const MUTATIONS: Mutation[] = [
     // round 2: a version-0 cursor's made-up epoch was accepted. The analog:
     // a token that does not open is read as one at version 0
     name: "N5 a token that does not open counts as version 0",
-    file: "src/server.ts",
-    from: "    const c = this.tokens.open(cursor);\n",
-    to: "    const c = this.tokens.open(cursor) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now };\n",
+    file: "../sync/src/server/server.ts",
+    from: "    const c = this.tokens.open(cursor, now);\n",
+    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now };\n",
   },
   {
     // visibility no longer changes (`01` C11): the space log whose history is
     // replaced is the restored one (`replaceHistory`)
     name: "N6 user log: a space log's history being replaced is not noticed",
-    file: "src/server.ts",
-    from: "      if (a && a.sp !== null && this.store.epoch(`space:${a.sp}`).start > head) return true;",
-    to: "      if (a && a.sp !== null && this.store.epoch(`space:${a.sp}`).start > head + 1e9) return true;",
+    file: "../sync/src/server/server.ts",
+    from: "      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head) return true;",
+    to: "      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head + 1e9) return true;",
   },
   {
     name: "N7 user log: a membership change is not noticed",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: '      if (row.key.startsWith("member:") && row.version > version) return true;\n',
     to: "",
   },
   {
+    // the rev rule moved to `StagedTx` (M1b review 2): the same fault there
     name: "N8 a record written again at a deleted key restarts at rev 1",
-    file: "src/server.ts",
-    from: "const rev = (prev?.rev ?? this.registry.get(reg) ?? 0) + 1;",
-    to: "const rev = (prev?.rev ?? 0) + 1;",
+    file: "../mutators/src/staged.ts",
+    from: "const rev = (committed?.rev ?? this.source.lastRev?.(registryKey(r)) ?? 0) + 1;",
+    to: "void registryKey;\n    const rev = (committed?.rev ?? 0) + 1;",
   },
   {
     name: "N9 a finished run writes text to a removed item",
-    file: "src/server.ts",
+    file: "src/sync-target.ts",
     from: 'if (!r || !("mod" in r) || r.mod === "removed") return false;',
     to: 'if (!r || !("mod" in r)) return false;',
   },
   {
     name: "N10 TOO_MANY_REQUESTS and SERVICE_UNAVAILABLE are recorded",
-    file: "src/contract.ts",
+    file: "../sync/src/wire.ts",
     from: '  "TOO_MANY_REQUESTS",\n  "SERVICE_UNAVAILABLE",\n',
     to: "",
   },
@@ -293,9 +302,9 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "N15 answers under (client, seq) are never expired",
-    file: "src/server.ts",
-    from: "      if (a.at > now - DEDUP_TTL) break;\n      this.seqAnswers.delete(k);",
-    to: "      if (a.at > now - DEDUP_TTL * 1000) break;\n      this.seqAnswers.delete(k);",
+    file: "../sync/src/server/memory.ts",
+    from: "      if (a.at > at) break;\n      this.remove(this.seqAnswers, k);",
+    to: "      if (a.at > at - 1e15) break;\n      this.remove(this.seqAnswers, k);",
   },
   {
     // the job effect is gone: the run record with status `queued` is the
@@ -309,14 +318,14 @@ const MUTATIONS: Mutation[] = [
     // the served-cursor table is gone (decision 1); the table that grows
     // with callers now is the client records
     name: "N20 client records are never expired",
-    file: "src/server.ts",
-    from: "      if (c.seen > now - CLIENT_IDLE_TTL) break;\n      this.clients.delete(id);",
-    to: "      if (c.seen > now - CLIENT_IDLE_TTL * 1000) break;\n      this.clients.delete(id);",
+    file: "../sync/src/server/memory.ts",
+    from: "      if (c.seen > at) break;\n      this.remove(this.clients, id);",
+    to: "      if (c.seen > at - 1e15) break;\n      this.remove(this.clients, id);",
   },
   {
     // likes are gone; notifications follow the same rule as saves
     name: "N21 a save or notification tombstone is served to its person whatever their access",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "    return t && readsAudience(this.store, t, u) ? true : null;",
     to: '    return t &&\n      (readsAudience(this.store, t, u) ||\n        ((t.kind === "save" || t.kind === "notif") && t.person === u))\n      ? true\n      : null;',
   },
@@ -344,37 +353,37 @@ const MUTATIONS: Mutation[] = [
   {
     // tombstones no longer hold the rev; the registry does
     name: "N25 a deleted key's rev is forgotten",
-    file: "src/server.ts",
-    from: "        this.born.delete(key);\n",
-    to: "        this.born.delete(key);\n        this.registry.set(registryKey(old), 0);\n",
+    file: "../sync/src/server/server.ts",
+    from: "        store.deleteRecord(key);\n",
+    to: "        store.deleteRecord(key);\n        store.setLastRev(registryKey(old), 0);\n",
   },
   {
     name: "N26 the client keeps an expired write in the outbox",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: 'for (const p of [...this.outbox]) if (p.queuedAt < now - OUTBOX_TTL) this.giveUp(p, "DROPPED");',
     to: "void now;",
   },
   {
     name: "N27 the client does not remap later writes after new ids",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "for (const x of this.outbox) if (!x.sent) x.input = remap(x.input, map);",
     to: "for (const x of this.outbox) if (x === this.outbox[0]) x.input = remap(x.input, map);",
   },
   {
     name: "N28 the client's seq does not follow a read's lastSeq",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "    if (lastSeq !== null) this.acked = lastSeq;",
     to: "",
   },
   {
     name: "N29 a deleted record's id may be used again",
-    file: "src/server.ts",
-    from: "        this.born.delete(key);\n",
-    to: "        this.born.delete(key);\n        const freed = idOf(old);\n        if (freed !== null) this.registry.delete(freed);\n",
+    file: "../sync/src/server/memory.ts",
+    from: "    this.records.delete(key);\n    this.index(prev, key, false);\n    this.born.delete(key);",
+    to: '    this.records.delete(key);\n    this.index(prev, key, false);\n    this.born.delete(key);\n    if ("id" in prev) this.registry.delete(prev.id);',
   },
   {
     name: "N30 a version-0 token's history is not checked",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      c.n !== this.store.epoch(log).n ||\n",
     to: "      (c.v > 0 && c.n !== this.store.epoch(log).n) ||\n",
   },
@@ -382,21 +391,21 @@ const MUTATIONS: Mutation[] = [
     // tokens are sealed, not counted; the same weakness is a token that does
     // not need the key to make
     name: "N31 a token opens without the key's authentication",
-    file: "src/server.ts",
+    file: "../sync/src/server/tokens.ts",
     from: "      decipher.setAuthTag(raw.subarray(raw.length - TOKEN_TAG));\n      plain = Buffer.concat([\n        decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG)),\n        decipher.final(),\n      ]);",
     to: "      plain = decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG));",
   },
   {
     name: "N33 an empty pull does not renew the token's serve time",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "    return { changes, cursor: this.serve(log, u, to, now), lastSeq };",
     to: "    return { changes, cursor: this.serve(log, u, to, changes.length ? now : c.at), lastSeq };",
   },
   {
     name: "N34 the token key is a constant",
-    file: "src/server.ts",
-    from: "  private readonly key = randomBytes(32);",
-    to: "  private readonly key = Buffer.alloc(32);",
+    file: "../sync/src/server/tokens.ts",
+    from: "    this.key = keys?.current ?? randomBytes(32);",
+    to: "    this.key = keys?.current ?? Buffer.alloc(32);",
   },
   {
     name: "R2-1 a hide or a removal is STALE after the item changed",
@@ -425,37 +434,37 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "R2-6 the client gives a sent write new ids",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "    for (const p of this.outbox) {\n      if (p.sent) continue;",
     to: "    for (const p of this.outbox) {",
   },
   {
     name: "R2-7 the server does not check a mutation id's age",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: '    if (!ageOk(m.mutationId, m.clientTime)) return expired("mutationId");\n',
     to: "",
   },
   {
     name: "R2-8 the learned clock offset is not saved",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "      offset: this.offset,\n",
     to: "      offset: 0,\n",
   },
   {
     name: "R2-9 registrations are not limited",
-    file: "src/server.ts",
-    from: "      if (times.length >= REGISTRATIONS_PER_DAY)",
-    to: "      if (times.length >= REGISTRATIONS_PER_DAY * 1000)",
+    file: "../sync/src/server/server.ts",
+    from: "        if (store.registrationsSince(u, now - DAY + 1) >= this.registrationsPerDay)",
+    to: "        if (store.registrationsSince(u, now - DAY + 1) >= this.registrationsPerDay * 1000)",
   },
   {
     name: "R2-10 the client does not register again on WRONG_CLIENT",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: 'if (code === "WRONG_CLIENT" && this.ownOutbox() && fresh++ < 1) {',
     to: 'if (code === "WRONG_CLIENT" && this.ownOutbox() && fresh++ < 0) {',
   },
   {
     name: "R2-11 the client registers for another person's outbox",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "    if (this.clientIdValue === null && this.ownOutbox()) {",
     to: "    if (this.clientIdValue === null) {",
     also: [
@@ -467,31 +476,31 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "R2-12 the client does not back off",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "      if (p.notBefore > now && p.notBefore - now <= RETRY_MAX) break;",
     to: "      if (p.notBefore > now && p.notBefore - now < 0) break;",
   },
   {
     name: "R2-13 a write that keeps failing is never given up",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "          if (p.errors >= MAX_SERVER_ERRORS) {",
     to: "          if (p.errors >= MAX_SERVER_ERRORS * 1000) {",
   },
   {
     name: "R2-14 a write dropped at 3 days is not shown",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: 'if (p.queuedAt < now - OUTBOX_TTL) this.giveUp(p, "DROPPED");',
     to: "if (p.queuedAt < now - OUTBOX_TTL) this.outbox.splice(this.outbox.indexOf(p), 1);",
   },
   {
     name: "R2-18 an input's depth is not bounded",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "    const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);",
     to: "    const bounds = outOfBounds(envelope, 1e9, MAX_ENVELOPE_BYTES);",
   },
   {
     name: "R2-19 an envelope's size is not bounded",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES\n',
     to: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES * 1000\n',
     also: [
@@ -503,20 +512,20 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "R2-20 an exception outside the mutator stages is thrown",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "      return this.applyEnvelope(actor, envelope);\n    } catch {",
     to: "      return this.applyEnvelope(actor, envelope);\n    } catch (e) {\n      if (e) throw e;",
   },
   {
     name: "R2-21 the device's clock is not checked against the server's",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "    if (Math.abs(m.clientTime - now) > CLOCK_MAX_SKEW)",
     to: "    if (Math.abs(m.clientTime - now) > 1e15)",
   },
   {
     name: "R2-22 scanStorage leaves out the client records",
-    file: "src/server.ts",
-    from: "      clients: [...this.clients].map(([clientId, c]) => ({ clientId, ...c })),",
+    file: "src/sync-target.ts",
+    from: "      clients: [...s.clients.values()].map((c) => ({\n        clientId: c.clientId,\n        u: c.u,\n        last: c.last,\n        seen: c.seen,\n      })),",
     to: "      clients: [],",
   },
   {
@@ -530,7 +539,7 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "R2-23 the client gives up on a write after a lost answer",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "      } catch {\n        res = noAnswer(this.now());\n      }",
     to: '      } catch {\n        res = { ok: false, error: { code: "NOT_FOUND", message: "", serverTime: 0 } };\n      }',
   },
@@ -539,19 +548,19 @@ const MUTATIONS: Mutation[] = [
   {
     name: "U6-1 a private space serves a save count below 3",
     file: "../mutators/src/rules.ts",
-    from: "  const saves = s && isClosed(s) && n < PRIVATE_SAVES_MIN ? 0 : n;",
-    to: "  const saves = s ? n : n;",
+    from: "  const saves = closed && n < PRIVATE_SAVES_MIN ? 0 : n;",
+    to: "  const saves = closed ? n : n;",
   },
   {
     name: "U6-2 a removal keeps the saves of the thread",
     file: "../mutators/src/rules.ts",
-    from: '      for (const x of tx.list("save", th)) drop(saveKey(x.u, x.th));\n',
+    from: '      for (const x of userLogRecords(tx, "save", r.id)) drop(saveKey(x.u, x.th));\n',
     to: "",
   },
   {
     name: "U6-3 a removal keeps the mention notifications about the thread",
     file: "../mutators/src/rules.ts",
-    from: '      for (const x of tx.list("notif", th).filter((y) => y.type === "mention"))\n        drop(`notif:${x.id}`);\n',
+    from: '      for (const x of userLogRecords(tx, "notif", r.id).filter((y) => y.type === "mention"))\n        drop(`notif:${x.id}`);\n',
     to: "",
   },
   {
@@ -588,19 +597,19 @@ const MUTATIONS: Mutation[] = [
   },
   {
     name: "U6-9 a reminted envelope's answer is not stored under the ids it replaces",
-    file: "src/server.ts",
-    from: "if (id !== m.mutationId && !this.dedup.has(rk))",
-    to: "if (id !== m.mutationId && !this.dedup.has(rk) && id.length < 0)",
+    file: "../sync/src/server/server.ts",
+    from: "if (id !== m.mutationId && !(old && old.at > now - DEDUP_TTL))",
+    to: "if (id !== m.mutationId && !(old && old.at > now - DEDUP_TTL) && id.length < 0)",
   },
   {
     name: "U6-10 an envelope's queuedAt is not checked",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: '    if (!timeOk(m.queuedAt, m.clientTime)) return expired("queuedAt");\n',
     to: "",
   },
   {
     name: "U6-11 an oversized envelope answers BAD_REQUEST",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: '        refuse("TOO_LARGE", undefined, [',
     to: '        refuse("BAD_REQUEST", undefined, [',
   },
@@ -649,19 +658,19 @@ const MUTATIONS: Mutation[] = [
   // ---- the M1a review's fixes ----
   {
     name: "M1a-10 a reminted write is applied again after its original was",
-    file: "src/server.ts",
+    file: "../sync/src/server/server.ts",
     from: "    if (wellFormed && !hit)\n      for (const id of m.replaces ?? []) {",
     to: "    if (wellFormed && !hit && m.seq < 0)\n      for (const id of m.replaces ?? []) {",
   },
   {
     name: "M1a-14 CLOCK_SKEW keeps the queue times read from the wrong clock",
-    file: "src/client.ts",
-    from: "for (const x of this.outbox) if (!x.sent) x.queuedAt += offset - this.offset;",
-    to: "for (const x of this.outbox) if (!x.sent) x.queuedAt = Math.min(x.queuedAt, offset + this.env.clock.now());",
+    file: "../sync/src/client/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt = Math.min(x.queuedAt, offset + raw);",
   },
   {
     name: "M1a-15 a reminted write names every earlier id",
-    file: "src/client.ts",
+    file: "../sync/src/client/client.ts",
     from: "      if (p.replaces.length > MAX_REPLACES) p.replaces.splice(0, p.replaces.length - MAX_REPLACES);\n",
     to: "",
   },
@@ -759,8 +768,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-7 a look-up phrase need not be whole words of its quote",
     file: "../mutators/src/nodes.ts",
-    from: "        if (i.quote !== undefined && !onWordBoundaries(look, i.quote))",
-    to: '        if (i.quote !== undefined && !onWordBoundaries(look, i.quote) && look === "")',
+    from: "        if (!onWordBoundaries(look, i.quote))",
+    to: '        if (!onWordBoundaries(look, i.quote) && look === "")',
   },
   {
     name: "M1b-8 a hidden branch is opened as its own thread",
@@ -781,16 +790,17 @@ const MUTATIONS: Mutation[] = [
     to: '      if (run.status === "queued" || run.status === "running")',
   },
   {
+    // a kept node's run is cancelled; a deleted one's run records go (M1b review 12)
     name: "M1b-11 deleting a node leaves its run going",
     file: "../mutators/src/nodes.ts",
-    from: "      cancel(tx, runOf(tx, n));\n      if (kept)",
-    to: "      if (kept)",
+    from: "        cancel(tx, runOf(tx, n));\n",
+    to: "",
   },
   {
     name: "M1b-12 a node with nodes under it is erased by its author's delete",
     file: "../mutators/src/nodes.ts",
-    from: '        tx.list("node", th).some((x) => x.par === n.id) ||',
-    to: '        tx.list("node", th).some((x) => x.par === n.id && x.del) ||',
+    from: "        nodes.some((x) => x.id !== n.id && under.has(x.id) && x.u !== tx.me) ||",
+    to: "        nodes.some((x) => x.id !== n.id && under.has(x.id) && x.u !== tx.me && x.del) ||",
   },
   {
     name: "M1b-13 anyone cancels a run",
@@ -816,39 +826,185 @@ const MUTATIONS: Mutation[] = [
     from: '      undefined,\n      "queue_full",\n',
     to: "      undefined,\n      undefined,\n",
   },
+  // ---- M1b review fixes ----
+  {
+    name: "M1b-17 a retry ignores the attempt it was made for",
+    file: "../mutators/src/nodes.ts",
+    from: "      if (run.attempt !== i.base.attempt) throw stale();\n",
+    to: "",
+  },
+  {
+    name: "M1b-18 the ban check runs on clients only",
+    file: "../mutators/src/tx.ts",
+    from: "    if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
+    to: "    if (!tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
+  },
+  {
+    name: "M1b-19 a ban stops a person's own user-log writes",
+    file: "../mutators/src/tx.ts",
+    from: "    if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
+    to: "    if (tx.server && bannedFrom(tx, sp, tx.me))",
+  },
+  {
+    name: "M1b-20 a gone thread takes new writes",
+    file: "../mutators/src/rules.ts",
+    from: "  if (p.gone) throw threadDeleted();",
+    to: '  if (p.gone && p.q === "never") throw threadDeleted();',
+  },
+  {
+    name: "M1b-21 a reply with only its author's replies under it stays as a shell",
+    file: "../mutators/src/replies.ts",
+    from: "      const kept = under.some((x) => x.u !== tx.me);",
+    to: "      const kept = under.length > 0;",
+  },
+  {
+    name: "M1b-22 a deleted node's run records stay",
+    file: "../mutators/src/nodes.ts",
+    from: '        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);\n',
+    to: "",
+  },
+  {
+    name: "M1b-23 a removed node's copies keep their text",
+    file: "../mutators/src/rules.ts",
+    from: '  if (p?.kind === "thread" && p.mod !== "removed") erase(tx, p, note);',
+    to: "  void p;",
+  },
+  {
+    name: "M1b-24 a correction moves a write queued on a clock known to be right",
+    file: "../sync/src/client/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.sent && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+  },
+  {
+    name: "M1b-25 a correction moves a write queued before the clock went back",
+    file: "../sync/src/client/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.sent && !x.known) x.queuedAt += offset - this.offset;",
+  },
+  {
+    name: "M1b-26 a correction moves a sent write",
+    file: "../sync/src/client/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+  },
+  // ---- M1a review fixes 1, 2, 4, 7, 8, 9 (M1b review 19) ----
+  {
+    name: "M1a-1 a promoted thread does not name its source",
+    file: "../mutators/src/threads.ts",
+    from: "    from: { th: p.id, node: n.id },",
+    to: "    from: null,",
+  },
+  {
+    name: "M1a-2 a removed thread's placeholder keeps its model and effort",
+    file: "../mutators/src/rules.ts",
+    from: "        model: null,\n        effort: null,\n        running: false,",
+    to: "        running: false,",
+  },
+  {
+    name: "M1a-4 an applied answer carries no server time",
+    file: "../sync/src/server/server.ts",
+    from: "      ? { ...a, serverTime }",
+    to: "      ? { ...a, serverTime: 0 }",
+  },
+  {
+    name: "M1a-7 an ask node has a look-up's template",
+    file: "../mutators/src/nodes.ts",
+    from: '        tpl: i.kind === "lookup" ? 1 : null,',
+    to: "        tpl: 1,",
+  },
+  {
+    name: "M1a-8 a copied answer keeps its node's id",
+    file: "../mutators/src/threads.ts",
+    from: '  tx.put({ ...a, node: "r", th: id, mod: null });',
+    to: "  tx.put({ ...a, th: id, mod: null });",
+  },
+  {
+    name: "M1a-9a a comment shell is edited",
+    file: "../mutators/src/comments.ts",
+    from: "      if (c.del) throw deleted();\n",
+    to: "",
+  },
+  {
+    name: "M1a-9b a reply shell is edited",
+    file: "../mutators/src/replies.ts",
+    from: "      if (r.del) throw deleted();\n",
+    to: "",
+  },
+  // ---- M1b review 17 ----
+  {
+    name: "M1b-27 the server counts no queued runs",
+    file: "../sync/src/server/server.ts",
+    from: "          ).length,\n      };",
+    to: "          ).length * 0,\n      };",
+  },
+  // ---- replies and comments to any depth ----
+  {
+    name: "M1b-28 a removal keeps the replies below its children",
+    file: "../mutators/src/rules.ts",
+    from: '      for (const x of itemsUnder(tx.list("reply", { th: r.th }), r.id)) drop(`reply:${x.id}`);',
+    to: '      for (const x of tx.list("reply", { th: r.th }).filter((y) => y.parent === r.id))\n        drop(`reply:${x.id}`);',
+  },
+  {
+    name: "M1b-29 a delete ignores another's reply below its children",
+    file: "../mutators/src/replies.ts",
+    from: '      const under = itemsUnder(tx.list("reply", { th: r.th }), r.id);',
+    to: '      const under = tx.list("reply", { th: r.th }).filter((x) => x.parent === r.id);',
+  },
 ];
 
-interface Outcome {
-  typecheck: string;
+/** What one suite said about a mutation. */
+interface SuiteResult {
   passed: number;
   failed: number;
   tests: string[];
 }
 
+interface Outcome {
+  typecheck: string;
+  /** The acceptance suite (this package's). */
+  suite: SuiteResult;
+  /** The suite of the package the mutation is in, when it is not this one. */
+  own?: SuiteResult;
+}
+
 const PKG = process.cwd();
 const WEB = resolve(PKG, "../..");
-const MUTATORS_PKG = join(WEB, "packages", "mutators");
+/** The workspace packages a slot holds a copy of, besides this one: a
+ * mutation in one of them is type-checked there and runs its suite too. */
+const COPIED = ["mutators", "sync"] as const;
 
 /** A copy of the package beside links to the workspace's modules, base
- * config and shared package, so it type-checks and runs as the package does. */
+ * config and shared package, so it type-checks and runs as the package does.
+ * The copies of `@session/mutators` and `@session/sync` are linked into the
+ * copies that import them, so a mutation in either reaches this suite. */
 function makeSlot(root: string, n: number): string {
   const web = join(root, `slot${n}`, "web");
   mkdirSync(join(web, "packages"), { recursive: true });
   symlinkSync(join(WEB, "node_modules"), join(web, "node_modules"));
   symlinkSync(join(WEB, "tsconfig.base.json"), join(web, "tsconfig.base.json"));
   symlinkSync(join(WEB, "packages", "shared"), join(web, "packages", "shared"));
-  // the package's own copy of `@session/mutators`, with its declarations
-  cpSync(MUTATORS_PKG, join(web, "packages", "mutators"), {
-    recursive: true,
-    filter: (src) => !/[/\\]node_modules$/.test(src),
-  });
+  // the package's own copies of `@session/mutators` and `@session/sync`, with
+  // their declarations
+  for (const name of COPIED)
+    cpSync(join(WEB, "packages", name), join(web, "packages", name), {
+      recursive: true,
+      filter: (src) => !/[/\\]node_modules$/.test(src),
+    });
+  const link = (from: string, name: string) => {
+    mkdirSync(join(web, "packages", from, "node_modules", "@session"), { recursive: true });
+    symlinkSync(
+      join(web, "packages", name),
+      join(web, "packages", from, "node_modules", "@session", name),
+    );
+  };
+  link("sync", "mutators");
   const dir = join(web, "packages", "replica-proto");
   cpSync(PKG, dir, {
     recursive: true,
     filter: (src) => !/[/\\](node_modules|dist)$/.test(src),
   });
-  mkdirSync(join(dir, "node_modules", "@session"), { recursive: true });
-  symlinkSync(join(web, "packages", "mutators"), join(dir, "node_modules", "@session", "mutators"));
+  link("replica-proto", "mutators");
+  link("replica-proto", "sync");
   return dir;
 }
 
@@ -862,6 +1018,20 @@ function sh(cmd: string, args: string[], cwd: string): Promise<{ code: number; o
   });
 }
 
+/** The package a mutation's file is in: this one, or a copied one. */
+const packageOf = (m: Mutation) => COPIED.find((name) => m.file.startsWith(`../${name}/`)) ?? null;
+
+function results(out: string): SuiteResult {
+  const tests = [
+    ...new Set([...out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? "")),
+  ];
+  return {
+    passed: [...out.matchAll(/(\d+) tests? passed/g)].reduce((n, x) => n + Number(x[1]), 0),
+    failed: [...out.matchAll(/(\d+) tests? failed/g)].reduce((n, x) => n + Number(x[1]), 0),
+    tests: tests.map((x) => x.slice(0, 140)),
+  };
+}
+
 async function run(m: Mutation, dir: string): Promise<Outcome> {
   const file = join(dir, m.file);
   const original = readFileSync(join(PKG, m.file), "utf8");
@@ -872,35 +1042,41 @@ async function run(m: Mutation, dir: string): Promise<Outcome> {
   }
   writeFileSync(file, source);
   try {
-    // a mutation in `@session/mutators` is type-checked in that package, and
-    // its suite runs before this one's
-    const inPackage = m.file.startsWith("../mutators/");
-    const pkg = join(dir, "../mutators");
-    const tc = await sh(
-      "npx",
-      ["tsc", "-p", "tsconfig.test.json", "--noEmit"],
-      inPackage ? pkg : dir,
-    );
-    const own = inPackage ? await sh("npx", ["ava", "--timeout=600s"], pkg) : { code: 0, out: "" };
-    const ava = await sh("npx", ["ava", "--timeout=600s"], dir);
-    ava.out = `${own.out}\n${ava.out}`;
-    const tests = [
-      ...new Set(
-        [...ava.out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? ""),
-      ),
-    ];
+    // a mutation in a copied package is type-checked in that package, and
+    // its suite runs as well as this one's
+    const name = packageOf(m);
+    const pkg = name === null ? dir : join(dir, "..", name);
+    const tc = await sh("npx", ["tsc", "-p", "tsconfig.test.json", "--noEmit"], pkg);
+    const own =
+      name === null ? null : results((await sh("npx", ["ava", "--timeout=600s"], pkg)).out);
+    const suite = results((await sh("npx", ["ava", "--timeout=600s"], dir)).out);
     return {
       typecheck: tc.code === 0 ? "ok" : (tc.out.split("\n")[0] ?? "failed"),
-      passed: [...ava.out.matchAll(/(\d+) tests? passed/g)].reduce((n, x) => n + Number(x[1]), 0),
-      failed: [...ava.out.matchAll(/(\d+) tests? failed/g)].reduce((n, x) => n + Number(x[1]), 0),
-      tests: tests.map((x) => x.slice(0, 140)),
+      suite,
+      ...(own ? { own } : {}),
     };
   } finally {
     writeFileSync(file, original);
   }
 }
 
+/** A mutation is killed when the acceptance suite fails; one marked
+ * `packageOnly` (a fault the acceptance suite cannot reach) also when its
+ * own package's suite fails. */
+const killed = (m: Mutation, o: Outcome) =>
+  o.suite.failed > 0 || (m.packageOnly === true && (o.own?.failed ?? 0) > 0);
+
+/** The id of a mutation: the first word of its name (`X1`, `M1b-12`). An
+ * argument selects the mutation with that id, or with a `*` at its end the
+ * ones whose id starts with what precedes it (`M1b-*`). */
+const idOf = (m: Mutation) => m.name.split(" ")[0] ?? "";
+const selects = (arg: string, m: Mutation) =>
+  arg.endsWith("*") ? idOf(m).startsWith(arg.slice(0, -1)) : idOf(m) === arg;
+
 const args = process.argv.slice(2);
+const ids = MUTATIONS.map(idOf);
+const dup = ids.find((x, k) => ids.indexOf(x) !== k);
+if (dup) throw new Error(`two mutations have the id ${dup}`);
 if (args.includes("--check")) {
   for (const m of MUTATIONS)
     for (const e of edits(m)) {
@@ -913,7 +1089,8 @@ if (args.includes("--check")) {
 const k = args.indexOf("--slots");
 const slots = k >= 0 ? Number(args[k + 1]) : 4;
 const only = args.filter((a, i) => !a.startsWith("--") && (k < 0 || i !== k + 1));
-const todo = MUTATIONS.filter((m) => !only.length || only.some((o) => m.name.startsWith(o)));
+const todo = MUTATIONS.filter((m) => !only.length || only.some((o) => selects(o, m)));
+if (only.length && !todo.length) throw new Error(`no mutation has the ids ${only.join(" ")}`);
 const root = mkdtempSync(join(tmpdir(), "replica-proto-mutate-"));
 let survived = 0;
 try {
@@ -923,10 +1100,11 @@ try {
     dirs.map(async (dir) => {
       for (let m = queue.shift(); m; m = queue.shift()) {
         const o = await run(m, dir);
-        const broken = o.passed + o.failed === 0;
-        if (o.failed === 0) survived++;
+        const broken = o.suite.passed + o.suite.failed === 0;
+        const dead = killed(m, o);
+        if (!dead) survived++;
         console.log(
-          `${broken ? "BROKEN  " : o.failed ? "killed  " : "SURVIVED"} ${m.name}: ${JSON.stringify(o)}`,
+          `${broken ? "BROKEN  " : dead ? "killed  " : "SURVIVED"} ${m.name}${m.packageOnly ? " (package only)" : ""}: ${JSON.stringify(o)}`,
         );
       }
     }),

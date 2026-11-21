@@ -81,7 +81,6 @@ test("a ban stops every write in its space, the author's own included", async (t
     ["threads.update", { id: th, q: "abuse after the ban", base: { rev } }],
     ["threads.delete", { id: th }],
     ["saved.set", { kind: "thread", id: th, on: true }],
-    ["saved.set", { kind: "thread", id: ask, on: false }],
     ["research.createPostFollowUp", { id: w.id(), thread: th, t: "abuse" }],
     ["research.createPostFollowUp", { id: w.id(), thread: th, t: "abuse", parent: reply }],
     ["research.forkNode", forkInput(w.id(), ask, "abuse")],
@@ -93,6 +92,10 @@ test("a ban stops every write in its space, the author's own included", async (t
     await refused(t, w.as("otto", name, input), "FORBIDDEN");
   t.is(JSON.stringify([...w.server.dump()]), before);
   t.is((w.get(`thread:${th}`) as ThreadRec).q, "fine");
+  // the person's own user-log writes are not stopped (M1b review 11): taking
+  // a save back
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: ask, on: false }));
+  t.is(w.get(`save:otto:${ask}`), undefined);
   // the same in a private space, and a ban is per space: otto still writes elsewhere
   await admit(t, w, closed, "otto");
   const mine = await thread(t, w, "otto", closed, "post");

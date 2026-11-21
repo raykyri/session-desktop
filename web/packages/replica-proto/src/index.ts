@@ -15,4 +15,5 @@ export * from "./client.js";
 export * from "./contract.js";
 export { JOIN_REQUESTS, PROTO_MUTATORS } from "./join-requests.js";
 export * from "./server.js";
+export * from "./sync-target.js";
 export * from "./ulid.js";

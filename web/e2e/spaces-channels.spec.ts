@@ -107,3 +107,17 @@ test("Browse: search, its empty line, and Join that stays on Browse", async ({ p
   await search.fill("sci");
   await expect(page.locator(".bcard", { hasText: "#sci-fi" }).getByText("Yours")).toBeVisible();
 });
+
+test("the moderation log stacks over the info dialog and Escape closes it", async ({ page }) => {
+  await page.goto("/c/sci-fi");
+  await page.getByRole("button", { name: "About this channel" }).click();
+  const info = page.getByRole("dialog", { name: "#sci-fi" });
+  const open = info.getByRole("button", { name: "Moderation log" });
+  await open.click();
+  const log = page.getByRole("dialog", { name: "Moderation log" });
+  await expect(log).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(log).toHaveCount(0);
+  await expect(info).toBeVisible();
+  await expect(open).toBeFocused();
+});

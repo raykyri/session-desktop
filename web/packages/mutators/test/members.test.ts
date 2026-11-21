@@ -50,6 +50,24 @@ test("a ban stops every write in its space, the author's own included", (t) => {
   refused(t, w.apply("mel", "saved.set", { kind: "thread", id: p, on: true }), "FORBIDDEN");
 });
 
+test("a ban does not stop a person's own user-log writes: marking read, taking a save back (M1b review 11)", (t) => {
+  const { w, open } = cast(t);
+  const p = w.id();
+  ok(t, w.apply("mel", "threads.create", { id: p, space: open, kind: "post", q: "hi" }));
+  ok(t, w.apply("otto", "saved.set", { kind: "thread", id: p, on: true }));
+  ok(t, w.apply("mona", "research.createPostFollowUp", { id: w.id(), thread: p, t: "@otto" }));
+  const n = w.notifs("otto")[0];
+  if (!n) return t.fail("otto was not notified");
+  ok(t, w.apply("olga", "members.ban", { space: open, user: "otto" }));
+  // an open space: a banned person still reads it, and their own records
+  ok(t, w.apply("otto", "notifications.markRead", { id: n.id }));
+  t.like(w.get(`notif:${n.id}`), { read: true });
+  ok(t, w.apply("otto", "saved.set", { kind: "thread", id: p, on: false }));
+  t.is(w.get(`save:otto:${p}`), undefined);
+  // saving again is a write in the space: banned
+  refused(t, w.apply("otto", "saved.set", { kind: "thread", id: p, on: true }), "FORBIDDEN");
+});
+
 test("a removal decided before the person was let in again is STALE", (t) => {
   const { w, closed } = cast(t);
   const adm = admission(w, closed, "ada");

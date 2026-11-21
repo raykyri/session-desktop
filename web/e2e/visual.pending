@@ -1,0 +1,2 @@
+The Linux visual baselines for the M4 feed views are not rendered yet.
+CI's update-visual-baselines run renders them; the commit that adds them deletes this file.

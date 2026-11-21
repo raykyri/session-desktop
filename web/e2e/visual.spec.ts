@@ -6,10 +6,17 @@
 // Visual regression tests run only on Chromium to avoid redundant
 // cross-engine font rendering differences. The baselines are CI's own renders
 // (`12-testing-linting-ci.md` §4 says how to regenerate them).
+//
+// A missing baseline fails in CI, unless the file `e2e/visual.pending` exists
+// (committed while a set is being re-rendered; the commit that adds the
+// baselines deletes it), in which case it skips. Outside CI a missing baseline
+// is written, as Playwright does by default.
 
 import { existsSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
+
+const VISUAL_PENDING = new URL("./visual.pending", import.meta.url);
 
 import { APP_ORIGIN } from "./constants.js";
 import { signIn } from "./helpers.js";
@@ -44,12 +51,12 @@ test.describe("@visual", () => {
     test.skip(testInfo.project.name !== "chromium", "baselines are Chromium's");
     const updating =
       testInfo.config.updateSnapshots === "all" || testInfo.config.updateSnapshots === "changed";
-    // The views changed with M4 and their baselines are rendered by CI's
-    // `update-visual-baselines` run (05 M4); until that run has committed
-    // them, a platform without them skips, in CI too.
     test.skip(
-      !updating && !existsSync(testInfo.snapshotPath("home-centred-1440-orange-blob-light.png")),
-      `no visual baselines for ${process.platform}`,
+      Boolean(process.env["CI"]) &&
+        existsSync(VISUAL_PENDING) &&
+        !updating &&
+        !existsSync(testInfo.snapshotPath("home-centred-1440-orange-blob-light.png")),
+      `visual baselines for ${process.platform} are pending (e2e/visual.pending)`,
     );
 
     await signIn(page, { login: "e2e-visual" });

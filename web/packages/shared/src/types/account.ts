@@ -7,17 +7,70 @@ import { z } from "zod";
 
 import { DEFAULT_MODEL_ID } from "../models/registry.js";
 
+/** The two sign-in providers (plan `04` I1, Z2). An account is bound to the
+ * one it was created with. */
+export const signInProviderSchema = z.enum(["github", "x"]);
+
+export type SignInProvider = z.infer<typeof signInProviderSchema>;
+
+/** `waiting`: signed in without an invite; reads like a signed-out reader and
+ * cannot write. `active`: redeemed an invite and chose a handle (`01` C8). */
+export const accountStatusSchema = z.enum(["waiting", "active"]);
+
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
+
 export const userSchema = z.object({
   id: z.string(),
+  /** The provider's username. Shown nowhere and unique nowhere (04 I1). */
   login: z.string(),
+  /** The name the provider reports. */
   name: z.string().nullish(),
   avatarUrl: z.string().nullish(),
-  /** Set manually in the database; gates admin-only models and the user list. */
+  /** Set by `npm run db:admin -- <handle>`; site admins seed the invite tree. */
   isAdmin: z.boolean(),
   createdAt: z.number(),
+  /** The Session handle, unique and never reused; null while waiting. */
+  handle: z.string().nullable(),
+  /** The name chosen at the profile step; null while waiting. */
+  displayName: z.string().nullable(),
+  status: accountStatusSchema,
+  /** Null only for a deleted account, which no session can belong to. */
+  provider: signInProviderSchema.nullable(),
 });
 
 export type User = z.infer<typeof userSchema>;
+
+/** Who made an account invite, as the "Join with invite?" step shows it. A
+ * root invite (`db:admin -- --invite`) has no creator: `handle` is null. */
+export const inviterSchema = z.object({
+  name: z.string(),
+  handle: z.string().nullable(),
+});
+
+export type Inviter = z.infer<typeof inviterSchema>;
+
+/** `auth.me`: the account, and the invite it will redeem at the profile step
+ * while that invite is still open. */
+export const meSchema = userSchema.extend({
+  pendingInvite: inviterSchema.nullable(),
+});
+
+export type Me = z.infer<typeof meSchema>;
+
+/** `auth.checkInvite` and `accountInvites.redeem`: an open invite with its
+ * creator, or one answer for a used, revoked, unknown or malformed code
+ * (04 I4, §13). */
+export type InviteCheck = { status: "open"; inviter: Inviter } | { status: "unusable" };
+
+/** The one message for a code that does not work (04 I4, 02 W7.2). */
+export const UNUSABLE_INVITE_MESSAGE =
+  "This invite code doesn't work. Ask the person who invited you for a new one.";
+
+/** How a member is named: the profile name, else the provider's, else the
+ * handle. */
+export function memberName(user: Pick<User, "displayName" | "handle" | "name" | "login">): string {
+  return user.displayName ?? user.name ?? user.handle ?? user.login;
+}
 
 /** Replaces the desktop's `GroupInfo` with `scope: "research"`. */
 export const workspaceSchema = z.object({

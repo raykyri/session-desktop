@@ -226,6 +226,20 @@ test("a redirect from the provider is never followed and reads as unreachable", 
   savedNothing(t, harness);
 });
 
+test("a waiting account cannot list, set or remove keys, or change billing", async (t) => {
+  const provider = accepts();
+  const harness = createHarness(t, { fetch: provider.fetch });
+  const caller = harness.caller(harness.addWaitingUser("waiting"));
+  await t.throwsAsync(caller.apiKeys.list(), { code: "FORBIDDEN" });
+  await t.throwsAsync(caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY }), {
+    code: "FORBIDDEN",
+  });
+  await t.throwsAsync(caller.apiKeys.remove({ provider: "anthropic" }), { code: "FORBIDDEN" });
+  await t.throwsAsync(caller.usage.setBilling({ mode: "pause" }), { code: "FORBIDDEN" });
+  t.is(provider.calls.length, 0, "no provider was asked");
+  savedNothing(t, harness);
+});
+
 test("the check lists the provider's models with the provider's own header", async (t) => {
   const provider = accepts();
   const harness = createHarness(t, { fetch: provider.fetch });

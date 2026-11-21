@@ -3,6 +3,9 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/account.js";
+import { AuthDialog } from "../../features/auth/AuthDialog.js";
+import { openAuthDialog } from "../../features/auth/authDialog.js";
+import { useAccountDialogs } from "../../features/auth/useAccountDialogs.js";
 import { joinChannel } from "../../features/channels/ChannelHeader.js";
 import { NewChannelDialog, useNewChannelDialog } from "../../features/channels/NewChannelDialog.js";
 import { FeedViewerProvider } from "../../features/feed/FeedContext.js";
@@ -16,6 +19,7 @@ import { useBarAutoHide } from "../../features/shell/useBarAutoHide.js";
 import { viewerOf, type Viewer } from "../../features/shell/viewer.js";
 import { ReplicaProvider } from "../../replica/ReplicaProvider.js";
 import { useWrites } from "../../replica/writes.js";
+import { useOnline } from "../../stores/connection.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
@@ -65,6 +69,7 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
   const { notifications, dismiss } = useUserNotifications();
   const writes = useWrites();
   const openNewChannel = useNewChannelDialog((state) => state.setOpen);
+  const online = useOnline();
 
   const { layout, toggle: toggleLayout } = useLayoutPreference(viewer);
   const setScope = useNavigationStore((state) => state.setScope);
@@ -110,11 +115,10 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, []);
 
-  // Sign-in is the `/login` page until the auth dialog (02 W7.2) replaces it;
-  // both buttons go there and come back to this page.
-  const openSignIn = useCallback(() => {
-    void navigate({ to: "/login", search: { redirect: pathname } });
-  }, [navigate, pathname]);
+  // Sign in and Join with invite open the auth dialog (02 W7.2).
+  const openSignIn = useCallback(() => openAuthDialog({ step: "landing" }), []);
+  const openJoin = useCallback(() => openAuthDialog({ step: "code" }), []);
+  useAccountDialogs(viewer);
 
   const signOut = useCallback(() => {
     logout.mutate(undefined, {
@@ -163,7 +167,7 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
           onToggleLayout={toggleLayout}
           unreadCount={data.unreadCount}
           onSignIn={openSignIn}
-          onJoinWithInvite={openSignIn}
+          onJoinWithInvite={openJoin}
           onSignOut={signOut}
           onMenuOpenChange={setMenuOpen}
         />
@@ -173,7 +177,8 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
           <Outlet />
         </PageHeadingFocusContext.Provider>
       </div>
-      <NewChannelDialog />
+      <NewChannelDialog online={online} />
+      <AuthDialog />
       <ToastHost />
       <ImageLightbox />
       <DiagramLightbox />

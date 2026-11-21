@@ -110,7 +110,19 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: optionalString,
   GITHUB_CLIENT_SECRET: optionalString,
   SESSION_ALLOWED_GITHUB_LOGINS: optionalString,
-  SESSION_REQUIRE_INVITE: flag(false),
+  SESSION_X_CLIENT_ID: optionalString,
+  SESSION_X_CLIENT_SECRET: optionalString,
+
+  // Abuse limits (`04` Z1); the defaults are the plan's.
+  SESSION_LIMIT_WRITES_PER_MINUTE: positiveInteger(60, 1),
+  SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: positiveInteger(30, 1),
+  SESSION_LIMIT_AUTH_PER_MINUTE: positiveInteger(20, 1),
+  SESSION_LIMIT_FAILED_CHECKS_PER_HOUR: positiveInteger(10, 1),
+  SESSION_LIMIT_WAITING_PER_IP_PER_DAY: positiveInteger(5, 1),
+  SESSION_LIMIT_OPEN_INVITES: positiveInteger(3, 1),
+  SESSION_LIMIT_INVITES_PER_DAY: positiveInteger(10, 1),
+  SESSION_LIMIT_INVITE_READS_PER_MINUTE: positiveInteger(60, 1),
+  SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE: positiveInteger(30, 1),
 
   GOOGLE_APPLICATION_CREDENTIALS_JSON: optionalString,
   GOOGLE_VERTEX_PROJECT: optionalString,
@@ -153,6 +165,9 @@ const envSchema = z.object({
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
+  // Fixture OAuth endpoints served by this server (`auth/fixtureOAuth.ts`),
+  // for the end-to-end suite. Never in production.
+  SESSION_FIXTURE_OAUTH: flag(false),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -192,6 +207,20 @@ export interface ProviderCredentials {
   openai: boolean;
 }
 
+/** The abuse limits of `04` Z1, validated at boot. Rates are per window; the
+ * window is in each name. */
+export interface AbuseLimits {
+  writesPerMinute: number;
+  snapshotsPerMinute: number;
+  authPerMinute: number;
+  failedChecksPerHour: number;
+  waitingPerIpPerDay: number;
+  openInvites: number;
+  invitesPerDay: number;
+  inviteReadsPerMinute: number;
+  handleChecksPerMinute: number;
+}
+
 export interface Config {
   env: RawEnv["NODE_ENV"];
   isProduction: boolean;
@@ -206,9 +235,12 @@ export interface Config {
   tmpDir: string;
 
   github: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
+  x: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
   allowedGithubLogins: string[] | null;
-  requireInvite: boolean;
   testAuthEnabled: boolean;
+  /** OAuth endpoints answered by this server's fixture routes. */
+  fixtureOAuth: boolean;
+  abuse: AbuseLimits;
 
   vertex: { credentialsJson: string | null; project: string | null; location: string };
   openrouterApiKey: string | null;
@@ -230,9 +262,10 @@ export interface Config {
   documentsReplicaUrl: string | null;
   sentryDsn: string | null;
   metricsToken: string | null;
-  /** The 32-byte key that seals stored secrets (`SESSION_SECRET_KEY`).
-   * Unset, it is `DEVELOPMENT_SECRET_KEY`, but only when `NODE_ENV` is set
-   * to `development` or `test`; anything else needs the variable. */
+  /** The 32-byte key that seals stored secrets (`SESSION_SECRET_KEY`): API
+   * keys and open account invite codes. Unset, it is
+   * `DEVELOPMENT_SECRET_KEY`, but only when `NODE_ENV` is set to
+   * `development` or `test`; anything else needs the variable. */
   secretKey: Buffer;
   /** True when `secretKey` is the public development key: boot logs a
    * warning (`main.ts`). */
@@ -331,9 +364,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ]);
     }
   }
+  const isProduction = value.NODE_ENV === "production";
+  if (isProduction && value.SESSION_FIXTURE_OAUTH) {
+    throw new ConfigError(["SESSION_FIXTURE_OAUTH: not allowed in production"]);
+  }
   return {
     env: value.NODE_ENV,
-    isProduction: value.NODE_ENV === "production",
+    isProduction,
     host: value.HOST,
     port: value.PORT,
 
@@ -349,10 +386,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientSecret: value.GITHUB_CLIENT_SECRET,
       callbackUrl: `${value.SESSION_PUBLIC_ORIGIN}/auth/github/callback`,
     },
+    x: {
+      clientId: value.SESSION_X_CLIENT_ID,
+      clientSecret: value.SESSION_X_CLIENT_SECRET,
+      callbackUrl: `${value.SESSION_PUBLIC_ORIGIN}/auth/x/callback`,
+    },
     allowedGithubLogins: splitLogins(value.SESSION_ALLOWED_GITHUB_LOGINS),
-    requireInvite: value.SESSION_REQUIRE_INVITE,
     // Never in production, whatever the variable says (`03-api-and-events.md` §5).
-    testAuthEnabled: value.SESSION_TEST_AUTH && value.NODE_ENV !== "production",
+    testAuthEnabled: value.SESSION_TEST_AUTH && !isProduction,
+    fixtureOAuth: value.SESSION_FIXTURE_OAUTH && !isProduction,
+    abuse: {
+      writesPerMinute: value.SESSION_LIMIT_WRITES_PER_MINUTE,
+      snapshotsPerMinute: value.SESSION_LIMIT_SNAPSHOTS_PER_MINUTE,
+      authPerMinute: value.SESSION_LIMIT_AUTH_PER_MINUTE,
+      failedChecksPerHour: value.SESSION_LIMIT_FAILED_CHECKS_PER_HOUR,
+      waitingPerIpPerDay: value.SESSION_LIMIT_WAITING_PER_IP_PER_DAY,
+      openInvites: value.SESSION_LIMIT_OPEN_INVITES,
+      invitesPerDay: value.SESSION_LIMIT_INVITES_PER_DAY,
+      inviteReadsPerMinute: value.SESSION_LIMIT_INVITE_READS_PER_MINUTE,
+      handleChecksPerMinute: value.SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE,
+    },
 
     vertex: {
       credentialsJson: value.GOOGLE_APPLICATION_CREDENTIALS_JSON,

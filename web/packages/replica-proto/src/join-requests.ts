@@ -74,6 +74,7 @@ export const JOIN_REQUESTS = {
     space: (_tx, i) => i.space,
     run: (tx, i) => {
       let k = 0;
+      let added = 0;
       for (const u of [...new Set(i.users)]) {
         const r = tx.byKey(requestKey(i.space, u));
         if (r?.kind !== "request") throw notFound();
@@ -91,13 +92,14 @@ export const JOIN_REQUESTS = {
             throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");
           tx.put({ ...r, st: "approved", updatedAt: tx.now });
           addMember(tx, i.space, u, "member", tx.id(k));
+          added++;
         } else if (i.decision === "decline") {
           tx.put({ ...r, st: "declined", why: (i.why ?? "").trim(), updatedAt: tx.now });
         } else {
           tx.put({ ...r, st: "open", updatedAt: tx.now });
         }
       }
-      refreshSpace(tx, i.space);
+      refreshSpace(tx, i.space, added);
       return null;
     },
   }),

@@ -15,10 +15,12 @@ import {
 } from "./records.js";
 import {
   M,
+  checkModel,
   countsOf,
   deleted,
   needSpace,
   notAuthor,
+  notGone,
   ownOrReadable,
   preRun,
   queueRun,
@@ -29,6 +31,7 @@ import {
   text,
   ulidFields,
   ulidS,
+  userLogRecords,
 } from "./rules.js";
 import { define, type Tx } from "./tx.js";
 
@@ -65,8 +68,12 @@ export const THREADS = {
     intent: "none",
     space: (tx, i) => ("from" in i ? readableThread(tx, i.from.th).s : i.space),
     ids: (i) => [i.id],
-    // an ask's run: a registry model and effort, and room in the queue
-    pre: (ctx, i) => ("kind" in i && i.kind === "ask" ? preRun(ctx, i) : {}),
+    // an ask's run: a registry model and effort (predicted), and room in the
+    // queue (server only)
+    can: (_tx, i) => {
+      if ("kind" in i && i.kind === "ask") checkModel(i.model, i.effort);
+    },
+    pre: (ctx, i) => ("kind" in i && i.kind === "ask" ? preRun(ctx) : {}),
     run: (tx, i) => {
       if ("from" in i) return promote(tx, i.id, i.from.th, i.from.node);
       const s = needSpace(tx, i.space);
@@ -146,7 +153,7 @@ export const THREADS = {
       // a thread without nodes or replies is gone: it leaves Saved, and its
       // root answer goes
       if (!kept) {
-        for (const x of tx.list("save", { th: p.id })) tx.del(saveKey(x.u, x.th));
+        for (const x of userLogRecords(tx, "save", p.id)) tx.del(saveKey(x.u, x.th));
         tx.del(answerKey(p.id));
       }
       for (const r of tx.list("run", { th: p.id }).filter((x) => x.node === "r"))
@@ -180,6 +187,7 @@ function promote(tx: Tx, id: string, th: string, nodeId: string) {
   const n = readable(tx, nodeKey(nodeId), "node");
   if (n.th !== p.id) throw refuse("NOT_FOUND");
   if (p.mod === "removed" || n.mod === "removed") throw removed();
+  notGone(p);
   if (n.del) throw deleted();
   if (n.mod !== null) throw refuse("PRECONDITION_FAILED", "This branch is hidden.");
   if (n.promoted !== null)

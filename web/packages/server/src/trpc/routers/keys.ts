@@ -12,16 +12,16 @@ import { listKeys, openValid, removeKey, setKey } from "../../keys/apiKeys.js";
 import { RATE_LIMITS } from "../../middleware/rateLimit.js";
 import { billLabel } from "../../runs/allowance.js";
 import { weekOf, weekResetAt } from "../../runs/ledger.js";
-import { protectedProcedure, router } from "../base.js";
+import { memberProcedure, protectedProcedure, router } from "../base.js";
 
 const providerSchema = z.enum(API_KEY_PROVIDERS);
 
 export const apiKeysRouter = router({
-  list: protectedProcedure.query(({ ctx }): ApiKeyView[] => listKeys(ctx, ctx.user.id)),
+  list: memberProcedure.query(({ ctx }): ApiKeyView[] => listKeys(ctx, ctx.user.id)),
   /** Checks the key with the provider during the request (10 s timeout) and
    * saves it `valid`; refused and not saved when the provider rejects it or
    * cannot be reached (`03` K4). */
-  set: protectedProcedure
+  set: memberProcedure
     .input(z.object({ provider: providerSchema, raw: z.string().max(1024) }))
     .mutation(async ({ ctx, input }): Promise<ApiKeyView> => {
       // A malformed key is refused before the limits: it reaches no provider.
@@ -67,7 +67,7 @@ export const apiKeysRouter = router({
         release();
       }
     }),
-  remove: protectedProcedure
+  remove: memberProcedure
     .input(z.object({ provider: providerSchema }))
     .mutation(({ ctx, input }) => ({ removed: removeKey(ctx, ctx.user.id, input.provider) })),
 });
@@ -188,7 +188,7 @@ export const usageProcedures = {
     }),
   /** What happens when included tokens run out (`03` K7): `key` needs a
    * valid Anthropic key, else `PRECONDITION_FAILED`. */
-  setBilling: protectedProcedure
+  setBilling: memberProcedure
     .input(z.object({ mode: z.enum(["pause", "key"]) }))
     .mutation(({ ctx, input }): { billing: "pause" | "key" } => {
       if (input.mode === "key" && !hasValidAnthropicKey(ctx, ctx.user.id)) {

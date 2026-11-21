@@ -14,6 +14,7 @@ import {
   StagedTx,
   idOf,
   inIndex,
+  indexOf,
   keyOf,
   msToIso,
   predict,
@@ -30,10 +31,13 @@ import {
 } from "@session/mutators";
 import type { Spaces } from "@session/shared";
 
-import type { ReplicaSource, WriteOutcome } from "./source.js";
+import { UNKNOWN, type ReplicaSource, type Unknown, type WriteOutcome } from "./source.js";
 import { newUlid } from "./ulid.js";
 
 type SpaceMutatorName = Spaces.SpaceMutatorName;
+
+const indexName = (index: Index) =>
+  "sp" in index ? `sp:${index.sp}` : "th" in index ? `th:${index.th}` : `u:${index.u}`;
 
 export interface MemoryReplicaOptions {
   me: string | null;
@@ -145,16 +149,47 @@ export class MemoryReplica implements ReplicaSource, Source {
     return true;
   }
 
-  get(key: string): StoredRecord | undefined {
-    const r = this.records.get(key);
-    return r ? (view(this, r, this.me) ?? undefined) : undefined;
+  // A sync replica holds part of what its user may read. The fixture holds
+  // everything, and tests mark indexes (a thread, a space) as not loaded to
+  // see the screens wait for them (`source.ts`, "Known versus absent").
+  private readonly unloaded = new Set<string>();
+
+  /** Marks a thread or a space index as not loaded (`th:<id>`, `sp:<id>`). */
+  unload(index: Index): void {
+    this.unloaded.add(indexName(index));
+    this.changed(["index"]);
   }
 
-  list<K extends Kind>(kind: K, index: Index): RecordOf<K>[] {
+  /** Loads an index marked with `unload`. */
+  load(index: Index): void {
+    if (this.unloaded.delete(indexName(index))) this.changed(["index"]);
+  }
+
+  private hidden(r: StoredRecord): boolean {
+    if (this.unloaded.size === 0) return false;
+    const cols = indexOf(r);
+    return (
+      (cols.th !== null && this.unloaded.has(`th:${cols.th}`)) ||
+      (cols.sp !== null && r.kind !== "space" && this.unloaded.has(`sp:${cols.sp}`))
+    );
+  }
+
+  get(key: string): StoredRecord | undefined | Unknown {
+    const r = this.records.get(key);
+    if (!r) {
+      const thread = /^(?:thread|counts|answer):([0-9A-Z]{26})$/.exec(key)?.[1];
+      return thread && this.unloaded.has(`th:${thread}`) ? UNKNOWN : undefined;
+    }
+    if (this.hidden(r)) return UNKNOWN;
+    return view(this, r, this.me) ?? undefined;
+  }
+
+  list<K extends Kind>(kind: K, index: Index): RecordOf<K>[] | Unknown {
+    if (this.unloaded.has(indexName(index))) return UNKNOWN;
     const out: RecordOf<K>[] = [];
     for (const key of [...this.keysIn(kind, index)].sort()) {
       const r = this.get(key);
-      if (r) out.push(r as RecordOf<K>);
+      if (r && r !== UNKNOWN) out.push(r as RecordOf<K>);
     }
     return out;
   }
@@ -162,10 +197,15 @@ export class MemoryReplica implements ReplicaSource, Source {
   all<K extends Kind>(kind: K): RecordOf<K>[] {
     const out: RecordOf<K>[] = [];
     for (const r of this.byKind.get(kind)?.values() ?? []) {
+      if (this.hidden(r)) continue;
       const v = view(this, r, this.me);
       if (v) out.push(v as RecordOf<K>);
     }
     return out;
+  }
+
+  complete(): boolean {
+    return true;
   }
 
   version(): number {
@@ -193,7 +233,9 @@ export class MemoryReplica implements ReplicaSource, Source {
       return { ok: false, error: { code: "UNAUTHORIZED", message: "Sign in to do this." } };
     const def = MUTATORS[name];
     if (!def) return { ok: false, error: { code: "BAD_REQUEST", message: `No mutator ${name}.` } };
-    const tx = new StagedTx(this, me, msToIso(this.clock()), newUlid(this.clock()));
+    // A prediction over the fixture records; the fixture then runs `notify`
+    // on it in the server's place.
+    const tx = new StagedTx(this, me, msToIso(this.clock()), newUlid(this.clock()), "client");
     const prediction = predict(tx, def, input);
     if ("unknown" in prediction)
       return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "Not available." } };

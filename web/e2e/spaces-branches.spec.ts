@@ -1,12 +1,13 @@
 // Branches end to end on the fixture replica (02 §12.2 `spaces-branches`;
 // the runs are the mock's until M5a): a passage's count button, the
 // selected branch's card, Continue, Branch, the footer's follow-up, Comment,
-// Branch here and Look up over a selection, and the rail's dots on their
-// rows' first lines.
+// Branch here and Look up over a selection, Open as its own thread, the
+// card's fade on a newly shown item only, and the rail's dots on their rows'
+// first lines.
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { FIRST_ASK, signInAndOpen, toast } from "./spaces.js";
+import { FIRST_ASK, flushRuns, holdRuns, scrollSettled, signInAndOpen, toast } from "./spaces.js";
 
 const side = (page: Page) => page.locator(`[data-side="${FIRST_ASK}"]`);
 const answer = (page: Page) => page.locator(`#pr-${FIRST_ASK}`);
@@ -32,6 +33,7 @@ test("a passage's count button opens its first branch", async ({ page }) => {
 test("Continue asks under the branch and the new row is selected and answered", async ({
   page,
 }) => {
+  await holdRuns(page, "running");
   await side(page)
     .getByRole("treeitem", { name: /how does the darknet/ })
     .click();
@@ -44,6 +46,7 @@ test("Continue asks under the branch and the new row is selected and answered", 
   await expect(row).toHaveAttribute("aria-selected", "true");
   await expect(row).toHaveAttribute("aria-level", "3");
   await expect(side(page).getByText("Researching · Step 1 of 4")).toBeVisible();
+  await flushRuns(page);
   await expect(side(page).getByText(/^Mock answer\. In the app/)).toBeVisible();
   await expect(
     page.locator(`#card-${FIRST_ASK}`).getByRole("button", { name: /^Ask a follow-up, 7/ }),
@@ -142,19 +145,47 @@ test("each dot sits on its row's first line, also when the row wraps", async ({ 
   await side(page)
     .getByRole("treeitem", { name: /how does the darknet/ })
     .click();
-  const offsets = await side(page)
+  // The tree that holds the selected row.
+  const graph = side(page)
     .locator(".graph")
-    .first()
-    .evaluate((graph) => {
-      const dots = [...graph.querySelectorAll("circle")];
-      const rows = [...graph.querySelectorAll<HTMLElement>(".grow-r")];
-      const top = graph.getBoundingClientRect().top;
-      return rows.map((row, i) => {
-        const line = row.querySelector<HTMLElement>(".gq");
-        const lh = parseFloat(getComputedStyle(line ?? row).lineHeight);
-        const first = (line ?? row).getBoundingClientRect().top - top + lh / 2;
-        return Math.abs(Number(dots[i]?.getAttribute("cy")) - first);
-      });
+    .filter({ has: page.getByRole("treeitem", { selected: true }) });
+  await expect(graph).toHaveCount(1);
+  const offsets = await graph.evaluate((graph) => {
+    const dots = [...graph.querySelectorAll("circle")];
+    const rows = [...graph.querySelectorAll<HTMLElement>(".grow-r")];
+    const top = graph.getBoundingClientRect().top;
+    return rows.map((row, i) => {
+      const line = row.querySelector<HTMLElement>(".gq");
+      const lh = parseFloat(getComputedStyle(line ?? row).lineHeight);
+      const first = (line ?? row).getBoundingClientRect().top - top + lh / 2;
+      return Math.abs(Number(dots[i]?.getAttribute("cy")) - first);
     });
+  });
   for (const offset of offsets) expect(offset).toBeLessThanOrEqual(1);
+});
+
+test("the card fades in for a newly shown item, not when it mounts again", async ({ page }) => {
+  const darknet = side(page).getByRole("treeitem", { name: /how does the darknet/ });
+  await darknet.click();
+  await expect(side(page).locator(".preview")).toHaveClass(/fadein/);
+  // Away and back by the bar: the same item, mounted again, does not fade.
+  await page.getByRole("banner").getByRole("link", { name: "#public" }).click();
+  await expect(page).toHaveURL(/\/c\/public$/);
+  await page.getByRole("banner").getByRole("link", { name: "Session home" }).click();
+  await expect(darknet).toHaveAttribute("aria-selected", "true");
+  await expect(side(page).locator(".preview")).not.toHaveClass(/fadein/);
+});
+
+test("Open as its own thread scrolls to the new thread", async ({ page }) => {
+  await side(page)
+    .getByRole("treeitem", { name: /how does the darknet/ })
+    .click();
+  await side(page).locator(".preview").getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Open as its own thread" }).click();
+  const promoted = page.locator(".tcard").first();
+  await expect(promoted.locator(".tt-title")).toContainText(/darknet/i);
+  await scrollSettled(page);
+  await expect(promoted).toBeInViewport();
+  // The branch keeps Comment beside Open thread.
+  await expect(side(page).getByRole("button", { name: "Comment" })).toBeVisible();
 });

@@ -20,9 +20,12 @@ import {
   active,
   authorOf,
   bad,
+  checkModel,
   deleted,
   nodeOf,
   notAuthor,
+  nodesUnder,
+  notGone,
   ownOrReadable,
   preRun,
   queueRun,
@@ -78,11 +81,13 @@ export const NODES = {
     intent: "none",
     space: (tx, i) => readableThread(tx, i.thread).s,
     ids: (i) => [i.id],
+    can: (_tx, i) => checkModel(i.model, i.effort),
     pre: preRun,
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
       if (p.k !== "ask") throw bad("thread", "an ask thread");
       if (p.mod === "removed") throw removed();
+      notGone(p);
       const parent = nodeOf(tx, p, i.parent);
       if (parent.mod === "removed") throw removed();
       if (active(runOf(tx, parent)))
@@ -93,8 +98,7 @@ export const NODES = {
       else {
         look = lookPhrase(i.look);
         if (look === null) throw bad("look", "1 to 4 words");
-        if (i.quote !== undefined && !onWordBoundaries(look, i.quote))
-          throw bad("look", "whole words of the quote");
+        if (!onWordBoundaries(look, i.quote)) throw bad("look", "whole words of the quote");
         q = LOOKUP_PROMPT_V1(look);
       }
       const run = tx.id(1);
@@ -153,10 +157,13 @@ export const NODES = {
     },
   }),
 
-  // The author deletes a node (`03` G6): a run still queued or running is
-  // cancelled first. A node with nodes or comments under it stays as a shell
-  // without text (`del`), as a thread does; one without is erased with its
-  // answer. The author may delete without read access, and in a frozen space.
+  // The author deletes a node (`03` G6). When someone else wrote under it (a
+  // node or a comment anywhere below it), it stays as a shell without text
+  // (`del`), as a thread does, and its run, if it has not ended, is
+  // cancelled. Otherwise it goes with everything under it, all the author's:
+  // the nodes below it, their answers, comments and run records, and the
+  // thread's count is written again (M1b review 9, 12). The author may delete
+  // without read access, and in a frozen space.
   "followups.delete": define({
     input: ulidFields(M["followups.delete"].input, ["thread", "node"]),
     who: "author",
@@ -170,14 +177,22 @@ export const NODES = {
       const n = nodeRef(tx, i.thread, i.node, "own");
       const reads = canRead(tx, n, tx.me);
       const th = { th: n.th };
+      const nodes = tx.list("node", th);
+      const under = nodesUnder(nodes, n.id);
+      const comments = tx.list("comment", th).filter((x) => under.has(x.node));
       const kept =
-        tx.list("node", th).some((x) => x.par === n.id) ||
-        tx.list("comment", th).some((x) => x.node === n.id);
-      cancel(tx, runOf(tx, n));
-      if (kept) tx.put({ ...n, q: "", look: null, quote: null, del: true });
-      else {
-        tx.del(answerKey(n.id));
-        tx.del(nodeKey(n.id));
+        nodes.some((x) => x.id !== n.id && under.has(x.id) && x.u !== tx.me) ||
+        comments.some((x) => x.u !== tx.me);
+      if (kept) {
+        cancel(tx, runOf(tx, n));
+        tx.put({ ...n, q: "", look: null, quote: null, del: true });
+      } else {
+        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);
+        for (const x of comments) tx.del(`comment:${x.id}`);
+        for (const id of under) {
+          tx.del(answerKey(id));
+          tx.del(nodeKey(id));
+        }
         recount(tx, tx.byKey(threadKey(n.th)) as ThreadRec);
       }
       return reads ? { kept } : null;
@@ -207,14 +222,16 @@ export const NODES = {
 
   // Run again (`03` E4): a run that ended `failed`, `cancelled` or
   // `interrupted` gets a new attempt, queued, with the model and effort the
-  // person picks. The attempt number fences it, so it carries no `base`.
+  // person picks. `base.attempt` is the attempt the person saw stop: a run
+  // retried since is STALE (M1b review 3).
   "research.retryNode": define({
     input: ulidFields(M["research.retryNode"].input, ["thread", "node"]),
     who: "author",
-    intent: "as is",
+    intent: "base.attempt",
     space: (tx, i) => readableThread(tx, i.thread).s,
     can: (tx, i) => {
       if (authorAt(tx, i.thread, i.node) !== tx.me) throw notAuthor();
+      checkModel(i.model, i.effort);
     },
     pre: preRun,
     run: (tx, i) => {
@@ -225,6 +242,7 @@ export const NODES = {
       if (n.del) throw deleted();
       const run = runOf(tx, n);
       if (!run) throw refuse("PRECONDITION_FAILED", "This ask has no run.");
+      if (run.attempt !== i.base.attempt) throw stale();
       if (run.status !== "failed" && run.status !== "cancelled" && run.status !== "interrupted")
         throw refuse("PRECONDITION_FAILED", "Only a run that stopped can run again.");
       tx.put({

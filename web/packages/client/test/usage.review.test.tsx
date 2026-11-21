@@ -31,6 +31,10 @@ test.afterEach.always(() => {
   useComposerChoice.setState({ model: null, effort: null });
 });
 
+/** Whether an alert on screen says `text` (other alerts may be shown). */
+const hasAlert = (text: string) =>
+  screen.queryAllByRole("alert").some((alert) => alert.textContent === text);
+
 /** The radio `element` is. */
 function input(element: HTMLElement): HTMLInputElement {
   if (!(element instanceof HTMLInputElement)) throw new Error("not an input");
@@ -240,12 +244,7 @@ test.serial("billing: a refused change shows its error and keeps the stored choi
   });
   const keyRadio = await screen.findByRole("radio", { name: /Continue on my Anthropic key/ });
   fireEvent.click(keyRadio);
-  await waitUntil(
-    t,
-    () =>
-      screen.queryByRole("alert")?.textContent === "Add a working Anthropic key to continue on it.",
-    "the error",
-  );
+  await waitUntil(t, () => hasAlert("Add a working Anthropic key to continue on it."), "the error");
   t.true(input(screen.getByRole("radio", { name: /Pause my asks/ })).checked);
 });
 
@@ -317,9 +316,7 @@ test.serial(
     fireEvent.click(efforts.getByRole("radio", { name: "High" }));
     await waitUntil(
       t,
-      () =>
-        screen.queryByRole("alert")?.textContent ===
-        "The default effort is low, medium, high or max.",
+      () => hasAlert("The default effort is low, medium, high or max."),
       "the error",
     );
     t.true(input(efforts.getByRole("radio", { name: "Medium" })).checked);

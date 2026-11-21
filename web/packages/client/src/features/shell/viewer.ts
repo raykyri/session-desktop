@@ -2,10 +2,8 @@
 // invite (a waiting account, 04 §3), or a member, who may also be a site
 // admin. The app bar, the account menu and the route guards branch on this.
 //
-// The account's status comes from the user record of the user log once the
-// replica lands (02 §9.1 `useMe`). Until then it is read from `auth.me`:
-// an account the current server knows is active, unless the record says
-// `status: "waiting"`.
+// The account's status is `auth.me`'s `status` (`waiting` or `active`,
+// 04 §3.1).
 
 import type { User } from "@session/shared";
 
@@ -16,8 +14,7 @@ export type Viewer =
 
 export function viewerOf(user: User | null | undefined): Viewer {
   if (!user) return { kind: "signedOut" };
-  const status = (user as User & { status?: unknown }).status;
-  if (status === "waiting") return { kind: "waiting", user };
+  if (user.status === "waiting") return { kind: "waiting", user };
   return { kind: "member", user, isAdmin: user.isAdmin };
 }
 
@@ -29,7 +26,13 @@ export function canWrite(viewer: Viewer): viewer is Extract<Viewer, { kind: "mem
 /** The account menu's header line under the name (`appbar`, the mock's
  * "@handle · Member"). */
 export function accountLine(viewer: Exclude<Viewer, { kind: "signedOut" }>): string {
-  const handle = `@${viewer.user.login}`;
+  const handle = `@${viewerHandle(viewer.user)}`;
   if (viewer.kind === "waiting") return `${handle} · No invite yet`;
   return `${handle} · ${viewer.isAdmin ? "Admin" : "Member"}`;
+}
+
+/** The handle a viewer goes by: the Session handle, or while waiting (no
+ * handle yet) the provider's username. */
+export function viewerHandle(user: Pick<User, "handle" | "login">): string {
+  return user.handle ?? user.login;
 }

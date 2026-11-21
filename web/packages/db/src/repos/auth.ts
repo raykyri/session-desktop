@@ -1,14 +1,15 @@
-// Sessions, the OAuth handshake, invite codes, sign-up attempts, and per-user
-// limits (`docs/06-auth-and-users.md` §1, §2, §3, §8).
+// Sessions, the OAuth handshake, sign-up attempts, and per-user limits
+// (`docs/06-auth-and-users.md` §1, §2, §3, §8). Account invites are
+// `accountInvites.ts`.
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, count, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, count, eq, gte, lt, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { oauthStates, sessions } from "../schema/sessions.js";
-import { invites, signupAttempts, userLimits, users } from "../schema/users.js";
+import { signupAttempts, userLimits } from "../schema/users.js";
 import { now } from "../time.js";
 
 /** Inactivity timeout duration after which a session is invalidated. */
@@ -126,34 +127,52 @@ export function deleteExpiredSessions(db: SessionDatabase, at: number = now()): 
     .all().length;
 }
 
-export function createOAuthState(
-  db: SessionDatabase,
-  input: { state: string; codeVerifier: string; returnTo?: string | null },
-): void {
+export interface OAuthStateInput {
+  state: string;
+  codeVerifier: string;
+  returnTo?: string | null;
+  /** The provider the handshake is for (`github`, `x`). */
+  provider?: string | null;
+  /** SHA-256 of the account invite code, never the code (04 §3.1). */
+  codeHash?: string | null;
+}
+
+export function createOAuthState(db: SessionDatabase, input: OAuthStateInput): void {
   db.insert(oauthStates)
     .values({
       state: input.state,
       codeVerifier: input.codeVerifier,
       createdAt: now(),
       returnTo: input.returnTo ?? null,
+      provider: input.provider ?? null,
+      codeHash: input.codeHash ?? null,
     })
     .run();
+}
+
+export interface ConsumedOAuthState {
+  codeVerifier: string;
+  returnTo: string | null;
+  provider: string | null;
+  codeHash: string | null;
 }
 
 /**
  * Retrieves and atomically consumes an OAuth state record, returning null if missing or expired to prevent replay attacks.
  */
-export function consumeOAuthState(
-  db: SessionDatabase,
-  state: string,
-): { codeVerifier: string; returnTo: string | null } | null {
+export function consumeOAuthState(db: SessionDatabase, state: string): ConsumedOAuthState | null {
   const at = now();
   return transact(db, (tx) => {
     const row = tx.delete(oauthStates).where(eq(oauthStates.state, state)).returning().get();
     if (!row || at - row.createdAt > OAUTH_STATE_TTL_MS) {
       return null;
     }
-    return { codeVerifier: row.codeVerifier, returnTo: row.returnTo };
+    return {
+      codeVerifier: row.codeVerifier,
+      returnTo: row.returnTo,
+      provider: row.provider,
+      codeHash: row.codeHash,
+    };
   });
 }
 
@@ -164,66 +183,6 @@ export function deleteExpiredOAuthStates(db: SessionDatabase, at: number = now()
     .where(lt(oauthStates.createdAt, at - OAUTH_STATE_TTL_MS))
     .returning({ state: oauthStates.state })
     .all().length;
-}
-
-/** Generates invite codes and decrements the creator's remaining invite quota within a single transaction to prevent race conditions. System operator codes (where `createdBy` is null) bypass quota limits. */
-export function createInvites(
-  db: SessionDatabase,
-  createdBy: string | null,
-  requested: number,
-): string[] {
-  if (requested <= 0) {
-    return [];
-  }
-  return transact(db, (tx) => {
-    let allowed = requested;
-    if (createdBy !== null) {
-      const owner = tx.select().from(users).where(eq(users.id, createdBy)).get();
-      if (!owner) {
-        throw new Error("the inviting account was not found");
-      }
-      allowed = Math.min(requested, owner.invitesRemaining);
-      if (allowed <= 0) {
-        return [];
-      }
-      tx.update(users)
-        .set({ invitesRemaining: owner.invitesRemaining - allowed })
-        .where(eq(users.id, createdBy))
-        .run();
-    }
-    const at = now();
-    const codes: string[] = [];
-    for (let index = 0; index < allowed; index += 1) {
-      const code = randomBytes(9).toString("base64url");
-      tx.insert(invites)
-        .values({ code, createdBy, createdAt: at, usedBy: null, usedAt: null })
-        .run();
-      codes.push(code);
-    }
-    return codes;
-  });
-}
-
-/**
- * Marks an invite code as redeemed by `userId`. Returns false if the code
- * is invalid or already redeemed; atomically verifies and updates the
- * record in a single statement.
- */
-export function redeemInvite(db: SessionDatabase, code: string, userId: string): boolean {
-  const row = db
-    .update(invites)
-    .set({ usedBy: userId, usedAt: now() })
-    .where(and(eq(invites.code, code), isNull(invites.usedBy)))
-    .returning({ code: invites.code })
-    .get();
-  return row !== undefined;
-}
-
-export function listInvites(
-  db: SessionDatabase,
-  createdBy: string,
-): (typeof invites.$inferSelect)[] {
-  return db.select().from(invites).where(eq(invites.createdBy, createdBy)).all();
 }
 
 export function recordSignupAttempt(
@@ -249,12 +208,24 @@ export function deleteSignupAttemptsBefore(db: SessionDatabase, before: number):
     .all().length;
 }
 
-/** Returns the count of sign-up attempts from `ipHash` since timestamp `since` for rate-limiting. */
-export function countSignupAttempts(db: SessionDatabase, ipHash: string, since: number): number {
+/** Returns the count of sign-up attempts from `ipHash` since timestamp
+ * `since`, of one `outcome` when given, for rate-limiting. */
+export function countSignupAttempts(
+  db: SessionDatabase,
+  ipHash: string,
+  since: number,
+  outcome?: string,
+): number {
   const row = db
     .select({ value: count() })
     .from(signupAttempts)
-    .where(and(eq(signupAttempts.ipHash, ipHash), gte(signupAttempts.attemptedAt, since)))
+    .where(
+      and(
+        eq(signupAttempts.ipHash, ipHash),
+        gte(signupAttempts.attemptedAt, since),
+        outcome === undefined ? undefined : eq(signupAttempts.outcome, outcome),
+      ),
+    )
     .get();
   return row?.value ?? 0;
 }

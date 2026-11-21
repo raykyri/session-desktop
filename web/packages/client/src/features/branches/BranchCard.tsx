@@ -18,13 +18,15 @@ import {
   type InlineComposer as Composer,
 } from "../../stores/threadUi.js";
 import { Avatar } from "../../ui/Avatar.js";
-import { InlineComposer } from "../composer/InlineComposer.js";
+import { InlineComposer, focusSoon, selectedRowOr } from "../composer/InlineComposer.js";
 import { AnswerProse } from "../feed/AnswerProse.js";
 import { useFeedViewer, useRunChoice } from "../feed/FeedContext.js";
 import { ConfirmDelete } from "../feed/FeedDialog.js";
+import { ModerationNote } from "../feed/Moderated.js";
 import { MoreMenu, type MoreAction } from "../feed/MoreMenu.js";
 import { clip, noun, relTime } from "../feed/format.js";
 import { BranchIcon, BubbleIcon, ContinueIcon, SearchIcon } from "../feed/icons.js";
+import { revealThread } from "../feed/reveal.js";
 import { ReplyText } from "../replies/ReplyText.js";
 
 import { RunStatus } from "./RunStatus.js";
@@ -76,7 +78,10 @@ export function BranchCard({
   if (writer && !pending && !promoted)
     actions.push({
       label: "Open as its own thread",
-      onSelect: () => void writes.promote(thread, node.id),
+      onSelect: () =>
+        void writes.promote(thread, node.id).then((id) => {
+          if (id) revealThread(id);
+        }),
     });
   if (writer && mine) {
     const reason = pending
@@ -95,9 +100,9 @@ export function BranchCard({
   }
 
   const composer = ui.composer;
-  const askHere = composer?.kind === "ask" && ui.selected === node.id ? composer : null;
+  const askHere = writer && composer?.kind === "ask" && ui.selected === node.id ? composer : null;
   const commentTop =
-    composer?.kind === "comment" && composer.node === node.id && composer.parent === null;
+    writer && composer?.kind === "comment" && composer.node === node.id && composer.parent === null;
 
   const openAsk = (parent: string) => {
     open(thread, { kind: "ask", parent }, node.id);
@@ -111,10 +116,13 @@ export function BranchCard({
   };
 
   const submitAsk = async (c: Composer & { kind: "ask" }, text: string) => {
+    // Branch on a top-level branch asks at the answer, on the same passage.
+    const b = c.parent === "r" && node.b !== null ? node.b : undefined;
     const id = await writes.fork({
       thread,
       parent: c.parent,
       q: text,
+      ...(b !== undefined ? { b } : {}),
       model: choice.model,
       effort: choice.effort,
     });
@@ -141,6 +149,7 @@ export function BranchCard({
       ) : node.quote ? (
         <blockquote className="bq">{clip(node.quote, 180)}</blockquote>
       ) : null}
+      {node.del ? <p className="modln">[deleted]</p> : <ModerationNote mod={node.mod} />}
       {pending ? (
         <>
           <RunStatus run={run} />
@@ -152,11 +161,11 @@ export function BranchCard({
             </p>
           </div>
         </>
-      ) : (
-        <AnswerProse md={answer?.md ?? ""} pages={answer?.pages ?? []} />
-      )}
+      ) : answer?.md ? (
+        <AnswerProse md={answer.md} pages={answer.pages} />
+      ) : null}
       <div className="pf">
-        {writer && !pending && !promoted ? (
+        {writer && !pending ? (
           <button
             type="button"
             className={cn("tlink bact", commentTop && "on")}
@@ -215,6 +224,7 @@ export function BranchCard({
           submitLabel="Ask"
           onSubmit={(text) => submitAsk(askHere, text)}
           onClose={() => close(thread)}
+          returnFocus={selectedRowOr(thread, `#card-${thread} .rcount`)}
         />
       ) : commentTop ? (
         <InlineComposer
@@ -228,6 +238,7 @@ export function BranchCard({
             return ok;
           }}
           onClose={() => close(thread)}
+          returnFocus={selectedRowOr(thread, `#card-${thread} .rcount`)}
         />
       ) : null}
       <BranchComments
@@ -239,7 +250,9 @@ export function BranchCard({
         channel={channel}
         onToggle={toggleComment}
         openParent={
-          composer?.kind === "comment" && composer.node === node.id ? composer.parent : undefined
+          writer && composer?.kind === "comment" && composer.node === node.id
+            ? composer.parent
+            : undefined
         }
       />
       <ConfirmDelete
@@ -247,8 +260,15 @@ export function BranchCard({
         onOpenChange={setDeleting}
         title="Delete this branch and the branches under it?"
         onConfirm={() => {
+          // Focus goes to the next row of the tree, once this one is gone.
+          const next = nextRowAfter(
+            thread,
+            index.dfs(node.id).map((x) => x.node.id),
+          );
           void writes.deleteNode(thread, node.id).then((ok) => {
-            if (ok) onSelect(null);
+            if (!ok) return;
+            onSelect(null);
+            focusSoon(next);
           });
         }}
       />
@@ -301,7 +321,14 @@ function BranchComments({
               <b>{c.u}</b>
               <time dateTime={c.createdAt}>{relTime(c.createdAt, now)}</time>
             </div>
-            <ReplyText text={c.t} channel={channel} />
+            {c.del ? (
+              <p className="modln">[deleted]</p>
+            ) : (
+              <>
+                <ModerationNote mod={c.mod} />
+                {c.t ? <ReplyText text={c.t} channel={channel} /> : null}
+              </>
+            )}
             <div className="pf">
               {writer ? (
                 <button
@@ -325,6 +352,7 @@ function BranchComments({
                   return ok;
                 }}
                 onClose={() => close(thread)}
+                returnFocus={selectedRowOr(thread, `#card-${thread} .rcount`)}
               />
             ) : null}
           </div>
@@ -332,4 +360,22 @@ function BranchComments({
       })}
     </div>
   );
+}
+
+/** The row after `gone` (a deleted row and its subtree) in its tree, else the
+ * row before it, else the thread's follow-up button. */
+export function nextRowAfter(thread: string, gone: readonly string[]): () => HTMLElement | null {
+  const side = document.querySelector(`[data-side="${thread}"]`);
+  const first = side?.querySelector<HTMLElement>(`[data-row="${gone[0] ?? ""}"]`);
+  const rows = Array.from(
+    first?.closest('[role="tree"]')?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [],
+  );
+  const at = first ? rows.indexOf(first) : -1;
+  const after = rows.slice(at + 1).find((r) => !gone.includes(r.dataset["row"] ?? ""));
+  const before = at > 0 ? rows[at - 1] : undefined;
+  const id = (after ?? before)?.dataset["row"];
+  return () =>
+    (id
+      ? document.querySelector<HTMLElement>(`[data-side="${thread}"] [data-row="${id}"]`)
+      : null) ?? document.querySelector<HTMLElement>(`#card-${thread} .rcount`);
 }

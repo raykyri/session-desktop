@@ -178,22 +178,44 @@ function itemKey(c: Ctx): string {
 function nodeRef(c: Ctx, th: string): string {
   const own = records(c, "node").filter((n) => n.th === th);
   if (chance(c.r, 0.4)) return "r";
-  if (own.length && chance(c.r, 0.8)) return pick(c.r, own).id;
+  if (own.length && chance(c.r, 0.85)) return pick(c.r, own).id;
+  // a thread without nodes: mostly its root
+  if (!own.length && chance(c.r, 0.8)) return "r";
   return some(
     c,
     records(c, "node").map((n) => n.id),
   );
 }
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
-/** A model and an effort, now and then a missing or an unknown effort, a
- * model outside the registry or an effort the model does not accept. */
+/** A model and an effort: mostly a registry model and an effort it accepts;
+ * now and then a missing or an unknown effort, a model outside the registry
+ * or an effort the model does not accept. */
 const model = (c: Ctx) =>
-  chance(c.r, 0.04)
-    ? { model: "m" }
-    : {
-        model: pick(c.r, ["claude-fable", "claude-fable", "gemini-flash", "m"]),
-        effort: pick(c.r, [...EFFORTS, ...(chance(c.r, 0.05) ? ["huge"] : [])]),
-      };
+  chance(c.r, 0.7)
+    ? { model: "claude-fable", effort: pick(c.r, ["low", "medium", "high"]) }
+    : chance(c.r, 0.1)
+      ? { model: "m" }
+      : {
+          model: pick(c.r, ["claude-fable", "claude-fable", "gemini-flash", "m"]),
+          effort: pick(c.r, [...EFFORTS, ...(chance(c.r, 0.05) ? ["huge"] : [])]),
+        };
+
+/** An ask thread `u` may write under, mostly (M1b review 18: the node tree
+ * is reached); else any thread, or a made-up id. */
+function askThreadId(c: Ctx, u: string): string {
+  const spaces = new Map(records(c, "space").map((x) => [x.id, x]));
+  const mine = records(c, "thread").filter((p) => {
+    const sp = spaces.get(p.s);
+    return (
+      p.k === "ask" &&
+      p.mod !== "removed" &&
+      !p.gone &&
+      sp !== undefined &&
+      (sp.vis === "open" || c.w.get(`member:${p.s}:${u}`) !== undefined)
+    );
+  });
+  return mine.length && chance(c.r, 0.8) ? pick(c.r, mine).id : threadId(c);
+}
 
 /** A new id from the sending device's clock: fresh, or one that was ever
  * taken (any record's, readable or not, deleted ones included). */
@@ -275,8 +297,11 @@ const GENERATORS: Record<string, Gen> = {
     // with an answer: its question and answer are copied to the new thread,
     // so their markers may be stored there too
     const nodes = records(c, "node");
-    if (nodes.length && chance(c.r, 0.12)) {
-      const answered = nodes.filter((n) => c.w.get(`answer:${n.id}`));
+    const open = nodes.filter(
+      (n) => n.promoted === null && n.mod === null && !n.del && c.w.get(`answer:${n.id}`),
+    );
+    if (nodes.length && chance(c.r, open.length ? 0.35 : 0.12)) {
+      const answered = open.length ? open : nodes.filter((n) => c.w.get(`answer:${n.id}`));
       const n = pick(c.r, answered.length && chance(c.r, 0.8) ? answered : nodes);
       const copied = JSON.stringify([n.q, c.w.get(`answer:${n.id}`)]).match(MARKER) ?? [];
       for (const m of copied) {
@@ -319,9 +344,9 @@ const GENERATORS: Record<string, Gen> = {
   },
   "saved.set": (c) => ({ kind: "thread", id: threadId(c), on: chance(c.r, 0.6) }),
   // Continue, Branch, Branch here and Look up (`03` §2.1)
-  "research.forkNode": (c, _u, d) => {
+  "research.forkNode": (c, u, d) => {
     const id = newId(c, d);
-    const thread = threadId(c);
+    const thread = askThreadId(c, u ?? "");
     const look = chance(c.r, 0.3);
     // the phrase ends on a letter, so the marker survives the trim
     const phrase = chance(c.r, 0.1)
@@ -338,14 +363,22 @@ const GENERATORS: Record<string, Gen> = {
       ...(look
         ? { kind: "lookup", look: phrase }
         : { kind: "ask", q: marked(c, `node:${id}`, "q") }),
-      ...(chance(c.r, 0.3) ? { quote: look ? `${quote}${around}` : quote, b: 1 } : {}),
+      // a look-up carries its quote (now and then none: BAD_REQUEST)
+      ...(look
+        ? chance(c.r, 0.95)
+          ? { quote: `${quote}${around}`, b: 1 }
+          : {}
+        : chance(c.r, 0.3)
+          ? { quote, b: 1 }
+          : {}),
       ...model(c),
     };
   },
-  "comments.create": (c, _u, d) => {
-    const thread = threadId(c);
+  "comments.create": (c, u, d) => {
+    const thread = askThreadId(c, u ?? "");
     const node = nodeRef(c, thread);
-    const tops = records(c, "comment").filter((x) => x.parent === null && x.th === thread);
+    // a comment to any comment of the thread, at any depth
+    const tops = records(c, "comment").filter((x) => x.th === thread);
     const top = tops.length && chance(c.r, 0.3) ? pick(c.r, tops) : null;
     const id = newId(c, d);
     const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
@@ -394,13 +427,17 @@ const GENERATORS: Record<string, Gen> = {
         : runs.length
           ? pick(c.r, runs)
           : null;
+    // the attempt the person saw stop; now and then an earlier one (STALE)
+    const attempt = r ? (chance(c.r, 0.85) ? r.attempt : Math.max(1, r.attempt - 1)) : 1;
     return {
       ...(r ? { thread: r.th, node: r.node } : { thread: threadId(c), node: "r" }),
       ...model(c),
+      base: { attempt },
     };
   },
   "research.createPostFollowUp": (c, _u, d) => {
-    const replies = records(c, "reply").filter((x) => x.parent === null);
+    // a reply to any reply, at any depth
+    const replies = records(c, "reply");
     const top = replies.length && chance(c.r, 0.3) ? pick(c.r, replies) : null;
     const id = newId(c, d);
     const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
@@ -643,7 +680,7 @@ function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
       if (r.q || r.look || r.quote) out.push(`removed ${k} keeps its text`);
     }
     if ((r.kind === "reply" || r.kind === "comment") && r.mod === "removed") {
-      if (r.parent === null) tops.add(r.id);
+      tops.add(`${r.kind}:${r.id}`);
       if (r.t) out.push(`removed ${k} keeps its text`);
     }
   }
@@ -661,8 +698,16 @@ function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
       out.push(`${k} is stored under a removed thread`);
     if ((r.kind === "answer" && nodes.has(r.node)) || (r.kind === "comment" && nodes.has(r.node)))
       out.push(`${k} is stored under a removed node`);
-    if ((r.kind === "reply" || r.kind === "comment") && r.parent !== null && tops.has(r.parent))
-      out.push(`${k} is stored under a removed ${r.kind}`);
+    // nothing is stored under a removed reply or comment, at any depth
+    if (r.kind === "reply" || r.kind === "comment")
+      for (let up = r.parent; up !== null;) {
+        if (tops.has(`${r.kind}:${up}`)) {
+          out.push(`${k} is stored under a removed ${r.kind}`);
+          break;
+        }
+        const x = dump.get(`${r.kind}:${up}`);
+        up = x && (x.kind === "reply" || x.kind === "comment") ? x.parent : null;
+      }
   }
   return out;
 }
@@ -810,12 +855,18 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     scan(u, `apply ${e.name}`, res);
     const got = res.ok ? "ok" : res.error.code;
     tally(`${got} ${e.name}`);
+    if (e.name === "threads.create" && (e.input as { from?: unknown } | null)?.from)
+      tally(`${got} threads.create from a node`);
     if (got !== p.code) {
       failures.push(
         `${what}: the write oracle predicted ${p.code}, the server answered ${JSON.stringify(res)}\n${JSON.stringify(e).slice(0, 600)}`,
       );
       return res;
     }
+    // and the reason the client acts on (`queue_full`)
+    const reason = res.ok ? undefined : res.error.reason;
+    if (reason !== p.reason)
+      failures.push(`${what}: the write oracle predicted reason ${p.reason}, got ${reason}`);
     // a write applied now (not a replay) changes exactly what the effect
     // model predicts; anything else changes nothing
     const fresh = p.code === "ok" && p.stored && u !== null && u !== "null";
@@ -1440,24 +1491,30 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     } else if (roll < 0.11) {
       if (!(await forged(step))) return false;
       what = "forged cursor";
-    } else if (roll < 0.14) {
-      // a run finishes: a thread's summary or a node's answer, with a marker
+    } else if (roll < 0.17) {
+      // a run finishes: a thread's summary or a node's answer, with a marker;
+      // mostly one whose run has not ended, so nodes can be forked under it
+      // (M1b review 18)
       const items = [
         ...records(c, "thread").map((p) => ({
           key: `thread:${p.id}`,
           at: `thread:${p.id}`,
           field: "sum",
+          live: records(c, "run").some((r) => r.th === p.id && r.node === "r" && liveRun(r)),
         })),
         ...records(c, "node").map((f) => ({
           key: `node:${f.id}`,
           at: `answer:${f.id}`,
           field: "md",
+          live: records(c, "run").some((r) => r.id === f.run && liveRun(r)),
         })),
       ];
-      const item = items.length ? pick(c.r, items) : null;
+      const live = items.filter((x) => x.live);
+      const item =
+        live.length && chance(c.r, 0.85) ? pick(c.r, live) : items.length ? pick(c.r, items) : null;
       what = `a run finishes for ${item?.key ?? "nothing"}`;
       if (item) await w.server.finishJob(item.key, marked(c, item.at, item.field));
-    } else if (roll < 0.18) {
+    } else if (roll < 0.21) {
       const d = pick(c.r, c.devices);
       const x = c.r();
       if (x < 0.4) {
@@ -1471,16 +1528,16 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         what = `${d.name} flushes`;
       }
       await flush(d);
-    } else if (roll < 0.2) {
+    } else if (roll < 0.23) {
       const k = pick(c.r, ["random", "loss"] as const);
       faults[k] = !faults[k];
       what = `${k} faults ${faults[k] ? "on" : "off"}`;
-    } else if (roll < 0.21) {
+    } else if (roll < 0.24) {
       const u = pick(c.r, PEOPLE);
       const n = 1 + Math.floor(c.r() * 24);
       for (let k = 0; k < n; k++) await watched.register(actor(u));
       what = `${u} registers ${n} clients`;
-    } else if (roll < 0.3) {
+    } else if (roll < 0.32) {
       what = await rawWrite();
     } else {
       what = await deviceWrite();
@@ -1514,6 +1571,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   return true;
 }
 
+/** A run that has not ended. */
+const liveRun = (r: Extract<StoredRecord, { kind: "run" }>) =>
+  r.status === "queued" || r.status === "running";
+
 const TALLY = new Map<string, number>();
 const tally = (k: string) => TALLY.set(k, (TALLY.get(k) ?? 0) + 1);
 test.after(() => {
@@ -1525,6 +1586,23 @@ test.after(() => {
         .join("\n"),
     );
 });
+
+/** The fewest applied writes of each mutator over the 200 fixed sequences:
+ * the generators must reach the node tree, not only refuse it (M1b review
+ * 18). Checked only on the fixed run. */
+const MIN_APPLIED: Record<string, number> = {
+  "threads.create": 100,
+  "threads.create from a node": 1,
+  "research.forkNode": 20,
+  "comments.create": 20,
+  "research.createPostFollowUp": 20,
+  "research.cancelNode": 5,
+  "followups.delete": 1,
+  "threads.delete": 5,
+  "moderation.decide": 20,
+  "saved.set": 50,
+  "spaces.create": 10,
+};
 
 // REPLICA_PROTO_SEED runs that one seed only (to debug a failure)
 const ONE = process.env["REPLICA_PROTO_SEED"];
@@ -1538,3 +1616,15 @@ for (let from = ONE ? Number(ONE) : 1; from <= (ONE ? Number(ONE) : SEQUENCES); 
     },
   );
 }
+
+if (!ONE && SEQUENCES === 200)
+  test.serial(
+    "the fixed sequences apply every write of the node tree some number of times",
+    (t) => {
+      const short = Object.entries(MIN_APPLIED).filter(([k, n]) => (TALLY.get(`ok ${k}`) ?? 0) < n);
+      t.deepEqual(
+        short.map(([k, n]) => `${k}: ${TALLY.get(`ok ${k}`) ?? 0} applied, at least ${n} expected`),
+        [],
+      );
+    },
+  );

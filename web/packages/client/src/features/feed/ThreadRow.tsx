@@ -10,9 +10,10 @@
 // its text to its author and the owner under "Hidden by the channel owner".
 
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { prefersReducedMotion } from "../../lib/motion.js";
 import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import { askTreeOf, repliesOf, threadOf, type ThreadView } from "../../replica/queries.js";
 import { UNKNOWN } from "../../replica/source.js";
@@ -24,6 +25,7 @@ import { RunStatus } from "../branches/RunStatus.js";
 import { SelectionActions } from "../branches/SelectionActions.js";
 import { indexTree, isActiveRun, othersUnder, passageTrees } from "../branches/tree.js";
 import { RemoveDialog } from "../channels/RemoveDialog.js";
+import { focusSoon } from "../composer/InlineComposer.js";
 import { ReplyTree } from "../replies/ReplyTree.js";
 import { FeedRow } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
@@ -31,13 +33,22 @@ import { showToast } from "../shell/Toast.js";
 import { AnswerProse, type PassageGroup } from "./AnswerProse.js";
 import { useFeedViewer, useRunChoice } from "./FeedContext.js";
 import { ConfirmDelete } from "./FeedDialog.js";
+import { ModerationNote, rowText } from "./Moderated.js";
 import { MoreMenu, type MoreAction } from "./MoreMenu.js";
 import { clip, footerMeta, noun, relTime, showsSaveCount } from "./format.js";
 import { RemovedIcon, ReplyArrowIcon, SaveIcon } from "./icons.js";
 
-export function ThreadRow({ id, now }: { id: string; now: number }) {
+/** A thread's row. Memoised: a row re-renders when its own records change
+ * or the clock passes a minute, not when another row's do (W9.1). */
+export const ThreadRow = memo(function ThreadRow({ id, now }: { id: string; now: number }) {
   const view = useReplicaQuery((source) => threadOf(source, id), [id]);
-  if (view === UNKNOWN || view === null) return null;
+  if (view === null) return null;
+  if (view === UNKNOWN)
+    return (
+      <FeedRow rowId={id}>
+        <LoadingCard />
+      </FeedRow>
+    );
   const { thread } = view;
   if (thread.mod === "removed")
     return (
@@ -46,6 +57,32 @@ export function ThreadRow({ id, now }: { id: string; now: number }) {
       </FeedRow>
     );
   return thread.k === "post" ? <PostRow view={view} now={now} /> : <AskRow view={view} now={now} />;
+});
+
+/** The card after a thread's, for focus once the thread is gone (02 §10.1),
+ * else the one before it. */
+function nextCardAfter(thread: string): () => HTMLElement | null {
+  const row = document.getElementById(`card-${thread}`)?.closest(".feed-row");
+  const near = (el: Element | null | undefined) => el?.querySelector<HTMLElement>("article.tcard");
+  const next = near(row?.nextElementSibling) ?? near(row?.previousElementSibling);
+  const id = next?.id;
+  return () => (id ? document.getElementById(id) : null);
+}
+
+/** A thread whose records are not loaded yet. */
+function LoadingCard() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading"
+      aria-busy="true"
+      data-placeholder=""
+      className="tcard bg-surface-card flex flex-col gap-2.5"
+    >
+      <span className="bg-surface-fill-medium h-3.5 w-3/5 rounded" />
+      <span className="bg-surface-fill-subtle h-3 w-full rounded" />
+    </div>
+  );
 }
 
 /** The placeholder of a removed thread (01 C12, 04 §6.2): who removed it,
@@ -57,7 +94,12 @@ function RemovedCard({ view }: { view: ThreadView }) {
   const [deleting, setDeleting] = useState(false);
   const mine = me !== null && thread.u === me;
   return (
-    <article className="tcard removed" id={`card-${thread.id}`} data-thread={thread.id}>
+    <article
+      className="tcard removed"
+      id={`card-${thread.id}`}
+      data-thread={thread.id}
+      tabIndex={-1}
+    >
       <div className="rmnote">
         <RemovedIcon />
         <span className="flex-1">
@@ -83,7 +125,10 @@ function RemovedCard({ view }: { view: ThreadView }) {
         open={deleting}
         onOpenChange={setDeleting}
         title="Delete this thread?"
-        onConfirm={() => void writes.deleteThread(thread.id)}
+        onConfirm={() => {
+          const next = nextCardAfter(thread.id);
+          void writes.deleteThread(thread.id).then((ok) => ok && focusSoon(next));
+        }}
       />
     </article>
   );
@@ -91,17 +136,22 @@ function RemovedCard({ view }: { view: ThreadView }) {
 
 function PostRow({ view, now }: { view: ThreadView; now: number }) {
   const replies = useReplicaQuery((source) => repliesOf(source, view.thread.id), [view.thread.id]);
-  const list = replies === UNKNOWN ? [] : replies;
   return (
     <FeedRow
       rowId={view.thread.id}
       side={
-        <div className="stick replies">
-          <ReplyTree thread={view.thread} replies={list} channel={view.space} now={now} />
-        </div>
+        replies === UNKNOWN ? null : (
+          <div className="stick replies">
+            <ReplyTree thread={view.thread} replies={replies} channel={view.space} now={now} />
+          </div>
+        )
       }
     >
-      <ThreadCard view={view} now={now} replyOthers={list.some((r) => r.u !== view.thread.u)} />
+      <ThreadCard
+        view={view}
+        now={now}
+        replyOthers={replies === UNKNOWN ? null : replies.some((r) => r.u !== view.thread.u)}
+      />
     </FeedRow>
   );
 }
@@ -133,7 +183,10 @@ function AskRow({ view, now }: { view: ThreadView; now: number }) {
           `[data-side="${thread.id}"] [data-row="${first.id}"]`,
         );
         row?.focus({ preventScroll: true });
-        row?.closest(".pin")?.scrollIntoView({ block: "nearest" });
+        row?.closest(".pin")?.scrollIntoView({
+          block: "nearest",
+          behavior: prefersReducedMotion() ? "instant" : "smooth",
+        });
       });
     },
     [trees, select, thread.id],
@@ -201,7 +254,9 @@ function ThreadCard({
   groups?: ReadonlyMap<number, PassageGroup>;
   quoted?: number | null;
   proseRef?: React.RefObject<HTMLDivElement | null>;
-  replyOthers?: boolean;
+  /** Whether someone else replied to a post; null while the replies are not
+   * loaded. */
+  replyOthers?: boolean | null;
 }) {
   const { thread, counts, space, saved } = view;
   const { writer, signedOut, signIn, me } = useFeedViewer();
@@ -225,6 +280,7 @@ function ThreadCard({
   const answer = index?.answerOf("r");
   const mine = me !== null && thread.u === me;
   const hidden = thread.mod === "hidden";
+  const deleted = thread.del;
   const r = counts?.r ?? 0;
   const saves = counts?.saves ?? 0;
   const showSaves = showsSaveCount(saves, space?.private ?? false);
@@ -245,10 +301,13 @@ function ThreadCard({
           .then((o) => o.ok && showToast(`Banned @${author} from #${space.name}.`)),
     });
   }
-  if (mine) {
+  // Delete needs to know what is under the thread: not offered while that is
+  // not loaded, nor on a deleted thread's shell.
+  const others = ask ? (index ? othersUnder(index, "r", me) : null) : replyOthers;
+  if (mine && !deleted && others !== null) {
     const reason = pending
       ? "Available when the answer finishes"
-      : (ask ? index !== null && index !== undefined && othersUnder(index, "r", me) : replyOthers)
+      : others
         ? "Not available once someone else has responded"
         : undefined;
     actions.push({
@@ -301,7 +360,13 @@ function ThreadCard({
       : { disabled: true, title: "Saving opens once you have an invite" };
 
   return (
-    <article className="tcard" id={`card-${thread.id}`} data-thread={thread.id}>
+    <article
+      className="tcard"
+      id={`card-${thread.id}`}
+      data-thread={thread.id}
+      tabIndex={-1}
+      aria-labelledby={`title-${thread.id}`}
+    >
       {source !== UNKNOWN && source && thread.from ? (
         <button
           type="button"
@@ -320,18 +385,25 @@ function ThreadCard({
           </span>
         </button>
       ) : null}
+      {hidden && thread.q ? <ModerationNote mod="hidden" className="hiddenln" /> : null}
       <div className="tt">
         <span className="ttn" aria-hidden="true" />
-        <p className="tt-title">{hidden && !thread.q ? "Hidden by the channel owner" : thread.q}</p>
+        <h3 className="tt-title" id={`title-${thread.id}`}>
+          {deleted ? "[deleted]" : rowText(thread, thread.q)}
+        </h3>
         {!ask ? <span className="ttm">#{space?.name ?? ""}</span> : null}
         <span className="ttav" title={`${thread.u ?? ""} · ${relTime(thread.createdAt, now)}`}>
           <Avatar handle={thread.u ?? "?"} size="sm" />
+          <span className="sr-only">
+            {thread.u ?? ""}, {relTime(thread.createdAt, now)}
+          </span>
         </span>
         <MoreMenu actions={actions} />
       </div>
-      {hidden && thread.q ? <p className="hiddenln">Hidden by the channel owner</p> : null}
       {ask ? (
-        pending ? (
+        !index ? (
+          <div className="answer" role="status" aria-label="Loading" aria-busy="true" />
+        ) : pending ? (
           <div className="answer">
             <p>
               <RunStatus run={run} />
@@ -413,7 +485,10 @@ function ThreadCard({
         open={deleting}
         onOpenChange={setDeleting}
         title="Delete this thread?"
-        onConfirm={() => void writes.deleteThread(thread.id)}
+        onConfirm={() => {
+          const next = nextCardAfter(thread.id);
+          void writes.deleteThread(thread.id).then((ok) => ok && focusSoon(next));
+        }}
       />
       {space?.owned ? (
         <RemoveDialog thread={thread} open={removing} onOpenChange={setRemoving} />

@@ -6,11 +6,12 @@
 // 12 px below the top of the feed, selects the item and flashes the card.
 
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { RouteNotFoundPanel } from "../../app/RouteBoundary.js";
 import { prefersReducedMotion } from "../../lib/motion.js";
-import { useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import {
   channelByName,
   channelsOf,
@@ -31,6 +32,7 @@ import { keepBar } from "../shell/useBarAutoHide.js";
 import { useFeedViewer } from "./FeedContext.js";
 import { ThreadRow } from "./ThreadRow.js";
 import { EmptySaveIcon } from "./icons.js";
+import { FLASH_MS, useRevealStore } from "./reveal.js";
 
 export interface FeedPageProps {
   kind: "home" | "saved" | "channel";
@@ -78,33 +80,158 @@ function SavedEmpty() {
   );
 }
 
-/** Scrolls a thread's row into place, selects the item and flashes the
- * card once the row is rendered (02 §2.1, W2.6). */
-function useThreadAddress(ids: string[] | null, t: string | undefined, sel: string | undefined) {
-  const source = useReplica();
+/** Lists past this many rows render only the rows near the viewport
+ * (W3.1). */
+export const VIRTUALISE_FROM = 60;
+
+/** Scrolls the feed so a thread's card sits 12 px below its top, keeping
+ * the bar shown (W2.3 `keepBar`), and flashes the card. */
+function scrollCardIntoPlace(card: HTMLElement): void {
+  const scroller = card.closest<HTMLElement>("[data-shell-scroll]");
+  if (!scroller) return;
+  keepBar();
+  const top = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  scroller.scrollBy({ top: top - 12, behavior: prefersReducedMotion() ? "instant" : "smooth" });
+  card.classList.add("flash");
+  setTimeout(() => card.classList.remove("flash"), FLASH_MS);
+}
+
+interface ListHandle {
+  /** Brings the row of `id` into the rendered rows; then `onRendered`. */
+  reach: (id: string, onRendered: () => void) => void;
+}
+
+/** The thread rows, virtualised past `VIRTUALISE_FROM` rows. */
+function ThreadList({
+  ids,
+  now,
+  handle,
+}: {
+  ids: readonly string[];
+  now: number;
+  handle: React.RefObject<ListHandle | null>;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
+  const [margin, setMargin] = useState(0);
+  const virtual = ids.length > VIRTUALISE_FROM;
+  // The scroll container, and how far down it the list starts (the rows
+  // above it change with the header and composer).
+  useLayoutEffect(() => {
+    const el = list.current;
+    const sc = el?.closest<HTMLElement>("[data-shell-scroll]") ?? null;
+    setScroller((prev) => (prev === sc ? prev : sc));
+    if (el && sc) {
+      const next = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      setMargin((prev) => (Math.abs(prev - next) > 0.5 ? next : prev));
+    }
+  }, [ids, virtual]);
+  // TanStack Virtual returns a mutable instance the React compiler cannot
+  // memoise; this component is not compiled.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: virtual ? ids.length : 0,
+    getScrollElement: () => scroller,
+    estimateSize: () => 520,
+    overscan: 4,
+    scrollMargin: margin,
+    getItemKey: (index) => ids[index] ?? index,
+  });
+  useImperativeHandle(handle, () => ({
+    reach: (id, onRendered) => {
+      const at = ids.indexOf(id);
+      if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
+      // The row renders on the next frames; wait until it is in the DOM.
+      let tries = 0;
+      const wait = () => {
+        if (document.getElementById(`card-${id}`) || tries++ > 30) onRendered();
+        else requestAnimationFrame(wait);
+      };
+      requestAnimationFrame(wait);
+    },
+  }));
+  if (!virtual)
+    return (
+      <div ref={list} className="feed-rows">
+        {ids.map((id) => (
+          <ThreadRow key={id} id={id} now={now} />
+        ))}
+      </div>
+    );
+  const items = virtualizer.getVirtualItems();
+  return (
+    <div
+      ref={list}
+      className="feed-rows"
+      style={{ position: "relative", height: virtualizer.getTotalSize() }}
+    >
+      {items.map((item) => {
+        const id = ids[item.index];
+        if (!id) return null;
+        return (
+          <div
+            key={item.key}
+            data-index={item.index}
+            ref={virtualizer.measureElement}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${item.start - margin}px)`,
+            }}
+          >
+            <ThreadRow id={id} now={now} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Brings the thread of an address (`?t=&sel=`) or of a request
+ * (`revealThread`) into place once its row can be: waits while the thread
+ * is not loaded, and says "This thread is not available." when it is known
+ * to be absent (02 §2.1). */
+function useReveal(
+  ids: string[] | null,
+  t: string | undefined,
+  sel: string | undefined,
+  handle: React.RefObject<ListHandle | null>,
+) {
   const select = useThreadUiStore((state) => state.select);
-  const done = useRef<string | null>(null);
+  const request = useRevealStore((state) => state.reveal);
+  const done = useRevealStore((state) => state.done);
+  const handled = useRef<string | null>(null);
+  // The address's thread: wanted until handled.
+  const target = useMemo(
+    () => request ?? (t ? { thread: t, sel, n: -1 } : null),
+    [request, t, sel],
+  );
+  const key = target ? (target.n >= 0 ? `r${target.n}` : `a:${t}:${sel ?? ""}`) : null;
+  const status = useReplicaQuery(
+    (source) => (target ? (threadOf(source, target.thread) ? "found" : "absent") : "none"),
+    [target?.thread],
+  );
   useEffect(() => {
-    if (!t || !ids) return;
-    const key = `${t}:${sel ?? ""}`;
-    if (done.current === key) return;
-    done.current = key;
-    if (!ids.includes(t)) {
-      if (!threadOf(source, t)) showToast("This thread is not available.");
+    if (!target || !key || !ids || handled.current === key) return;
+    if (status === UNKNOWN) return;
+    if (!ids.includes(target.thread)) {
+      if (status === "absent") {
+        handled.current = key;
+        if (target.n >= 0) done(target.n);
+        showToast("This thread is not available.");
+      }
       return;
     }
-    if (sel) select(t, sel);
-    requestAnimationFrame(() => {
-      const card = document.getElementById(`card-${t}`);
-      const scroller = card?.closest<HTMLElement>("[data-shell-scroll]");
-      if (!card || !scroller) return;
-      keepBar();
-      const top = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      scroller.scrollBy({ top: top - 12, behavior: prefersReducedMotion() ? "instant" : "smooth" });
-      card.classList.add("flash");
-      setTimeout(() => card.classList.remove("flash"), 1600);
+    handled.current = key;
+    if (target.n >= 0) done(target.n);
+    if (target.sel) select(target.thread, target.sel);
+    handle.current?.reach(target.thread, () => {
+      const card = document.getElementById(`card-${target.thread}`);
+      if (card) scrollCardIntoPlace(card);
     });
-  }, [ids, t, sel, source, select]);
+  }, [ids, target, key, status, select, done, handle]);
 }
 
 export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
@@ -114,9 +241,14 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
     (source) => (kind === "channel" && name ? channelByName(source, name) : null),
     [kind, name],
   );
+  // The composer's channels: the viewer's; signed out, the open channels
+  // its disabled picker shows (the mock's "#public").
   const joined = useReplicaQuery(
-    (source) => channelsOf(source).filter((c) => c.joined && !c.frozen),
-    [],
+    (source) =>
+      channelsOf(source).filter((c) =>
+        signedOut ? !c.private && !c.frozen : c.joined && !c.frozen,
+      ),
+    [signedOut],
   );
   const feed: FeedKind | null =
     kind === "channel"
@@ -125,7 +257,8 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
         : null
       : { kind };
   const ids = useReplicaQuery((source) => (feed ? feedOf(source, feed) : []), [feed]);
-  useThreadAddress(ids === UNKNOWN ? null : ids, t, sel);
+  const handle = useRef<ListHandle | null>(null);
+  useReveal(ids === UNKNOWN ? null : ids, t, sel, handle);
 
   if (ids === UNKNOWN || channel === UNKNOWN || joined === UNKNOWN)
     return (
@@ -177,7 +310,7 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
         </FeedRow>
       ) : null}
       {empty ? <FeedRow>{empty}</FeedRow> : null}
-      {locked ? null : ids.map((id) => <ThreadRow key={id} id={id} now={now} />)}
+      {locked ? null : <ThreadList ids={ids} now={now} handle={handle} />}
     </FeedFrame>
   );
 }

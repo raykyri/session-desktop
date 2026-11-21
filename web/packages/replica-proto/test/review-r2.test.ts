@@ -303,9 +303,9 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
     1,
   );
   // an approval queued 20 days ago, device clock reset after it was queued:
-  // the correction moves its queue time with the clock (M1a review 14), so
-  // it lands in the future and the server answers EXPIRED; shown, never
-  // applied
+  // the device's clock went back, so the error came after the write was
+  // queued and its queue time stays; 20 days old in server time, it is
+  // dropped and shown, never applied (M1b review 16)
   const dev2 = new ManualClock(w.clock.now());
   const m = new ReplicaClient(w.server, actor("olga"), { clock: dev2, random: w.random });
   await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
@@ -317,12 +317,64 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
   });
   w.clock.advance(20 * DAY);
   dev2.ms = Date.parse("2020-01-01T00:00:00Z");
-  t.deepEqual(codes(await m.flush()), ["EXPIRED"]);
+  t.deepEqual(codes(await m.flush()), []);
   t.deepEqual(
     m.problems().map((p) => p.reason),
-    ["EXPIRED"],
+    ["DROPPED"],
   );
   t.is(w.get(`member:${closed}:otto`), undefined);
+  // the same after a partial set-back (18 of the 20 days): the device's clock
+  // was known to be right when the approval was queued (an answer agreed
+  // with it), so the correction does not move the queue time either
+  const dev3 = new ManualClock(w.clock.now());
+  const m2 = new ReplicaClient(w.server, actor("olga"), { clock: dev3, random: w.random });
+  const t3 = await thread(t, w, "mel", open, "post");
+  m2.queue("saved.set", { kind: "thread", id: t3, on: true });
+  t.deepEqual(codes(await m2.flush()), ["ok"]);
+  // otto's request is still open
+  m2.queue("joinRequests.decide", {
+    space: closed,
+    users: ["otto"],
+    decision: "approve",
+    base: w.requests(closed, ["otto"]),
+  });
+  w.clock.advance(20 * DAY);
+  dev3.ms = w.clock.now() - 18 * DAY;
+  t.deepEqual(codes(await m2.flush()), []);
+  t.deepEqual(
+    m2.problems().map((p) => [p.name, p.reason]),
+    [["joinRequests.decide", "DROPPED"]],
+  );
+  t.is(w.get(`member:${closed}:otto`), undefined);
+  // a sent write is never moved: it keeps its mutation id and queue time,
+  // even on a clock 10 days slow that is corrected after it was sent: 10
+  // days old in server time, it is dropped and shown, never applied under a
+  // moved queue time
+  const dev4 = new ManualClock(w.clock.now() - 10 * DAY);
+  let drop = true;
+  const flaky: ServerHalf = {
+    register: (a) => w.server.register(a),
+    snapshot: (a, l, o) => w.server.snapshot(a, l, o),
+    pull: (a, l, c, o) => w.server.pull(a, l, c, o),
+    apply: async (a, e) => {
+      if (!drop) return w.server.apply(a, e);
+      drop = false;
+      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost", serverTime: 0 } };
+    },
+  };
+  const m3 = new ReplicaClient(flaky, actor("olga"), { clock: dev4, random: w.random });
+  m3.queue("saved.set", { kind: "thread", id: t3, on: true });
+  t.deepEqual(codes(await m3.flush()), ["SERVICE_UNAVAILABLE"]);
+  const queued = m3.pending()[0]?.queuedAt;
+  w.clock.advance(2 * MINUTE);
+  dev4.advance(2 * MINUTE);
+  t.deepEqual(codes(await m3.flush()), []);
+  t.deepEqual(
+    m3.problems().map((p) => [p.reason, p.sent]),
+    [["DROPPED", true]],
+  );
+  t.is(m3.sent[0]?.mutationId, m3.sent.at(-1)?.mutationId);
+  t.is(m3.sent.at(-1)?.queuedAt, queued);
   // a device 10 days slow: corrected once, and the offset survives a restart.
   // A write it queued before its clock was corrected moves with the
   // correction and is applied (M1a review 14; round 2's fixes dropped it)

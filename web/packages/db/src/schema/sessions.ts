@@ -31,4 +31,10 @@ export const oauthStates = sqliteTable("oauth_states", {
   createdAt: integer("created_at").notNull(),
   /** Same-origin path the callback returns to. */
   returnTo: text("return_to"),
+  /** The provider the handshake was started for; the callback of the other
+   * provider does not accept it. Null for states written before 0004. */
+  provider: text("provider"),
+  /** SHA-256 of the account invite code the person started with; the code
+   * itself is never stored (04 §3.1). */
+  codeHash: text("code_hash"),
 });

@@ -22,12 +22,17 @@ export interface TreeRow {
   /** `aria-expanded` of a collapsible row. */
   expanded?: boolean | undefined;
   className?: string | undefined;
+  /** A control drawn over the row's right end (a collapsed reply's "+N"). */
+  trailing?: ReactNode;
 }
 
 export interface TreeRailProps {
   rows: readonly TreeRow[];
   label: string;
   onSelect: (id: string) => void;
+  /** Collapses or expands a row with `expanded` (Left and Right, the tree
+   * convention). */
+  onExpand?: (id: string, expanded: boolean) => void;
   /** A value that changes when the rows' layout may (wrapping, selection). */
   layoutKey?: string;
   /** The selector of a row's first-line element (`.gq`, or `.gq-av` for
@@ -46,6 +51,7 @@ export function TreeRail({
   rows,
   label,
   onSelect,
+  onExpand,
   layoutKey,
   lineSelector = ".gq",
 }: TreeRailProps) {
@@ -61,6 +67,7 @@ export function TreeRail({
     const el = graph.current;
     if (!el) return;
     const measure = () => {
+      const top = el.getBoundingClientRect().top;
       const measured = rows.map((row) => {
         const button = el.querySelector<HTMLElement>(`[data-row="${CSS.escape(row.id)}"]`);
         const line = button?.querySelector<HTMLElement>(lineSelector);
@@ -69,8 +76,8 @@ export function TreeRail({
           const centre = line.classList.contains("gq-av")
             ? line.offsetHeight / 2
             : parseFloat(getComputedStyle(line).lineHeight) / 2 || 13;
-          y = button.offsetTop + line.offsetTop + centre;
-        } else if (button) y = button.offsetTop + 13;
+          y = line.getBoundingClientRect().top - top + centre;
+        } else if (button) y = button.getBoundingClientRect().top - top + 13;
         return {
           id: row.id,
           parent: row.parent,
@@ -89,15 +96,30 @@ export function TreeRail({
     return () => observer.disconnect();
   }, [rows, layoutKey, lineSelector]);
 
-  const tabStop = focusId ?? rows.find((r) => r.selected)?.id ?? rows[0]?.id ?? null;
+  // The focused row keeps the tab stop while it is in the tree; a removed
+  // one hands it to the selected row, else the first.
+  const focused = focusId !== null && rows.some((r) => r.id === focusId) ? focusId : null;
+  const tabStop = focused ?? rows.find((r) => r.selected)?.id ?? rows[0]?.id ?? null;
 
   const move = (event: KeyboardEvent<HTMLButtonElement>, row: TreeRow, index: number) => {
     let target: TreeRow | undefined;
     if (event.key === "ArrowDown") target = rows[index + 1];
     else if (event.key === "ArrowUp") target = rows[index - 1];
-    else if (event.key === "ArrowLeft") target = rows.find((r) => r.id === row.parent);
-    else if (event.key === "ArrowRight") target = rows.find((r) => r.parent === row.id);
-    else if (event.key === "Home") target = rows[0];
+    else if (event.key === "ArrowLeft") {
+      if (row.expanded === true && onExpand) {
+        event.preventDefault();
+        onExpand(row.id, false);
+        return;
+      }
+      target = rows.find((r) => r.id === row.parent);
+    } else if (event.key === "ArrowRight") {
+      if (row.expanded === false && onExpand) {
+        event.preventDefault();
+        onExpand(row.id, true);
+        return;
+      }
+      target = rows.find((r) => r.parent === row.id);
+    } else if (event.key === "Home") target = rows[0];
     else if (event.key === "End") target = rows[rows.length - 1];
     else return;
     event.preventDefault();
@@ -117,24 +139,26 @@ export function TreeRail({
         ))}
       </svg>
       {rows.map((row, index) => (
-        <button
-          key={row.id}
-          type="button"
-          role="treeitem"
-          data-row={row.id}
-          data-depth={row.depth}
-          aria-level={row.depth + 1}
-          aria-selected={row.selected}
-          {...(row.expanded !== undefined ? { "aria-expanded": row.expanded } : {})}
-          tabIndex={row.id === tabStop ? 0 : -1}
-          className={cn("grow-r", row.on && "on", row.selected && "sel", row.className)}
-          style={{ paddingLeft: railX(row.depth) + 10 }}
-          onFocus={() => setFocusId(row.id)}
-          onClick={() => onSelect(row.id)}
-          onKeyDown={(event) => move(event, row, index)}
-        >
-          {row.content}
-        </button>
+        <div key={row.id} className="grow-w">
+          <button
+            type="button"
+            role="treeitem"
+            data-row={row.id}
+            data-depth={row.depth}
+            aria-level={row.depth + 1}
+            aria-selected={row.selected}
+            {...(row.expanded !== undefined ? { "aria-expanded": row.expanded } : {})}
+            tabIndex={row.id === tabStop ? 0 : -1}
+            className={cn("grow-r", row.on && "on", row.selected && "sel", row.className)}
+            style={{ paddingLeft: railX(row.depth) + 10 }}
+            onFocus={() => setFocusId(row.id)}
+            onClick={() => onSelect(row.id)}
+            onKeyDown={(event) => move(event, row, index)}
+          >
+            {row.content}
+          </button>
+          {row.trailing}
+        </div>
       ))}
     </div>
   );

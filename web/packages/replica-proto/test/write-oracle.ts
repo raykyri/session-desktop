@@ -86,6 +86,9 @@ export interface Prediction {
   storedForSeq?: boolean;
   /** An earlier mutation id's answer, now kept under this one as well. */
   adopted?: boolean;
+  /** Why a PRECONDITION_FAILED is answered, where the client acts on it
+   * (`queue_full`). */
+  reason?: string;
 }
 
 const MIN_DAY = 86_400_000;
@@ -147,6 +150,7 @@ const words =
     typeof v === "string" && v.length >= 1 && v.length <= n;
 const ulid: Check = (v) => typeof v === "string" && ULID.test(v);
 const nat: Check = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
+const pos: Check = (v) => nat(v) && (v as number) >= 1;
 const oneOf =
   (...xs: unknown[]): Check =>
   (v) =>
@@ -226,14 +230,23 @@ const SCHEMA: Record<string, Check> = {
       { quote: upTo(2000), b: nat },
     ),
     lookup: obj(
-      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: words(80), model, effort },
-      { quote: upTo(2000), b: nat },
+      {
+        id: ulid,
+        thread: ulid,
+        parent: nodeRef,
+        kind: str,
+        look: words(80),
+        quote: words(2000),
+        model,
+        effort,
+      },
+      { b: nat },
     ),
   }),
   "followups.update": obj({ ...nodeIn, q: words(8000), base: rev }),
   "followups.delete": obj(nodeIn),
   "research.cancelNode": obj(nodeIn),
-  "research.retryNode": obj({ ...nodeIn, model, effort }),
+  "research.retryNode": obj({ ...nodeIn, model, effort, base: obj({ attempt: pos }) }),
   "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: words(8000) }, { parent: ulid }),
   "replies.update": obj({ id: ulid, t: words(8000), base: rev }),
   "replies.delete": obj({ id: ulid }),
@@ -302,12 +315,15 @@ interface Facts {
 
 /** Thrown with the code a rule refuses with. */
 class No extends Error {
-  constructor(readonly code: ErrorCode) {
+  constructor(
+    readonly code: ErrorCode,
+    readonly reason?: string,
+  ) {
     super(code);
   }
 }
-const no = (code: ErrorCode): never => {
-  throw new No(code);
+const no = (code: ErrorCode, reason?: string): never => {
+  throw new No(code, reason);
 };
 
 type Space = Extract<StoredRecord, { kind: "space" }>;
@@ -331,9 +347,16 @@ const blank = (v: unknown) => String(v).trim() === "";
  * items, leaving, saves and notifications (`thaw`; `04` B6); then the role
  * `need` (0: any signed-in person; "member": a member of a private space,
  * anyone in an open one; "owner": the owner). */
-function inSpace(f: Facts, sp: string, need: 0 | "member" | "owner", thaw = false): Space {
+function inSpace(
+  f: Facts,
+  sp: string,
+  need: 0 | "member" | "owner",
+  thaw = false,
+  ownLog = false,
+): Space {
   const s = spaceAt(f, sp) ?? no("NOT_FOUND");
-  if (banned(f, sp, f.me)) no("FORBIDDEN");
+  // a write of the person's own user-log records only: a ban allows it
+  if (!ownLog && banned(f, sp, f.me)) no("FORBIDDEN");
   if (s.frozen && !thaw) no("FORBIDDEN");
   if (need === "member" && closed(s) && roleOf(f, sp, f.me) === null) no("FORBIDDEN");
   if (need === "owner" && roleOf(f, sp, f.me) !== "owner") no("FORBIDDEN");
@@ -411,12 +434,12 @@ function runPre(f: Facts, i: In) {
   let queued = 0;
   for (const r of f.dump.values())
     if (r.kind === "run" && r.u === f.me && r.status === "queued") queued++;
-  if (queued >= 20) no("PRECONDITION_FAILED");
+  if (queued >= 20) no("PRECONDITION_FAILED", "queue_full");
 }
 
-/** A look-up phrase is 1 to 4 words, once what is not a letter or a digit is
- * taken off both ends (`03` G2). */
-const isWordChar = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+/** A look-up phrase is 1 to 4 words, once what is not a letter, a combining
+ * mark or a digit is taken off both ends (`03` G2). */
+const isWordChar = (ch: string) => /[\p{L}\p{M}\p{N}]/u.test(ch);
 /** The words of a look-up phrase, once what is not a letter or a digit is
  * taken off both ends. */
 function phraseWords(v: string): string[] {
@@ -486,7 +509,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
       inSpace(f, p.s, "member");
       const n = f.dump.get(`node:${from.node}`);
       if (n?.kind !== "node" || !mayRead(f.dump, n, f.me) || n.th !== p.id) return no("NOT_FOUND");
-      if (p.mod === "removed" || n.mod === "removed" || n.del || n.mod !== null)
+      if (p.mod === "removed" || p.gone || n.mod === "removed" || n.del || n.mod !== null)
         no("PRECONDITION_FAILED");
       if (n.promoted !== null || !f.dump.has(`answer:${n.id}`)) no("PRECONDITION_FAILED");
       if (f.idTaken(String(i["id"]))) no("CONFLICT");
@@ -517,29 +540,26 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const mine = f.dump.has(`save:${f.me}:${String(i["id"])}`);
     if (i["on"] === false) {
       const p = f.dump.get(`thread:${String(i["id"])}`);
-      if (mine && p?.kind === "thread") inSpace(f, p.s, 0, true);
+      if (mine && p?.kind === "thread") inSpace(f, p.s, 0, true, true);
       return;
     }
     const p = seenThread(f, i["id"]);
     inSpace(f, p.s, 0, true);
-    if (!mine && p.mod === "removed") no("PRECONDITION_FAILED");
+    // nothing is added to a thread deleted with nothing under it (`gone`)
+    if (!mine && (p.mod === "removed" || p.gone)) no("PRECONDITION_FAILED");
   },
   "research.forkNode": (f, i) => {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     runPre(f, i);
     if (p.k !== "ask") no("BAD_REQUEST");
-    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     const parent = seenNode(f, p, i["parent"]);
     if (parent.mod === "removed") no("PRECONDITION_FAILED");
     // a parent whose run has not ended has no answer to build on (`03` G1)
     if (pending(runAt(f, parent))) no("PRECONDITION_FAILED");
     if (i["kind"] === "ask" ? blank(i["q"]) : !phraseOk(String(i["look"]))) no("BAD_REQUEST");
-    if (
-      i["kind"] === "lookup" &&
-      i["quote"] !== undefined &&
-      !inQuote(String(i["look"]), i["quote"] as string)
-    )
+    if (i["kind"] === "lookup" && !inQuote(String(i["look"]), i["quote"] as string))
       no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
@@ -578,23 +598,19 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     runPre(f, i);
     if (p.mod === "removed" || n.mod === "removed" || n.del) no("PRECONDITION_FAILED");
     const run = runAt(f, n);
-    if (run?.kind !== "run" || !["failed", "cancelled", "interrupted"].includes(run.status))
-      no("PRECONDITION_FAILED");
+    if (run?.kind !== "run") return no("PRECONDITION_FAILED");
+    // the attempt the person saw stop: a run retried since is STALE
+    if (run.attempt !== (i["base"] as { attempt: number }).attempt) no("STALE");
+    if (!["failed", "cancelled", "interrupted"].includes(run.status)) no("PRECONDITION_FAILED");
   },
   "research.createPostFollowUp": (f, i) => {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     if (p.k !== "post") no("BAD_REQUEST");
-    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     if (i["parent"] !== undefined) {
       const top = f.dump.get(`reply:${i["parent"] as string}`);
-      if (
-        top?.kind !== "reply" ||
-        !mayRead(f.dump, top, f.me) ||
-        top.th !== p.id ||
-        top.parent !== null
-      )
-        no("NOT_FOUND");
+      if (top?.kind !== "reply" || !mayRead(f.dump, top, f.me) || top.th !== p.id) no("NOT_FOUND");
       if ((top as Extract<StoredRecord, { kind: "reply" }>).mod === "removed")
         no("PRECONDITION_FAILED");
     }
@@ -606,7 +622,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     if (p.k !== "ask") no("BAD_REQUEST");
-    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     if (seenNode(f, p, i["node"]).mod === "removed") no("PRECONDITION_FAILED");
     if (i["parent"] !== undefined) {
       const top = f.dump.get(`comment:${i["parent"] as string}`);
@@ -614,8 +630,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
         top?.kind !== "comment" ||
         !mayRead(f.dump, top, f.me) ||
         top.th !== p.id ||
-        top.node !== i["node"] ||
-        top.parent !== null
+        top.node !== i["node"]
       )
         no("NOT_FOUND");
       if ((top as Extract<StoredRecord, { kind: "comment" }>).mod === "removed")
@@ -706,7 +721,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
   "notifications.markRead": (f, i) => {
     const n = f.dump.get(`notif:${String(i["id"])}`);
     if (n?.kind !== "notif" || n.to !== f.me || !mayRead(f.dump, n, f.me)) return no("NOT_FOUND");
-    if (n.sp !== null) inSpace(f, n.sp, 0, true);
+    if (n.sp !== null) inSpace(f, n.sp, 0, true, true);
   },
   "notifications.markAllRead": () => {},
   "prefs.set": () => {},
@@ -746,7 +761,10 @@ interface ClientModel {
 
 export class WriteModel {
   private readonly clients = new Map<string, ClientModel>();
-  private readonly answers = new Map<string, { payload: string; code: Code; at: number }>();
+  private readonly answers = new Map<
+    string,
+    { payload: string; code: Code; reason?: string; at: number }
+  >();
   /** Every id a stored record ever had. */
   private readonly ids = new Set<string>();
   /** Each person's registrations. */
@@ -804,7 +822,12 @@ export class WriteModel {
   }
 
   predict(dump: Dump, u: string | null, envelope: unknown, now: number): Prediction {
-    const pass = (code: Code): Prediction => ({ code, usesSeq: false, stored: false });
+    const pass = (code: Code, reason?: string): Prediction => ({
+      code,
+      usesSeq: false,
+      stored: false,
+      ...(reason !== undefined ? { reason } : {}),
+    });
     const e = envelope as Envelope;
     const isObject = e !== null && typeof e === "object";
     if (isObject && depthOf((e as { input?: unknown }).input) > 32) return pass("BAD_REQUEST");
@@ -843,7 +866,8 @@ export class WriteModel {
     const payload = sortedJson([e.name, e.input]);
     const prior = formed ? this.answers.get(`${u} ${e.mutationId}`) : undefined;
     const live = prior && now - prior.at < 7 * MIN_DAY ? prior : undefined;
-    if (live && (live.payload === payload || live.payload === REPLACED)) return pass(live.code);
+    if (live && (live.payload === payload || live.payload === REPLACED))
+      return pass(live.code, live.reason);
     const again = client.bySeq.get(e.seq);
     if (again && now - again.at < 7 * MIN_DAY && again.sent === sortedJson([e.mutationId, payload]))
       return pass(again.code);
@@ -853,13 +877,24 @@ export class WriteModel {
       for (const id of e.replaces ?? []) {
         const old = this.answers.get(`${u} ${id}`);
         if (old && now - old.at < 7 * MIN_DAY)
-          return { code: old.code, usesSeq: false, stored: false, adopted: true };
+          return {
+            code: old.code,
+            usesSeq: false,
+            stored: false,
+            adopted: true,
+            ...(old.reason !== undefined ? { reason: old.reason } : {}),
+          };
       }
     if (e.seq !== client.last + 1) return pass("OUT_OF_ORDER");
     if (!formed || live)
       return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
     if (Math.abs(e.clientTime - now) > MINUTE_MS) return pass("CLOCK_SKEW");
-    const stored = (code: Code): Prediction => ({ code, usesSeq: true, stored: true });
+    const stored = (code: Code, reason?: string): Prediction => ({
+      code,
+      usesSeq: true,
+      stored: true,
+      ...(reason !== undefined ? { reason } : {}),
+    });
     if (!fresh(e.mutationId, e.clientTime)) return stored("EXPIRED");
     if (!freshTime(e.queuedAt, e.clientTime)) return stored("EXPIRED");
     const schema = Object.hasOwn(SCHEMA, e.name) ? SCHEMA[e.name] : undefined;
@@ -882,7 +917,7 @@ export class WriteModel {
       rules(facts, input);
     } catch (x) {
       if (x instanceof No)
-        return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code);
+        return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code, x.reason);
       throw x;
     }
     return stored("ok");
@@ -900,22 +935,25 @@ export class WriteModel {
         code: p.code,
         at: now,
       });
+    const reason = p.reason !== undefined ? { reason: p.reason } : {};
     if (p.adopted)
       this.answers.set(`${u} ${envelope.mutationId}`, {
         payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
+        ...reason,
         at: now,
       });
     if (p.stored) {
       this.answers.set(`${u} ${envelope.mutationId}`, {
         payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
+        ...reason,
         at: now,
       });
       for (const id of envelope.replaces ?? []) {
         const old = this.answers.get(`${u} ${id}`);
         if (id !== envelope.mutationId && !(old && now - old.at < 7 * MIN_DAY))
-          this.answers.set(`${u} ${id}`, { payload: REPLACED, code: p.code, at: now });
+          this.answers.set(`${u} ${id}`, { payload: REPLACED, code: p.code, ...reason, at: now });
       }
     }
     for (const [k, a] of this.answers) if (now - a.at >= 7 * MIN_DAY) this.answers.delete(k);

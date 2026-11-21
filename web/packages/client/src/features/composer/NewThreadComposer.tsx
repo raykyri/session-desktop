@@ -12,6 +12,7 @@ import { useNavigate } from "@tanstack/react-router";
 import type { MouseEvent, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 
+import { cn } from "../../lib/cn.js";
 import { useOnlineData } from "../../replica/ReplicaProvider.js";
 import {
   composerModel,
@@ -352,20 +353,36 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
       ? "Ask anything"
       : "Write a post";
 
+  // One write at a time: a second ⌘↵ or click while the first is in flight
+  // does nothing (the sync replica answers when the server has).
+  const busy = useRef(false);
+  const [sending, setSending] = useState(false);
   const send = async () => {
     const q = text.trim();
-    if (!q || !target) {
+    if (!q || !target || busy.current) {
       field.current?.focus();
       return;
     }
-    const id =
-      mode === "ask" && model
-        ? await writes.ask(target.id, q, model.id, effort)
-        : await writes.post(target.id, q);
-    if (id) {
-      clearDraft(NEW_THREAD_DRAFT);
-      if (field.current) field.current.style.height = "";
-      onCreated?.(id);
+    busy.current = true;
+    setSending(true);
+    const sent = text;
+    try {
+      const id =
+        mode === "ask" && model
+          ? await writes.ask(target.id, q, model.id, effort)
+          : await writes.post(target.id, q);
+      if (id) {
+        // Text typed while the write was in flight stays in the field.
+        const current = useDraftsStore.getState().byKey[NEW_THREAD_DRAFT]?.text ?? "";
+        if (current === sent) {
+          clearDraft(NEW_THREAD_DRAFT);
+          if (field.current) field.current.style.height = "";
+        }
+        onCreated?.(id);
+      }
+    } finally {
+      busy.current = false;
+      setSending(false);
     }
   };
 
@@ -387,7 +404,7 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
     // the form is reachable from the keyboard.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <form
-      className={`nb${empty ? "" : "has-text"}`}
+      className={cn("nb", !empty && "has-text")}
       onSubmit={(event) => {
         event.preventDefault();
         void send();
@@ -435,7 +452,7 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
       ) : null}
       <SendSplitButton
         mode={mode}
-        empty={empty}
+        empty={empty || sending}
         onMode={(next) => {
           setMode(next);
           requestAnimationFrame(() => {

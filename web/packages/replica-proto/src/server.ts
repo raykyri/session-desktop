@@ -67,7 +67,6 @@ import {
   Refusal,
   StagedTx,
   ULID_RE,
-  answerKey,
   audience,
   authorize,
   createdOf,
@@ -275,6 +274,10 @@ class Store implements Source {
     return this.registry.has(id);
   }
 
+  lastRev(name: string): number | undefined {
+    return this.registry.get(name);
+  }
+
   /** Add a record's key to its indexes, or take it out. */
   private index(r: StoredRecord, key: string, on: boolean) {
     const cols = indexOf(r);
@@ -337,8 +340,10 @@ class Store implements Source {
         for (const log of logsOfAudience(tomb)) this.row(log, key, "del", version);
         continue;
       }
+      // the rev is the staged one (`StagedTx`: the committed rev + 1, or the
+      // registry's last rev + 1 at a key that was deleted)
       const reg = registryKey(next);
-      const rev = (prev?.rev ?? this.registry.get(reg) ?? 0) + 1;
+      const rev = next.rev;
       const rec = { ...next, rev };
       if (prev) this.index(prev, key, false);
       this.index(rec, key, true);
@@ -730,7 +735,7 @@ export class ProtoServer implements TestServer {
             "mutationId: expected a ULID from the minute before clientTime (online only)",
           ]),
         );
-      const tx = new StagedTx(this.store, u, isoAt(now), m.mutationId);
+      const tx = new StagedTx(this.store, u, isoAt(now), m.mutationId, "server");
       authorize(tx, def, input);
       const pre: PreCtx = {
         me: u,
@@ -993,34 +998,42 @@ export class ProtoServer implements TestServer {
     });
   }
 
+  freeze(space: string): boolean {
+    const now = this.begin();
+    const s = this.store.byKey(`space:${space}`);
+    if (s?.kind !== "space") return false;
+    const tx = new StagedTx(this.store, "", isoAt(now), "", "server");
+    tx.put({ ...s, frozen: true });
+    this.store.commit(tx.staged, now);
+    return true;
+  }
+
   finishJob(key: string, text: string): boolean {
     const now = this.begin();
     const r = this.store.byKey(key);
     if (!r || !("mod" in r) || r.mod === "removed") return false;
+    const tx = new StagedTx(this.store, "", isoAt(now), "", "server");
     /** The ask's run, `complete` if it had not ended (the run loop's last
      * write, `03` E2). */
-    const done = (th: string, node: string): [string, StoredRecord][] => {
+    const done = (th: string, node: string) => {
       const run = [...this.store.keysIn("run", { th })]
         .map((k) => this.store.byKey(k) as RunRec)
         .find((x) => x.node === node);
-      if (!run || (run.status !== "queued" && run.status !== "running")) return [];
+      if (!run || (run.status !== "queued" && run.status !== "running")) return;
       const at = isoAt(now);
-      return [
-        [
-          `run:${run.id}`,
-          { ...run, status: "complete", step: 3, startedAt: run.startedAt ?? at, finishedAt: at },
-        ],
-      ];
+      tx.put({
+        ...run,
+        status: "complete",
+        step: 3,
+        startedAt: run.startedAt ?? at,
+        finishedAt: at,
+      });
     };
-    if (r.kind === "thread" && !r.del)
-      return (
-        this.store.commit(
-          new Map([[key, { ...r, sum: text, running: false }], ...done(r.id, "r")]),
-          now,
-        ) !== null
-      );
-    if (r.kind === "node") {
-      const answer: StoredRecord = {
+    if (r.kind === "thread" && !r.del) {
+      tx.put({ ...r, sum: text, running: false });
+      done(r.id, "r");
+    } else if (r.kind === "node") {
+      tx.put({
         kind: "answer",
         node: r.id,
         th: r.th,
@@ -1032,13 +1045,10 @@ export class ProtoServer implements TestServer {
         run: r.run,
         attempt: 1,
         mod: r.mod,
-        rev: 0,
-      };
-      return (
-        this.store.commit(new Map([[answerKey(r.id), answer], ...done(r.th, r.id)]), now) !== null
-      );
-    }
-    return false;
+      });
+      done(r.th, r.id);
+    } else return false;
+    return this.store.commit(tx.staged, now) !== null;
   }
 }
 
