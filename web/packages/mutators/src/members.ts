@@ -11,7 +11,8 @@ export const MEMBERS = {
   // queued before the person was removed and let in again is STALE (review
   // round 1, R1b); the person cannot change the id alone, except by joining
   // an open space again (review round 2, finding 2). A person who is no
-  // longer a member: nothing to remove.
+  // longer a member: nothing to remove, and the result says so
+  // (`removed: false`), so the owner's client does not report a removal.
   "members.remove": define({
     input: M["members.remove"].input.extend({ space: ulidS, user: handleS }).strict(),
     who: "owner",
@@ -20,11 +21,11 @@ export const MEMBERS = {
     can: (tx, i) => actsOn(tx, i.user),
     run: (tx, i) => {
       const m = tx.byKey(memberKey(i.space, i.user));
-      if (m?.kind !== "member") return null;
+      if (m?.kind !== "member") return { removed: false };
       if (m.adm !== i.base.adm) throw stale();
       tx.del(memberKey(i.space, i.user));
       refreshSpace(tx, i.space, -1);
-      return null;
+      return { removed: true };
     },
   }),
 

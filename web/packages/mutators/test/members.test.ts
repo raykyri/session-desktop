@@ -73,7 +73,10 @@ test("a ban does not stop a person's own user-log writes: marking read, taking a
 test("a removal decided before the person was let in again is STALE", (t) => {
   const { w, closed } = cast(t);
   const adm = admission(w, closed, "ada");
-  ok(t, w.apply("olga", "members.remove", { space: closed, user: "ada", base: { adm } }));
+  t.deepEqual(
+    ok(t, w.apply("olga", "members.remove", { space: closed, user: "ada", base: { adm } })),
+    { removed: true },
+  );
   t.is(w.get(`member:${closed}:ada`), undefined);
   admit(t, w, closed, "ada");
   t.not(admission(w, closed, "ada"), adm);
@@ -84,4 +87,17 @@ test("a removal decided before the person was let in again is STALE", (t) => {
   );
   // a person who is not a member: nothing to remove
   ok(t, w.apply("olga", "members.remove", { space: closed, user: "eve", base: { adm: "" } }));
+});
+
+test("a removal of a person who had already left answers removed: false and changes nothing (C12)", (t) => {
+  const { w, closed } = cast(t);
+  const adm = admission(w, closed, "ada");
+  ok(t, w.apply("ada", "spaces.leave", { space: closed }));
+  const before = w.get(`space:${closed}`);
+  t.deepEqual(
+    ok(t, w.apply("olga", "members.remove", { space: closed, user: "ada", base: { adm } })),
+    { removed: false },
+  );
+  t.deepEqual(w.get(`space:${closed}`), before, "the member count is as it was");
+  t.is(w.all("modlog").length, 0);
 });

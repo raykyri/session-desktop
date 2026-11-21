@@ -14,8 +14,11 @@
 //   members only. A non-member gets none of a private space's content, the
 //   threads they wrote included, and no further updates of it.
 // - Join requests (prototype only): the person's own, and all of them for
-//   the space's owner. Bans, invite links and the moderation log: the
-//   space's owner only.
+//   the space's owner. Bans: the banned person's own (in their user log, so
+//   that their client learns of the ban), and all of them for the space's
+//   owner. A ban holds the space, the person and its time, and no field
+//   naming who banned them, so it is served unredacted. Invite links and
+//   the moderation log: the space's owner only.
 // - A person reads their own membership records (in their user log).
 // - A person's saves, notifications and preferences: that person only;
 //   saves and notifications only while they may read the space the record is
@@ -132,8 +135,8 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "answer":
       return sp !== null && readsSpace(g, sp, u);
     case "request":
-      return own || (sp !== null && isOwnerOf(g, sp, u));
     case "ban":
+      return own || (sp !== null && isOwnerOf(g, sp, u));
     case "invite":
     case "modlog":
       return sp !== null && isOwnerOf(g, sp, u);
