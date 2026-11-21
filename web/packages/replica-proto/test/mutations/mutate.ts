@@ -834,8 +834,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-15 a used invite link is revoked and restored",
     file: "../mutators/src/invites.ts",
-    from: '    space: (tx, i) => readable(tx, linkOf(i.id), "invite").sp,\n    run: (tx, i) => {\n      const l = readable(tx, linkOf(i.id), "invite");\n      if (l.dead === "Used") throw refuse("PRECONDITION_FAILED", "This link was already used.");\n      if (l.dead === "Revoked")',
-    to: '    space: (tx, i) => readable(tx, linkOf(i.id), "invite").sp,\n    run: (tx, i) => {\n      const l = readable(tx, linkOf(i.id), "invite");\n      if (l.dead === "Used" || l.dead === "Revoked")',
+    from: '      if (l.dead === "Used") throw refuse("PRECONDITION_FAILED", "This link was already used.");\n      if (l.dead !== "Revoked") return null;',
+    to: '      if (l.dead !== "Used" && l.dead !== "Revoked") return null;',
   },
   {
     name: "M1b-16 the queue-full refusal carries no reason",
