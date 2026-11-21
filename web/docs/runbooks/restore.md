@@ -1,9 +1,10 @@
 # Restore
 
-How to bring `session-dev` back from its backups: `session.db` from Litestream,
-`/data/documents` (image attachments) from the daily archives, followed by
-the verification steps required to validate database integrity and
-application health. Source of truth for what is backed up:
+How to bring `session-dev` (or `session-staging`) back from its backups:
+`session.db` from Litestream, and `/data/documents` from the daily archives
+when the database is one of the earlier build (a rollback, `launch.md` §8),
+followed by the verification steps required to validate database integrity
+and application health. Source of truth for what is backed up:
 `13-deployment-fly.md` §6.
 
 Available backup sources:
@@ -23,8 +24,9 @@ the database with an empty one instead of restoring it, see
 - **The volume is gone or corrupt.** Full restore, below.
 - **Recover from an incorrect write or data corruption.** Restore to a point
   in time, then replace the active database file.
-- **One image is missing.** Pull the archive that contains it and copy that
-  one file; skip the database entirely.
+- **One image of the earlier build is missing.** Pull the archive that
+  contains it and copy that one file; skip the database entirely. The
+  current build writes nothing under `/data/documents`.
 
 Stop the application before performing any restore. Two processes must never
 hold the same SQLite file, and a Litestream restore into a live database
@@ -54,13 +56,18 @@ litestream restore -config /etc/litestream.yml \
   -o /data/session.db.restored "$LITESTREAM_REPLICA_URL"
 ```
 
-Inspect the database before replacing the active file: run `litestream ltx` to review available snapshots, and query the restored database directly with `sqlite3` to confirm row counts and table integrity:
+Inspect the database before replacing the active file. The image has no
+`sqlite3`; `better-sqlite3` is in `/app/node_modules`:
 
 ```sh
-sqlite3 /data/session.db.restored "PRAGMA integrity_check;"
-sqlite3 /data/session.db.restored "SELECT count(*) FROM nodes;"
-sqlite3 /data/session.db.restored "SELECT count(*) FROM research_images;"
+cd /app && node -e '
+  const d = require("better-sqlite3")("/data/session.db.restored", { readonly: true });
+  console.log(d.pragma("integrity_check", { simple: true }));
+  console.log(d.prepare("SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM records) AS records, (SELECT version FROM server_head) AS head").get());'
 ```
+
+`integrity_check` prints `ok`; `head` is the last sync version the restored
+file holds.
 
 Then swap, keeping the old file until the verification below passes:
 
@@ -104,7 +111,7 @@ time. After such a restore, and before starting the server, ask the next
 boot to replace the history id:
 
 ```sh
-cd /app/packages/db && SESSION_DATA_DIR=/data npm run db:admin -- --new-history
+node /app/packages/server/dist/admin.mjs --new-history
 ```
 
 The command leaves a marker in `server_meta` (`history_reset_requested`);
@@ -137,9 +144,11 @@ done
 chown -R session:session /data/documents
 ```
 
-`/data/documents` holds the image attachments (`research_images`), as
-`<owner_id>/<sha256>` plus `<sha256>.thumb.jpg`; uploaded documents were
-removed in phase 2.0. Restoring it is required: the database names these
+Only for a database of the earlier build (the current web app on `main`,
+restored in a rollback): its `/data/documents` holds the image attachments
+(`research_images`), as `<owner_id>/<sha256>` plus `<sha256>.thumb.jpg`.
+The current build writes nothing there. Restoring it is required for that
+database: it names these
 files, and `GET /images/:id` answers 404 for a row whose file is missing.
 Images uploaded after the newest archive are not in any archive and stay
 404 after a restore; their rows and the messages that name them remain.
@@ -155,45 +164,38 @@ fly logs -a session-dev
 ```
 
 Monitor the startup logs for the expected boot sequence
-(`13-deployment-fly.md` §5): environment validation, credential generation,
-migration application, `reconciled runs from the previous process`, and
-`session-server listening`. `/healthz` returns 503 until startup completes.
+(`13-deployment-fly.md` §5): the warning `the sync history id was replaced:
+every cursor served before this boot resyncs` with `reason: "generation"`
+(the restored file is a new file), `booted`, and `session-server
+listening`. `/healthz` returns 503 until startup completes.
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' https://session.dev/healthz     # 200
 curl -sS -H "Authorization: Bearer $SESSION_METRICS_TOKEN" https://session.dev/metrics \
-  | grep -E 'session_(ready|db_size_bytes|queue_depth)'
+  | grep -E 'session_(ready|db_size_bytes)'
 ```
 
-Counts against what you expected before the incident:
+Counts against what you expected before the incident, with the query of §2
+on `/data/session.db` (`fly ssh console -a session-dev`, then `cd /app &&
+node -e ...`).
 
-```sh
-fly ssh console -a session-dev -C \
-  "sqlite3 /data/session.db 'SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM trees), (SELECT count(*) FROM nodes), (SELECT count(*) FROM research_images);'"
-fly ssh console -a session-dev -C "sh -c 'find /data/documents -type f ! -name \"*.thumb.jpg\" | wc -l'"
-```
+Then in the app: sign in, open a channel and a thread, post, and ask one
+short question (that exercises the run dispatcher, a provider credential
+and a write). A tab that was open before the restore takes a new snapshot
+when it reconnects (a `POST /api/sync/snapshot` in its network log) instead
+of pulling from its old cursor.
 
-The file count should be close to the `research_images` count (rows of one
-owner with the same bytes share a file; images newer than the archive are
-missing).
-
-Then in the app: sign in, open a thread with an image attachment (that
-exercises `GET /images/:id` and the restored file), open an answer with a
-widget (that exercises the artifact origin), and start one short run (that
-exercises the queue, a provider credential, and a write).
-
-Interrupted runs resume automatically: nodes left `running` by the crash are
-marked `interrupted` with `resume_pending` and re-queued during startup
-(`05-run-lifecycle-and-streaming.md` §7). This can increase activity during the
-first minute.
+Runs the restored file holds as `running` are marked `interrupted` at boot,
+and the dispatcher queues the ones it may resume (`01` S5, `03` E2). This can
+increase activity during the first minute.
 
 ## 5. After
 
 - Delete `/data/session.db.broken` once the verification passes, not before.
 - Litestream begins replicating the restored file immediately; confirm with
   `fly logs` (a `sync` line within a second or two of the first write).
-- Force a documents archive to establish a reliable baseline marker for
-  subsequent incremental backups:
+- For a database of the earlier build, force a documents archive to
+  establish a baseline marker for subsequent incremental backups:
   `fly ssh console -a session-dev -C "/app/scripts/backup-documents.sh"`.
   Otherwise the server runs one at boot when the marker is missing or a day
   old; `session_documents_backup_age_seconds` shows when it last succeeded.

@@ -32,7 +32,7 @@
 // privacy check, the pre-stage limits, the invite notification), named by
 // the review's row, so that each fix's test is shown to fail without it.
 // M6-55 on cover the M6 tail: `members.remove`'s result (C12) and the
-// banned person's read of their own ban record, with its backfill (C18).
+// banned person's read of their own ban record (C18).
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -1834,18 +1834,6 @@ const MUTATIONS: Mutation[] = [
     from: '    case "request":\n    case "ban":\n      return own || (sp !== null && isOwnerOf(g, sp, u));',
     to: '    case "ban":\n      return own || (sp !== null && readsSpace(g, sp, u));\n    case "request":\n      return own || (sp !== null && isOwnerOf(g, sp, u));',
   },
-  {
-    name: "M6-60 C18: the ban backfill writes no log row",
-    file: "../db/src/backfills/records.ts",
-    from: "      tx.run(\n        sql`INSERT INTO change_log",
-    to: "      String(\n        sql`INSERT INTO change_log",
-  },
-  {
-    name: "M6-61 C18: boot does not run the ban backfill",
-    file: "../db/src/backfills/index.ts",
-    from: "export const BACKFILLS: readonly Backfill[] = [hashAccountInvites, banUserLogs];",
-    to: "export const BACKFILLS: readonly Backfill[] = [hashAccountInvites];\nvoid banUserLogs;",
-  },
 ];
 
 /** The tests that must fail for a mutation to count as killed, by id: the
@@ -2310,14 +2298,6 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
       "C18: a banned person's snapshot and pull of their user log hold their own ban",
       "a banned person's snapshots and pulls hold their own ban and no other",
     ],
-  },
-  "M6-60": {
-    in: "db",
-    tests: ["C18: the ban backfill writes a stored ban to the banned person's user log once"],
-  },
-  "M6-61": {
-    in: "db",
-    tests: ["C18: the ban backfill writes a stored ban to the banned person's user log once"],
   },
 };
 

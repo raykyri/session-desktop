@@ -130,8 +130,8 @@ threads is preserved upon account deletion.
 
 - `user_id` PK FK, `weekly_tokens` integer null (the member's weekly
   allowance of included tokens; null = the deployment's
-  `SESSION_WEEKLY_TOKENS`, 2,000,000; plan `03` K3), `updated_at`. The daily
-  token and run columns were dropped by `0007_weekly_tokens`.
+  `SESSION_WEEKLY_TOKENS`, 2,000,000; plan `03` K3), `updated_at`. There
+  are no daily token or run columns.
 
 `sessions`
 
@@ -484,12 +484,14 @@ metadata | search | fetch | run`), `provider` text, `model` text null,
   by comparing `__drizzle_migrations` against the bundled journal.
 - Data backfills that cannot be expressed in SQL run as versioned TypeScript
   steps in `src/backfills/` after `migrate()`, recorded in a `backfills`
-  table. The list is empty since the reset below.
-- Phase 2.0 of the desktop parity plan squashed the history into one
-  `0000_initial.sql` generated from the schema, and phase 5 folded the
-  collaboration migration into it again before the first deploy. A database created by the
-  earlier migrations is not upgraded; it is replaced
-  (`runbooks/reset-database.md`).
+  table. The list is empty since the M8a squash below.
+- M8a squashed the history (`0000_initial` with the research tables, then
+  `0003_api_keys` to `0007_weekly_tokens`) into one `0000_initial.sql`
+  generated from the schema (plan `01` D5). It creates no research table. A
+  database created by the earlier migrations is refused at boot with
+  `UnknownMigrationError` and replaced, not upgraded
+  (`runbooks/reset-database.md`). §3 still describes tables of the removed
+  research schema; `0000_initial.sql` does not create them.
 - Test databases: `openDatabase(":memory:")` for unit tests of repos where
   file semantics do not matter; a temp file for tests exercising WAL and
   concurrent readers.

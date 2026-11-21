@@ -17,10 +17,8 @@ import {
   SqliteStore,
   checkRestore,
   databaseGeneration,
-  logBansInUserLogs,
   requestNewHistory,
   rewriteRecords,
-  runBackfills,
 } from "../src/index.js";
 
 import { DAY, KEYS, MINUTE, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
@@ -576,32 +574,6 @@ test("D7: a backfill reads a stored shape the current schema refuses, and valida
     }),
   );
   t.deepEqual(w.tables(), before);
-});
-
-test("C18: the ban backfill writes a stored ban to the banned person's user log once, and their replica pulls it", (t) => {
-  const w = new World(t);
-  const { open, closed } = cast(t, w);
-  // eve is a member of nothing: her user log pulls without a resync
-  ok(t, w.as("olga", "members.ban", { space: open, user: "eve" }));
-  ok(t, w.as("olga", "members.ban", { space: closed, user: "eve" }));
-  const cursor = w.server.snapshot(actor("eve"), "user:eve").cursor;
-  // the rows an earlier build did not write, and the backfill it had not run
-  w.db.$client.prepare("DELETE FROM change_log WHERE log = 'user:eve'").run();
-  w.db.$client.prepare("DELETE FROM backfills WHERE id = '0007-ban-user-logs'").run();
-  const head = w.store.head();
-  // as boot runs it, inside the transaction `runBackfills` gives
-  t.deepEqual(runBackfills(w.db), ["0007-ban-user-logs"]);
-  const store = new SqliteStore(w.db);
-  for (const sp of [open, closed])
-    t.is(store.logRow("user:eve", `ban:${sp}:eve`)?.version, head + 1);
-  const server = new SyncServer({ store, clock: w.clock, mutators: MUTATORS, cursorKeys: KEYS });
-  t.deepEqual(
-    changesOf(server.pull(actor("eve"), "user:eve", cursor))
-      .map((c) => c.key)
-      .sort(),
-    [`ban:${closed}:eve`, `ban:${open}:eve`].sort(),
-  );
-  t.is(logBansInUserLogs(w.db), 0, "nothing left to write");
 });
 
 test("the store refuses a record that does not match its schema, and the write commits nothing", (t) => {

@@ -12,7 +12,6 @@
 // rewritten record is validated, by `putRecord`.
 
 import { logsOf, registryKey, type Kind, type StoredRecord } from "@session/mutators";
-import { sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { SqliteStore } from "../sync/store.js";
@@ -72,51 +71,3 @@ export function recordBackfill(spec: RecordBackfillSpec): Backfill {
     },
   };
 }
-
-/** Adds a `put` row to the banned person's user log for every ban stored
- * before bans were written there (`personOf`, `01` C18), under one new
- * version, so the banned person's replica pulls their own ban. A ban that
- * already has its row is left as it is. Returns how many rows it wrote.
- * Plain SQL over `db`, which is the transaction `runBackfills` gives (a
- * drizzle transaction, which `SqliteStore` does not take). */
-export function logBansInUserLogs(db: SessionDatabase): number {
-  return db.transaction((tx) => {
-    // a database migrated only up to a build before the spaces tables holds
-    // no bans (`openDatabase` with an older migrations folder)
-    const tables = tx.all(
-      sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'records'`,
-    );
-    if (tables.length === 0) return 0;
-    const rows = tx.all<{ key: string; body: string }>(
-      sql`SELECT key, body FROM records WHERE kind = 'ban' ORDER BY created_v, key`,
-    );
-    let version: number | null = null;
-    let n = 0;
-    for (const { key, body } of rows) {
-      const log = `user:${(JSON.parse(body) as { u: string }).u}`;
-      const held = tx.all(sql`SELECT 1 FROM change_log WHERE log = ${log} AND key = ${key}`);
-      if (held.length > 0) continue;
-      if (version === null) {
-        const head = tx.all<{ version: number }>(
-          sql`UPDATE server_head SET version = version + 1 WHERE id = 1 RETURNING version`,
-        );
-        if (!head[0]) throw new Error("server_head has no row");
-        version = head[0].version;
-      }
-      tx.run(
-        sql`INSERT INTO change_log (log, key, op, version) VALUES (${log}, ${key}, 'put', ${version})`,
-      );
-      n += 1;
-    }
-    return n;
-  });
-}
-
-/** `logBansInUserLogs` as a step of `BACKFILLS`. */
-export const banUserLogs: Backfill = {
-  id: "0007-ban-user-logs",
-  description: "write each stored ban to the banned person's user log",
-  run: (db) => {
-    logBansInUserLogs(db);
-  },
-};
