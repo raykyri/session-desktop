@@ -177,6 +177,16 @@ frameworks impose schemas that conflict with the Drizzle database design.
 Consequences: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` become Fly
 secrets. The desktop's stored `githubToken` is not needed (it gated nothing).
 
+Amendment (plan `04` I1, Z2; M6): sign-in is GitHub or X, both OAuth 2.0
+authorization code with PKCE, through one fetch-based client
+(`server/src/auth/providers.ts`) instead of `arctic`. An account is bound to
+the provider identity it was created with (`users.provider`,
+`provider_user_id`, unique together); there is no linking and no merging,
+so the same person's GitHub and X accounts are two Session accounts. Sign-up
+is invite-only: a new identity without an open invite becomes a `waiting`
+account that can only read. X adds `SESSION_X_CLIENT_ID` and
+`SESSION_X_CLIENT_SECRET`; `SESSION_SECRET_KEY` encrypts open invite codes.
+
 ## ADR-6 Client state: TanStack Query for server data, Zustand for UI state
 
 Status: superseded by ADR-20.

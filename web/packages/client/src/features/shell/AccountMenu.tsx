@@ -14,7 +14,7 @@ import { FOCUS_RING } from "../../ui/surfaces.js";
 
 import { ChevronDownIcon } from "./icons.js";
 import { SHELL_MENU_ITEM, SHELL_MENU_POPUP, SHELL_MENU_SEPARATOR } from "./menuStyles.js";
-import { accountLine, type Viewer } from "./viewer.js";
+import { accountLine, viewerHandle, type Viewer } from "./viewer.js";
 
 export function accountButtonLabel(unread: number): string {
   if (unread === 0) return "Account";
@@ -30,7 +30,7 @@ export interface AccountMenuProps {
 
 export function AccountMenu({ viewer, unreadCount, onSignOut, onOpenChange }: AccountMenuProps) {
   const navigate = useNavigate();
-  const handle = viewer.user.login;
+  const handle = viewerHandle(viewer.user);
   const go = (to: "/notifications" | "/invites" | "/saved" | "/usage" | "/admin" | "/welcome") =>
     void navigate({ to });
 
@@ -59,7 +59,9 @@ export function AccountMenu({ viewer, unreadCount, onSignOut, onOpenChange }: Ac
             <div className="flex items-center gap-2.5 px-2.5 pt-2 pb-1.5">
               <Avatar handle={handle} />
               <div>
-                <b className="text-fg-heading block text-sm">{viewer.user.name ?? handle}</b>
+                <b className="text-fg-heading block text-sm">
+                  {viewer.user.displayName ?? viewer.user.name ?? handle}
+                </b>
                 <small className="text-fg-faint -mt-0.5 block text-xs">{accountLine(viewer)}</small>
               </div>
             </div>

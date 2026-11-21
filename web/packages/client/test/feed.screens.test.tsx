@@ -84,7 +84,8 @@ test.serial("signed out: the composer is a cover that opens sign-in", async (t) 
   await waitUntil(t, () => document.querySelector(".tcard") !== null, "threads render");
   const cover = screen.getByRole("button", { name: "Sign in to ask or post" });
   fireEvent.click(cover);
-  await waitUntil(t, () => result.router.state.location.pathname === "/login", "sign-in opens");
+  t.truthy(await screen.findByRole("dialog", { name: "Sign in to Session" }), "sign-in opens");
+  t.is(result.router.state.location.pathname, "/");
 });
 
 test.serial(

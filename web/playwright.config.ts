@@ -95,6 +95,9 @@ export default defineConfig({
       SESSION_DATA_DIR: E2E_DATA_DIR,
       SESSION_FIXTURE_PROVIDERS: "1",
       SESSION_TEST_AUTH: "1",
+      // The auth dialog's sign-in runs the real OAuth handshake against this
+      // server's fixture provider endpoints (`auth/fixtureOAuth.ts`).
+      SESSION_FIXTURE_OAUTH: "1",
       // Every provider reports a credential so no model is hidden as
       // unavailable; the fixture provider answers instead of any of them.
       GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',

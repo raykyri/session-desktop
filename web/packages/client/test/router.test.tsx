@@ -144,17 +144,29 @@ test.serial("a thread address keeps t and drops a malformed sel", async (t) => {
   t.is(match?.search.sel, undefined, "the malformed value does not reach the screen");
 });
 
-test.serial("/i#<code>: the code leaves the URL and waits in memory", async (t) => {
-  const app = await renderApp("/i#SESS-9TQ2-X8", { user: null });
-  await waitUntil(t, () => app.router.state.location.pathname === "/login", "on to sign in");
+test.serial("/i#<code>: the code leaves the URL and the dialog shows the inviter", async (t) => {
+  const app = await renderApp("/i#SESS-9TQ2-X8", {
+    user: null,
+    responses: {
+      "auth.checkInvite": () => ({
+        status: "open",
+        inviter: { name: "Ines Vidal", handle: "ines.v" },
+      }),
+    },
+  });
+  await waitUntil(t, () => app.router.state.location.pathname === "/", "on to Home");
   t.false(app.router.state.location.href.includes("SESS"), "no code in the address");
-  t.deepEqual(readPendingInvite(), { kind: "account", code: "SESS-9TQ2-X8" });
+  t.truthy(await screen.findByText("Ines Vidal invited you to Session"));
+  t.deepEqual(app.trpc.calls.find((call) => call.path === "auth.checkInvite")?.input, {
+    code: "SESS-9TQ2-X8",
+  });
+  t.is(readPendingInvite(), null, "taken out of memory once shown");
   app.unmount();
 
-  clearPendingInvite();
   const member = await renderApp("/i#SESS-9TQ2-X8", { user: testUser() });
   await waitUntil(t, () => member.router.state.location.pathname === "/", "signed in: Home");
   t.false(member.router.state.location.href.includes("SESS"));
+  t.is(screen.queryByRole("dialog"), null, "a member's link is dropped");
 });
 
 test("a page load takes the code out of the address before the router starts", (t) => {
@@ -193,11 +205,13 @@ test.serial("a redirect that leaves this origin is not followed", async (t) => {
 });
 
 test.serial("the sign-in page shows the server's refusal", async (t) => {
-  await renderApp("/login?error=invite_required", { user: null });
+  await renderApp("/login?error=too_many_accounts", { user: null });
   t.is(
     screen.getByRole("alert").textContent,
-    "A sign-up code is required to create an account. Open the sign-up link you received.",
+    "Too many new accounts were made from your network today. Try again tomorrow.",
   );
+  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
+  t.truthy(screen.getByRole("button", { name: "Sign in with X" }));
 });
 
 test.serial("the development kitchen sink is absent outside a development build", async (t) => {

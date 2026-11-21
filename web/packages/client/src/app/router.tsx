@@ -228,6 +228,10 @@ const usageRoute = createRoute({
 const welcomeRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/welcome",
+  // `?new=1`: the OAuth callback made this waiting account just now; the
+  // page opens the "No Session account" step and drops the marker.
+  validateSearch: (search: Record<string, unknown>): { new?: true } =>
+    search["new"] === 1 || search["new"] === "1" || search["new"] === true ? { new: true } : {},
   beforeLoad: async ({ context, location }) => {
     const viewer = await loadViewer(context.queryClient);
     if (viewer.kind === "signedOut") toLogin(location.href);
@@ -258,21 +262,17 @@ const adminRoute = createRoute({
  * An account invite link, `/i#<code>` (02 §2.1, 04 §3.2). A page load has
  * already moved the code into memory (`app/captureInvite.ts`); a navigation
  * inside the app carries it here in `location.hash`. Either way the code
- * stays out of the URL and the history. A signed-out visitor goes on to
- * sign in, which carries the code; the auth dialog of 02 W7.2 replaces that
- * step and opens over `/`.
+ * stays out of the URL and the history. The route goes on to `/`, where the
+ * shell opens the auth dialog with the code (`useAccountDialogs`).
  */
 const inviteLinkRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/i",
-  beforeLoad: async ({ context, location }) => {
+  beforeLoad: ({ location }) => {
     const code = location.hash.replace(/^#/, "").trim();
     if (code !== "") savePendingInvite({ kind: "account", code });
-    const viewer = await loadViewer(context.queryClient);
     // eslint-disable-next-line @typescript-eslint/only-throw-error
-    throw redirect(
-      viewer.kind === "signedOut" ? { to: "/login", search: {} } : { to: "/", replace: true },
-    );
+    throw redirect({ to: "/", replace: true });
   },
 });
 

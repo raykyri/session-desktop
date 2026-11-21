@@ -30,7 +30,6 @@ import {
   protectedProcedure,
   publicProcedure,
   router,
-  takeOrRefuse,
   tooManyRequests,
 } from "../base.js";
 
@@ -56,7 +55,12 @@ function guardFailedChecks(ctx: AppContext): void {
   const spec = abuseBuckets(ctx.config.abuse).failedChecks;
   const keys = [`failedChecks:ip:${ctx.ipKey}`];
   if (ctx.user) keys.push(`failedChecks:user:${ctx.user.id}`);
-  if (keys.some((key) => !ctx.limiter.has(key, spec))) throw tooManyRequests();
+  const spent = keys.find((key) => !ctx.limiter.has(key, spec));
+  if (spent !== undefined) {
+    // Taken from an empty bucket: refused, and counted for the metric.
+    ctx.limiter.take(spent, spec);
+    throw tooManyRequests();
+  }
 }
 
 /** Counts a failed check against the IP key and the account. */
@@ -166,7 +170,14 @@ export const accountInvitesRouter = router({
   }),
 
   create: memberProcedure.mutation(({ ctx }) => {
-    takeOrRefuse(ctx, "invitesCreated", `user:${ctx.user.id}`);
+    // 10 created a day (04 Z1): counted when a link is made, so a create
+    // refused at 3 open does not use up the day.
+    const daily = abuseBuckets(ctx.config.abuse).invitesCreated;
+    const dailyKey = `invitesCreated:user:${ctx.user.id}`;
+    // `take` on the refusal path records it for `session_rate_limited_total`.
+    if (!ctx.limiter.has(dailyKey, daily) && !ctx.limiter.take(dailyKey, daily).allowed) {
+      throw tooManyRequests();
+    }
     const made = accountInvites.create(ctx.db, {
       createdBy: ctx.user.id,
       exempt: ctx.user.isAdmin,
@@ -179,6 +190,7 @@ export const accountInvitesRouter = router({
         message: `You have ${ctx.config.abuse.openInvites} open invites. One frees when it is used or revoked.`,
       });
     }
+    ctx.limiter.take(dailyKey, daily);
     ctx.logger.info({ userId: ctx.user.id, inviteId: made.id }, "account invite created");
     return {
       id: made.id,

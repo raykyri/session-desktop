@@ -1,18 +1,10 @@
-// The page screens of 02 §2.1 whose content needs a procedure the server
-// does not have yet: Invites (W7.1, `members.tree` and account invites), Usage (W8.1,
-// `usage.get`), Notifications (W2.6, the user log) and Invite required
-// (W7.3, the redeem call). Each is its heading, a placeholder line and the
-// site footer.
+// The page screens of 02 §2.1. Usage (W8.1, `usage.get`) and Notifications
+// (W2.6, the user log) still need a procedure the server does not have yet:
+// each is its heading, a placeholder line and the site footer. Invites
+// (W7.1) and Invite required (W7.3) are the account screens of
+// `features/auth`.
 
 import { NotBuiltYet, PageFrame } from "../features/shell/Frames.js";
-
-export function InvitesPage() {
-  return (
-    <PageFrame title="Invites">
-      <NotBuiltYet />
-    </PageFrame>
-  );
-}
 
 export function UsagePage() {
   return (
@@ -30,12 +22,6 @@ export function NotificationsPage() {
   );
 }
 
-export function WelcomePage() {
-  return (
-    <PageFrame title="Invite required" narrow>
-      <NotBuiltYet />
-    </PageFrame>
-  );
-}
-
 export { BrowsePage } from "../features/channels/BrowsePage.js";
+export { InvitesPage } from "../features/auth/InvitesPage.js";
+export { WelcomePage } from "../features/auth/WelcomePage.js";
