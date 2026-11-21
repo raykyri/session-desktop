@@ -3,17 +3,23 @@
 // however the call ends, with counts that match what the fixture streamed.
 // The sum of a run's rows is the run record's `tok`.
 
-import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
-import { estimateTokenCount } from "@session/shared";
+import type {
+  LanguageModelV4,
+  LanguageModelV4CallOptions,
+  LanguageModelV4StreamPart,
+} from "@ai-sdk/provider";
+import type { ModelEntry } from "@session/shared";
+import { estimateTokenCount, findModel } from "@session/shared";
 import type { ExecutionContext } from "ava";
 import test from "ava";
 
 import { OVERDRAFT_STOP_NOTE, RUN_CAP_NOTE } from "../src/runs/allowance.js";
 import { registerFixture } from "../src/runs/fixtureProvider.js";
 import type { CallEnding } from "../src/runs/ledger.js";
-import { countedTokens, weekOf } from "../src/runs/ledger.js";
+import { ZERO_COUNTS, countedTokens, weekOf } from "../src/runs/ledger.js";
 import type { MemoryLedgerRow } from "../src/runs/memoryLedger.js";
 import { MemoryLedger } from "../src/runs/memoryLedger.js";
+import { AttemptMeter } from "../src/runs/meter.js";
 
 import type { LoopHarness, StreamedCall } from "./runsHelpers.js";
 import { createLoopHarness, until } from "./runsHelpers.js";
@@ -327,6 +333,27 @@ test("two concurrent runs of one member never exceed allowance plus overdraft by
   t.true(total <= bound, `spent ${total}, bound ${bound}`);
 });
 
+test("K9: the step boundary counts the next request's input: a request that would pass the overdraft limit is not made", async (t) => {
+  const harness = createLoopHarness(t, {
+    env: { SESSION_WEEKLY_TOKENS: "500", SESSION_OVERDRAFT_TOKENS: "500" },
+  });
+  const user = harness.addUser("boundary");
+  // a question of about 3,000 tokens: every request of the run is larger
+  // than the limit, while the first step is billed 940 by the provider
+  const request = harness.runRequest(user.id, `${"word ".repeat(2_400)}fixture:success-with-tools`);
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  t.is(harness.store.finishes(request.runId)[0]?.summary.note, OVERDRAFT_STOP_NOTE);
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.deepEqual(
+    rows.map((row) => [row.ending, row.counted]),
+    [["finish", 940]],
+    "no request after the first step",
+  );
+  t.is(harness.ledger.includedUsage(user.id, weekOf(Date.now())), 940);
+  assertTok(t, harness, request.runId);
+});
+
 test("the run's token cap ends it complete with its note", async (t) => {
   const harness = createLoopHarness(t, {
     env: { SESSION_RUN_MAX_TOKENS: "2500" },
@@ -417,4 +444,131 @@ test("a crash copy is independent of the live ledger", (t) => {
   t.is(ledger.runTokens("r"), 15, "a closed row is not closed again");
   t.is(copy.rows()[0]?.state, "open");
   t.is(copy.includedUsage("u", "2026-11-20"), 10, "open rows count");
+});
+
+test("K9: the step boundary alone stops a run past allowance plus overdraft when no checkpoint fires", async (t) => {
+  // the default 2 s checkpoint interval: no checkpoint fires in these steps
+  const harness = createLoopHarness(t, {
+    env: { SESSION_WEEKLY_TOKENS: "500", SESSION_OVERDRAFT_TOKENS: "500" },
+  });
+  const user = harness.addUser("boundary-only");
+  const at = Date.now();
+  const earlier = harness.ledger.open({
+    runId: "earlier",
+    attempt: 1,
+    userId: user.id,
+    payer: "included",
+    week: weekOf(at),
+    kind: "research",
+    provider: "vertex",
+    model: "gemini-flash",
+    cachedInputRatio: 1,
+    counts: { ...ZERO_COUNTS, inputTokens: 100 },
+    openedAt: at,
+  });
+  harness.ledger.close(earlier, { ...ZERO_COUNTS, inputTokens: 100 }, "finish", at);
+  // the first step is billed 940: 1,040 is past the 1,000 limit
+  const request = harness.runRequest(user.id, "fixture:success-with-tools");
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  t.is(harness.store.finishes(request.runId)[0]?.summary.note, OVERDRAFT_STOP_NOTE);
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.deepEqual(
+    rows.map((row) => [row.kind, row.ending, row.writes.length]),
+    [["research", "finish", 2]],
+    "one call, no checkpoint",
+  );
+});
+
+/** An `AttemptMeter` over a memory ledger with a clock the test moves, and a
+ * model whose stream the test feeds part by part. */
+function meterWithClock(at: number, checkpointMs = 100) {
+  const ledger = new MemoryLedger();
+  const clock = { at };
+  const meter = new AttemptMeter(
+    { ledger, now: () => clock.at, checkpointMs },
+    { runId: "metered", attempt: 1, userId: "u1" },
+    { abortEnding: () => "cancel" },
+  );
+  let feed: ReadableStreamDefaultController<LanguageModelV4StreamPart> | null = null;
+  const source: LanguageModelV4 = {
+    specificationVersion: "v4",
+    provider: "test",
+    modelId: "test",
+    supportedUrls: {},
+    doGenerate: () => Promise.reject(new Error("not used")),
+    doStream: () =>
+      Promise.resolve({
+        stream: new ReadableStream<LanguageModelV4StreamPart>({
+          start(controller) {
+            feed = controller;
+          },
+        }),
+      }),
+  };
+  const entry = findModel("gemini-flash") as ModelEntry;
+  const model = meter.wrap(source, { entry, payer: "included", kind: "research" });
+  const abort = new AbortController();
+  const options: LanguageModelV4CallOptions = {
+    prompt: [{ role: "user", content: [{ type: "text", text: "A question." }] }],
+    abortSignal: abort.signal,
+  };
+  /** Starts the call; `next(part)` feeds one part and reads it through. */
+  const start = async () => {
+    const reader = (await model.doStream(options)).stream.getReader();
+    return async (part: LanguageModelV4StreamPart) => {
+      feed?.enqueue(part);
+      await reader.read();
+    };
+  };
+  return { ledger, clock, start, abort };
+}
+
+const delta = (text: string): LanguageModelV4StreamPart => ({
+  type: "text-delta",
+  id: "t0",
+  delta: text,
+});
+
+test("K1: a checkpoint is written once checkpointMs has passed, exactly", async (t) => {
+  const m = meterWithClock(1_000_000, 100);
+  const next = await m.start();
+  await next(delta(CHUNK));
+  t.is(m.ledger.rows()[0]?.writes.length, 1, "the open write only");
+  m.clock.at += 100;
+  await next(delta(CHUNK));
+  t.is(m.ledger.rows()[0]?.writes.length, 2, "one checkpoint");
+});
+
+test("K1: consecutive checkpoint writes of a row are at least checkpointMs apart", async (t) => {
+  const m = meterWithClock(1_000_000, 100);
+  const next = await m.start();
+  for (let i = 0; i < 20; i += 1) {
+    m.clock.at += 30;
+    await next(delta(CHUNK));
+  }
+  const writes = m.ledger.rows()[0]?.writes ?? [];
+  t.true(writes.length >= 4, `${writes.length} writes`);
+  for (let i = 1; i < writes.length; i += 1) {
+    t.true(writes[i]!.at - writes[i - 1]!.at >= 100, `write ${i}`);
+  }
+});
+
+test("K1, K3: a call opened at Friday 00:00:00.000 UTC counts in the week that starts then", async (t) => {
+  const friday = Date.UTC(2026, 10, 27);
+  const m = meterWithClock(friday);
+  await m.start();
+  t.is(m.ledger.rows()[0]?.week, "2026-11-27");
+});
+
+test("K1, K2: a call cancelled after streaming only reasoning closes with its reasoning inside its output", async (t) => {
+  const m = meterWithClock(1_000_000);
+  const next = await m.start();
+  await next({ type: "reasoning-start", id: "r0" });
+  await next({ type: "reasoning-delta", id: "r0", delta: CHUNK.repeat(4) });
+  m.abort.abort();
+  const [row] = m.ledger.rows();
+  t.like(row, { state: "closed", ending: "cancel" });
+  t.true((row?.counts.reasoningTokens ?? 0) > 0);
+  t.true((row?.counts.outputTokens ?? 0) >= (row?.counts.reasoningTokens ?? 0));
 });

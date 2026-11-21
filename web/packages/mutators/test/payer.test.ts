@@ -31,6 +31,13 @@ test("K8: an ask with included tokens left is paid with included tokens", (t) =>
   t.like(w.get(`thread:${th}`), { running: true });
 });
 
+test("K8: with included tokens left, billing key and a valid Anthropic key still pay with included tokens", (t) => {
+  const { w, open } = cast(t);
+  w.payers = { mel: { ...SPENT_KEY, includedLeft: true } };
+  const th = ask(t, w, "mel", open, false);
+  t.like(runOf(w, th), { pay: "included", status: "queued", ...MODEL });
+});
+
 test("K8: once the allowance is spent, billing key and a valid Anthropic key pay for an Anthropic model", (t) => {
   const { w, open } = cast(t);
   w.payers = { mel: SPENT_KEY };

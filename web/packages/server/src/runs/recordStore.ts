@@ -52,7 +52,7 @@ import type { Spaces, Turn } from "@session/shared";
 
 import type { SyncService } from "../sync/service.js";
 
-import { billLabel } from "./allowance.js";
+import { runBill } from "./allowance.js";
 import { roleOf, runContext, turnsOf } from "./context.js";
 import type { Ledger, Payer } from "./ledger.js";
 import type {
@@ -125,10 +125,12 @@ export interface RecordRunStoreDeps {
   accountOf?: (handle: string) => string | null;
   /** The asker's research instruction; the stored preference when absent. */
   instructionOf?: (userId: string) => string | null;
-  /** The run record's `tok` and `bill` when an attempt ends without the
-   * loop's summary: a 429 re-queue, a claim refused, an interrupt at boot, an
-   * attempt the fence stopped (`03` K1). Absent, those writes leave both as
-   * they are. */
+  /** The run record's `tok` and `bill`, written from the ledger whenever a
+   * write ends or re-queues an attempt: the attempt's end (`finish`), a 429
+   * re-queue, a claim refused, an interrupt at boot, an attempt the fence
+   * stopped (`03` K1, K9). Both cover every row of the run, every attempt.
+   * Absent, `finish` writes the summary's and the other writes leave both
+   * as they are. */
   ledger?: Pick<Ledger, "runTokens" | "runPayers">;
   /** A run ended `failed`: the counter `session_run_failures_total{cls}`
    * (`03` E5), labelled with the error class or, for a failure that is not
@@ -283,12 +285,14 @@ export class RecordRunStore implements RunStore {
   }
 
   /** The run record's `tok` and `bill` from the ledger, or nothing without
-   * one. */
+   * one: the counted tokens of every row of the run and the payers of its
+   * research rows, every attempt (`runBill`), so both describe the same
+   * rows. */
   #spent(run: RunRec): { tok: number; bill: BillLabel | null } | Record<string, never> {
     if (!this.#ledger) return {};
     return {
       tok: this.#ledger.runTokens(run.id),
-      bill: billLabel(this.#ledger.runPayers(run.id, run.attempt)),
+      bill: runBill(this.#ledger, run.id),
     };
   }
 
@@ -525,12 +529,17 @@ export class RecordRunStore implements RunStore {
       const fail = cancelled ? run.fail : failOf(summary.fail);
       const complete = summary.outcome === "complete" && answer !== undefined;
       const stored = complete ? answerOf(answer.turns) : null;
+      // the ledger's, when there is one: the loop's summary knows only the
+      // calls of this claim, and the dispatcher's and a thrown write's none
+      const spent: { tok?: number; bill?: BillLabel | null } = this.#spent(run);
+      const tok = spent.tok ?? summary.tok;
+      const bill = spent.bill === undefined ? summary.bill : spent.bill;
       tx.put({
         ...run,
         status: cancelled ? "cancelled" : summary.outcome,
         fail,
-        tok: summary.tok,
-        bill: summary.bill,
+        tok,
+        bill,
         note: summary.note ?? null,
         step: complete ? 3 : run.step,
         finishedAt: cancelled ? (run.finishedAt ?? now) : now,
@@ -544,7 +553,7 @@ export class RecordRunStore implements RunStore {
           u: run.u,
           md: stored.md,
           pages: stored.pages,
-          tok: summary.tok,
+          tok,
           run: run.id,
           attempt: run.attempt,
           mod: ask.mod,
@@ -554,7 +563,7 @@ export class RecordRunStore implements RunStore {
         tx.put({
           ...th,
           running: false,
-          ...(stored ? { tok: summary.tok, src: stored.pages.length } : {}),
+          ...(stored ? { tok, src: stored.pages.length } : {}),
         });
       }
       if (!cancelled && summary.outcome === "failed") failed.push({ fail });
@@ -625,6 +634,9 @@ export class RecordRunStore implements RunStore {
         effort: run.effort,
         payer: queuedPayer(run),
         queuedAt: this.#place(run),
+        // Run again writes `startedAt: null`; a 429 re-queue and a resume
+        // keep the first claim's
+        ran: run.startedAt !== null,
       }))
       .sort((a, b) => a.queuedAt - b.queuedAt);
   }

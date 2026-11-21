@@ -429,8 +429,10 @@ Exit criteria:
   refused, `xhigh` or any value outside low, medium, high and max refused as
   the default effort, `setDefault` leaving the default effort unchanged,
   every registry entry in `models.list`).
-- `cd web && npm run test:e2e -- spaces-usage admin` passes (keys, billing
-  setting, out-of-tokens refusal of Ask while Post sends; a site admin
+- `cd web && npm run test:e2e -- spaces-usage spaces-billing admin` passes
+  (keys, billing setting, out-of-tokens refusal of Ask while Post sends; in
+  `e2e/spaces-billing.spec.ts`, a run that crosses the allowance and stops at
+  the overdraft limit, failed tokens, Run again and key billing; a site admin
   changes the default model and the default effort, and a member's composer
   starts on both after a reload).
 - `06-auth-and-users.md` §8 and `fly.toml`'s comment on daily limits updated

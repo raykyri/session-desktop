@@ -156,6 +156,19 @@ export function findModel(id: string): ModelEntry | null {
   return BY_ID.get(LEGACY_MODEL_IDS[id] ?? id) ?? null;
 }
 
+/**
+ * Adds `entry` to `MODEL_REGISTRY` and `findModel` for the rest of the
+ * process. Tests only: the server's suite registers a model the registry
+ * does not have yet (a key-only one, `03` K11) so that `pre`, the
+ * dispatcher and the run loop, which read the registry directly, all see
+ * it. An id already present is left as it is.
+ */
+export function registerTestModel(entry: ModelEntry): void {
+  if (BY_ID.has(entry.id)) return;
+  (MODEL_REGISTRY as ModelEntry[]).push(entry);
+  BY_ID.set(entry.id, entry);
+}
+
 /** Whether a run on `model` may be paid with included tokens: the condition
  * for being the site's default model (`03` K15). */
 export function payableWithIncluded(model: Pick<ModelEntry, "payers">): boolean {
