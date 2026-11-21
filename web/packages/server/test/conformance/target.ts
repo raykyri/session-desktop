@@ -25,9 +25,10 @@
 // default body and batch limits (`SESSION_LIMIT_APPLY_BYTES`,
 // `SESSION_LIMIT_APPLY_BATCH`; the rate limits stay raised, since the
 // suite's oracles cannot predict them), and sends each envelope in a batch
-// after the last few envelopes of the same client id that were applied in
-// the past hour, which the server answers as replays from their stored
-// answers. The target returns the last answer of the batch.
+// after the last few envelopes of the same client id and person that were
+// applied in the past hour, which the server answers as replays from their
+// stored answers (any other answer fails the test). The target returns the
+// last answer of the batch.
 
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -202,7 +203,7 @@ export class HttpTestServer implements TestServer {
   readonly #batched: boolean;
   /** Each client id's applied envelopes, newest last, with the time of the
    * answer on the suite's clock. */
-  readonly #applied = new Map<string, { envelope: Envelope; at: number }[]>();
+  readonly #applied = new Map<string, { envelope: Envelope; at: number; u: string | null }[]>();
 
   constructor(options: ServerOptions, target: HttpTargetOptions = {}) {
     this.#options = options;
@@ -390,7 +391,11 @@ export class HttpTestServer implements TestServer {
     const sent = this.#batched
       ? [
           ...(this.#applied.get(envelope.clientId) ?? [])
-            .filter((x) => x.at > now - RESEND_WITHIN && x.envelope !== envelope)
+            // the same person's (a client id sent by someone else is not)
+            .filter(
+              (x) =>
+                x.u === (actor?.u ?? null) && x.at > now - RESEND_WITHIN && x.envelope !== envelope,
+            )
             .slice(-RESEND)
             .map((x) => x.envelope),
           envelope,
@@ -413,7 +418,7 @@ export class HttpTestServer implements TestServer {
           throw new Error(`a resent envelope was not answered from its stored answer: ${i}`);
       if (a.ok && !("replay" in a)) {
         const list = this.#applied.get(envelope.clientId) ?? [];
-        list.push({ envelope, at: now });
+        list.push({ envelope, at: now, u: actor?.u ?? null });
         this.#applied.set(envelope.clientId, list.slice(-RESEND));
       }
     }
