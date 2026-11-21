@@ -5,6 +5,7 @@
 // who is not a member, they come from here: the registry of
 // `@session/shared`, and the fixture build's values.
 
+import { payerFor } from "@session/mutators";
 import { MODEL_REGISTRY, type ModelPayer, type ReasoningEffort } from "@session/shared";
 
 import type { UsageReading } from "../features/shell/usage.js";
@@ -39,6 +40,8 @@ export interface OnlineData {
   usage: UsageReading | null;
   /** The providers the member has a `valid` key for (`usage.get`). */
   keys: readonly KeyProvider[];
+  /** What happens when included tokens run out (`usage.get`, 03 K7). */
+  billing: "pause" | "key";
 }
 
 /** The provider whose key alone pays for `model`, or null when included
@@ -114,6 +117,7 @@ export interface WeeklyUsage {
   allowance: number;
   used: number;
   resetAt: number;
+  billing?: "pause" | "key";
   keys?: readonly { provider: KeyProvider; status: "valid" | "invalid" }[];
 }
 
@@ -154,6 +158,7 @@ export function withServerData(
           keys: (usage.keys ?? [])
             .filter((key) => key.status === "valid")
             .map((key) => key.provider),
+          billing: usage.billing ?? "pause",
         }
       : {}),
   };
@@ -179,5 +184,28 @@ export function defaultOnlineData(): OnlineData {
     defaultEffort: "medium",
     usage: null,
     keys: [],
+    billing: "pause",
   };
+}
+
+/**
+ * Whether a run on `model` has no payer now (03 K8): the server's rule
+ * (`payerFor`) over the member's `usage.get` reading, so the composer sends
+ * no Ask, follow-up, Continue, Branch, Branch here, Look up or Run again
+ * that the server would refuse `out_of_tokens`. False while the reading is
+ * unknown, and for a model the client does not know: the server decides.
+ * A key-only model without its key is not offered (`composerModel`).
+ */
+export function outOfTokens(
+  online: Pick<OnlineData, "models" | "usage" | "keys" | "billing">,
+  model: string,
+): boolean {
+  const entry = online.models.find((m) => m.id === model);
+  if (!entry || online.usage === null) return false;
+  const facts = {
+    includedLeft: online.usage.used < online.usage.allowance,
+    billing: online.billing,
+    keys: online.keys,
+  };
+  return payerFor(entry.payers, facts) === "out_of_tokens";
 }

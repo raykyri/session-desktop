@@ -4,15 +4,30 @@
 // and handed to the component only when it differs (structural equality), so
 // a write to one thread does not re-render another thread's row (W9.1).
 
-import { useQueryClient } from "@tanstack/react-query";
+import { QueryClientContext, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 
 import { queryKeys, useModels, useWeeklyUsage } from "../api/account.js";
 import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
 import { useThreadUiStore } from "../stores/threadUi.js";
 
-import { defaultOnlineData, withServerData, type OnlineData } from "./online.js";
+import {
+  defaultOnlineData,
+  outOfTokens,
+  withServerData,
+  type ModelListing,
+  type OnlineData,
+  type WeeklyUsage,
+} from "./online.js";
 import { UNKNOWN, emptyReplica, runQuery, type ReplicaSource, type Unknown } from "./source.js";
 
 /** How a build makes the viewer's replica. `create` may run more than once
@@ -134,6 +149,25 @@ export function useOnlineData(): OnlineData {
         usageData === undefined ? undefined : { ...usageData, readAt },
       ),
     [online, models.data, usageData, readAt],
+  );
+}
+
+/**
+ * Whether a run on a model has no payer now (03 K8, `outOfTokens`), read
+ * when a write is about to be sent: the latest `models.list` and `usage.get`
+ * answers in the query cache over the build's values. Outside a query client
+ * (a test that renders without one) nothing is refused here.
+ */
+export function useOutOfTokens(): (model: string) => boolean {
+  const { online, member } = useContext(ReplicaContext);
+  const client = useContext(QueryClientContext);
+  return useCallback(
+    (model: string) => {
+      const listing = member ? client?.getQueryData<ModelListing>(queryKeys.models()) : undefined;
+      const usage = member ? client?.getQueryData<WeeklyUsage>(queryKeys.weeklyUsage()) : undefined;
+      return outOfTokens(withServerData(online, listing, usage), model);
+    },
+    [online, member, client],
   );
 }
 
