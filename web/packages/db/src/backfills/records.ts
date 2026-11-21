@@ -81,6 +81,12 @@ export function recordBackfill(spec: RecordBackfillSpec): Backfill {
  * drizzle transaction, which `SqliteStore` does not take). */
 export function logBansInUserLogs(db: SessionDatabase): number {
   return db.transaction((tx) => {
+    // a database migrated only up to a build before the spaces tables holds
+    // no bans (`openDatabase` with an older migrations folder)
+    const tables = tx.all(
+      sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'records'`,
+    );
+    if (tables.length === 0) return 0;
     const rows = tx.all<{ key: string; body: string }>(
       sql`SELECT key, body FROM records WHERE kind = 'ban' ORDER BY created_v, key`,
     );
