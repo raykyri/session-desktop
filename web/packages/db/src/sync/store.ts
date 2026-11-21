@@ -75,8 +75,11 @@ export class InvalidRecordError extends Error {
   }
 }
 
-/** How many parsed records the read cache keeps. */
-const CACHE_SIZE = 20_000;
+/** How many parsed records the read cache keeps by default: enough for the
+ * records one write or one window snapshot reads again, and few enough that
+ * the cache is full, and the process's memory flat, within minutes of load
+ * (`runbooks/load-check.md`). */
+export const RECORD_CACHE_SIZE = 5_000;
 
 /** The kinds a unique lookup reads. */
 const UNIQUE: readonly [UniqueIndex, Kind][] = [
@@ -102,6 +105,8 @@ export interface SqliteStoreOptions {
    * rows or history it wrote: the server wakes the event streams that read
    * them (`01` Y7). Not called for a transaction that rolled back. */
   onCommit?: (logs: ReadonlySet<LogId>) => void;
+  /** How many parsed records the read cache keeps (`RECORD_CACHE_SIZE`). */
+  cacheSize?: number;
 }
 
 export class SqliteStore implements ServerStore {
@@ -110,6 +115,7 @@ export class SqliteStore implements ServerStore {
   private readonly cache = new Map<string, StoredRecord | null>();
   private readonly s;
   private readonly onCommit: ((logs: ReadonlySet<LogId>) => void) | undefined;
+  private readonly cacheSize: number;
   /** The logs the open transaction wrote. */
   private touched = new Set<LogId>();
 
@@ -117,6 +123,7 @@ export class SqliteStore implements ServerStore {
     this.sqlite = "$client" in db ? db.$client : db;
     this.now = options.now ?? Date.now;
     this.onCommit = options.onCommit;
+    this.cacheSize = options.cacheSize ?? RECORD_CACHE_SIZE;
     const c = this.sqlite;
     this.s = {
       byKey: c.prepare<[string], RecordRow>("SELECT body FROM records WHERE key = ?"),
@@ -288,7 +295,7 @@ export class SqliteStore implements ServerStore {
   }
 
   private remember(key: string, rec: StoredRecord | null) {
-    if (this.cache.size >= CACHE_SIZE) {
+    if (this.cache.size >= this.cacheSize) {
       const oldest = this.cache.keys().next();
       if (!oldest.done) this.cache.delete(oldest.value);
     }

@@ -53,6 +53,12 @@ Staging runs the production image on the production machine size
 server makes, so it runs against a staging deploy started for it, and the
 database is reset afterwards.
 
+While `NODE_ENV=test` is set, the server mounts the acceptance suite's test
+routes (`/api/sync/test/*`, unauthenticated, one of them a dump of every
+table) and the test sign-in. Staging holds no real data, but keep the window
+short and never set these on production (`loadConfig` refuses the test
+sign-in there; the test routes follow `NODE_ENV`).
+
 1. Deploy the build to staging with the test switches for the check:
 
    ```sh
