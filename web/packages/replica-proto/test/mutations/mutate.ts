@@ -657,8 +657,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1a-14 CLOCK_SKEW keeps the queue times read from the wrong clock",
     file: "src/client.ts",
-    from: "for (const x of this.outbox) if (!x.sent) x.queuedAt += offset - this.offset;",
-    to: "for (const x of this.outbox) if (!x.sent) x.queuedAt = Math.min(x.queuedAt, offset + this.env.clock.now());",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt = Math.min(x.queuedAt, offset + raw);",
   },
   {
     name: "M1a-15 a reminted write names every earlier id",
@@ -860,6 +860,24 @@ const MUTATIONS: Mutation[] = [
     file: "../mutators/src/rules.ts",
     from: '  if (p?.kind === "thread" && p.mod !== "removed") erase(tx, p, note);',
     to: "  void p;",
+  },
+  {
+    name: "M1b-24 a correction moves a write queued on a clock known to be right",
+    file: "src/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.sent && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+  },
+  {
+    name: "M1b-25 a correction moves a write queued before the clock went back",
+    file: "src/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.sent && !x.known) x.queuedAt += offset - this.offset;",
+  },
+  {
+    name: "M1b-26 a correction moves a sent write",
+    file: "src/client.ts",
+    from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
+    to: "            if (!x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
   },
 ];
 

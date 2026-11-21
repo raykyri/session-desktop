@@ -86,6 +86,9 @@ export const RETRY_MIN = 1000;
 export const RETRY_MAX = 600_000;
 /** INTERNAL_SERVER_ERROR answers after which a write is marked failed. */
 export const MAX_SERVER_ERRORS = 5;
+/** How close an answer's server time must be to the client's clock for the
+ * clock to count as right. */
+const CLOCK_CHECK = 60_000;
 
 /** The answers after which the client waits and sends the write again. */
 const TRANSIENT: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
@@ -106,6 +109,15 @@ export interface Pending {
   /** When it was queued, in the server's time as the client estimates it
    * (its clock plus the learned offset). */
   queuedAt: number;
+  /** The device's own clock when it was queued, and whether the client's
+   * clock was known to be right then (an answer's server time agreed with
+   * it). A CLOCK_SKEW correction moves `queuedAt` only by the error present
+   * when the write was queued: by the new offset for a write queued on a
+   * clock not known to be right, unless the device's clock went back since;
+   * not at all for one queued on a clock known to be right (Y10: a write is
+   * dropped 3 days after it was queued in server time). */
+  rawAt: number;
+  known: boolean;
   /** The mutation ids it had before the client reminted it. */
   replaces: string[];
   /** An envelope of it may have reached the server without a definite
@@ -143,6 +155,9 @@ export interface ClientState {
   acked: number;
   /** Milliseconds added to the device's clock, learned from CLOCK_SKEW. */
   offset: number;
+  /** Whether the corrected clock was found right (an answer's server time
+   * agreed with it). */
+  known?: boolean;
   problems: Problem[];
 }
 
@@ -193,6 +208,8 @@ export class ReplicaClient {
   private acked: number;
   /** Milliseconds to add to the local clock, learned from CLOCK_SKEW. */
   private offset: number;
+  /** Whether the corrected clock was found right: see `Pending.known`. */
+  private known: boolean;
   /** The last seq the server reported as processed for this client. */
   lastSeq: LastSeq = null;
   /** Every envelope this client sent, in order (for the suite). */
@@ -215,6 +232,7 @@ export class ReplicaClient {
     this.outbox = (restore?.outbox ?? []).map((e) => ({ ...e, replaces: [...e.replaces] }));
     this.acked = restore?.acked ?? 0;
     this.offset = restore?.offset ?? 0;
+    this.known = restore?.known ?? false;
     this.shown = (restore?.problems ?? []).map((x) => ({ ...x }));
   }
 
@@ -256,6 +274,7 @@ export class ReplicaClient {
       outbox: this.outbox.map((e) => ({ ...e, replaces: [...e.replaces] })),
       acked: this.acked,
       offset: this.offset,
+      known: this.known,
       problems: this.shown.map((x) => ({ ...x })),
     };
   }
@@ -351,6 +370,8 @@ export class ReplicaClient {
       name,
       input,
       queuedAt: now,
+      rawAt: this.env.clock.now(),
+      known: this.known,
       replaces: [],
       sent: false,
       attempts: 0,
@@ -468,15 +489,24 @@ export class ReplicaClient {
         res = noAnswer(this.now());
       }
       this.lastAnswer.set(p.local, res);
+      // an answer's server time that agrees with the client's clock: the
+      // clock is known to be right
+      const at = res.ok ? res.serverTime : res.error.serverTime;
+      if (at !== undefined && Math.abs(at - this.now()) <= CLOCK_CHECK) this.known = true;
       if (!res.ok) {
         const { code, serverTime, expectedSeq } = res.error;
         if (code === "CLOCK_SKEW" && serverTime !== undefined && skews++ < 3) {
-          const offset = serverTime - this.env.clock.now();
-          // the queue times of the writes not sent yet were read from the
-          // clock that was off: they move by the correction, so a device
-          // whose clock was days behind does not drop them as old
-          for (const x of this.outbox) if (!x.sent) x.queuedAt += offset - this.offset;
+          const raw = this.env.clock.now();
+          const offset = serverTime - raw;
+          // a write not sent yet whose queue time was read from a clock not
+          // known to be right moves by the correction, so a device whose
+          // clock was days behind does not drop it as old. One queued on a
+          // clock known to be right, or before the device's clock went back,
+          // keeps its queue time: the error came later (review M1b-16).
+          for (const x of this.outbox)
+            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;
           this.offset = offset;
+          this.known = true;
           this.remint();
           continue;
         }
