@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 // Operator commands on accounts (plan `04` I1, §8; `05` §3.5). There is no
 // in-app promotion and no in-app deletion, so these run against the volume
 // (`fly ssh console`).
@@ -9,7 +8,8 @@
 //   npm run db:admin -- --delete <handle>      the account-deletion job, with
 //                                              the server stopped: it refuses
 //                                              while a server's heartbeat is
-//                                              fresh
+//                                              fresh or another process has
+//                                              the database open
 //                                              (`web/docs/runbooks/delete-account.md`)
 //   npm run db:admin -- --new-history          replace the sync history id at
 //                                              the next boot, after a restore
@@ -23,6 +23,10 @@
 // `packages/server/dist/admin.mjs`, run with the same arguments:
 //
 //   node /app/packages/server/dist/admin.mjs --invite
+//
+// The file has no `#!` line: esbuild copies an entry's `#!` line into the
+// bundle, where a `tsx` one names a program the image does not have.
+// `npm run db:admin` runs it with tsx.
 
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +40,7 @@ import {
   openDatabase,
   requestNewHistory,
   users,
+  type SessionDatabase,
 } from "../src/index.js";
 
 const USAGE =
@@ -59,7 +64,15 @@ const path = dataDir ? resolve(dataDir, "session.db") : resolve(".data/session.d
 // here (`packages/db/bin/admin.ts`, run with tsx) and from the bundle the
 // image holds (`packages/server/dist/admin.mjs`), as `main.ts` resolves it.
 const migrationsFolder = fileURLToPath(new URL("../../db/migrations", import.meta.url));
-const db = openDatabase(path, { migrationsFolder });
+let db: SessionDatabase;
+try {
+  db = openDatabase(path, { migrationsFolder });
+} catch (error) {
+  // a database of a newer build, or of a build from before the M8a squash:
+  // its message names the runbook (`UnknownMigrationError`)
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exit(1);
+}
 try {
   if (flags.has("--new-history")) {
     requestNewHistory(db.$client);

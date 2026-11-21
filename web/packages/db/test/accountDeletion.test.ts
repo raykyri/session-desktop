@@ -2,15 +2,21 @@
 // plan `04` B6, §8): with the server stopped, the spaces step writes through a
 // sync core over the job's own connection.
 
+import { join } from "node:path";
+
 import { MUTATORS, Refusal, type StoredRecord, type Tx } from "@session/mutators";
 import { SyncServer } from "@session/sync/server";
 import test from "ava";
+import SqliteDatabase from "better-sqlite3";
 
 import {
+  HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_STALE_MS,
   RunTables,
+  ServerRunningError,
   SqliteStore,
   accounts,
+  assertNoFreshHeartbeat,
   clearHeartbeat,
   writeHeartbeat,
   type SessionDatabase,
@@ -135,6 +141,70 @@ test("the job refuses while a server's heartbeat is fresh, and runs once it is d
   writeHeartbeat(db, Date.now());
   clearHeartbeat(db);
   t.notThrows(() => accounts.deleteAccount(db, ada.id));
+});
+
+test("H3, H4: a server beats every 30 s and is taken as stopped 90 s after its last beat", (t) => {
+  t.is(HEARTBEAT_INTERVAL_MS, 30_000);
+  t.is(HEARTBEAT_STALE_MS, 90_000);
+});
+
+test("R7: a heartbeat dated ahead of this machine's clock says so", (t) => {
+  const { db } = createFixture(t);
+  const at = Date.now();
+  writeHeartbeat(db, at + 60_000);
+  t.throws(() => assertNoFreshHeartbeat(db, at, "The job"), {
+    instanceOf: ServerRunningError,
+    message: /wrote a heartbeat dated 60 s ahead of this machine's clock/,
+  });
+  writeHeartbeat(db, at - 12_000);
+  t.throws(() => assertNoFreshHeartbeat(db, at, "The job"), {
+    message: /wrote its heartbeat 12 s ago/,
+  });
+});
+
+test("R1: the job refuses while another connection has the database open, with no heartbeat", (t) => {
+  const { db, directory } = createFixture(t);
+  const mel = addActiveUser(db, "mel");
+  // a server between openDatabase and its first beat, or a build without
+  // the heartbeat: the file is open and no row is fresh
+  const other = new SqliteDatabase(join(directory, "session.db"));
+  other.prepare("SELECT count(*) FROM users").get();
+  t.throws(() => accounts.deleteAccount(db, mel.id), {
+    instanceOf: ServerRunningError,
+    message:
+      /The account-deletion job needs the server stopped: another process has the database open/,
+  });
+  t.is(
+    (other.prepare("SELECT deleted_at AS d FROM users WHERE id = ?").get(mel.id) as { d: null }).d,
+    null,
+  );
+  other.close();
+  t.notThrows(() => accounts.deleteAccount(db, mel.id));
+});
+
+test("R1: the job holds an exclusive lock while it writes, and releases it when done", (t) => {
+  const { db, directory } = createFixture(t);
+  const mel = addActiveUser(db, "mel");
+  const tryOpen = () => {
+    const other = new SqliteDatabase(join(directory, "session.db"), { timeout: 0 });
+    try {
+      other.prepare("SELECT count(*) FROM users").get();
+      return "read";
+    } catch (error) {
+      return (error as { code?: string }).code ?? "error";
+    } finally {
+      other.close();
+    }
+  };
+  const during: string[] = [];
+  accounts.deleteAccount(db, mel.id, {
+    // a step runs inside the job's transaction
+    steps: [() => void during.push(tryOpen())],
+  });
+  t.deepEqual(during, ["SQLITE_BUSY"]);
+  t.is(tryOpen(), "read");
+  // the connection keeps the busy timeout it had
+  t.is(db.$client.pragma("busy_timeout", { simple: true }), 5000);
 });
 
 test("the job deletes the account's keys, billing, preferences, limits and sync clients with their answers", (t) => {
