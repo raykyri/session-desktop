@@ -228,10 +228,11 @@ test("T3: a failed /live read is tried again with a growing wait until it answer
   await until(() => live.get("R") !== null);
   t.like(live.get("R"), { seq: 4, text: "Read at last" });
   t.is(reads.length, 3);
-  t.true(
-    (reads[2] ?? 0) - (reads[1] ?? 0) >= (reads[1] ?? 0) - (reads[0] ?? 0) - 5,
-    "it waits longer",
-  );
+  // A timer never fires early, so the second wait is at least the doubled
+  // 40 ms; comparing the two measured gaps fails when a loaded machine
+  // delays the first. (2 ms of slack for Date.now's rounding.)
+  t.true((reads[1] ?? 0) - (reads[0] ?? 0) >= 18, "it waits retryMs first");
+  t.true((reads[2] ?? 0) - (reads[1] ?? 0) >= 38, "then twice as long");
 
   // a run dropped while its read is failing is not read again
   failures = 100;
