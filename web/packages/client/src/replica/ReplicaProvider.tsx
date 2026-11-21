@@ -13,9 +13,12 @@ import { useThreadUiStore } from "../stores/threadUi.js";
 import { defaultOnlineData, type OnlineData } from "./online.js";
 import { UNKNOWN, emptyReplica, runQuery, type ReplicaSource, type Unknown } from "./source.js";
 
-/** How a build makes the viewer's replica. */
+/** How a build makes the viewer's replica. `create` may run more than once
+ * per viewer (React can discard a render, and does under StrictMode), so it
+ * should not start work: `activate` runs when the provider mounts with the
+ * replica and `dispose` when it unmounts, possibly more than once each. */
 export interface ReplicaConfig {
-  create: (viewer: Viewer) => ReplicaSource & { dispose?: () => void };
+  create: (viewer: Viewer) => ReplicaSource & { activate?: () => void; dispose?: () => void };
   online?: Partial<OnlineData>;
 }
 
@@ -60,7 +63,11 @@ export function ReplicaProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [key, given],
   );
-  useEffect(() => () => (made as { dispose?: () => void }).dispose?.(), [made]);
+  useEffect(() => {
+    const lifecycle = made as { activate?: () => void; dispose?: () => void };
+    lifecycle.activate?.();
+    return () => lifecycle.dispose?.();
+  }, [made]);
   // Another viewer (a sign-in or sign-out without a reload): no selection or
   // open composer of the previous one stays.
   const previous = useRef(key);
