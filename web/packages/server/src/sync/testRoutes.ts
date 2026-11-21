@@ -54,7 +54,7 @@ export function syncTestRoutes(sync: SyncService): Hono<AppEnv> {
         done(r.id, "r");
         return true;
       }
-      if (r.kind === "node") {
+      if (r.kind === "node" && r.u !== null) {
         tx.put({
           kind: "answer",
           node: r.id,

@@ -23,7 +23,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve, type ServerType } from "@hono/node-server";
-import { accounts, auth, closeDatabase, openDatabase, users } from "@session/db";
+import { accounts, auth, clearHeartbeat, closeDatabase, openDatabase, users } from "@session/db";
 
 import { createApp } from "./app.js";
 import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
@@ -309,6 +309,12 @@ export function main(): RunningServer {
       );
     }
     await closeServer(server, CONNECTION_GRACE_MS);
+    try {
+      // no write follows: operator jobs may run (`runbooks/delete-account.md`)
+      clearHeartbeat(db);
+    } catch (error) {
+      logger.error({ err: error }, "the heartbeat could not be deleted");
+    }
     try {
       db.$client.pragma("wal_checkpoint(TRUNCATE)");
     } catch (error) {

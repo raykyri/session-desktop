@@ -190,7 +190,7 @@ export class World {
       ctx.allow = (limit) => {
         const key = `${me}:${limit}`;
         const n = this.used.get(key) ?? 0;
-        if (n >= (limits[limit] ?? Infinity)) return false;
+        if (n >= (limits[limit] ?? Infinity)) return `No ${limit} left.`;
         this.used.set(key, n + 1);
         return true;
       };
