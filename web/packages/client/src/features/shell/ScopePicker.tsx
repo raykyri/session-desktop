@@ -51,7 +51,12 @@ export function ScopePicker({ scopes, scope, onScopeChange, onOpenChange }: Scop
               onValueChange={(value: unknown) => onScopeChange(value as ChannelScope)}
             >
               {scopes.map((item) => (
-                <BaseMenu.RadioItem key={item} value={item} className={SHELL_MENU_ITEM}>
+                <BaseMenu.RadioItem
+                  closeOnClick
+                  key={item}
+                  value={item}
+                  className={SHELL_MENU_ITEM}
+                >
                   <span className="text-accent inline-flex">{SCOPE_ICON[item]}</span>
                   <span className="flex-1">{SCOPE_LABEL[item]}</span>
                   <BaseMenu.RadioItemIndicator className="text-accent inline-flex">

@@ -7,7 +7,7 @@
 import { Popover } from "@base-ui/react/popover";
 import { baseRemarkPlugins, safeHref } from "@session/shared";
 import type { ComponentPropsWithoutRef, ElementType, ReactNode, Ref } from "react";
-import { memo, useMemo, useRef } from "react";
+import { createContext, memo, useContext, useMemo, useRef } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 
 import { cn } from "../../lib/cn.js";
@@ -90,6 +90,96 @@ function Citation({ n, page }: { n: string; page: readonly [string, string, stri
   );
 }
 
+/** What the passage components read: the groups, the quoted passage, the
+ * cited pages. Through a context, so the components keep their identity and
+ * React never remounts the answer's elements (a remount would drop the
+ * reader's selection). */
+interface ProseState {
+  groups: ReadonlyMap<number, PassageGroup> | undefined;
+  quoted: number | null | undefined;
+  pages: AnswerProseProps["pages"];
+}
+
+const ProseContext = createContext<ProseState>({ groups: undefined, quoted: null, pages: [] });
+
+function passageComponent(Tag: string) {
+  return function Passage({
+    node,
+    children,
+    ...props
+  }: ComponentPropsWithoutRef<"p"> & { node?: unknown }) {
+    void node;
+    const { groups, quoted } = useContext(ProseContext);
+    const raw = (props as Record<string, unknown>)["data-passage"];
+    const index = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
+    const group = index === null ? undefined : groups?.get(index);
+    const El = Tag as ElementType;
+    let content: ReactNode = children;
+    if (group)
+      content = (
+        <>
+          {children}
+          <button
+            type="button"
+            className="anc"
+            title="Open the branches on this passage"
+            aria-label={`${noun(group.total, "branch", "branches")} on this passage. Open the first`}
+            onClick={group.open}
+          >
+            <ReplyArrowIcon />
+            {group.total}
+          </button>
+        </>
+      );
+    return (
+      <El
+        {...props}
+        className={cn(index !== null && index === quoted ? "qsel" : undefined)}
+        {...(group
+          ? {
+              "data-grp": "",
+              onMouseEnter: () => group.onHover(true),
+              onMouseLeave: () => group.onHover(false),
+            }
+          : {})}
+      >
+        {content}
+      </El>
+    );
+  };
+}
+
+function CitationSlot({ node, ...props }: ComponentPropsWithoutRef<"button"> & { node?: unknown }) {
+  void node;
+  const { pages } = useContext(ProseContext);
+  const n = (props as Record<string, unknown>)["data-cite"];
+  return typeof n === "string" ? <CitationButton n={n} pages={pages} /> : null;
+}
+
+const COMPONENTS: Components = {
+  a: ({ href, children }) => {
+    const safe = safeHref(href);
+    return safe ? (
+      <a href={safe} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    );
+  },
+  img: ({ alt }) => (alt ? <span>{alt}</span> : null),
+  button: CitationSlot,
+  ...Object.fromEntries(PASSAGE_TAGS.map((tag) => [tag, passageComponent(tag)])),
+};
+
+const Markdown = memo(function Markdown({ md }: { md: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={baseRemarkPlugins} rehypePlugins={REHYPE} components={COMPONENTS}>
+      {md}
+    </ReactMarkdown>
+  );
+});
+
 export const AnswerProse = memo(function AnswerProse({
   md,
   pages,
@@ -99,79 +189,12 @@ export const AnswerProse = memo(function AnswerProse({
   proseRef,
   id,
 }: AnswerProseProps) {
-  const components = useMemo<Components>(() => {
-    const passage =
-      (Tag: string) =>
-      ({ node, children, ...props }: ComponentPropsWithoutRef<"p"> & { node?: unknown }) => {
-        void node;
-        const raw = (props as Record<string, unknown>)["data-passage"];
-        const index = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
-        const group = index === null ? undefined : groups?.get(index);
-        const El = Tag as ElementType;
-        let content: ReactNode = children;
-        if (group)
-          content = (
-            <>
-              {children}
-              <button
-                type="button"
-                className="anc"
-                title="Open the branches on this passage"
-                aria-label={`${noun(group.total, "branch", "branches")} on this passage. Open the first`}
-                onClick={group.open}
-              >
-                <ReplyArrowIcon />
-                {group.total}
-              </button>
-            </>
-          );
-        return (
-          <El
-            {...props}
-            className={cn(index !== null && index === quoted ? "qsel" : undefined)}
-            {...(group
-              ? {
-                  "data-grp": "",
-                  onMouseEnter: () => group.onHover(true),
-                  onMouseLeave: () => group.onHover(false),
-                }
-              : {})}
-          >
-            {content}
-          </El>
-        );
-      };
-    const map: Components = {
-      a: ({ href, children }) => {
-        const safe = safeHref(href);
-        return safe ? (
-          <a href={safe} target="_blank" rel="noopener noreferrer">
-            {children}
-          </a>
-        ) : (
-          <span>{children}</span>
-        );
-      },
-      img: ({ alt }) => (alt ? <span>{alt}</span> : null),
-      button: ({ node, ...props }) => {
-        void node;
-        const n = (props as Record<string, unknown>)["data-cite"];
-        return typeof n === "string" ? <CitationButton n={n} pages={pages} /> : null;
-      },
-    };
-    for (const tag of PASSAGE_TAGS) (map as Record<string, unknown>)[tag] = passage(tag);
-    return map;
-  }, [groups, quoted, pages]);
-
+  const state = useMemo(() => ({ groups, quoted, pages }), [groups, quoted, pages]);
   return (
     <div ref={proseRef} className={cn("answer", className)} {...(id ? { id } : {})}>
-      <ReactMarkdown
-        remarkPlugins={baseRemarkPlugins}
-        rehypePlugins={REHYPE}
-        components={components}
-      >
-        {md}
-      </ReactMarkdown>
+      <ProseContext.Provider value={state}>
+        <Markdown md={md} />
+      </ProseContext.Provider>
     </div>
   );
 });

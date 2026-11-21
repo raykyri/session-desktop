@@ -85,6 +85,7 @@ function ChannelPicker({
             >
               {channels.map((c) => (
                 <Menu.RadioItem
+                  closeOnClick
                   key={c.id}
                   value={c.id}
                   className={`${SHELL_MENU_ITEM} h-8 gap-2.5`}
@@ -149,7 +150,7 @@ export function ModelPicker({
               }}
             >
               {models.map((m) => (
-                <Menu.RadioItem key={m.id} value={m.id} className={SHELL_MENU_ITEM}>
+                <Menu.RadioItem closeOnClick key={m.id} value={m.id} className={SHELL_MENU_ITEM}>
                   <span className="flex-1">{m.label}</span>
                   <Menu.RadioItemIndicator className="text-accent inline-flex">
                     <CheckMark />
@@ -186,7 +187,7 @@ export function ModelPicker({
                       }
                     >
                       {model.efforts.map((e) => (
-                        <Menu.RadioItem key={e} value={e} className={SHELL_MENU_ITEM}>
+                        <Menu.RadioItem closeOnClick key={e} value={e} className={SHELL_MENU_ITEM}>
                           <span className="flex-1">{effortLabel(e)}</span>
                           <Menu.RadioItemIndicator className="text-accent inline-flex">
                             <CheckMark />
@@ -249,6 +250,7 @@ function SendSplitButton({
                   ] as const
                 ).map(([value, title, sub, icon]) => (
                   <Menu.RadioItem
+                    closeOnClick
                     key={value}
                     value={value}
                     className={`${SHELL_MENU_ITEM} mi-2 h-auto items-start`}

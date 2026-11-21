@@ -56,18 +56,23 @@ export function SelectionActions({
   useEffect(() => {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const read = () => {
+    const read = (keyboard: boolean) => {
       const prose = proseRef.current;
       const selection = document.getSelection();
-      if (!prose || !selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      // Focus moving into a field moves the selection there; the actions
+      // stay until a pointer, a scroll or Escape removes them.
+      const hide = () => {
+        const active = document.activeElement;
+        if (keyboard && active && active.matches("textarea, input")) return;
         setShown(null);
-        return;
-      }
+      };
+      if (!prose || !selection || selection.rangeCount === 0 || selection.isCollapsed)
+        return hide();
       const raw = selection.toString().replace(/\s+/g, " ").trim();
-      if (raw.length < 3) return setShown(null);
-      if (!selection.anchorNode || !selection.focusNode) return setShown(null);
+      if (raw.length < 3) return hide();
+      if (!selection.anchorNode || !selection.focusNode) return hide();
       if (!prose.contains(selection.anchorNode) || !prose.contains(selection.focusNode))
-        return setShown(null);
+        return hide();
       const range = selection.getRangeAt(0);
       const text = selectedText(range) || raw;
       const rect = range.getBoundingClientRect();
@@ -93,20 +98,30 @@ export function SelectionActions({
         right: rect.right,
       });
     };
-    const onUp = () => setTimeout(read);
+    const onUp = () => setTimeout(() => read(false));
     const onChange = () => {
       clearTimeout(timer);
-      timer = setTimeout(read, 120);
+      timer = setTimeout(() => read(true), 120);
     };
-    const onScroll = () => setShown(null);
     document.addEventListener("mouseup", onUp);
     document.addEventListener("selectionchange", onChange);
-    window.addEventListener("scroll", onScroll, true);
+    // The feed's scroll removes them (the mock's scroll handler on `#k-mg`).
+    // A focus change fires a scroll event without moving; that one does not.
+    const scroller: HTMLElement | Window =
+      proseRef.current?.closest<HTMLElement>("[data-shell-scroll]") ?? window;
+    const top = () => ("scrollTop" in scroller ? scroller.scrollTop : scroller.scrollY);
+    let last = top();
+    const onScroll = () => {
+      const now = top();
+      if (Math.abs(now - last) > 1) setShown(null);
+      last = now;
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       clearTimeout(timer);
       document.removeEventListener("mouseup", onUp);
       document.removeEventListener("selectionchange", onChange);
-      window.removeEventListener("scroll", onScroll, true);
+      scroller.removeEventListener("scroll", onScroll);
     };
   }, [enabled, proseRef]);
 
