@@ -239,6 +239,20 @@ test.serial("the ring's tone attribute and arc", async (t) => {
   const ring = screen.getByRole("link", { name: /included tokens/ });
   t.is(ring.getAttribute("data-tone"), "bad");
   t.is(ring.textContent, "");
+  cleanup();
+
+  // the arc's length over the full circle of radius 7: 2π · 7 = 43.98
+  const arc = async (used: number) => {
+    await renderInRouter(<UsageRing reading={{ used, allowance: 2_000_000, resetsAt: null }} />);
+    const circles = screen
+      .getByRole("link", { name: /included tokens/ })
+      .querySelectorAll("circle");
+    const value = circles[1]?.getAttribute("stroke-dasharray");
+    cleanup();
+    return value;
+  };
+  t.is(await arc(2_000_000), "43.98 43.98", "all used: the whole circle");
+  t.is(await arc(1_000_000), "21.99 43.98", "half used: half the circle");
 });
 
 test.serial(
