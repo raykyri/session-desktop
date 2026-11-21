@@ -475,7 +475,7 @@ test("18: gone and removed threads take no slot of the window, and are summaries
   ok(t, w.as("olga", "moderation.decide", { item: `p:${removed}`, decision: "removed" }));
   w.clock.advance(2 * DAY);
   const snap = w.server.snapshot(actor("mona"), `space:${open}`, { tier: "window" });
-  t.deepEqual(new Set(snap.full), new Set([a, b]));
+  t.deepEqual([...(snap.full ?? [])].sort(), [a, b].sort());
   const keys = new Set(snap.records.map((x) => x.key));
   t.true(keys.has(`thread:${gone}`) && keys.has(`thread:${removed}`));
 });
