@@ -577,13 +577,17 @@ Choice: option 2.
   format, then lists the provider's models during the `apiKeys.set` request
   with a 10 s timeout. A key the provider rejects, a timeout and a network
   error each refuse the save; there is no queued check. An accepted key is
-  stored encrypted with AES-256-GCM under `SESSION_SECRET_KEY` (bound to its
-  owner and provider), decrypted only for the duration of a provider call,
-  never logged and never returned: reads return the provider, the last four
-  characters and the status. A key a provider rejects during a run becomes
-  `invalid`. Calls made with a member's key do not use OpenRouter's
-  zero-data-retention routing; they fall under the member's own agreement
-  with the provider (K14).
+  stored encrypted under `SESSION_SECRET_KEY`, decrypted only for the
+  duration of a provider call, never logged and never returned: reads
+  return the provider, the last four characters and the status. A key a
+  provider rejects during a run becomes `invalid`.
+- Key-only models are called at their provider directly with the member's
+  key, not through OpenRouter; calls made with a member's key do not use
+  OpenRouter's zero-data-retention routing and fall under the member's own
+  agreement with the provider (K11, K14).
+- Removing a key, or its becoming invalid, ends every run paid by it at the
+  run's next step, `failed { why: "key" }`, with the turns it committed
+  kept (K4).
 - Effort: every registry entry lists the efforts it accepts, and every new
   run carries an explicit effort that the model accepts (`effort` is
   required in `threads.create`, `research.forkNode` and
@@ -617,8 +621,12 @@ operators move members to a better or cheaper model without a release.
 Option 3 adds settings the product does not need (decision Q9: no
 per-member overrides).
 
-Consequences: `SESSION_SECRET_KEY` is required in production, and losing it
-makes stored keys unreadable. `apiKeys.set` waits on a provider request of
+Implementation note: the stored value is AES-256-GCM with the key's owner
+and provider as associated data, so a value copied to another row does not
+open (`server/src/secretBox.ts`).
+
+Consequences: `SESSION_SECRET_KEY` is required outside development and
+test, and losing it makes stored keys unreadable. `apiKeys.set` waits on a provider request of
 up to 10 s. The registry gains `payers`; effort is part of every run's
 inputs and is checked in `pre`. Changing the site defaults affects only composers opened afterwards;
 queued runs keep their model and effort (K13).

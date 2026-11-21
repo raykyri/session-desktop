@@ -224,6 +224,9 @@ export interface ProviderCredentials {
   vertex: boolean;
   openrouter: boolean;
   anthropic: boolean;
+  /** Always false: OpenAI models run only on a member's own key
+   * (`03` K11), never on a deployment credential. */
+  openai: boolean;
 }
 
 /** The abuse limits of `04` Z1, validated at boot. Rates are per window; the
@@ -303,9 +306,13 @@ export interface Config {
   sentryDsn: string | null;
   metricsToken: string | null;
   /** The 32-byte key that seals stored secrets (`SESSION_SECRET_KEY`): API
-   * keys and open account invite codes. Outside production an unset
-   * variable gives `DEVELOPMENT_SECRET_KEY`. */
+   * keys and open account invite codes. Unset, it is
+   * `DEVELOPMENT_SECRET_KEY`, but only when `NODE_ENV` is set to
+   * `development` or `test`; anything else needs the variable. */
   secretKey: Buffer;
+  /** True when `secretKey` is the public development key: boot logs a
+   * warning (`main.ts`). */
+  secretKeyIsDevelopment: boolean;
 }
 
 /** Raised with every offending variable at once; a deploy that is missing
@@ -331,7 +338,7 @@ export const DEVELOPMENT_CURSOR_KEY: Uint8Array = new Uint8Array(32).fill(0xc5);
 
 /** `SESSION_CURSOR_KEY` and its previous key (`01` S3, Y6): 32 bytes of
  * base64 each; the previous one needs the time of the rotation. */
-function cursorKeysFrom(value: RawEnv, production: boolean): CursorKeys {
+function cursorKeysFrom(value: RawEnv, required: boolean): CursorKeys {
   const issues: string[] = [];
   const key = (name: string, raw: string): Uint8Array | null => {
     try {
@@ -343,7 +350,8 @@ function cursorKeysFrom(value: RawEnv, production: boolean): CursorKeys {
   };
   let current: Uint8Array | null = DEVELOPMENT_CURSOR_KEY;
   if (value.SESSION_CURSOR_KEY === null) {
-    if (production) issues.push("SESSION_CURSOR_KEY: required in production");
+    if (required)
+      issues.push("SESSION_CURSOR_KEY: required unless NODE_ENV is development or test");
   } else current = key("SESSION_CURSOR_KEY", value.SESSION_CURSOR_KEY);
   let previous: CursorKeys["previous"];
   if (value.SESSION_CURSOR_KEY_PREVIOUS !== null) {
@@ -374,10 +382,16 @@ export function parseSecretKey(value: string): Buffer {
   throw new Error("expected 32 bytes as 64 hex digits or base64 (openssl rand -base64 32)");
 }
 
-function secretKeyFrom(value: string | null, production: boolean): Buffer {
+/** `SESSION_SECRET_KEY`, or the development key when the variable is unset
+ * and `NODE_ENV` was set to `development` or `test` explicitly. An unset
+ * `NODE_ENV` defaults to development for everything else, but not for this:
+ * a deploy that forgot both must not seal keys under a public value. */
+function secretKeyFrom(value: string | null, nodeEnv: string | undefined): Buffer {
   if (value === null) {
-    if (production) {
-      throw new ConfigError(["SESSION_SECRET_KEY: required in production"]);
+    if (nodeEnv !== "development" && nodeEnv !== "test") {
+      throw new ConfigError([
+        "SESSION_SECRET_KEY: required unless NODE_ENV is development or test",
+      ]);
     }
     return DEVELOPMENT_SECRET_KEY;
   }
@@ -411,6 +425,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ? value.SESSION_DATA_DIR
     : resolve(process.cwd(), value.SESSION_DATA_DIR);
   const fixtureProviders = value.SESSION_FIXTURE_PROVIDERS;
+  // Fixture providers answer every model call and the API key check from
+  // recordings; a production server must never do that.
+  if (fixtureProviders && value.NODE_ENV === "production") {
+    throw new ConfigError(["SESSION_FIXTURE_PROVIDERS: not allowed in production"]);
+  }
+  const nodeEnv = env["NODE_ENV"]?.trim();
   const vertexConfigured =
     value.GOOGLE_APPLICATION_CREDENTIALS_JSON !== null && value.GOOGLE_VERTEX_PROJECT !== null;
   if (value.GOOGLE_APPLICATION_CREDENTIALS_JSON !== null) {
@@ -428,8 +448,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       `SESSION_MIN_PROTOCOL: ${value.SESSION_MIN_PROTOCOL} is above this build's protocol ${PROTOCOL_VERSION}`,
     ]);
   }
-  const secretKey = secretKeyFrom(value.SESSION_SECRET_KEY, isProduction);
-  const cursorKeys = cursorKeysFrom(value, isProduction);
+  const secretKey = secretKeyFrom(value.SESSION_SECRET_KEY, nodeEnv);
+  const cursorKeys = cursorKeysFrom(value, nodeEnv !== "development" && nodeEnv !== "test");
   if (isProduction && value.SESSION_FIXTURE_OAUTH) {
     throw new ConfigError(["SESSION_FIXTURE_OAUTH: not allowed in production"]);
   }
@@ -498,6 +518,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       vertex: fixtureProviders || vertexConfigured,
       openrouter: fixtureProviders || value.OPENROUTER_API_KEY !== null,
       anthropic: fixtureProviders || value.ANTHROPIC_API_KEY !== null,
+      openai: false,
     },
 
     search: {
@@ -526,6 +547,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sentryDsn: value.SENTRY_DSN,
     metricsToken: value.SESSION_METRICS_TOKEN,
     secretKey,
+    secretKeyIsDevelopment: value.SESSION_SECRET_KEY === null,
   };
 }
 

@@ -13,6 +13,7 @@
 // effect model sees no deletes a write did not make.
 
 import { DAY, type LogId, type RunRec, type StoredRecord } from "@session/mutators";
+import type { RegisterOptions } from "@session/sync/client";
 import { MemoryStore, SyncServer } from "@session/sync/server";
 
 import type {
@@ -41,14 +42,15 @@ export class SyncTestServer implements TestServer {
       clock: options.clock,
       ...(options.random ? { random: options.random } : {}),
       mutators: options.mutators ?? PROTO_MUTATORS,
+      ...(options.window ? { window: options.window } : {}),
       expireEveryCall: true,
       // the suite's clients keep an outbox for days: the prototype's figures
       clients: { idleTtl: 90 * DAY, perDay: 20 },
     });
   }
 
-  register(actor: Actor | null): RegisterResult {
-    return this.server.register(actor);
+  register(actor: Actor | null, options?: RegisterOptions): RegisterResult {
+    return this.server.register(actor, options);
   }
 
   apply(actor: Actor | null, envelope: Envelope): ApplyResult {

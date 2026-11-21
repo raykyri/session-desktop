@@ -37,4 +37,6 @@ otherwise. It exits with 1 when a mutation survives.
   check, the ledger, the run texts, `save_counts`, `secure_delete`, boot).
 - Not applicable (`--list` prints the reasons): the client half's faults
   (X28, X31, N26-N28, R2-6, R2-8, R2-10 to R2-14, R2-23) and the prototype's
-  join requests (X16, X22, N23, R2-2).
+  join requests (X16, X22, N23, R2-2); X25 (a tombstone keeping the whole
+  record) is an equivalent mutant on SQLite, whose tombstone row holds the
+  key, kind and audience columns only.

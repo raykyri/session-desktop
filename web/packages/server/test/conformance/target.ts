@@ -207,7 +207,10 @@ export class HttpTestServer implements TestServer {
     const clock = this.#options.clock;
     const sync = new SyncService({
       db,
-      config: this.config,
+      // the suite may give the web window of `window` snapshots
+      config: this.#options.window
+        ? { ...this.config, sync: { ...this.config.sync, window: this.#options.window } }
+        : this.config,
       clock,
       ...(this.#options.random ? { random: this.#options.random } : {}),
       mutators: this.#mutators,
@@ -358,10 +361,13 @@ export class HttpTestServer implements TestServer {
   }
 
   async snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Promise<Snapshot> {
-    const { json } = await this.#request<Snapshot>("POST", "/api/sync/snapshot", actor, {
+    const { status, json } = await this.#request<Snapshot>("POST", "/api/sync/snapshot", actor, {
       log,
       ...options,
     });
+    // the server half throws a refusal for a tier or a thread list the
+    // protocol does not have; over HTTP it is a 400
+    if (status !== 200) throw new Error(`snapshot answered ${status}: ${JSON.stringify(json)}`);
     return json;
   }
 

@@ -242,7 +242,8 @@ test("a read carries no version: its cursor is an opaque token whose length does
   await thread(t, w, "mel", closed, "post", "before eve looks");
   const s = await w.server.snapshot(actor("eve"), `space:${closed}`);
   const o = await w.server.snapshot(actor("eve"), `space:${open}`);
-  t.deepEqual(Object.keys(s).sort(), ["cursor", "lastSeq", "records"]);
+  // a token, the reader's last seq, the records and the server's clock
+  t.deepEqual(Object.keys(s).sort(), ["cursor", "lastSeq", "records", "serverTime"]);
   t.regex(s.cursor, /^[A-Za-z0-9_-]+$/);
   for (let k = 0; k < 120; k++) await thread(t, w, "mel", closed, "post", "eve should not see");
   const other = await thread(t, w, "mel", closed);
@@ -251,7 +252,7 @@ test("a read carries no version: its cursor is an opaque token whose length does
   const p1 = await w.server.pull(actor("eve"), `space:${closed}`, s.cursor);
   if ("resync" in p1) return t.fail("unexpected resync");
   t.deepEqual(p1.changes, []);
-  t.deepEqual(Object.keys(p1).sort(), ["changes", "cursor", "lastSeq"]);
+  t.deepEqual(Object.keys(p1).sort(), ["changes", "cursor", "lastSeq", "serverTime"]);
   t.is(p1.cursor.length, s.cursor.length);
   t.not(p1.cursor, s.cursor);
   const again = await w.server.snapshot(actor("eve"), `space:${closed}`);

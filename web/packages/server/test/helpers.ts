@@ -37,6 +37,8 @@ export interface Harness {
   db: SessionDatabase;
   deps: ServerDeps;
   logger: Logger;
+  /** Every line the server logged, at every level. */
+  logs: string[];
   /** The recording stand-in, unless `createRuns` replaced it. */
   runs: NoopRunsService;
   limiter: RateLimiter;
@@ -102,7 +104,9 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     closeDatabase(db);
     rmSync(directory, { recursive: true, force: true });
   });
-  const logger = createLogger({ level: "error", write: () => undefined });
+  // Every line is kept, so a test can assert what was and was not logged.
+  const logs: string[] = [];
+  const logger = createLogger({ level: "debug", write: (line) => logs.push(line) });
   const runs = createNoopRunsService();
   const limiter = new RateLimiter(options.limiterNow);
   const sync = new SyncService({ db, config, logger, ...options.sync });
@@ -127,6 +131,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     db,
     deps,
     logger,
+    logs,
     runs,
     limiter,
     sync,

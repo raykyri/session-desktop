@@ -7,7 +7,7 @@
 // run uses when none was chosen; `effortProviderOptions` returns the
 // per-provider spelling of an effort.
 
-import type { ModelInfo, ModelProvider, User } from "../types/account.js";
+import type { ModelInfo, ModelProvider } from "../types/account.js";
 
 /** Reasoning effort: the whole range the providers accept. Anthropic's effort
  * scale for Fable 5.1 runs `low` through `max`; the others stop at `high`. */
@@ -48,7 +48,6 @@ export interface ModelEntry {
   route: string;
   /** Tried first when the primary route is missing (OpenRouter aliases). */
   fallbackRoute?: string;
-  adminOnly: boolean;
   supportsFiles: boolean;
   supportsImages: boolean;
   /** Search comes from the provider's own grounding rather than the app's
@@ -76,7 +75,6 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     label: "Gemini 3.8 Flash",
     provider: "vertex",
     route: "gemini-3.8-flash",
-    adminOnly: false,
     supportsFiles: true,
     supportsImages: true,
     nativeSearch: true,
@@ -91,7 +89,6 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     label: "DeepSeek V4.1 Flash",
     provider: "openrouter",
     route: "deepseek/deepseek-v4.1-flash",
-    adminOnly: false,
     // Text is inlined from `document_text`; the provider takes no file parts.
     supportsFiles: false,
     supportsImages: false,
@@ -108,7 +105,6 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     provider: "openrouter",
     route: "~openai/gpt-luna-latest",
     fallbackRoute: "openai/gpt-5.6-luna",
-    adminOnly: false,
     supportsFiles: true,
     supportsImages: true,
     nativeSearch: false,
@@ -123,7 +119,6 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     label: "Claude Fable 5.1",
     provider: "anthropic",
     route: "claude-fable-5-1",
-    adminOnly: true,
     supportsFiles: true,
     supportsImages: true,
     nativeSearch: false,
@@ -160,19 +155,12 @@ export function payableWithIncluded(model: Pick<ModelEntry, "payers">): boolean 
   return model.payers.includes("included");
 }
 
-/** Whether `user` may launch on `modelId`. An unknown id is never usable, so
- * a stale client cannot launch on a model that has been withdrawn. */
-export function canUseModel(user: Pick<User, "isAdmin"> | null, modelId: string): boolean {
-  const model = BY_ID.get(modelId);
-  if (!model) {
-    return false;
-  }
-  return !model.adminOnly || Boolean(user?.isAdmin);
-}
-
-/** The registry entries `user` may launch on, in registry order. */
-export function modelsFor(user: Pick<User, "isAdmin"> | null): ModelEntry[] {
-  return MODEL_REGISTRY.filter((model) => canUseModel(user, model.id));
+/** Whether a run may launch on `modelId`: every registry entry is open to
+ * every member (ADR-23, `03` K11; the weekly allowance replaced ADR-16's
+ * admin gate). An unknown id is never usable, so a stale client cannot
+ * launch on a model that has been withdrawn. */
+export function canUseModel(modelId: string): boolean {
+  return BY_ID.has(modelId);
 }
 
 /** The client-facing model registry. `available` comes from the server's
@@ -183,7 +171,6 @@ export function modelInfo(model: ModelEntry, available: boolean): ModelInfo {
     id: model.id,
     label: model.label,
     provider: model.provider,
-    adminOnly: model.adminOnly,
     available,
     supportsFiles: model.supportsFiles,
     supportsImages: model.supportsImages,
@@ -229,6 +216,8 @@ export function effortProviderOptions(
       };
     case "anthropic":
       return { anthropic: { effort } };
+    case "openai":
+      return { openai: { reasoningEffort: effort } };
   }
 }
 

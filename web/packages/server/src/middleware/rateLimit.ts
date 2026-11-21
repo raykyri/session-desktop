@@ -34,6 +34,11 @@ const DAY = 24 * HOUR;
 export const RATE_LIMITS = {
   mutations: { limit: 60, windowMs: MINUTE },
   auth: { limit: 20, windowMs: MINUTE },
+  /** `apiKeys.set` per account: each call makes a request to a provider
+   * with a key someone pasted (`03` K4). */
+  apiKeyChecks: { limit: 5, windowMs: 10 * MINUTE },
+  /** `apiKeys.set` across all accounts. */
+  apiKeyChecksGlobal: { limit: 60, windowMs: MINUTE },
 } as const satisfies Record<string, BucketSpec>;
 
 /** The buckets of `04` Z1 from the configured limits. */
@@ -61,6 +66,7 @@ export type AbuseBucket = keyof ReturnType<typeof abuseBuckets>;
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();
+  readonly #held = new Set<string>();
   readonly #refusals = new Map<string, number>();
   readonly #now: () => number;
 
@@ -93,6 +99,17 @@ export class RateLimiter {
     }
     this.#buckets.set(key, { tokens: tokens - cost, updatedAt: at, windowMs: spec.windowMs });
     return { allowed: true, retryAfter: 0 };
+  }
+
+  /** Takes the one slot `key` has, for work that must not run twice at once
+   * (one API key check per account, `03` K4). Returns the release, or null
+   * while the slot is held. */
+  hold(key: string): (() => void) | null {
+    if (this.#held.has(key)) return null;
+    this.#held.add(key);
+    return () => {
+      this.#held.delete(key);
+    };
   }
 
   /** Whether `cost` tokens are available, without taking them. */

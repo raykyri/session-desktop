@@ -535,9 +535,13 @@ answer.
 are now, filtered by the reader's scope at read time (`replica-proto/src/access.ts`);
 hidden text goes to its author and the space's owner only. Snapshot records
 come in `createdAt`, then `created_v`, order. `pull` returns the keys changed
-after the cursor's version, each as the current record or a `del`
-(tombstone, or a record the reader may no longer read), plus `lastSeq` when
-the request names a client id of the caller. `pull` answers `resync` for a
+after the cursor's version that the reader may read now, each as the
+current record (as the reader may read it) or a `del` (a tombstone whose
+audience the reader may read), plus `lastSeq` when the request names a
+client id of the caller. A record the reader may no longer read is not
+pulled as a `del` (that would expose its key); what a reader may read
+changes only with their own membership or a log's history, and the reader
+resyncs then (`mutators/src/access.ts`). Every read carries `serverTime`. `pull` answers `resync` for a
 token not sealed by this server (current or previous key), sealed for
 another reader, log or epoch, served more than 30 days ago, or when the
 reader's scope changed since (their membership in the space; for a

@@ -56,7 +56,12 @@ function ChoiceRow({
         <span>
           <b>
             {label}
-            {sub ? <small>{sub}</small> : null}
+            {sub ? (
+              <>
+                {" "}
+                <small>{sub}</small>
+              </>
+            ) : null}
           </b>
         </span>
       </span>

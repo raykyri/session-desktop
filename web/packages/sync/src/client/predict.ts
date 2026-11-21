@@ -30,6 +30,9 @@ import {
 
 import { CONTENT_KINDS, type Replica } from "./replica.js";
 
+/** The kinds a window snapshot serves only for threads in its 2 years. */
+const THREAD_KINDS: ReadonlySet<Kind> = new Set<Kind>(["thread", "counts"]);
+
 /** Kinds that live in user logs only. */
 const USER_KINDS: ReadonlySet<Kind> = new Set<Kind>(["save", "notif", "prefs"]);
 
@@ -65,10 +68,41 @@ export class OverlaySource implements Source {
     return this.replica.state(log) !== undefined;
   }
 
-  /** Whether the replica holds space `sp`'s log with every thread full. */
-  private fullSpace(sp: string): boolean {
-    const s = this.replica.state(`space:${sp}`);
-    return s !== undefined;
+  /** Whether the replica holds everything of `kind` in space `sp`: the
+   * space's log, and for threads, counts and what is under threads, every
+   * thread in full (a window snapshot leaves out old threads and the content
+   * of summary ones). */
+  private fullSpace(sp: string, kind: Kind): boolean {
+    const log: LogId = `space:${sp}`;
+    if (!this.has(log)) return false;
+    return !(CONTENT_KINDS.has(kind) || THREAD_KINDS.has(kind)) || this.replica.fullLog(log);
+  }
+
+  /** Whether the replica can answer a read of `key`: it holds the record,
+   * or the log that would hold it (an id-keyed record the replica does not
+   * hold is not known to be absent). */
+  loaded(key: string): boolean {
+    if (this.overlay.has(key) || this.replica.get(key)) return true;
+    const scope = scopeOfKey(key);
+    if (scope.space === undefined && scope.user === undefined) return false;
+    try {
+      this.byKey(key);
+      return true;
+    } catch (e) {
+      if (e instanceof UnknownRead) return false;
+      throw e;
+    }
+  }
+
+  /** Whether the replica can answer an index read. */
+  loadedIndex(kind: Kind, index: Index): boolean {
+    try {
+      this.keysIn(kind, index);
+      return true;
+    } catch (e) {
+      if (e instanceof UnknownRead) return false;
+      throw e;
+    }
   }
 
   byKey(key: string): StoredRecord | undefined {
@@ -91,7 +125,9 @@ export class OverlaySource implements Source {
       if (index.u !== this.me || !this.has(`user:${this.me}`))
         throw new UnknownRead(`${kind} ${JSON.stringify(index)}`);
     } else if ("sp" in index) {
-      const ok = USER_KINDS.has(kind) ? this.has(`user:${this.me}`) : this.fullSpace(index.sp);
+      const ok = USER_KINDS.has(kind)
+        ? this.has(`user:${this.me}`)
+        : this.fullSpace(index.sp, kind);
       if (!ok) throw new UnknownRead(`${kind} ${JSON.stringify(index)}`);
     } else {
       const log = this.replica.logOfThread(index.th);

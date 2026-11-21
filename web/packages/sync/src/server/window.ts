@@ -51,9 +51,13 @@ export function windowOf(
   }
   // newest first; equal times by id, so the window is the same on every read
   threads.sort((a, b) => createdMs(b) - createdMs(a) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
-  const recent = threads.filter((t) => createdMs(t) >= now - settings.days * DAY).length;
+  // the window's slots go to threads with content: a thread its author
+  // deleted with nothing under it (`gone`) or the owner removed is served as
+  // a summary, without taking a slot (`01` R1)
+  const live = threads.filter((t) => !t.gone && t.mod !== "removed");
+  const recent = live.filter((t) => createdMs(t) >= now - settings.days * DAY).length;
   const take = Math.min(settings.cap, Math.max(recent, settings.threads));
-  const full = new Set(threads.slice(0, take).map((t) => t.id));
+  const full = new Set(live.slice(0, take).map((t) => t.id));
   const open = new Set(opened);
   for (const t of threads) {
     if (open.has(t.id)) full.add(t.id);

@@ -78,17 +78,8 @@ test("usage and the admin surface are gated on is_admin", async (t) => {
   // @ts-expect-error Only the current UTC day is supported, including at runtime.
   await t.throwsAsync(harness.caller(user).usage.summary({ days: 7 }));
 
-  await t.throwsAsync(harness.caller(user).admin.listUsers(), { message: /administrator/ });
-  const listed = await harness.caller(admin).admin.listUsers();
-  t.is(listed.length, 2);
-  t.true(listed.every((entry) => entry.limits.dailyRuns === 10));
-
-  const limits = await harness.caller(admin).admin.setLimits({ userId: user.id, dailyRuns: 3 });
-  t.is(limits.dailyRuns, 3);
-  t.is((await harness.caller(user).usage.summary()).dailyRunLimit, 3);
-  await t.throwsAsync(harness.caller(admin).admin.setLimits({ userId: "nobody", dailyRuns: 1 }), {
-    message: /was not found/,
-  });
+  await t.throwsAsync(harness.caller(user).admin.models.list(), { message: /administrator/ });
+  t.like(await harness.caller(admin).admin.models.list(), { defaultModel: "gemini-flash" });
 });
 
 test("boot writes the Vertex credential", (t) => {

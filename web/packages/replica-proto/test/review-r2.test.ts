@@ -49,7 +49,8 @@ test("S1: a read shows no version, and its token's length depends only on the lo
   await thread(t, w, "otto", open, "post", "public 2");
   const b = await w.server.snapshot(null, `space:${open}`);
   // nothing in a read is a version: a snapshot has records, a token and lastSeq
-  t.deepEqual(Object.keys(b).sort(), ["cursor", "lastSeq", "records"]);
+  t.deepEqual(Object.keys(b).sort(), ["cursor", "lastSeq", "records", "serverTime"]);
+  t.is(b.serverTime, w.clock.now());
   t.is(a.cursor.length, b.cursor.length);
   // the token: a random IV, the sealed fixed-size head and [log, reader], a tag
   const log = `space:${open}`;
@@ -783,7 +784,8 @@ test("Y1: an envelope's queuedAt is checked like a mutation id's age, and the an
     ...old.e,
     queuedAt: old.e.clientTime - 4 * DAY - 1,
   });
-  t.deepEqual(again, old.r);
+  // the recorded answer, given again without using a seq
+  t.deepEqual(again, { ...old.r, replay: true });
   const ahead = await send("queued in the future", MINUTE + 1);
   t.is(ahead.r.ok ? null : ahead.r.error.code, "EXPIRED");
   await ok(t, (await send("queued 4 days ago", -4 * DAY)).r);

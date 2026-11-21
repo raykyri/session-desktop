@@ -174,3 +174,24 @@ test("A3: a person has at most SESSION_LIMIT_STREAMS_PER_USER streams; a client 
   t.is((await other.events({ "user:other": cursor })).status, 409);
   for (const s of [s2, again]) await s.close();
 });
+
+test("a snapshot with a tier or a thread list the protocol does not have answers 400 BAD_REQUEST", async (t) => {
+  const h = createHarness(t);
+  const p = new Person(h, h.addUser("reader"));
+  const bad = [
+    { log: "user:reader", tier: "all" },
+    { log: "user:reader", tier: "threads" },
+    { log: "user:reader", tier: "window", threads: ["not-a-ulid"] },
+    { log: "user:reader", threads: "x" },
+  ];
+  for (const body of bad) {
+    const res = await p.post("/api/sync/snapshot", body);
+    t.is(res.status, 400, JSON.stringify(body));
+    t.like(await res.json(), { code: "BAD_REQUEST" });
+  }
+  t.is((await p.post("/api/sync/snapshot", { log: "user:reader", tier: "summary" })).status, 200);
+  const snap = (await (await p.post("/api/sync/snapshot", { log: "user:reader" })).json()) as {
+    serverTime?: number;
+  };
+  t.is(typeof snap.serverTime, "number");
+});

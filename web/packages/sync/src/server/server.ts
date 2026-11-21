@@ -127,6 +127,7 @@ const logS = z
   .max(200)
   .regex(/^(space|user):[^:]+$/);
 const threadsS = z.array(z.string().regex(ULID_RE)).max(MAX_OPENED_THREADS);
+const TIERS: ReadonlySet<string> = new Set(["full", "summary", "window", "threads"]);
 
 const fail = (e: Refusal): StoredAnswer => ({ ok: false, error: e.toError() });
 const same = (a: StoredRecord, b: StoredRecord) =>
@@ -359,7 +360,11 @@ export class SyncServer implements ServerHalf {
     const serverTime = this.now();
     return a.ok
       ? { ...a, serverTime }
-      : { ok: false, error: { ...a.error, serverTime: a.error.serverTime ?? serverTime } };
+      : {
+          ok: false,
+          error: { ...a.error, serverTime: a.error.serverTime ?? serverTime },
+          ...(a.replay ? { replay: true as const } : {}),
+        };
   }
 
   /** A batch of envelopes, answered in order (`POST /api/sync/apply`). */
@@ -440,7 +445,7 @@ export class SyncServer implements ServerHalf {
     // or one a reminted envelope replaced: its recorded answer, and the seq
     // is not used (R7c)
     if (hit && (hit.digest === payload || hit.digest === REPLACED))
-      return structuredClone(hit.result);
+      return { ...structuredClone(hit.result), replay: true };
     // an answer recorded under this client's seq: the same envelope again
     const sent = digest(canonical([m.mutationId, m.name, m.input]));
     const kept = store.seqAnswer(m.clientId, m.seq);
@@ -460,7 +465,7 @@ export class SyncServer implements ServerHalf {
           digest: payload,
           at: now,
         });
-        return structuredClone(prior.result);
+        return { ...structuredClone(prior.result), replay: true };
       }
     if (m.seq !== client.last + 1)
       return {
@@ -661,16 +666,29 @@ export class SyncServer implements ServerHalf {
     });
   }
 
+  /** Throws a `Refusal` (BAD_REQUEST, nothing recorded) for a tier or a
+   * list of threads the protocol does not have: the route answers 400. */
   snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
+    // a tier or a list of threads the protocol does not have is refused
+    // (BAD_REQUEST, nothing recorded; the route answers 400)
+    const tier = options.tier ?? "full";
+    if (!TIERS.has(tier))
+      throw refuse("BAD_REQUEST", undefined, ["tier: expected full, summary, window or threads"]);
+    const opened = threadsS.safeParse(options.threads ?? []);
+    if (!opened.success)
+      throw refuse("BAD_REQUEST", undefined, [
+        `threads: expected at most ${MAX_OPENED_THREADS} thread ids`,
+      ]);
+    if (tier === "threads" && opened.data.length === 0)
+      throw refuse("BAD_REQUEST", undefined, ["threads: expected a thread id"]);
+    const threads = opened.data;
     const now = this.begin();
     const u = this.userOf(actor);
     const lastSeq = this.lastSeq(u, options.clientId, now);
     // a log id that cannot name a log: no token, so a pull resyncs
-    if (!logS.safeParse(log).success) return { records: [], cursor: "", lastSeq };
-    if (this.closedTo(log, u)) return { records: [], cursor: this.serve(log, u, 0, now), lastSeq };
-    const tier = options.tier ?? "full";
-    const opened = threadsS.safeParse(options.threads ?? []);
-    const threads = opened.success ? opened.data : [];
+    if (!logS.safeParse(log).success) return { records: [], cursor: "", lastSeq, serverTime: now };
+    if (this.closedTo(log, u))
+      return { records: [], cursor: this.serve(log, u, 0, now), lastSeq, serverTime: now };
     // which threads are served in full, and which as summaries; null: all
     let tiers: { full: Set<string>; summary: Set<string> | null } | null = null;
     if (tier === "window" && log.startsWith("space:"))
@@ -705,7 +723,12 @@ export class SyncServer implements ServerHalf {
       const y = createdOf(b.record);
       return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);
     });
-    const out: Snapshot = { records, cursor: this.serve(log, u, version, now), lastSeq };
+    const out: Snapshot = {
+      records,
+      cursor: this.serve(log, u, version, now),
+      lastSeq,
+      serverTime: now,
+    };
     if (tiers)
       out.full = records.flatMap((x) =>
         x.record.kind === "thread" && tiers.full.has(x.record.id) ? [x.record.id] : [],
@@ -731,7 +754,8 @@ export class SyncServer implements ServerHalf {
       return { resync: true };
     const lastSeq = this.lastSeq(u, options.clientId, now);
     // another person's user log: nothing
-    if (this.closedTo(log, u)) return { changes: [], cursor: this.serve(log, u, 0, now), lastSeq };
+    if (this.closedTo(log, u))
+      return { changes: [], cursor: this.serve(log, u, 0, now), lastSeq, serverTime: now };
     if (u !== null && this.scopeChanged(log, u, c.v, c.h)) return { resync: true };
     const changes: Change[] = [];
     let to = c.v;
@@ -746,7 +770,7 @@ export class SyncServer implements ServerHalf {
           : { key: row.key, op: "put", record: structuredClone(v) },
       );
     }
-    return { changes, cursor: this.serve(log, u, to, now), lastSeq };
+    return { changes, cursor: this.serve(log, u, to, now), lastSeq, serverTime: now };
   }
 
   /** Whether what `u` may read of `log` changed, after the token at

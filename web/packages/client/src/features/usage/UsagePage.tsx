@@ -14,7 +14,7 @@ import {
   apiKeyFormatError,
   type ApiKeyProvider,
 } from "@session/shared";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   useModels,
@@ -62,13 +62,16 @@ function UsageTop({
 }) {
   const tone = usageTone(reading.used, reading.allowance);
   const { percent, weekday, resetIn } = usageSentence(reading, now);
+  // The bar is drawn to one decimal; the sentence rounds to a whole percent.
+  const left =
+    reading.allowance > 0 ? Math.min(1, Math.max(0, 1 - reading.used / reading.allowance)) : 0;
   return (
     <section className="box">
       <p className={`usent ${tone}`}>
         You have <b>{percent}%</b> of usage left this week. Next reset on {weekday}, in {resetIn}.
       </p>
       <div className={`utrack ${tone}`} role="img" aria-label={`${percent}% left`}>
-        <span style={{ width: `${percent}%` }} />
+        <span style={{ width: `${(left * 100).toFixed(1)}%` }} />
       </div>
     </section>
   );
@@ -191,6 +194,22 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
   const [confirming, setConfirming] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
+  const removeButton = useRef<HTMLButtonElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  // Where focus goes once the row has rendered its next state (02 §10.1):
+  // after a save the row's Remove, after a removal or Cancel its Add key,
+  // after Keep its Remove.
+  const [focusNext, setFocusNext] = useState<"remove" | "add" | null>(null);
+  useEffect(() => {
+    if (focusNext === null) return;
+    const target = focusNext === "remove" ? removeButton.current : addButton.current;
+    if (target) {
+      target.focus();
+      setFocusNext(null);
+    }
+    // The target appears with the row's next state: a stored key, the form
+    // closing or the confirmation closing.
+  }, [focusNext, stored, checking, confirming, form]);
   const inputId = `in-key-${provider}`;
   const errorId = `${inputId}-error`;
 
@@ -217,6 +236,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
         onSuccess: () => {
           setChecking(null);
           setDraft("");
+          setFocusNext("remove");
           showToast(`${info.name} key works.`);
         },
         onError: (refusal) => {
@@ -234,6 +254,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
     removeKey.mutate(provider, {
       onSuccess: () => {
         setConfirming(false);
+        setFocusNext("add");
         showToast(`${info.name} key removed.`);
       },
       onError: (refusal) => {
@@ -259,9 +280,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
         <span className="kmask">
           {info.prefix}••••{checking}
         </span>
-        <span className="chip kchip" role="status">
-          Checking…
-        </span>
+        <span className="chip kchip">Checking…</span>
       </div>
     );
   } else if (stored && confirming) {
@@ -269,7 +288,15 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
       <div className="kconfirm">
         <span>Remove the {info.name} key? Asks billed to it will stop.</span>
         <span className="grow" />
-        <button ref={keep} type="button" className="btn2 sm" onClick={() => setConfirming(false)}>
+        <button
+          ref={keep}
+          type="button"
+          className="btn2 sm"
+          onClick={() => {
+            setConfirming(false);
+            setFocusNext("remove");
+          }}
+        >
           Keep
         </button>
         <button
@@ -316,6 +343,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
               setForm(false);
               setError(null);
               setDraft("");
+              setFocusNext("add");
             }}
           >
             Cancel
@@ -347,6 +375,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
           )}
           <span className="grow" />
           <button
+            ref={removeButton}
             type="button"
             className="btn2 sm"
             onClick={() => {
@@ -366,15 +395,30 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
         {name}
         <small>Not set</small>
         <span className="grow" />
-        <button type="button" className="btn2 sm" onClick={openForm}>
+        <button ref={addButton} type="button" className="btn2 sm" onClick={openForm}>
           Add key
         </button>
       </div>
     );
   }
 
+  // One live region per row, always rendered, so a change of status is
+  // announced once: Checking…, then Valid or Invalid (02 W8.1).
+  const status =
+    checking !== null
+      ? "Checking…"
+      : stored
+        ? stored.status === "valid"
+          ? "Valid"
+          : "Invalid"
+        : "";
+  const announced = status === "" ? "" : `${info.name} key: ${status}`;
+
   return (
     <div className="krow" data-key={provider}>
+      <span className="sr-only" aria-live="polite" data-key-status="">
+        {announced}
+      </span>
       <div className="kb">{body}</div>
     </div>
   );

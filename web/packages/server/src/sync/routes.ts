@@ -12,7 +12,7 @@
 // `waiting` account read the public path (`01` R5) and write nothing. The
 // limits of A3 answer TOO_MANY_REQUESTS, unrecorded.
 
-import type { LogId } from "@session/mutators";
+import { Refusal, type LogId } from "@session/mutators";
 import { type Actor, type ApplyResult, type RegisterResult, type Tier } from "@session/sync/server";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -189,18 +189,20 @@ export function syncRoutes(options: SyncRoutesOptions): Hono<AppEnv> {
     };
     if (typeof body.log !== "string")
       return refusal(c, 400, "BAD_REQUEST", "Expected { log }.", now());
-    const tier = (["full", "summary", "window", "threads"] as const).find((x) => x === body.tier);
-    if (body.tier !== undefined && tier === undefined)
-      return refusal(c, 400, "BAD_REQUEST", "Unknown tier.", now());
-    const threads =
-      Array.isArray(body.threads) && body.threads.every((x) => typeof x === "string")
-        ? body.threads
-        : undefined;
-    const snap = sync.server.snapshot(readerOf(callerOf(c)), body.log as LogId, {
-      ...(tier ? { tier: tier satisfies Tier } : {}),
-      ...(threads ? { threads } : {}),
-      ...(typeof body.clientId === "string" ? { clientId: body.clientId } : {}),
-    });
+    // the server half refuses a tier or a thread list the protocol does not
+    // have (BAD_REQUEST, nothing recorded): 400
+    let snap;
+    try {
+      snap = sync.server.snapshot(readerOf(callerOf(c)), body.log as LogId, {
+        ...(body.tier !== undefined ? { tier: body.tier as Tier } : {}),
+        ...(body.threads !== undefined ? { threads: body.threads as string[] } : {}),
+        ...(typeof body.clientId === "string" ? { clientId: body.clientId } : {}),
+      });
+    } catch (e) {
+      if (e instanceof Refusal)
+        return c.json({ ...e.toError(), serverTime: now() }, e.code === "BAD_REQUEST" ? 400 : 500);
+      throw e;
+    }
     return c.json(snap, 200);
   });
 

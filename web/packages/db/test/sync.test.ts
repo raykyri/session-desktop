@@ -421,3 +421,44 @@ test("the store refuses a record that does not match its schema, and the write c
   t.deepEqual(w.tables(), before);
   refused(t, w.as("olga", "spaces.update", { id: open, desc: "x".repeat(301) }), "BAD_REQUEST");
 });
+
+test("sync review-m2 17 on SqliteStore: a nested transaction that throws takes back its own writes only", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const p = post(t, w, "mel", open);
+  const store = w.store as SqliteStore;
+  const head = store.head();
+  const r = w.store.transaction(() => {
+    w.store.setLastRev("outer", 1);
+    // a fault after serverApply staged and wrote its records
+    return w.server.serverApply({ me: "mel" }, (tx) => {
+      const th = tx.byKey(`thread:${p}`);
+      if (th?.kind === "thread") tx.put({ ...th, sum: "partial" });
+      throw new Error("the fault");
+    });
+  });
+  t.false(r.ok);
+  t.is(store.lastRev("outer"), 1, "the outer transaction's write is kept");
+  t.like(w.get(`thread:${p}`), { sum: null });
+  t.is(w.store.head(), head);
+  // a fault inside a nested call, caught by the outer one
+  store.transaction(() => {
+    store.setLastRev("a", 1);
+    try {
+      store.transaction(() => {
+        store.setLastRev("b", 1);
+        throw new Error("inner");
+      });
+    } catch {
+      // the inner savepoint was rolled back
+    }
+  });
+  t.is(store.lastRev("a"), 1);
+  t.is(store.lastRev("b"), undefined);
+  // a new connection reads the same
+  const fresh = new SqliteStore(new SqliteDatabase(w.path, { readonly: true }));
+  t.is(fresh.lastRev("a"), 1);
+  t.is(fresh.lastRev("b"), undefined);
+  t.like(fresh.byKey(`thread:${p}`), { sum: null });
+  fresh.sqlite.close();
+});

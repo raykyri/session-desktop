@@ -75,6 +75,10 @@ const NOT_APPLICABLE: [string, string][] = [
     "the prototype's join-request mutators (`replica-proto/src/join-requests.ts`): not part of the server build (`01` C10)",
   ]),
   [
+    "X25",
+    "a tombstone that keeps the whole record: SqliteStore writes a tombstone's key, kind and audience columns only, so the extra fields of the in-memory fault have nowhere to go (an equivalent mutant on SQLite; the erasure scans of the file and WAL, D4, cover the table)",
+  ],
+  [
     "N1",
     "left out of replica-proto's set as well: with the version sealed in the token it changes nothing a reader gets",
   ],
@@ -192,12 +196,6 @@ const MUTATIONS: Mutation[] = [
     file: "../mutators/src/members.ts",
     from: "      if (m.adm !== i.base.adm) throw stale();\n",
     to: "",
-  },
-  {
-    name: "X25 a tombstone keeps the whole record",
-    file: "../sync/src/server/server.ts",
-    from: "const tomb: Tombstone = { key, ...audience(store, old), at };",
-    to: "const tomb = { ...old, key, ...audience(store, old), at } as Tombstone;",
   },
   {
     // likes are gone; saves and notifications share the rule
@@ -343,8 +341,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "N33 an empty pull does not renew the token's serve time",
     file: "../sync/src/server/server.ts",
-    from: "    return { changes, cursor: this.serve(log, u, to, now), lastSeq };",
-    to: "    return { changes, cursor: this.serve(log, u, to, changes.length ? now : c.at), lastSeq };",
+    from: "    return { changes, cursor: this.serve(log, u, to, now), lastSeq, serverTime: now };",
+    to: "    return { changes, cursor: this.serve(log, u, to, changes.length ? now : c.at), lastSeq, serverTime: now };",
   },
   {
     name: "N34 the token key is a constant",
