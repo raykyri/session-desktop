@@ -849,7 +849,8 @@ export const spaceMutators = {
   },
   // -- members (C18): the owner acts on anyone but themselves
   /** `base.adm`: the member's admission id as the owner saw it; STALE when
-   * the person was let in again since. */
+   * the person was let in again since. `removed`: false when the person was
+   * no longer a member (nothing changed). */
   "members.remove": {
     who: "owner",
     online: false,
@@ -858,7 +859,7 @@ export const spaceMutators = {
       user: spaceHandleSchema,
       base: z.strictObject({ adm: z.string().max(64) }),
     }),
-    result: nullResult,
+    result: z.object({ removed: z.boolean() }),
   },
   /** Applies to the person as they are now; no `base`. */
   "members.ban": {

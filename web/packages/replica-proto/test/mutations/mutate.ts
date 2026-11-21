@@ -38,6 +38,7 @@
 // of `@session/client` as well (linked to the copies of the two packages
 // above), and a client mutation runs the client test files it names
 // (`files`), not this package's suite, which does not import the client.
+// M6-C48 on cover the M6 tail: the removal toast of C12 (`removed`).
 //
 // Before the mutations, the suites run in an unmutated slot: a failure there
 // stops the run (a mutation is not killed by a test that fails anyway). A
@@ -1694,6 +1695,15 @@ const MUTATIONS: Mutation[] = [
     to: "  return (false as boolean) && error?.message ? error.message : null;",
     packageOnly: true,
     files: ["test/outbox.screens.test.tsx"],
+  },
+  // ---- the M6 tail: C12 ----
+  {
+    name: "M6-C48 (C12) a removal that changed nothing reads as Removed",
+    file: "../client/src/features/channels/MembersDialog.tsx",
+    from: "  return removed === false\n",
+    to: "  return (false as boolean) && removed === false\n",
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
   },
 ];
 

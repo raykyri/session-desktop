@@ -30,6 +30,7 @@
 // M6-8 on undo one fix of the M6 server review each (the deletion job, the
 // privacy check, the pre-stage limits, the invite notification), named by
 // the review's row, so that each fix's test is shown to fail without it.
+// M6-55 on cover the M6 tail: `members.remove`'s result (C12).
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -1776,6 +1777,19 @@ const MUTATIONS: Mutation[] = [
     from: '  for (const r of tx.list("run", { u })) dropRuns(tx, r.th, [r]);\n',
     to: "",
   },
+  // ---- the M6 tail: C12's removal result ----
+  {
+    name: "M6-55 C12: a removal of a person who had left answers removed: true",
+    file: "../mutators/src/members.ts",
+    from: '      if (m?.kind !== "member") return { removed: false };',
+    to: '      if (m?.kind !== "member") return { removed: true };',
+  },
+  {
+    name: "M6-56 C12: a removal that acted answers null",
+    file: "../mutators/src/members.ts",
+    from: "      refreshSpace(tx, i.space, -1);\n      return { removed: true };",
+    to: "      refreshSpace(tx, i.space, -1);\n      return null;",
+  },
 ];
 
 /** The tests that must fail for a mutation to count as killed, by id: the
@@ -2200,6 +2214,16 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M6-52": { tests: ["text in Litestream's local state beside the database fails its check"] },
   "M6-53": { tests: ["limit: the pre-stage limits hold for their whole window"] },
   "M6-54": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M6-55": {
+    tests: [
+      "C12: members.remove answers removed: true when it removes the member, and removed: false",
+    ],
+  },
+  "M6-56": {
+    tests: [
+      "C12: members.remove answers removed: true when it removes the member, and removed: false",
+    ],
+  },
 };
 
 /** What one suite said about a mutation. */

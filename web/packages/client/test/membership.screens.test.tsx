@@ -563,6 +563,42 @@ test.serial(
   },
 );
 
+test.serial(
+  "a removal of a person who had already left says so, and a removal that acted says Removed (C12)",
+  async (t) => {
+    prepare = (replica) => rewrite(replica, space(replica, "sci-fi"), { vis: "private" });
+    const dialog = await openMembers("/c/sci-fi", "sci-fi");
+    const others = () =>
+      within(within(dialog).getByRole("list", { name: "Members" })).getAllByRole("listitem");
+    const replica = replicaOf();
+    let removed = false;
+    recordWrites(replica, (name) =>
+      name === "members.remove" ? { ok: true, result: { removed } } : null,
+    );
+    const remove = async (row: HTMLElement) => {
+      const user = row.getAttribute("data-member") ?? "";
+      fireEvent.click(within(row).getByRole("button", { name: "More" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove from channel" }));
+      const confirm = await screen.findByRole("alertdialog", {
+        name: `Remove @${user} from #sci-fi?`,
+      });
+      fireEvent.click(within(confirm).getByRole("button", { name: "Remove" }));
+      return user;
+    };
+    // the server answers removed: false: the person had left before the
+    // removal applied, and nothing changed
+    const gone = await remove(others()[1] as HTMLElement);
+    await waitUntil(
+      t,
+      () => currentToast() === `@${gone} had already left #sci-fi.`,
+      "the already-left toast",
+    );
+    removed = true;
+    const user = await remove(others()[1] as HTMLElement);
+    await waitUntil(t, () => currentToast() === `Removed @${user} from #sci-fi.`, "the toast");
+  },
+);
+
 // ------------------------------------------------------ channel invite links
 
 test.serial("Invite to #name: create, copy, revoke and undo", async (t) => {

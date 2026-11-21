@@ -140,3 +140,23 @@ test("B4: a used link admits nobody else; a banned person cannot join with a lin
     error: { code: "FORBIDDEN" },
   });
 });
+
+test("C12: members.remove answers removed: true when it removes the member, and removed: false for one who had already left", async (t) => {
+  const h = createHarness(t);
+  const { olga, mel, closed } = await channels(h);
+  const adm = (h.sync.store.byKey(`member:${closed}:mel`) as { adm: string }).adm;
+  await mel.ok("spaces.leave", { space: closed });
+  t.deepEqual(await olga.ok("members.remove", { space: closed, user: "mel", base: { adm } }), {
+    removed: false,
+  });
+  const ann = new Person(h, h.addUser("ann"));
+  const link = (await olga.ok("invites.create", { id: newId(), space: closed, days: 7 })) as {
+    code: string;
+  };
+  await ann.ok("spaces.join", { space: closed, invite: link.code });
+  const annAdm = (h.sync.store.byKey(`member:${closed}:ann`) as { adm: string }).adm;
+  t.deepEqual(
+    await olga.ok("members.remove", { space: closed, user: "ann", base: { adm: annAdm } }),
+    { removed: true },
+  );
+});
