@@ -24,8 +24,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/client/package.json packages/client/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/mutators/package.json packages/mutators/package.json
+COPY packages/replica-proto/package.json packages/replica-proto/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/sync/package.json packages/sync/package.json
 
 # `better-sqlite3` ships prebuilt binaries for linux/amd64 and linux/arm64, so
 # the common case needs no toolchain. The fallback installs one and retries
@@ -48,8 +51,8 @@ COPY . .
 # typechecks the test files; types are CI's `check` job (`12` §4), and an image
 # that cannot be built because a test file is mid-edit is not a useful gate.
 #
-# The server bundle inlines `@session/db` and `@session/shared` (they publish
-# TypeScript sources) and leaves every npm package external, so
+# The server bundle inlines `@session/db`, `@session/shared`,
+# `@session/mutators` and `@session/sync` (they publish TypeScript sources) and leaves every npm package external, so
 # `better-sqlite3`, `unpdf`, and `linkedom` are resolved from
 # `node_modules` at runtime rather than bundled.
 RUN npm run build --workspace @session/client --workspace @session/server

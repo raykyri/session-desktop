@@ -7,13 +7,18 @@ import type { ModelEntry, User } from "@session/shared";
 
 import type { Config } from "./config.js";
 import type { Logger } from "./logger.js";
+import type { Allowances } from "./runs/allowance.js";
 import type { Ledger } from "./runs/ledger.js";
 import type { RunTexts } from "./runs/runTexts.js";
 import type { RunsService } from "./runs/service.js";
+import type { SyncService } from "./sync/service.js";
 
 export interface ServerDeps {
   config: Config;
   db: SessionDatabase;
+  /** The server half of the sync core (`sync/service.ts`). Built over
+   * `db` by `createApp` when absent. */
+  sync?: SyncService;
   /** Attempts in progress, for the drain (`runs/service.ts`). */
   runs: RunsService;
   logger?: Logger;
@@ -23,6 +28,10 @@ export interface ServerDeps {
   /** The usage ledger `usage.get` and `usage.listRuns` read (`03` K1, K5).
    * An empty in-memory ledger when absent, until the SQLite ledger lands. */
   ledger?: Ledger;
+  /** A member's allowance, keys and billing as the run loop and the
+   * dispatcher read them (`keys/allowances.ts`); the configured allowance for
+   * everyone when absent. */
+  allowances?: Allowances;
   /** The question of a run as its asker may read it now (`03` K5). Every
    * run reads as unavailable when absent, until the run records land. */
   runTexts?: RunTexts;

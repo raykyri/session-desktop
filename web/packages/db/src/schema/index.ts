@@ -10,5 +10,6 @@ export * from "./apiKeys.js";
 export * from "./backfills.js";
 export * from "./preferences.js";
 export * from "./sessions.js";
+export * from "./sync.js";
 export * from "./usage.js";
 export * from "./users.js";

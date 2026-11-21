@@ -124,6 +124,7 @@ test("test-only auth is impossible in production", (t) => {
     NODE_ENV: "production",
     SESSION_TEST_AUTH: "1",
     SESSION_SECRET_KEY: "ab".repeat(32),
+    SESSION_CURSOR_KEY: Buffer.alloc(32, 3).toString("base64"),
   });
   t.false(config.testAuthEnabled);
   t.true(config.isProduction);
@@ -159,6 +160,45 @@ test("the development secret key only when NODE_ENV says development or test", (
   });
   t.deepEqual(base64.secretKey, Buffer.alloc(32, 7));
   t.deepEqual(testConfig("/tmp/session-config").secretKey, DEVELOPMENT_SECRET_KEY);
+});
+
+test("the cursor key is 32 bytes of base64, required outside development and test; the previous one needs its rotation time", (t) => {
+  const production = { NODE_ENV: "production", SESSION_SECRET_KEY: "ab".repeat(32) };
+  const missing = t.throws(() => testConfig("/tmp/session-config", production));
+  t.regex(
+    (missing as ConfigError).issues.join("\n"),
+    /SESSION_CURSOR_KEY: required unless NODE_ENV is development or test/,
+  );
+  for (const bad of [
+    "too-short",
+    Buffer.alloc(31, 1).toString("base64"),
+    Buffer.alloc(33, 1).toString("base64"),
+  ]) {
+    const e = t.throws(() => testConfig("/tmp/session-config", { SESSION_CURSOR_KEY: bad }));
+    t.regex(
+      (e as ConfigError).issues.join("\n"),
+      /SESSION_CURSOR_KEY: expected 32 bytes of base64/,
+    );
+  }
+  const key = Buffer.alloc(32, 9).toString("base64");
+  const config = testConfig("/tmp/session-config", { ...production, SESSION_CURSOR_KEY: key });
+  t.deepEqual(Buffer.from(config.sync.cursorKeys.current), Buffer.alloc(32, 9));
+  t.is(config.sync.cursorKeys.previous, undefined);
+  const noTime = t.throws(() =>
+    testConfig("/tmp/session-config", {
+      SESSION_CURSOR_KEY: key,
+      SESSION_CURSOR_KEY_PREVIOUS: key,
+    }),
+  );
+  t.regex((noTime as ConfigError).issues.join("\n"), /SESSION_CURSOR_KEY_ROTATED_AT/);
+  const rotated = testConfig("/tmp/session-config", {
+    SESSION_CURSOR_KEY: key,
+    SESSION_CURSOR_KEY_PREVIOUS: Buffer.alloc(32, 8).toString("base64"),
+    SESSION_CURSOR_KEY_ROTATED_AT: "2026-11-01T00:00:00Z",
+  });
+  t.is(rotated.sync.cursorKeys.previous?.rotatedAt, Date.parse("2026-11-01T00:00:00Z"));
+  t.throws(() => testConfig("/tmp/session-config", { SESSION_MIN_PROTOCOL: "99" }));
+  t.is(testConfig("/tmp/session-config").sync.minProtocol, 4);
 });
 
 test("boot warns when the development secret key is in use", (t) => {

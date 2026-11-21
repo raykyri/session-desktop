@@ -16,6 +16,9 @@
       "path": "../mutators"
     },
     {
+      "path": "../sync"
+    },
+    {
       "path": "../server"
     }
   ]

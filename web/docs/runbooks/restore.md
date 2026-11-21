@@ -77,6 +77,30 @@ migration unsupported by the image (`UnknownMigrationError`). A current image ca
 an older database snapshot and apply pending migrations. An older image cannot
 use a newer database; deploy an image that supports the restored schema.
 
+### Sync cursors after a restore
+
+No manual step is needed for the sync clients: the restore check runs at
+boot (plan `01` D6, decision E6). The server records the generation of the
+database file in `server_meta` (`litestream_generation`); a restored file is
+a new file, so its generation differs from the one recorded in it, and the
+boot bumps the epoch of every log. Every cursor and event id issued before the
+restore then resyncs instead of pulling from a version the restored database
+issues again. The boot log line `database generation changed: every log's
+epoch was bumped` says it happened, with the number of logs. Litestream 0.5
+reports no generation id, so the generation is the identity of the database
+file (device, inode, creation time); with a Litestream that writes a
+`generation` file into `.session.db-litestream/`, that id is used.
+
+Writes confirmed after the restore point are lost with their recorded
+answers: a client that sent one gets no replay of it. Web clients hold no
+outbox across a reload, so nothing resends them. Record the restore time in
+the incident notes: the window is the Litestream lag (seconds) plus the
+point in time chosen.
+
+Removed content: a restore to a point before a removal serves the removed
+content again (`05` §3.3). Repeat the removals applied after the restore
+point, from the JSON logs (`moderation.decide` with `decision: "removed"`).
+
 ## 3. Restore `/data/documents`
 
 The archives are `documents-<timestamp>-full.tar.gz` and

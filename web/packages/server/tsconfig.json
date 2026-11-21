@@ -5,6 +5,12 @@
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": ["src", "test"],
-  "references": [{ "path": "../shared" }, { "path": "../db" }]
+  "include": ["src", "test", "scripts"],
+  "references": [
+    { "path": "../shared" },
+    { "path": "../mutators" },
+    { "path": "../sync" },
+    { "path": "../db" },
+    { "path": "../replica-proto" }
+  ]
 }

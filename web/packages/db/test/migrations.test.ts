@@ -99,6 +99,7 @@ test("applies every migration to an empty database", (t) => {
       [
         "api_keys",
         "backfills",
+        "change_log",
         "collapsed_groups",
         "collapsed_places",
         "embed_assets",
@@ -109,20 +110,31 @@ test("applies every migration to an empty database", (t) => {
         "image_refs",
         "interface_drafts",
         "invites",
+        "log_epochs",
         "node_messages",
         "node_summaries",
         "nodes",
         "notifications",
         "oauth_states",
+        "records",
+        "registry",
         "research_drafts",
         "research_images",
         "response_snapshots",
         "run_attempts",
+        "run_live",
         "run_queue",
         "run_turns",
+        "save_counts",
+        "server_head",
+        "server_meta",
         "sessions",
         "signup_attempts",
         "site_settings",
+        "sync_answers",
+        "sync_clients",
+        "sync_seq_answers",
+        "tombstones",
         "tree_folder_membership",
         "tree_invites",
         "tree_member_removals",
@@ -152,19 +164,20 @@ test("the history is the initial migration and the plan's numbered ones", (t) =>
   // The database has never been deployed with this schema; M8a squashes the
   // history into one initial migration (runbooks/reset-database.md, plan
   // `01` D5). Each milestone adds its own numbered migration beside it:
-  // `0003_api_keys` (M5b), `0004_accounts` (M6).
+  // `0003_api_keys` (M5b), `0004_accounts` (M6), `0005_spaces` (M3; the
+  // plan's `0001_spaces`, numbered after the ones that landed first).
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
   t.deepEqual(
     journal.entries.map((entry) => entry.tag),
-    ["0000_initial", "0003_api_keys", "0004_accounts"],
+    ["0000_initial", "0003_api_keys", "0004_accounts", "0005_spaces"],
   );
   t.deepEqual(
     readdirSync(MIGRATIONS_FOLDER)
       .filter((name) => name.endsWith(".sql"))
       .sort(),
-    ["0000_initial.sql", "0003_api_keys.sql", "0004_accounts.sql"],
+    ["0000_initial.sql", "0003_api_keys.sql", "0004_accounts.sql", "0005_spaces.sql"],
   );
 });
 
@@ -178,6 +191,48 @@ test("journal entries ascend: idx and when strictly increase together", (t) => {
     t.true(entry.when > previous.when, `${entry.tag}: when after ${previous.tag}`);
     t.true(entry.tag.startsWith(String(entry.idx).padStart(4, "0")), `${entry.tag} matches idx`);
   }
+});
+
+test("0005_spaces creates the records indexes of 01 D1 and the change log's, and seeds the server head", (t) => {
+  const db = openDatabase(":memory:");
+  const indexes = (table: string) =>
+    (db.$client.prepare(`PRAGMA index_list(\`${table}\`)`).all() as { name: string }[]).flatMap(
+      (row) =>
+        row.name.startsWith("sqlite_")
+          ? []
+          : [
+              `${row.name}(${(
+                db.$client.prepare(`PRAGMA index_info(\`${row.name}\`)`).all() as { name: string }[]
+              )
+                .map((c) => c.name)
+                .join(",")})`,
+            ],
+    );
+  t.deepEqual(indexes("records").sort(), [
+    "records_kind_sp_idx(kind,sp,created_v)",
+    "records_kind_th_idx(kind,th,created_v)",
+    "records_kind_u_idx(kind,u)",
+    "records_kind_uniq_unique(kind,uniq)",
+  ]);
+  t.true(indexes("change_log").includes("change_log_version_idx(log,version)"));
+  t.deepEqual(db.$client.prepare("SELECT id, version FROM server_head").all(), [
+    { id: 1, version: 0 },
+  ]);
+  // every lookup of the store is answered by an index (`01` U2)
+  for (const q of [
+    "SELECT key FROM records WHERE kind = 'thread' AND sp = 'x'",
+    "SELECT key FROM records WHERE kind = 'node' AND th = 'x'",
+    "SELECT key FROM records WHERE kind = 'save' AND u = 'x'",
+    "SELECT key FROM records WHERE kind = 'space' AND uniq = 'x'",
+    "SELECT key, op, version FROM change_log WHERE log = 'x' AND version > 0 ORDER BY version",
+  ]) {
+    const plan = (db.$client.prepare(`EXPLAIN QUERY PLAN ${q}`).all() as { detail: string }[])
+      .map((r) => r.detail)
+      .join("; ");
+    t.regex(plan, /USING (COVERING )?INDEX/, q);
+  }
+  t.is(db.$client.pragma("secure_delete", { simple: true }), 1);
+  closeDatabase(db);
 });
 
 test("every migration has a snapshot, chained, and the latest one holds the schema", async (t) => {
