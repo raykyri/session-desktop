@@ -25,6 +25,13 @@ import { restoreUnsent, resetDrafts, useDraftsStore } from "../src/stores/drafts
 
 import { FakeLocks, FakeStorage, FakeSync, until } from "./syncFake.js";
 
+// The transport unrefs its timers so a pending wait never keeps a Node
+// process alive. A test whose only pending work is such a timer would let the
+// event loop drain and end the worker before the timer fires, so the file
+// holds the loop open until its tests finish.
+const hold = setInterval(() => {}, 1_000);
+test.after.always(() => clearInterval(hold));
+
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
