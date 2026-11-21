@@ -429,3 +429,38 @@ test("SESSION_WEB_SUMMARY_DAYS bounds how far back a window snapshot serves summ
   t.true(await make({}), "a summary by default");
   t.false(await make({ SESSION_WEB_SUMMARY_DAYS: "0" }), "no row at all");
 });
+
+test("spaces.threadSpace answers a thread's channel to a reader who may read it, and the same null otherwise", async (t) => {
+  const at = Date.now();
+  const h = createHarness(t, {
+    limiterNow: () => at,
+    env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "100" },
+  });
+  const { olga, mel, mona, lab, secret } = await privateLab(h);
+  const open = newId();
+  await olga.ok("spaces.create", { id: open, name: "lounge" });
+  const pub = newId();
+  await olga.ok("threads.create", { id: pub, space: open, kind: "post", q: "For anyone" });
+  const wanda = h.addWaitingUser("wanda");
+  const ask = (user: Parameters<typeof h.caller>[0], thread: string) =>
+    h.caller(user).spaces.threadSpace({ thread });
+  t.deepEqual(await ask(mel.user, secret), { space: lab });
+  t.deepEqual(await ask(olga.user, secret), { space: lab });
+  for (const user of [null, wanda, mona.user])
+    t.deepEqual(await ask(user, secret), { space: null }, user?.login ?? "signed out");
+  for (const user of [null, wanda, mona.user, mel.user])
+    t.deepEqual(await ask(user, pub), { space: open });
+  t.deepEqual(await ask(mel.user, newId()), { space: null }, "no such thread");
+  await t.throwsAsync(ask(null, "not-a-ulid"), { code: "BAD_REQUEST" } as never);
+  // the snapshots bucket: a read request and the lookup share it
+  const tight = createHarness(t, {
+    limiterNow: () => at,
+    env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "2" },
+  });
+  const user = tight.addUser("reader");
+  t.is((await read(tight, { reads: [{ log: "user:reader" }] }, tight.signIn(user))).status, 200);
+  await tight.caller(user).spaces.threadSpace({ thread: newId() });
+  await t.throwsAsync(tight.caller(user).spaces.threadSpace({ thread: newId() }), {
+    code: "TOO_MANY_REQUESTS",
+  } as never);
+});

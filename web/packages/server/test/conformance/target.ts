@@ -355,7 +355,11 @@ export class HttpTestServer implements TestServer {
     );
     // a refusal of the request (signed out: 401 before the body is read; the
     // day's registrations: 429) is the registration's answer
-    return "code" in json ? { ok: false, error: json as never } : json;
+    if ("code" in json) return { ok: false, error: json as never };
+    // the handle the route adds for the web client: the suite's server half
+    // answers without it
+    if (json.ok && "user" in json) delete (json as { user?: unknown }).user;
+    return json;
   }
 
   async apply(actor: Actor | null, envelope: Envelope): Promise<ApplyResult> {

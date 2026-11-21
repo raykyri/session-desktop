@@ -17,14 +17,14 @@ test("Y3: a re-attach returns the stored lastSeq and is not counted; the 51st ne
   const h = createHarness(t, { env: { SESSION_LIMIT_REGISTER_PER_MINUTE: "1000" } });
   const p = new Person(h, h.addUser("tabs"));
   const first = await p.register();
-  t.like(first.body, { ok: true, lastSeq: 0, reattached: false });
+  t.like(first.body, { ok: true, lastSeq: 0, reattached: false, user: "tabs" });
   const id = p.clientId;
   await p.ok("prefs.set", { layout: "wide" });
   await p.ok("prefs.set", { layout: "centred" });
   // 100 reloads of the tab re-attach its id
   for (let k = 0; k < 100; k++) {
     const again = await p.register(id);
-    t.deepEqual(again.body, { ok: true, clientId: id, lastSeq: 2, reattached: true });
+    t.deepEqual(again.body, { ok: true, clientId: id, lastSeq: 2, reattached: true, user: "tabs" });
   }
   // 49 more new ids make 50 today; the 51st is refused, a re-attach is not
   for (let k = 0; k < 49; k++) t.true((await p.register()).body.ok);

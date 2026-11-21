@@ -180,7 +180,8 @@ export function syncRoutes(options: SyncRoutesOptions): Hono<AppEnv> {
     const body = await objectBody(c, SMALL_BODY);
     const clientId = typeof body["clientId"] === "string" ? body["clientId"] : undefined;
     const r = sync.server.register(caller.actor, clientId === undefined ? {} : { clientId });
-    if (r.ok) return c.json(r, 200);
+    // the registered person's handle, so the client needs no `auth.me` for it
+    if (r.ok) return c.json({ ...r, user: caller.actor.u }, 200);
     // the 50 new ids a day (`01` Y3): a refusal of the request, an hour on
     if (r.error.code === "TOO_MANY_REQUESTS")
       return refusal(c, 429, "TOO_MANY_REQUESTS", r.error.message, now(), 3600);

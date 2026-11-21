@@ -918,6 +918,18 @@ const MUTATIONS: Mutation[] = [
     from: "      const checkpoint = this.store.checkpoint();",
     to: "      const checkpoint = (null as unknown) as ReturnType<typeof this.store.checkpoint>;",
   },
+  {
+    name: "M3-75 register leaves out the person's handle",
+    file: "src/sync/routes.ts",
+    from: "    if (r.ok) return c.json({ ...r, user: caller.actor.u }, 200);",
+    to: "    if (r.ok) return c.json(r, 200);",
+  },
+  {
+    name: "M3-76 threadSpace answers a thread the caller may not read",
+    file: "src/trpc/routers/spaces.ts",
+    from: "      return { space: view(store, r, reader) === null ? null : r.s };",
+    to: "      return { space: view(store, r, reader) === undefined ? null : r.s };",
+  },
 ];
 
 /** The tests that must fail for a mutation to count as killed, by id: the
@@ -1137,6 +1149,8 @@ const EXPECTED: Record<string, { in?: "db" | "sync"; tests: string[] }> = {
   "M3-72": { tests: ["after a resync a stream is unsubscribed"] },
   "M3-73": { tests: ["the session check ends a stream"] },
   "M3-74": { tests: ["boot: the restore check, open usage rows"] },
+  "M3-75": { tests: ["Y3: a re-attach returns the stored lastSeq"] },
+  "M3-76": { tests: ["spaces.threadSpace answers a thread's channel"] },
 };
 
 /** What one suite said about a mutation. */
