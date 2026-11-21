@@ -20,8 +20,10 @@ import {
   type Kind,
   type NodeRec,
   type RecordOf,
+  type NotifRec,
   type ReplyRec,
   type RunRec,
+  type SaveRec,
   type SpaceRec,
   type SpaceRole,
   type ThreadRec,
@@ -91,10 +93,13 @@ export function needSpace(tx: Tx, sp: string): SpaceRec {
   return s;
 }
 
-/** Write a space's stored member count after its member records changed. */
-export function refreshSpace(tx: Tx, sp: string): void {
+/** Write a space's stored member count after its member records changed by
+ * `delta`. The server counts the member records; a client's replica of a
+ * private space it is joining holds none of them, so a prediction adds
+ * `delta` to the stored count (server-only read, `Tx.server`). */
+export function refreshSpace(tx: Tx, sp: string, delta: number): void {
   const s = needSpace(tx, sp);
-  const members = tx.count("member", { sp });
+  const members = tx.server ? tx.count("member", { sp }) : Math.max(1, s.members + delta);
   tx.put({ ...s, members });
 }
 
@@ -124,18 +129,35 @@ export function recount(tx: Tx, th: ThreadRec): void {
  * decision S6). */
 export const PRIVATE_SAVES_MIN = 3;
 
-/** Write a thread's served save count (`01` C1): the number of save records;
- * in a private space 0 below `PRIVATE_SAVES_MIN`. The true count is the save
- * records, which only the server reads (a client's read of them is
- * unknown), so a save that leaves a private count below 3 writes no counts
- * record. */
-export function countSaves(tx: Tx, th: string): void {
+/** Write a thread's served save count (`01` C1) after the actor's save
+ * changed by `delta`: the number of save records; in a private space 0 below
+ * `PRIVATE_SAVES_MIN`. The true count is the save records, which only the
+ * server reads (`Tx.server`): a client predicts the served count ± 1 in an
+ * open space, and leaves a private space's count to the server. */
+export function countSaves(tx: Tx, th: string, delta: 1 | -1): void {
   const c = tx.byKey(countsKey(th));
   if (c?.kind !== "counts") return;
-  const n = tx.count("save", { th });
   const s = spaceRec(tx, c.s);
-  const saves = s && isClosed(s) && n < PRIVATE_SAVES_MIN ? 0 : n;
+  const closed = s !== undefined && isClosed(s);
+  if (!tx.server) {
+    if (!closed) tx.put({ ...c, saves: Math.max(0, c.saves + delta) });
+    return;
+  }
+  const n = tx.count("save", { th });
+  const saves = closed && n < PRIVATE_SAVES_MIN ? 0 : n;
   tx.put({ ...c, saves });
+}
+
+/** The records of `kind` about thread `th` in people's user logs (saves,
+ * notifications). The server reads everyone's; a client only the actor's
+ * own, the others' being server-only reads (`Tx.server`). */
+export function userLogRecords<K extends "save" | "notif">(
+  tx: Tx,
+  kind: K,
+  th: string,
+): RecordOf<K>[] {
+  if (tx.server) return tx.list(kind, { th });
+  return tx.list(kind, { u: tx.me }).filter((x) => (x as SaveRec | NotifRec).th === th);
 }
 
 /** The owner acts on anyone but themselves (`01` C18): the target of a
@@ -216,8 +238,8 @@ export function erase(
       for (const x of tx.list("reply", th)) drop(`reply:${x.id}`);
       for (const x of tx.list("comment", th)) drop(`comment:${x.id}`);
       for (const x of tx.list("run", th)) drop(`run:${x.id}`);
-      for (const x of tx.list("save", th)) drop(saveKey(x.u, x.th));
-      for (const x of tx.list("notif", th).filter((y) => y.type === "mention"))
+      for (const x of userLogRecords(tx, "save", r.id)) drop(saveKey(x.u, x.th));
+      for (const x of userLogRecords(tx, "notif", r.id).filter((y) => y.type === "mention"))
         drop(`notif:${x.id}`);
       tx.put({ ...countsOf(tx, r), r: 0, saves: 0 });
       // the placeholder keeps nothing else of the removed content
@@ -281,9 +303,9 @@ export function erase(
       break;
   }
   gone.add(`${r.kind}:${r.id}`);
-  for (const x of tx
-    .list("notif", { th: r.th })
-    .filter((y) => y.type === "mention" && gone.has(y.item ?? "")))
+  for (const x of userLogRecords(tx, "notif", r.th).filter(
+    (y) => y.type === "mention" && gone.has(y.item ?? ""),
+  ))
     tx.del(`notif:${x.id}`);
 }
 
@@ -303,7 +325,8 @@ export const QUEUED_RUNS_MAX = spaces.QUEUED_RUNS_PER_USER;
 
 /** The model must be a registry entry and the effort one it accepts (`03`
  * K11, K13): BAD_REQUEST otherwise. Every registry model is open to every
- * member (`03` K15). */
+ * member (`03` K15). Deterministic, so it runs in `can` and a client
+ * predicts it (M1b review 5). */
 export function checkModel(model: string, effort: string): void {
   const entry = MODEL_REGISTRY.find((m) => m.id === model);
   if (!entry) throw bad("model", "a model of the registry");
@@ -324,9 +347,9 @@ export function checkQueue(ctx: PreCtx): void {
     );
 }
 
-/** The pre-check of a write that queues a run. */
-export const preRun = (ctx: PreCtx, i: { model: string; effort: string }): ServerValues => {
-  checkModel(i.model, i.effort);
+/** The pre-check of a write that queues a run: room in the person's queue
+ * (server only; the model is checked in `can`). */
+export const preRun = (ctx: PreCtx): ServerValues => {
   checkQueue(ctx);
   return {};
 };

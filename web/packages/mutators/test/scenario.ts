@@ -4,7 +4,7 @@
 
 import type { ExecutionContext } from "ava";
 
-import type { World } from "./world.js";
+import type { Answer, World } from "./world.js";
 import { MODEL, admit, finish, ok, refused } from "./world.js";
 
 /** Apply every mutator once; returns the names applied, in order. `between`
@@ -13,10 +13,12 @@ export function everyMutator(
   t: ExecutionContext,
   w: World,
   between: (f: () => void) => void = (f) => f(),
+  apply: (u: string, name: string, input: unknown) => Answer = (u, name, input) =>
+    w.apply(u, name, input),
 ): string[] {
   const done: string[] = [];
   const as = (u: string, name: string, input: unknown) => {
-    ok(t, w.apply(u, name, input));
+    ok(t, apply(u, name, input));
     done.push(name);
     return w;
   };
@@ -96,7 +98,7 @@ export function everyMutator(
   as("mel", "prefs.set", { layout: "wide" });
   as("mona", "spaces.leave", { space: open });
   // the owner may not leave: a refusal is the other half of the rule
-  refused(t, w.apply("olga", "spaces.leave", { space: open }), "PRECONDITION_FAILED");
+  refused(t, apply("olga", "spaces.leave", { space: open }), "PRECONDITION_FAILED");
   return done;
 }
 

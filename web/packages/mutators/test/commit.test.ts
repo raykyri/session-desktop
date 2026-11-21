@@ -107,20 +107,23 @@ test("a client's prediction stops at a read its replica cannot answer", (t) => {
     w.predict("olga", "invites.create", { id: w.id(), space: closed, days: 7 }).prediction,
     { unknown: true },
   );
-  // a joiner's replica has no invite links: the link's read is unknown
+  // a joiner's replica has no invite links: the link is checked on the
+  // server only, and the join is predicted
   t.deepEqual(
     w.predict("eve", "spaces.join", { space: closed, invite: "x" }, (k) => !k.startsWith("invite:"))
       .prediction,
-    { unknown: true },
+    { ok: true, result: null },
   );
-  // a replica without the thread's saves cannot count them
-  t.deepEqual(
-    w.predict(
-      "mona",
-      "saved.set",
-      { kind: "thread", id: p, on: true },
-      (k) => !k.startsWith("save:"),
-    ).prediction,
-    { unknown: true },
+  // a replica without other people's saves still predicts a save: the
+  // actor's own save record and, in an open space, the served count + 1
+  // (M1b review 1; the true count is the server's)
+  const own = w.predict(
+    "mona",
+    "saved.set",
+    { kind: "thread", id: p, on: true },
+    (k) => !k.startsWith("save:") || k.startsWith("save:mona:"),
   );
+  t.deepEqual(own.prediction, { ok: true, result: { on: true } });
+  t.like(own.tx.staged.get(`save:mona:${p}`), { kind: "save", u: "mona", th: p });
+  t.like(own.tx.staged.get(`counts:${p}`), { saves: 1 });
 });

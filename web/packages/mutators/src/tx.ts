@@ -32,9 +32,17 @@
 import type { z } from "zod";
 
 import type { Reader } from "./access.js";
-import { bannedFrom, isClosed, isOwnerOf, roleIn, spaceRec } from "./access.js";
+import { bannedFrom, isClosed, isOwnerOf, roleIn, spaceRec, view } from "./access.js";
 import { Refusal, refuse, type ApiError } from "./errors.js";
-import type { Draft, Index, Kind, RecordOf, UniqueIndex, UniqueKind } from "./records.js";
+import type {
+  Draft,
+  Index,
+  Kind,
+  RecordOf,
+  StoredRecord,
+  UniqueIndex,
+  UniqueKind,
+} from "./records.js";
 
 /** A read the replica cannot answer: the record or index is outside its
  * working set. A replica's `tx` throws it; it stops prediction. On the server
@@ -160,7 +168,11 @@ export function authorize(tx: Tx, def: AnyMutator, input: unknown): void {
     // open space, a banned person included (its bans only stop joining a
     // closed space). A ban stops every write in its space here, the author's
     // edits and deletes and a person's own saves included.
-    if (bannedFrom(tx, sp, tx.me)) throw refuse("FORBIDDEN", "You are banned from this space.");
+    // Bans are the owner's records: a client's replica does not hold them,
+    // so the check is server-only (`Tx.server`), and the server's FORBIDDEN
+    // rolls a banned person's prediction back.
+    if (tx.server && bannedFrom(tx, sp, tx.me))
+      throw refuse("FORBIDDEN", "You are banned from this space.");
     if (s.frozen && def.frozen !== "allowed") throw refuse("FORBIDDEN", frozenMessage(s.name));
     const who = def.who;
     if (who === "member") {
@@ -182,9 +194,18 @@ export type Prediction =
   { ok: true; result: unknown } | { ok: false; error: ApiError } | { unknown: true };
 
 /** Predict a write on a client: the input schema, `authorize` and `run`,
- * never `pre` or `notify`. `run` gets no server values. An exception other
- * than a refusal or an unknown read is rethrown: it is a bug. */
+ * never `pre` or `notify`, over a client transaction (`Tx.server` false), so
+ * the server-only reads and effects are skipped. `run` gets no server
+ * values. An exception other than a refusal or an unknown read is rethrown:
+ * it is a bug.
+ *
+ * What the prediction stages is the stored shape; the replica shows it as
+ * `predictedView` gives it (the actor's view, as the server would serve it).
+ * Where `run` is engine-dependent (the `\p{L}`/`\p{N}` classes of a look-up
+ * phrase, `validate.ts`), the server's stored record replaces the
+ * prediction when the write is confirmed. */
 export function predict(tx: Tx, def: AnyMutator, input: unknown): Prediction {
+  if (tx.server) throw new Error("predict runs on a client transaction");
   const parsed = def.input.safeParse(input);
   if (!parsed.success) return { ok: false, error: refuse("BAD_REQUEST").toError() };
   try {
@@ -195,4 +216,15 @@ export function predict(tx: Tx, def: AnyMutator, input: unknown): Prediction {
     if (e instanceof Refusal) return { ok: false, error: e.toError() };
     throw e;
   }
+}
+
+/** A prediction's staged records as the actor reads them (M1b review 6):
+ * each through `view` over the transaction's reads, so the replica shows
+ * what the server will serve the actor (a removed thread's author is null
+ * for the owner who removed it). A record the actor may not read is null,
+ * as a delete is. */
+export function predictedView(tx: Tx & { staged: ReadonlyMap<string, StoredRecord | null> }) {
+  const out = new Map<string, StoredRecord | null>();
+  for (const [key, r] of tx.staged) out.set(key, r === null ? null : view(tx, r, tx.me));
+  return out;
 }

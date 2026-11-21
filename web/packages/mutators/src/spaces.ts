@@ -70,6 +70,8 @@ export const SPACES = {
       // member join again.
       if (i.invite === undefined)
         throw refuse("FORBIDDEN", `#${s.name} is private: joining it needs an invite link.`);
+      // the link is the owner's record: checked on the server only
+      if (!tx.server) return;
       const link = tx.unique("invite.code", i.invite);
       // a link is made by the owner, who keeps the right to make links; it
       // works once, until it expires (checked now, at apply time)
@@ -83,12 +85,13 @@ export const SPACES = {
     run: (tx, i) => {
       const s = needSpace(tx, i.space);
       if (roleIn(tx, s.id, tx.me)) return null;
-      if (isClosed(s) && i.invite !== undefined) {
+      // the owner's link is server-only: a joiner's replica does not hold it
+      if (tx.server && isClosed(s) && i.invite !== undefined) {
         const link = tx.unique("invite.code", i.invite);
         if (link) tx.put({ ...link, dead: "Used", usedBy: tx.me });
       }
       addMember(tx, s.id, tx.me, "member", tx.id(1));
-      refreshSpace(tx, s.id);
+      refreshSpace(tx, s.id, 1);
       return null;
     },
   }),
@@ -107,7 +110,7 @@ export const SPACES = {
     run: (tx, i) => {
       if (!tx.byKey(memberKey(i.space, tx.me))) return null;
       tx.del(memberKey(i.space, tx.me));
-      refreshSpace(tx, i.space);
+      refreshSpace(tx, i.space, -1);
       return null;
     },
   }),

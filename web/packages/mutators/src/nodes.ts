@@ -20,6 +20,7 @@ import {
   active,
   authorOf,
   bad,
+  checkModel,
   deleted,
   nodeOf,
   notAuthor,
@@ -78,6 +79,7 @@ export const NODES = {
     intent: "none",
     space: (tx, i) => readableThread(tx, i.thread).s,
     ids: (i) => [i.id],
+    can: (_tx, i) => checkModel(i.model, i.effort),
     pre: preRun,
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
@@ -215,6 +217,7 @@ export const NODES = {
     space: (tx, i) => readableThread(tx, i.thread).s,
     can: (tx, i) => {
       if (authorAt(tx, i.thread, i.node) !== tx.me) throw notAuthor();
+      checkModel(i.model, i.effort);
     },
     pre: preRun,
     run: (tx, i) => {

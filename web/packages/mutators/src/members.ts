@@ -23,7 +23,7 @@ export const MEMBERS = {
       if (m?.kind !== "member") return null;
       if (m.adm !== i.base.adm) throw stale();
       tx.del(memberKey(i.space, i.user));
-      refreshSpace(tx, i.space);
+      refreshSpace(tx, i.space, -1);
       return null;
     },
   }),
@@ -40,7 +40,8 @@ export const MEMBERS = {
     run: (tx, i) => {
       // the ban's id is the mock's (`<space>:<user>`): one ban per person and
       // space, outside the ULID id registry
-      if (tx.byKey(memberKey(i.space, i.user))) tx.del(memberKey(i.space, i.user));
+      const member = tx.byKey(memberKey(i.space, i.user)) !== undefined;
+      if (member) tx.del(memberKey(i.space, i.user));
       if (!tx.byKey(banKey(i.space, i.user))) {
         tx.put({
           kind: "ban",
@@ -61,7 +62,7 @@ export const MEMBERS = {
           createdAt: tx.now,
         });
       }
-      refreshSpace(tx, i.space);
+      refreshSpace(tx, i.space, member ? -1 : 0);
       return null;
     },
   }),

@@ -54,7 +54,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X1 a ban keeps the membership",
     file: "../mutators/src/members.ts",
-    from: "      if (tx.byKey(memberKey(i.space, i.user))) tx.del(memberKey(i.space, i.user));\n      if (!tx.byKey(banKey",
+    from: "      if (member) tx.del(memberKey(i.space, i.user));\n      if (!tx.byKey(banKey",
     to: "      if (!tx.byKey(banKey",
   },
   {
@@ -540,19 +540,19 @@ const MUTATIONS: Mutation[] = [
   {
     name: "U6-1 a private space serves a save count below 3",
     file: "../mutators/src/rules.ts",
-    from: "  const saves = s && isClosed(s) && n < PRIVATE_SAVES_MIN ? 0 : n;",
-    to: "  const saves = s ? n : n;",
+    from: "  const saves = closed && n < PRIVATE_SAVES_MIN ? 0 : n;",
+    to: "  const saves = closed ? n : n;",
   },
   {
     name: "U6-2 a removal keeps the saves of the thread",
     file: "../mutators/src/rules.ts",
-    from: '      for (const x of tx.list("save", th)) drop(saveKey(x.u, x.th));\n',
+    from: '      for (const x of userLogRecords(tx, "save", r.id)) drop(saveKey(x.u, x.th));\n',
     to: "",
   },
   {
     name: "U6-3 a removal keeps the mention notifications about the thread",
     file: "../mutators/src/rules.ts",
-    from: '      for (const x of tx.list("notif", th).filter((y) => y.type === "mention"))\n        drop(`notif:${x.id}`);\n',
+    from: '      for (const x of userLogRecords(tx, "notif", r.id).filter((y) => y.type === "mention"))\n        drop(`notif:${x.id}`);\n',
     to: "",
   },
   {

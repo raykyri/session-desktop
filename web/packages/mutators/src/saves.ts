@@ -26,7 +26,7 @@ export const SAVES = {
       if (i.on === had) return { on: i.on };
       if (i.on) tx.put({ kind: "save", u: tx.me, th: i.id, createdAt: tx.now });
       else tx.del(key);
-      countSaves(tx, i.id);
+      countSaves(tx, i.id, i.on ? 1 : -1);
       return { on: i.on };
     },
   }),
