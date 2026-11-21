@@ -1,15 +1,17 @@
 // The member list (02 W6.8, 04 §4.3, §6.4; a plan addition), stacked over
 // the channel's info dialog: the owner, then members by the date they
 // joined. The owner gets a "…" menu on every other member: "Ban from
-// #name", and in a private channel "Remove from channel" (`members.remove`
-// with the admission id the owner saw: a person let in again since answers
-// STALE, the toast says so and the row shows the member as they are now).
+// #name", and in a private channel "Remove from channel", each confirmed
+// first in a dialog that names the person and the channel. A removal sends
+// `members.remove` with the admission id the owner saw: a person let in
+// again since answers STALE, the toast says so and the row shows the member
+// as they are now.
 // Under the list the owner sees who is banned, each with Unban. There are no
 // role controls: a channel has only its owner and members (01 C18).
 
 import { Dialog } from "@base-ui/react/dialog";
 import type { BanRec, MemberRec } from "@session/mutators";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import type { ChannelView } from "../../replica/queries.js";
@@ -20,6 +22,8 @@ import { FeedDialog } from "../feed/FeedDialog.js";
 import { MoreMenu, type MoreAction } from "../feed/MoreMenu.js";
 import { CloseIcon } from "../feed/icons.js";
 import { showToast } from "../shell/Toast.js";
+
+import { ConfirmMemberAction, type MemberAction } from "./ConfirmMemberAction.js";
 
 /** The owner first, then members by the time they joined. */
 export function memberOrder(members: readonly MemberRec[]): MemberRec[] {
@@ -97,11 +101,19 @@ export function MembersDialog({
     if (o.ok && !o.unsent) showToast(`Unbanned @${b.u}.`);
   };
 
+  // Ban and Remove ask first; the removal keeps the admission id the owner
+  // saw when they chose it
+  const [asking, setAsking] = useState<{ action: MemberAction; member: MemberRec } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const ask = (action: MemberAction, member: MemberRec) => {
+    setAsking({ action, member });
+    setConfirmOpen(true);
+  };
   const actionsOf = (m: MemberRec): MoreAction[] =>
     memberActions(channel, m, me).map((label) =>
       label === "Remove from channel"
-        ? { label, danger: true, onSelect: () => void remove(m) }
-        : { label, danger: true, onSelect: () => void ban(m.u) },
+        ? { label, danger: true, onSelect: () => ask("remove", m) }
+        : { label, danger: true, onSelect: () => ask("ban", m) },
     );
 
   return (
@@ -164,6 +176,18 @@ export function MembersDialog({
           </section>
         ) : null}
       </div>
+      {asking ? (
+        <ConfirmMemberAction
+          action={asking.action}
+          user={asking.member.u}
+          channel={channel}
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          onConfirm={() =>
+            void (asking.action === "ban" ? ban(asking.member.u) : remove(asking.member))
+          }
+        />
+      ) : null}
     </FeedDialog>
   );
 }

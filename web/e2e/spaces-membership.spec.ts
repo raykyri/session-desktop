@@ -1,8 +1,9 @@
 // Account invites, sign-up and waiting accounts end to end (02 §12.2
 // `spaces-membership`, plan 04 I4): a member's link signs a new person up
 // through the auth dialog and the profile step, a sign-in without a code
-// waits and reads, redeems a code on "Invite required" and can ask, and a
-// used code and an unknown one get the same message.
+// waits and reads, redeems a code on "Invite required" and can ask, a used
+// code and an unknown one get the same message, and a private channel's
+// link opened signed out joins the channel after the provider sign-in.
 //
 // Members are made with the test sign-in (`SESSION_TEST_AUTH=1`). New
 // identities go through the real handshake against the server's fixture
@@ -12,7 +13,7 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
-import { e2eLogin, signIn } from "./helpers.js";
+import { e2eLogin, mutation, signIn } from "./helpers.js";
 import { channelName, person } from "./world.js";
 
 const UNUSABLE = "This invite code doesn't work. Ask the person who invited you for a new one.";
@@ -220,4 +221,42 @@ test("a used code and an unknown code show the same message", async ({ browser, 
   expect(await dialog.getByRole("alert").textContent()).toBe(used);
   await expect(dialog.getByRole("button", { name: /^Sign up with/ })).toHaveCount(0);
   await late.close();
+});
+
+test("signed out, a private channel's link survives the provider sign-in: the new member joins the channel", async ({
+  browser,
+}) => {
+  // the channel's owner makes the channel's link and an account invite
+  const owner = await person(browser, "e2e-membership-chowner");
+  const priv = channelName("members-priv");
+  const space = await owner.channel(priv, { vis: "private" });
+  await owner.post(space, "Notes for the private channel");
+  const link = await owner.invite(space);
+  const { code } = await mutation<{ code: string }>(owner.request, "accountInvites.create", {});
+
+  const context = await asProviderAccount(browser, e2eLogin("chjoiner"));
+  const joiner = await context.newPage();
+  await joiner.goto(`/c/${priv}#${link}`);
+  expect(joiner.url()).not.toContain(link);
+  const dialog = joiner.getByRole("dialog", { name: "Sign in to Session" });
+  await expect(dialog.getByText(`Sign in to join #${priv}.`)).toBeVisible();
+  await dialog.getByRole("button", { name: "I have an invite code" }).click();
+  await dialog.getByRole("textbox", { name: "Invite code" }).fill(code);
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await dialog.getByRole("button", { name: "Sign up with GitHub" }).click();
+  // the channel's code is in no request of the sign-in
+  const start = joiner.waitForRequest((req) => req.url().endsWith("/auth/github/start"));
+  await continueWith(joiner, "GitHub");
+  expect((await start).postData() ?? "").not.toContain(link);
+
+  // back on the channel's page: the profile step, then the join
+  await createAccount(joiner, "Channel Joiner", handleFor("chjoiner"));
+  await expect(joiner.locator(".feed-toast")).toHaveText(`Joined #${priv}.`);
+  await expect(joiner).toHaveURL(new RegExp(`/c/${priv}$`));
+  await expect(
+    joiner.locator(".tcard").filter({ hasText: "Notes for the private channel" }),
+  ).toBeVisible();
+  // the page load back from the provider took the code out of storage
+  expect(await joiner.evaluate(() => sessionStorage.getItem("session.channelInvite"))).toBeNull();
+  await context.close();
 });

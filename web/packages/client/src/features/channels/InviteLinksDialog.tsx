@@ -31,6 +31,17 @@ export function channelInviteLink(name: string, code: string, origin = PUBLIC_OR
   return `${origin}/c/${name}#${code}`;
 }
 
+/** The toast when the browser refuses the copy. */
+export const COPY_FAILED = "The link could not be copied. Select it and copy it by hand.";
+
+/** A link's date of expiry, as its row shows it ("Nov 23"). */
+export function expiryDate(link: Pick<InviteRec, "expiresAt">): string {
+  return new Date(isoToMs(link.expiresAt)).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export type LinkState = "open" | "used" | "revoked" | "expired";
 
 export function linkState(link: InviteRec, now: number): LinkState {
@@ -76,8 +87,9 @@ export function InviteLinksDialog({
     if (outcome.ok && !outcome.unsent) showToast("Invite link created.");
   };
   const copy = (code: string) =>
-    void writeClipboardText(channelInviteLink(channel.name, code)).then(() =>
-      showToast("Link copied."),
+    void writeClipboardText(channelInviteLink(channel.name, code)).then(
+      () => showToast("Link copied."),
+      () => showToast(COPY_FAILED, { alert: true }),
     );
   const revoke = async (id: string) => {
     const o = await writes.send("invites.revoke", { id });
@@ -112,8 +124,10 @@ export function InviteLinksDialog({
         </p>
         {list.length ? (
           <ul className="mlist ilist" aria-label="Invite links">
-            {list.map((l) => {
+            {list.map((l, i) => {
               const state = linkState(l, now);
+              // each row's buttons name their link: its place and expiry
+              const which = `link ${i + 1}, expires ${expiryDate(l)}`;
               return (
                 <li key={l.id} data-link={l.id} data-state={state}>
                   <span>
@@ -123,29 +137,36 @@ export function InviteLinksDialog({
                         ? `Used by @${l.usedBy ?? ""}`
                         : state === "revoked"
                           ? "Revoked"
-                          : `Expires ${new Date(isoToMs(l.expiresAt)).toLocaleDateString(
-                              undefined,
-                              { month: "short", day: "numeric" },
-                            )}`}
+                          : `Expires ${expiryDate(l)}`}
                     </small>
                   </span>
                   {state === "open" ? (
                     <>
-                      <button type="button" className="btn2 sm" onClick={() => copy(l.code)}>
+                      <button
+                        type="button"
+                        className="btn2 sm"
+                        aria-label={`Copy ${which}`}
+                        onClick={() => copy(l.code)}
+                      >
                         Copy
                       </button>
                       <button
                         type="button"
                         className="btn2 sm"
-                        aria-label="Revoke this link"
-                        title="Revoke"
+                        aria-label={`Revoke ${which}`}
                         onClick={() => void revoke(l.id)}
                       >
                         Revoke
                       </button>
                     </>
-                  ) : state === "revoked" ? (
-                    <button type="button" className="btn2 sm" onClick={() => void restore(l.id)}>
+                  ) : state === "revoked" && isoToMs(l.expiresAt) > now ? (
+                    // a revoked link past its expiry could not work again
+                    <button
+                      type="button"
+                      className="btn2 sm"
+                      aria-label={`Undo revoking ${which}`}
+                      onClick={() => void restore(l.id)}
+                    >
                       Undo
                     </button>
                   ) : null}

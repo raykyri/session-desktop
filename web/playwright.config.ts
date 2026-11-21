@@ -4,6 +4,8 @@
 // sign-in route — serving the built client through its own static middleware,
 // which is the deployment's arrangement rather than Vite's. Building the
 // client is part of the server command so `npm run test:e2e` is a single step.
+// A second server of the same build (the side server, `e2e/constants.ts`)
+// runs with the settings a few specs need and the others must not get.
 //
 // Visual regression screenshots run on Chromium only to avoid baseline churn from cross-engine font rasterization differences.
 
@@ -17,6 +19,10 @@ import {
   E2E_PORT,
   E2E_REUSE_SERVER,
   E2E_RUN_ID_VARIABLE,
+  E2E_SIDE_DATA_DIR,
+  E2E_SIDE_PORT,
+  SIDE_ARTIFACT_ORIGIN,
+  SIDE_ORIGIN,
 } from "./e2e/constants.js";
 
 const CI = Boolean(process.env["CI"]);
@@ -27,6 +33,57 @@ const CI = Boolean(process.env["CI"]);
 // run against a reused server signs in as fresh accounts instead of finding
 // the folders and threads an earlier attempt made.
 process.env[E2E_RUN_ID_VARIABLE] ??= Date.now().toString(36);
+
+/** The suite's server's environment; the side server changes a few. */
+const serverEnv: Record<string, string> = {
+  // `::` (`E2E_HOST`) rather than the config's default loopback: the suite
+  // reaches the same process as both `127.0.0.1` and `localhost`, and a
+  // v4-only bind would miss `localhost` if the browser tried only `::1`.
+  HOST: E2E_HOST,
+  PORT: String(E2E_PORT),
+  NODE_ENV: "development",
+  SESSION_PUBLIC_ORIGIN: APP_ORIGIN,
+  SESSION_ARTIFACT_ORIGIN: ARTIFACT_ORIGIN,
+  SESSION_DATA_DIR: E2E_DATA_DIR,
+  SESSION_FIXTURE_PROVIDERS: "1",
+  SESSION_TEST_AUTH: "1",
+  // The auth dialog's sign-in runs the real OAuth handshake against this
+  // server's fixture provider endpoints (`auth/fixtureOAuth.ts`).
+  SESSION_FIXTURE_OAUTH: "1",
+  // Every provider reports a credential so no model is hidden as
+  // unavailable; the fixture provider answers instead of any of them.
+  GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',
+  GOOGLE_VERTEX_PROJECT: "session-e2e",
+  OPENROUTER_API_KEY: "openrouter-key",
+  ANTHROPIC_API_KEY: "anthropic-key",
+  // No search key on purpose: `web_search` is then not registered at all,
+  // so a fixture that calls it fails the call locally instead of reaching
+  // a vendor from CI (`04-agent-runtime.md` §11).
+  SESSION_ENFORCE_LIMITS: "0",
+  // A member's overdraft past the weekly allowance (`03` K9): small, so
+  // the billing spec's run reaches it in seconds. Only that spec's
+  // member, who starts near the allowance, comes near it.
+  SESSION_OVERDRAFT_TOKENS: "1000",
+  // The specs write their channels and threads through the sync routes,
+  // many in a few seconds, and sign in several people from one address
+  // (`e2e/world.ts`): the abuse limits of `04` Z1 are raised.
+  SESSION_LIMIT_WRITES_PER_MINUTE: "100000",
+  SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "100000",
+  SESSION_LIMIT_REGISTER_PER_MINUTE: "1000",
+  SESSION_LIMIT_AUTH_PER_MINUTE: "1000",
+  SESSION_LIMIT_STREAMS_PER_USER: "50",
+  SESSION_LIMIT_SPACES_PER_DAY: "100000",
+  SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: "100000",
+  SESSION_LIMIT_JOINS_PER_HOUR: "100000",
+  SESSION_LIMIT_DIRECTORY_PER_MINUTE: "100000",
+  SESSION_LIMIT_STREAM_OPENS_PER_MINUTE: "100000",
+  SESSION_LIMIT_THREAD_READS_PER_MINUTE: "100000",
+  SESSION_LIMIT_THREAD_READS_PER_IP_PER_MINUTE: "100000",
+  SESSION_LIMIT_BY_NAME_PER_MINUTE: "100000",
+  // A channel past 100 threads keeps its oldest out of the window, for
+  // the thread address of a thread outside it (`spaces-feed`, 01 R1).
+  SESSION_WEB_WINDOW_CAP: "100",
+};
 
 export default defineConfig({
   testDir: "./e2e",
@@ -68,69 +125,50 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: [
-      `rm -rf ${JSON.stringify(E2E_DATA_DIR)}`,
-      "npm run build --workspace @session/client",
-      "npx tsx packages/server/src/index.ts",
-    ].join(" && "),
-    url: `${APP_ORIGIN}/healthz`,
-    // A server already on the port is used only when asked for
-    // (`SESSION_E2E_REUSE_SERVER=1`); otherwise Playwright refuses to start
-    // rather than run against another suite's server and data.
-    reuseExistingServer: E2E_REUSE_SERVER,
-    timeout: 180_000,
-    // Request logging is disabled in e2e test mode to avoid obscuring test runner output.
-    stdout: "ignore",
-    stderr: "pipe",
-    env: {
-      // `::` (`E2E_HOST`) rather than the config's default loopback: the suite
-      // reaches the same process as both `127.0.0.1` and `localhost`, and a
-      // v4-only bind would miss `localhost` if the browser tried only `::1`.
-      HOST: E2E_HOST,
-      PORT: String(E2E_PORT),
-      NODE_ENV: "development",
-      SESSION_PUBLIC_ORIGIN: APP_ORIGIN,
-      SESSION_ARTIFACT_ORIGIN: ARTIFACT_ORIGIN,
-      SESSION_DATA_DIR: E2E_DATA_DIR,
-      SESSION_FIXTURE_PROVIDERS: "1",
-      SESSION_TEST_AUTH: "1",
-      // The auth dialog's sign-in runs the real OAuth handshake against this
-      // server's fixture provider endpoints (`auth/fixtureOAuth.ts`).
-      SESSION_FIXTURE_OAUTH: "1",
-      // Every provider reports a credential so no model is hidden as
-      // unavailable; the fixture provider answers instead of any of them.
-      GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',
-      GOOGLE_VERTEX_PROJECT: "session-e2e",
-      OPENROUTER_API_KEY: "openrouter-key",
-      ANTHROPIC_API_KEY: "anthropic-key",
-      // No search key on purpose: `web_search` is then not registered at all,
-      // so a fixture that calls it fails the call locally instead of reaching
-      // a vendor from CI (`04-agent-runtime.md` §11).
-      SESSION_ENFORCE_LIMITS: "0",
-      // A member's overdraft past the weekly allowance (`03` K9): small, so
-      // the billing spec's run reaches it in seconds. Only that spec's
-      // member, who starts near the allowance, comes near it.
-      SESSION_OVERDRAFT_TOKENS: "1000",
-      // The specs write their channels and threads through the sync routes,
-      // many in a few seconds, and sign in several people from one address
-      // (`e2e/world.ts`): the abuse limits of `04` Z1 are raised.
-      SESSION_LIMIT_WRITES_PER_MINUTE: "100000",
-      SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "100000",
-      SESSION_LIMIT_REGISTER_PER_MINUTE: "1000",
-      SESSION_LIMIT_AUTH_PER_MINUTE: "1000",
-      SESSION_LIMIT_STREAMS_PER_USER: "50",
-      SESSION_LIMIT_SPACES_PER_DAY: "100000",
-      SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: "100000",
-      SESSION_LIMIT_JOINS_PER_HOUR: "100000",
-      SESSION_LIMIT_DIRECTORY_PER_MINUTE: "100000",
-      SESSION_LIMIT_STREAM_OPENS_PER_MINUTE: "100000",
-      SESSION_LIMIT_THREAD_READS_PER_MINUTE: "100000",
-      SESSION_LIMIT_THREAD_READS_PER_IP_PER_MINUTE: "100000",
-      SESSION_LIMIT_BY_NAME_PER_MINUTE: "100000",
-      // A channel past 100 threads keeps its oldest out of the window, for
-      // the thread address of a thread outside it (`spaces-feed`, 01 R1).
-      SESSION_WEB_WINDOW_CAP: "100",
+  webServer: [
+    {
+      command: [
+        `rm -rf ${JSON.stringify(E2E_DATA_DIR)}`,
+        "npm run build --workspace @session/client",
+        "npx tsx packages/server/src/index.ts",
+      ].join(" && "),
+      url: `${APP_ORIGIN}/healthz`,
+      // A server already on the port is used only when asked for
+      // (`SESSION_E2E_REUSE_SERVER=1`); otherwise Playwright refuses to start
+      // rather than run against another suite's server and data.
+      reuseExistingServer: E2E_REUSE_SERVER,
+      timeout: 180_000,
+      // Request logging is disabled in e2e test mode to avoid obscuring test runner output.
+      stdout: "ignore",
+      stderr: "pipe",
+      env: serverEnv,
     },
-  },
+    // The side server: the same build, served once the first command has
+    // written it, on its own port with its own data directory.
+    {
+      command: [
+        `rm -rf ${JSON.stringify(E2E_SIDE_DATA_DIR)}`,
+        "until [ -f packages/client/dist/app/index.html ]; do sleep 1; done",
+        "npx tsx packages/server/src/index.ts",
+      ].join(" && "),
+      url: `${SIDE_ORIGIN}/healthz`,
+      reuseExistingServer: E2E_REUSE_SERVER,
+      timeout: 180_000,
+      stdout: "ignore",
+      stderr: "pipe",
+      env: {
+        ...serverEnv,
+        PORT: String(E2E_SIDE_PORT),
+        // the test routes (`/api/sync/test/freeze`) need `test`
+        NODE_ENV: "test",
+        SESSION_TEST_ROUTES: "1",
+        SESSION_PUBLIC_ORIGIN: SIDE_ORIGIN,
+        SESSION_ARTIFACT_ORIGIN: SIDE_ARTIFACT_ORIGIN,
+        SESSION_DATA_DIR: E2E_SIDE_DATA_DIR,
+        // the newest 100 threads of a channel in full and the older ones not
+        // at all: a thread address past them arrives through a `threads` read
+        SESSION_WEB_SUMMARY_DAYS: "0",
+      },
+    },
+  ],
 });

@@ -1690,6 +1690,16 @@
   z-index: 42;
 }
 
+/* the ban and removal confirmation, above the member list (the mock's rmDlg
+   stacks at 44 and 45) */
+.fscrim.mact-scrim {
+  z-index: 44;
+}
+
+.fdialog.mactdlg {
+  z-index: 45;
+}
+
 .fdialog.cedlg {
   z-index: 43;
   width: min(520px, calc(100% - 32px));

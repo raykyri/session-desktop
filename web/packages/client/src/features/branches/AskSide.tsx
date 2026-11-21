@@ -17,7 +17,7 @@ import { Avatar } from "../../ui/Avatar.js";
 import { InlineComposer, focusSoon, selectedRowOr } from "../composer/InlineComposer.js";
 import { useFeedViewer, useRunChoice } from "../feed/FeedContext.js";
 import { rowText } from "../feed/Moderated.js";
-import { clip } from "../feed/format.js";
+import { authorName, clip } from "../feed/format.js";
 import { CloseIcon, SearchIcon } from "../feed/icons.js";
 
 import { BranchCard } from "./BranchCard.js";
@@ -196,7 +196,7 @@ export function AskSide({
             <BranchOutline
               tree={tree}
               index={index}
-              threadAuthor={thread.u ?? ""}
+              threadAuthor={thread.u}
               selected={ui.selected}
               path={selectedPath}
               onSelect={(id) => toggle(thread.id, id)}
@@ -219,7 +219,7 @@ export function AskSide({
   );
 }
 
-function rowContent(node: NodeRec, parentAuthor: string) {
+function rowContent(node: NodeRec, parentAuthor: string | null) {
   return (
     <>
       {node.look !== null ? (
@@ -231,10 +231,11 @@ function rowContent(node: NodeRec, parentAuthor: string) {
       ) : (
         <span className="gq">{rowText(node, node.q)}</span>
       )}
-      {node.u !== parentAuthor ? (
-        <span className="rav rav-r" title={node.u ?? ""}>
-          <Avatar handle={node.u ?? "?"} size="xs" />
-          <span className="sr-only">, by {node.u}</span>
+      {/* two deleted accounts are not known to be one person */}
+      {node.u === null || node.u !== parentAuthor ? (
+        <span className="rav rav-r" title={authorName(node.u)}>
+          <Avatar handle={node.u} size="xs" />
+          <span className="sr-only">, by {authorName(node.u)}</span>
         </span>
       ) : null}
     </>
@@ -252,7 +253,7 @@ export function BranchOutline({
 }: {
   tree: PassageTree;
   index: TreeIndex;
-  threadAuthor: string;
+  threadAuthor: string | null;
   selected: string | null;
   path: ReadonlySet<string>;
   onSelect: (id: string) => void;
@@ -260,7 +261,7 @@ export function BranchOutline({
   const rows: TreeRow[] = [];
   for (const top of tree.nodes)
     for (const { node, depth } of index.dfs(top.id)) {
-      const parentAuthor = node.par === "r" ? threadAuthor : (index.nodes.get(node.par)?.u ?? "");
+      const parentAuthor = node.par === "r" ? threadAuthor : (index.nodes.get(node.par)?.u ?? null);
       rows.push({
         id: node.id,
         parent: depth === 0 ? null : node.par,

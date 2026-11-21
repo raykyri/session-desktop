@@ -27,3 +27,9 @@ export async function fetchDirectory(): Promise<SpaceRec[]> {
 export async function fetchSpaceByName(name: string): Promise<SpaceRec | null> {
   return (await trpc().spaces.byName.query({ name })).space;
 }
+
+/** `spaces.threadSpace`: the id of the channel a thread is in, null when
+ * there is no such thread or the viewer may not read it. */
+export async function fetchThreadSpace(thread: string): Promise<string | null> {
+  return (await trpc().spaces.threadSpace.query({ thread })).space;
+}

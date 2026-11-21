@@ -43,6 +43,11 @@ mutation there is type-checked in that package and runs its suite as well
 as this one. Build the declarations first (`cd web && npx tsc -b`): the
 copies use them.
 
+M6-C1 on are faults in the web client (`../client/src/<file>`): each copy
+holds a copy of `@session/client` too, and a client mutation runs only the
+client test files it names (`files`), since this package's suite does not
+import the client.
+
 A pattern that no longer matches stops the run with an error: when the code
 changes, move the pattern with it and keep the fault the same. Where the code
 a fault was in is gone, the mutation names the same fault in the code that

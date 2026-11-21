@@ -22,6 +22,19 @@ export const ARTIFACT_ORIGIN = `http://localhost:${E2E_PORT}`;
  * suites on different ports never share a database. */
 export const E2E_DATA_DIR = join(tmpdir(), `session-web-e2e-${E2E_PORT}`);
 
+/**
+ * The side server (`playwright.config.ts`): a second server of the same
+ * build, on the next port with its own data directory, for the specs whose
+ * server settings would change every other spec. Its window gives threads
+ * past the newest 100 no row at all (`SESSION_WEB_SUMMARY_DAYS=0`), and it
+ * serves the test routes (`/api/sync/test/*`, which need `NODE_ENV=test`),
+ * which freeze a channel as the account-deletion job does (`04` B6).
+ */
+export const E2E_SIDE_PORT = Number(process.env["SESSION_E2E_SIDE_PORT"] ?? E2E_PORT + 1);
+export const SIDE_ORIGIN = `http://127.0.0.1:${E2E_SIDE_PORT}`;
+export const SIDE_ARTIFACT_ORIGIN = `http://localhost:${E2E_SIDE_PORT}`;
+export const E2E_SIDE_DATA_DIR = join(tmpdir(), `session-web-e2e-${E2E_SIDE_PORT}`);
+
 /** Whether the suite may run against a server already listening on the port
  * (`SESSION_E2E_REUSE_SERVER=1`): for iterating locally against a server one
  * started oneself. Off by default, so a port another run holds fails the

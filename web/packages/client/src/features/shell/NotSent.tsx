@@ -8,6 +8,9 @@
 //   alert toast "Not sent." with Retry and Discard; with several such writes
 //   it reads "N changes not sent." and its buttons act on all of them in
 //   outbox order (`OutboxToast`).
+// A write left unsent by one of the server's limits (TOO_MANY_REQUESTS,
+// 04 Z1) shows the server's message after "Not sent", which says which
+// limit and when it frees.
 
 import { useSyncExternalStore } from "react";
 
@@ -34,6 +37,14 @@ async function retryAll(source: ReplicaSource, writes: readonly UnsentWrite[]): 
   }
 }
 
+/** The server's message when a limit left a write unsent ("You can create 5
+ * channels a day. Try again in 22 hours.", 04 Z1), else null: a failed
+ * request has no message worth showing. */
+export function limitMessage(writes: readonly UnsentWrite[]): string | null {
+  const error = writes.find((w) => w.error?.code === "TOO_MANY_REQUESTS")?.error;
+  return error?.message ? error.message : null;
+}
+
 function discardAll(source: ReplicaSource, writes: readonly UnsentWrite[]): void {
   for (const w of writes) source.discard?.(w.local);
 }
@@ -43,9 +54,10 @@ export function NotSentLine({ item }: { item: string }) {
   const source = useReplica();
   const unsent = useUnsent().filter((w) => w.item === item);
   if (unsent.length === 0) return null;
+  const limit = limitMessage(unsent);
   return (
     <div className="notsent" data-not-sent="">
-      <span>Not sent</span>
+      <span>{limit ? `Not sent: ${limit}` : "Not sent"}</span>
       <span aria-hidden="true">·</span>
       <button type="button" className="tlink" onClick={() => void retryAll(source, unsent)}>
         Retry
@@ -64,9 +76,13 @@ export function OutboxToast() {
   const source = useReplica();
   const unsent = useUnsent().filter((w) => w.item === null);
   if (unsent.length === 0) return null;
+  const limit = limitMessage(unsent);
   return (
     <div role="alert" className="feed-toast outbox-toast" data-outbox-toast="">
-      <span>{unsent.length === 1 ? "Not sent." : `${unsent.length} changes not sent.`}</span>
+      <span>
+        {unsent.length === 1 ? "Not sent." : `${unsent.length} changes not sent.`}
+        {limit ? ` ${limit}` : ""}
+      </span>
       <button type="button" onClick={() => void retryAll(source, unsent)}>
         Retry
       </button>

@@ -40,7 +40,8 @@ const SIZE = {
 } as const;
 
 export interface AvatarProps {
-  handle: string;
+  /** null: a deleted account, drawn as an empty neutral circle. */
+  handle: string | null;
   size?: keyof typeof SIZE;
   className?: string;
 }
@@ -50,14 +51,15 @@ export function Avatar({ handle, size = "md", className }: AvatarProps) {
   return (
     <span
       aria-hidden="true"
+      data-deleted-account={handle === null ? "" : undefined}
       className={cn(
         "text-avatar-fg inline-grid shrink-0 place-items-center rounded-full font-semibold tracking-[0.02em]",
-        FILLS[fillIndex(handle) - 1],
+        handle === null ? "bg-surface-fill-medium" : FILLS[fillIndex(handle) - 1],
         SIZE[size],
         className,
       )}
     >
-      {initialsOf(handle)}
+      {handle === null ? null : initialsOf(handle)}
     </span>
   );
 }

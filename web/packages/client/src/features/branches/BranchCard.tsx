@@ -25,7 +25,7 @@ import { useFeedViewer, useRunChoice } from "../feed/FeedContext.js";
 import { ConfirmDelete } from "../feed/FeedDialog.js";
 import { ModerationNote } from "../feed/Moderated.js";
 import { MoreMenu, type MoreAction } from "../feed/MoreMenu.js";
-import { clip, noun, relTime } from "../feed/format.js";
+import { authorName, clip, noun, relTime } from "../feed/format.js";
 import { BranchIcon, BubbleIcon, ContinueIcon, SearchIcon } from "../feed/icons.js";
 import { revealThread } from "../feed/reveal.js";
 import { ReplyText } from "../replies/ReplyText.js";
@@ -135,8 +135,8 @@ export function BranchCard({
   return (
     <div className={cn("preview", fade && "fadein")}>
       <div className="who">
-        <Avatar handle={node.u ?? "?"} size="xs" />
-        <b>{node.u ?? ""}</b>
+        <Avatar handle={node.u} size="xs" />
+        <b>{authorName(node.u)}</b>
         <time dateTime={node.createdAt}>{relTime(node.createdAt, now)}</time>
         <span className="ml-auto inline-flex self-center">
           <MoreMenu actions={actions} />
@@ -303,9 +303,10 @@ function BranchComments({
   /** The comment whose reply composer is open; null for the top one. */
   openParent: string | null | undefined;
 }) {
-  const { writer } = useFeedViewer();
+  const { writer, active, me } = useFeedViewer();
   const writes = useWrites();
   const close = useThreadUiStore((state) => state.close);
+  const [deleting, setDeleting] = useState<string | null>(null);
   if (pending || comments.length === 0) return null;
   const tops = comments.filter((c) => c.parent === null);
   const rows: { c: CommentRec; depth: number }[] = [];
@@ -319,12 +320,32 @@ function BranchComments({
       {rows.map(({ c, depth }) => {
         const parent = c.parent ?? c.id;
         const replying = openParent === c.id;
+        // the viewer's own comment: Delete, as a reply has it, in a frozen
+        // channel too (02 W6.10, 04 B6)
+        const mine = me !== null && c.u === me;
+        const othersUnder = comments.some((x) => x.parent === c.id && x.u !== me);
         return (
           <div key={c.id} className="brr" style={{ marginLeft: Math.min(depth, 3) * 14 }}>
             <div className="who">
-              <Avatar handle={c.u ?? "?"} size="xs" />
-              <b>{c.u ?? ""}</b>
+              <Avatar handle={c.u} size="xs" />
+              <b>{authorName(c.u)}</b>
               <time dateTime={c.createdAt}>{relTime(c.createdAt, now)}</time>
+              {mine && active ? (
+                <span className="ml-auto inline-flex self-center">
+                  <MoreMenu
+                    actions={[
+                      {
+                        label: "Delete comment",
+                        danger: true,
+                        disabledReason: othersUnder
+                          ? "Not available once someone else has responded"
+                          : undefined,
+                        onSelect: () => setDeleting(c.id),
+                      },
+                    ]}
+                  />
+                </span>
+              ) : null}
             </div>
             {c.del ? (
               <p className="modln">[deleted]</p>
@@ -363,6 +384,16 @@ function BranchComments({
           </div>
         );
       })}
+      <ConfirmDelete
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title="Delete this comment and your replies under it?"
+        onConfirm={() => {
+          if (deleting !== null) void writes.deleteComment(deleting);
+        }}
+      />
     </div>
   );
 }
