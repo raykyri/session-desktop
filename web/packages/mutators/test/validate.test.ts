@@ -85,6 +85,7 @@ test("a look-up phrase is 1 to 4 whole words of its quote", (t) => {
 
 test("mentions are handles after @, once each", (t) => {
   t.deepEqual(mentionsIn("@mona and @otto, @mona. mail@example.com @x."), ["mona", "otto", "x"]);
+  t.deepEqual(mentionsIn("@mona_ and @otto-- @mel._ @a.b_c"), ["mona", "otto", "mel", "a.b_c"]);
 });
 
 const msToIsoInverse = (iso: string) => isoToMs(msToIso(isoToMs(iso)));

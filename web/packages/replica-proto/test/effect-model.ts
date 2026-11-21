@@ -87,7 +87,7 @@ const lookupPrompt = (p: string) =>
   '" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.';
 
 /** The handles a text mentions: "@" after the start or a character that
- * cannot be in a handle, then a handle's characters, without trailing dots;
+ * cannot be in a handle, then a handle's characters, without trailing ".", "_" or "-";
  * each once. */
 function mentioned(t: string): string[] {
   const inHandle = (ch: string) => /[a-z0-9._-]/.test(ch);
@@ -100,7 +100,7 @@ function mentioned(t: string): string[] {
     for (let j = k + 1; j < t.length && inHandle(t[j] as string) && h.length < 64; j++)
       h += t[j] as string;
     if (!/^[a-z0-9]/.test(h)) continue;
-    while (h.endsWith(".")) h = h.slice(0, -1);
+    while (h.endsWith(".") || h.endsWith("_") || h.endsWith("-")) h = h.slice(0, -1);
     if (h && !out.includes(h)) out.push(h);
   }
   return out;

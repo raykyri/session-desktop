@@ -94,11 +94,13 @@ export function onWordBoundaries(phrase: string, quote: string): boolean {
 export const LOOKUP_PROMPT_V1 = (phrase: string) =>
   `Look up "${phrase}" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.`;
 
-/** The handles a text mentions (`@handle`), once each, in order. */
+/** The handles a text mentions (`@handle`), once each, in order. Trailing
+ * `.`, `_` and `-` are punctuation, not part of the handle ("@mona_",
+ * "@otto-": M1b review 15). */
 export function mentionsIn(t: string): string[] {
   const out: string[] = [];
   for (const m of t.matchAll(/(?:^|[^a-z0-9._@-])@([a-z0-9][a-z0-9._-]{0,63})/g)) {
-    const h = (m[1] ?? "").replace(/[.]+$/, "");
+    const h = (m[1] ?? "").replace(/[._-]+$/, "");
     if (h && !out.includes(h)) out.push(h);
   }
   return out;
