@@ -78,6 +78,10 @@ export interface UnsentWrite {
   error: ApiError | null;
 }
 
+/** The text of a summary row whose records could not be fetched (02 §9.1,
+ * 01 R3). */
+export const UNAVAILABLE_TEXT = "Available when online.";
+
 /** What a read answers when the replica has not loaded it. */
 export const UNKNOWN: unique symbol = Symbol("unknown");
 export type Unknown = typeof UNKNOWN;
@@ -120,6 +124,9 @@ export interface ReplicaSource {
   /** Ask for a thread's full records (01 R3): a summary thread, or a thread
    * of a thread address outside the window (`space` names its channel). */
   open?(thread: string, space?: string): void;
+  /** Whether `open` could not fetch a thread's records (offline, a refused
+   * read): its row shows "Available when online." while it is retried. */
+  unavailable?(thread: string): boolean;
   /** Read a channel's records while its view is open (01 R5); the returned
    * function ends the view. */
   watch?(space: string): () => void;

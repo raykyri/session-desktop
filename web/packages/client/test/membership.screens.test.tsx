@@ -184,7 +184,7 @@ test.serial(
     await waitUntil(t, () => document.querySelector("[data-unread-dot]") === null, "no dot");
     t.truthy(screen.getByRole("button", { name: "Account" }));
     t.truthy(screen.getByText(/^All caught up\./));
-    t.true(screen.getByRole("button", { name: "Mark all as read" }).disabled);
+    t.true(screen.getByRole("button", { name: "Mark all as read" }).hasAttribute("disabled"));
   },
 );
 

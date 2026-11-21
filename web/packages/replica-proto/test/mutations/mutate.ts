@@ -244,7 +244,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X31 the client drops a write after a transient answer",
     file: "../sync/src/client/client.ts",
-    from: "          p.notBefore = now + Math.min(RETRY_MAX, RETRY_MIN * 2 ** (p.attempts - 1));\n          break;",
+    from: "          p.notBefore =\n            now +\n            Math.min(\n              RETRY_MAX,\n              Math.max(RETRY_MIN * 2 ** (p.attempts - 1), res.error.retryAfterMs ?? 0),\n            );\n          break;",
     to: "          this.outbox.shift();\n          break;",
   },
   // ---- review round 2 ----
@@ -1108,8 +1108,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M2-4 reads of one log are not serialized",
     file: "../sync/src/client/client.ts",
-    from: "return this.serial(log, () => this.syncNow(log, tier));",
-    to: "return this.syncNow(log, tier);",
+    from: "    return this.serial(log, () =>\n      this.dropsOf(log) === drops ? this.syncNow",
+    to: "    return ((f: () => Promise<SyncOutcome>) => f())(() =>\n      this.dropsOf(log) === drops ? this.syncNow",
     packageOnly: true,
   },
   {
@@ -1165,8 +1165,11 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M2-12 open() answers full for a thread the replica does not hold",
     file: "../sync/src/client/client.ts",
-    from: 'if (!log) return "missing";',
-    to: 'if (!log) return "full";',
+    // since the M4 fixes a thread the replica does not hold is asked of the
+    // held space logs (`openMany`): the fault is the same, a thread no log
+    // served answers full
+    from: "const found = served.has(th) || this.replica.logOfThread(th) !== undefined;",
+    to: "const found = served.has(th) || true;",
   },
   // package only: the client's bookkeeping of applied writes across ids; no
   // server answer changes it, so the acceptance targets cannot differ on it
