@@ -96,15 +96,8 @@ export const THREADS = {
       if (!ask) return { id: i.id, run: null, notified: [], notMembers: [] };
       // the run record with status `queued` is the run queue (`03` E2)
       const run = tx.id(1);
-      queueRun(
-        tx,
-        run,
-        tx.byKey(threadKey(i.id)) as ThreadRec,
-        "r",
-        i.model,
-        i.effort,
-        payOf(values, i.model),
-      );
+      const root = tx.byKey(threadKey(i.id)) as ThreadRec;
+      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));
       return { id: i.id, run, notified: [], notMembers: [] };
     },
     // a post notifies the accounts it mentions, and says who in its answer

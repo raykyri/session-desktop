@@ -143,6 +143,16 @@ test.serial("K8: with included tokens left the run record says included", async 
   t.like(w.run(run), { status: "queued", pay: "included" });
 });
 
+test.serial("K8: with billing pause a valid Anthropic key does not pay", async (t) => {
+  const w = await runsWorld(t, {
+    allowances: { ...keyBilling(1_000), billing: () => "pause" },
+    start: false,
+  });
+  spend(w, w.mona.user.id, 1_000, Date.now());
+  await w.mona.register();
+  refusedForTokens(t, await w.mona.write("threads.create", askInput(w.open)));
+});
+
 test.serial(
   "K10: a run queued while tokens were left and claimed after they ran out ends tokens without a provider call",
   async (t) => {
