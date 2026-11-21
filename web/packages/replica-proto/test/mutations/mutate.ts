@@ -1273,7 +1273,7 @@ const MUTATIONS: Mutation[] = [
     name: "M6-4 invites.create uses no limit",
     file: "../mutators/src/invites.ts",
     from: '      within(ctx, "invites.create");\n',
-    to: "",
+    to: "      void within;\n",
     packageOnly: true,
   },
   {
@@ -1287,7 +1287,7 @@ const MUTATIONS: Mutation[] = [
     name: "M6-6 an expired link counts as open",
     file: "../mutators/src/invites.ts",
     from: "        .filter((l) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now)).length;",
-    to: "        .filter((l) => l.dead === null).length;",
+    to: "        .filter((l) => l.dead === null && isoToMs(l.expiresAt) >= 0).length;",
     packageOnly: true,
   },
   {
