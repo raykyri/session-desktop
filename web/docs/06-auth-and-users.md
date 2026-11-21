@@ -52,12 +52,13 @@ and `invites` (sign-up codes) with `users.invites_remaining` defaulting to 0 so 
 distributed manually when `SESSION_REQUIRE_INVITE=1` is switched on. The
 optional `SESSION_ALLOWED_GITHUB_LOGINS` allowlist remains available.
 
-Admins are set manually: locally, `npm run db:admin -- <github login>` sets
-`users.is_admin = 1`; on the deployed machine the script is not in the image, so it
-is a SQL update against the volume instead (`13-deployment-fly.md` §2). Admin
-unlocks the `claude-fable` model (`04-agent-runtime.md` §1) and
-`admin.listUsers`. The server checks `is_admin` on every gated launch; the
-client only conditionally hides administrative UI elements.
+Site admins are set by handle (plan `05` §3.5): `npm run db:admin --
+--invite` prints a root invite, the person redeems it and chooses a handle,
+and `npm run db:admin -- <handle>` sets `users.is_admin = 1`. The runtime
+image holds the same commands as `packages/server/dist/admin.mjs`
+(`13-deployment-fly.md` §2, `runbooks/launch.md` §6 step 6). The server
+checks `is_admin` on every gated launch; the client only conditionally
+hides administrative UI elements.
 
 ## 4. Authorization in tRPC
 
