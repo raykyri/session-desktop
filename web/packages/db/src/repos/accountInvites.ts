@@ -328,24 +328,37 @@ export function activate(
         .get();
       if (held) return { ok: false, reason: "taken" };
       const at = now();
+      const unusable = () => {
+        tx.update(users).set({ pendingInviteId: null }).where(eq(users.id, account.id)).run();
+        return { ok: false, reason: "unusable" } as const;
+      };
+      // The creator is checked before the invite is marked used: a link of an
+      // account that is no longer active is not open (`findOpenByHash`).
+      const pending = tx
+        .select({ createdBy: invites.createdBy })
+        .from(invites)
+        .where(eq(invites.id, account.pendingInviteId))
+        .get();
+      const creator =
+        pending?.createdBy != null
+          ? tx.select().from(users).where(eq(users.id, pending.createdBy)).get()
+          : undefined;
+      if (
+        !pending ||
+        (pending.createdBy !== null &&
+          (!creator || creator.status !== "active" || creator.deletedAt !== null))
+      ) {
+        return unusable();
+      }
+      // Conditional on the invite still being open: of two accounts holding
+      // it, the second finds it used.
       const invite = tx
         .update(invites)
         .set({ usedBy: account.id, usedAt: at, codeEnc: null })
         .where(and(eq(invites.id, account.pendingInviteId), isOpen))
         .returning()
         .get();
-      const creator =
-        invite?.createdBy != null
-          ? tx.select().from(users).where(eq(users.id, invite.createdBy)).get()
-          : undefined;
-      if (
-        !invite ||
-        (invite.createdBy !== null &&
-          (!creator || creator.status !== "active" || creator.deletedAt !== null))
-      ) {
-        tx.update(users).set({ pendingInviteId: null }).where(eq(users.id, account.id)).run();
-        return { ok: false, reason: "unusable" };
-      }
+      if (!invite) return unusable();
       const updated = tx
         .update(users)
         .set({

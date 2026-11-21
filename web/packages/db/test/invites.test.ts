@@ -343,6 +343,21 @@ test("a deleted account's identity signs in again as a new waiting account", (t)
   });
 });
 
+test("an invite whose creator was deleted is not redeemed and stays unused", (t) => {
+  const { db, userId } = createFixture(t);
+  const made = invite(db, userId);
+  const waiting = addWaitingUser(db);
+  t_assertOpen(accountInvites.setPendingInvite(db, waiting.id, made.code));
+  accounts.deleteAccount(db, userId);
+  t.deepEqual(
+    accountInvites.activate(db, { userId: waiting.id, handle: "orphan", displayName: "O" }),
+    { ok: false, reason: "unusable" },
+  );
+  const row = db.$client.prepare(`SELECT used_by AS by FROM invites WHERE id = ?`).get(made.id);
+  t.deepEqual(row, { by: null });
+  t.is(users.findById(db, waiting.id)?.status, "waiting");
+});
+
 test("the waiting-account sweep deletes waiting accounts older than 90 days", (t) => {
   const { db, userId } = createFixture(t);
   const old = addWaitingUser(db);
