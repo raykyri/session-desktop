@@ -28,6 +28,15 @@ It exits with 1 when a mutation survives.
   counts record, report notifications for staff only, write age and clock
   offsets, bounded tables, client backoff and failure, the effect worker,
   input bounds and the storage scan.
+- U6-1 on cover the build's contract (`01` U6), M1a-10 on the M1a review's
+  fixes, and M1b-1 on the checks `@session/mutators` added (M1b).
+
+The mutators, the stored shape and the read rules live in
+`@session/mutators` since M1b: their patterns name `../mutators/src/<file>`.
+Each copy holds a copy of that package too, which the copy of this one
+imports; a mutation there is type-checked in that package and runs its suite
+as well as this one. Build the declarations first (`cd web && npx tsc -b`):
+the copies use them.
 
 A pattern that no longer matches stops the run with an error: when the code
 changes, move the pattern with it and keep the fault the same. Where the code
