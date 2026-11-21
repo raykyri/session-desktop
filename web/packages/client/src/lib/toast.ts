@@ -58,6 +58,19 @@ export function trpcErrorCode(error: unknown): string | null {
   return typeof code === "string" ? code : null;
 }
 
+/** What a failed request shows when it carries no refusal of the server's
+ * (the network failed, or the answer was not tRPC's). */
+export const UNREACHABLE_MESSAGE = "Couldn't reach Session. Try again.";
+
+/** A failed call's message for the reader: the server's own message for a
+ * tRPC refusal that carries one, else `UNREACHABLE_MESSAGE`. The text of
+ * any other error (the browser's "Failed to fetch") is not shown. */
+export function refusalMessage(error: unknown): string {
+  return trpcErrorCode(error) !== null && error instanceof Error && error.message
+    ? error.message
+    : UNREACHABLE_MESSAGE;
+}
+
 /** What the thread page says when the server no longer has the thread for
  * the reader: it was deleted, moved to its owner's Trash, or the reader was
  * removed from it. The server's own message names the thread's id. */

@@ -96,7 +96,9 @@ test.serial("a member: ring, Saved, layout toggle and the full account menu", as
   await renderApp("/", { user: testUser({ login: "ines.v", name: "Ines" }) });
   const header = within(bar());
 
-  const ring = header.getByRole("link", { name: /included tokens left this week/ });
+  const ring = await header.findByRole("link", {
+    name: /^2M of 2M included tokens left this week/,
+  });
   t.is(ring.textContent, "", "no visible text in the ring");
   t.is(ring.getAttribute("href"), "/usage");
 

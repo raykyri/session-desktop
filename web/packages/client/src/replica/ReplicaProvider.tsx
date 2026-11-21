@@ -18,6 +18,7 @@ import {
 
 import { queryKeys, useModels, useWeeklyUsage } from "../api/account.js";
 import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
+import { outOfTokensText } from "../features/usage/usageText.js";
 import { useThreadUiStore } from "../stores/threadUi.js";
 
 import {
@@ -100,7 +101,59 @@ export function ReplicaProvider({
     () => ({ source: made, online: { ...defaultOnlineData(), ...config?.online }, member }),
     [made, member],
   );
-  return <ReplicaContext.Provider value={value}>{children}</ReplicaContext.Provider>;
+  // `usage.get` is refreshed from one place, not from each reader.
+  const client = useContext(QueryClientContext);
+  return (
+    <ReplicaContext.Provider value={value}>
+      {member && client ? <UsageRefresh /> : null}
+      {children}
+    </ReplicaContext.Provider>
+  );
+}
+
+/** How long after a reading's `resetAt` it is fetched again: the server's
+ * week has turned by then (03 K3). */
+export const RESET_REFETCH_DELAY_MS = 1_000;
+
+/** The longest wait `setTimeout` takes (about 24.8 days). */
+const MAX_TIMER_MS = 2_147_483_647;
+
+/**
+ * Refetches the member's `usage.get` reading (03 K6): when one of their runs
+ * ends in the replica (with the Usage page's recent runs), and when the
+ * reading's week resets, so a tab left open across the reset does not keep
+ * the previous week's reading. Rendered once, by the provider, inside a
+ * query client.
+ */
+function UsageRefresh() {
+  const source = useReplica();
+  const client = useQueryClient();
+  const usage = useWeeklyUsage(true);
+  const ended = useReplicaQuery(endedRunsOf, []);
+  const seen = useRef<number | null>(null);
+  useEffect(() => {
+    if (ended === UNKNOWN) return;
+    if (seen.current !== null && seen.current !== ended) {
+      // The ring's reading and the Usage page's recent runs both moved.
+      void client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() });
+      void client.invalidateQueries({ queryKey: queryKeys.usageRuns() });
+    }
+    seen.current = ended;
+  }, [ended, client]);
+  const resetAt = usage.data?.resetAt;
+  useEffect(() => {
+    if (resetAt === undefined) return;
+    const wait = Math.min(
+      MAX_TIMER_MS,
+      Math.max(0, resetAt - source.now() + RESET_REFETCH_DELAY_MS),
+    );
+    const timer = setTimeout(() => {
+      void client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() });
+      void client.invalidateQueries({ queryKey: queryKeys.usageRuns() });
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [resetAt, source, client]);
+  return null;
 }
 
 export function useReplica(): ReplicaSource {
@@ -119,26 +172,13 @@ function endedRunsOf(source: ReplicaSource): number {
 /**
  * The online-only data (02 §9.1): for a member, `models.list` and
  * `usage.get` from the server over the build's values (03 K6, K15). The
- * usage and the recent runs are refetched when one of the member's runs
- * ends in the replica.
+ * provider's `UsageRefresh` decides when the reading is fetched again.
  * Must be rendered inside the app's query client.
  */
 export function useOnlineData(): OnlineData {
   const { online, member } = useContext(ReplicaContext);
   const models = useModels(member);
   const usage = useWeeklyUsage(member);
-  const ended = useReplicaQuery(endedRunsOf, []);
-  const client = useQueryClient();
-  const seen = useRef<number | null>(null);
-  useEffect(() => {
-    if (ended === UNKNOWN) return;
-    if (seen.current !== null && seen.current !== ended) {
-      // The ring's reading and the Usage page's recent runs both moved.
-      void client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() });
-      void client.invalidateQueries({ queryKey: queryKeys.usageRuns() });
-    }
-    seen.current = ended;
-  }, [ended, client]);
   const usageData = usage.data;
   const readAt = usage.dataUpdatedAt;
   return useMemo(
@@ -153,21 +193,27 @@ export function useOnlineData(): OnlineData {
 }
 
 /**
- * Whether a run on a model has no payer now (03 K8, `outOfTokens`), read
- * when a write is about to be sent: the latest `models.list` and `usage.get`
- * answers in the query cache over the build's values. Outside a query client
- * (a test that renders without one) nothing is refused here.
+ * The out-of-tokens toast for a run on a model when nothing can pay for it
+ * now (03 K8, `outOfTokens`), else null; read when a write is about to be
+ * sent, from the latest `models.list` and `usage.get` answers in the query
+ * cache over the build's values. A refusal fetches the reading again, so a
+ * reading that no longer holds refuses at most until its refetch answers.
+ * Outside a query client (a test that renders without one) nothing is
+ * refused here.
  */
-export function useOutOfTokens(): (model: string) => boolean {
-  const { online, member } = useContext(ReplicaContext);
+export function useOutOfTokensToast(): (model: string) => string | null {
+  const { source, online, member } = useContext(ReplicaContext);
   const client = useContext(QueryClientContext);
   return useCallback(
     (model: string) => {
       const listing = member ? client?.getQueryData<ModelListing>(queryKeys.models()) : undefined;
       const usage = member ? client?.getQueryData<WeeklyUsage>(queryKeys.weeklyUsage()) : undefined;
-      return outOfTokens(withServerData(online, listing, usage), model);
+      const data = withServerData(online, listing, usage);
+      if (!outOfTokens(data, model, source.now())) return null;
+      if (member) void client?.invalidateQueries({ queryKey: queryKeys.weeklyUsage() });
+      return outOfTokensText(data.usage?.resetsAt ?? null);
     },
-    [online, member, client],
+    [source, online, member, client],
   );
 }
 

@@ -94,6 +94,13 @@ export function testWeeklyUsage(overrides: Record<string, unknown> = {}): unknow
   };
 }
 
+/** A refusal as tRPC's client raises it: the server's message, with the
+ * formatter's `data.code`. A plain `Error` stands for a request that failed
+ * without the server's answer (the browser's "Failed to fetch"). */
+export function trpcRefusal(message: string, code = "BAD_REQUEST"): Error {
+  return Object.assign(new Error(message), { data: { code } });
+}
+
 export interface RenderAppOptions {
   /** `null` renders a signed-out guest in the public shell. */
   user?: User | null;

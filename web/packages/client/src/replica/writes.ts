@@ -8,12 +8,12 @@
 // the outbox toast (`NotSent.tsx`) instead of its confirmation.
 
 import { QUEUED_RUNS_MAX, type ApiError } from "@session/mutators";
-import { OUT_OF_TOKENS_TEXT, type Spaces } from "@session/shared";
+import type { Spaces } from "@session/shared";
 import { useMemo } from "react";
 
 import { showToast } from "../features/shell/Toast.js";
 
-import { useOutOfTokens, useReplica } from "./ReplicaProvider.js";
+import { useOutOfTokensToast, useReplica } from "./ReplicaProvider.js";
 import type { Effort } from "./online.js";
 import { queuedRunsOf } from "./queries.js";
 import type { DraftRef, ReplicaSource, WriteOutcome } from "./source.js";
@@ -111,9 +111,10 @@ export interface Writes {
 }
 
 export interface WritesOptions {
-  /** Whether a run on a model has no payer now (03 K8): such a write is
-   * refused before it is sent. Absent: none is. */
-  outOfTokens?: (model: string) => boolean;
+  /** The out-of-tokens toast when a run on a model has no payer now (03
+   * K8), else null: such a write is refused before it is sent, with that
+   * toast. Absent: none is. */
+  outOfTokensToast?: (model: string) => string | null;
 }
 
 export function makeWrites(source: ReplicaSource, options: WritesOptions = {}): Writes {
@@ -129,8 +130,9 @@ export function makeWrites(source: ReplicaSource, options: WritesOptions = {}): 
    * refusal the server answers anyway shows its message. The caller keeps
    * the text. */
   const mayStart = (model: unknown): boolean => {
-    if (typeof model === "string" && options.outOfTokens?.(model)) {
-      showToast(OUT_OF_TOKENS_TEXT, { alert: true });
+    const refused = typeof model === "string" ? options.outOfTokensToast?.(model) : null;
+    if (refused) {
+      showToast(refused, { alert: true });
       return false;
     }
     if (queuedRunsOf(source) >= QUEUED_RUNS_MAX) {
@@ -252,6 +254,6 @@ export function makeWrites(source: ReplicaSource, options: WritesOptions = {}): 
 
 export function useWrites(): Writes {
   const source = useReplica();
-  const outOfTokens = useOutOfTokens();
-  return useMemo(() => makeWrites(source, { outOfTokens }), [source, outOfTokens]);
+  const outOfTokensToast = useOutOfTokensToast();
+  return useMemo(() => makeWrites(source, { outOfTokensToast }), [source, outOfTokensToast]);
 }

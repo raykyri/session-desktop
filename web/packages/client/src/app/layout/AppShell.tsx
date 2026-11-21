@@ -163,6 +163,7 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
           onJoin={(channel) => void joinChannel(writes, channel)}
           onNewChannel={() => openNewChannel(true)}
           usage={data.usage}
+          usageOffline={data.usageOffline}
           savedCount={data.savedCount}
           onSaved={pathname === "/saved"}
           layout={layout}

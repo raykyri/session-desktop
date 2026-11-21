@@ -14,28 +14,47 @@ export function percentLeft(used: number, allowance: number): number {
   return Math.round((1 - share) * 100);
 }
 
+// Weekdays and dates are written in the viewer's own time zone (03 K8; 02
+// §3.3, §5): the reset is Friday 00:00 UTC, which is Thursday afternoon or
+// evening west of UTC. `timeZone` is for tests; absent, the viewer's zone
+// applies.
+
+/** The weekday of `at` in the viewer's zone: "Friday", or "Fri" short. */
+export function weekdayOf(at: number, short = false, timeZone?: string): string {
+  return new Date(at).toLocaleDateString("en-US", {
+    weekday: short ? "short" : "long",
+    ...(timeZone === undefined ? {} : { timeZone }),
+  });
+}
+
 /** "You have N% of usage left this week. Next reset on Fri, in 2d 5h." */
 export function usageSentence(
   reading: { used: number; allowance: number; resetAt: number },
   now: number,
+  timeZone?: string,
 ): { percent: number; weekday: string; resetIn: string } {
   return {
     percent: percentLeft(reading.used, reading.allowance),
-    weekday: new Date(reading.resetAt).toLocaleDateString("en-US", {
-      weekday: "short",
-      timeZone: "UTC",
-    }),
+    weekday: weekdayOf(reading.resetAt, true, timeZone),
     resetIn: resetShort(reading.resetAt - now),
   };
 }
 
-/** A run's date, "Nov 21" (`day`). */
-export function runDay(at: number): string {
+/** A run's date in the viewer's zone, "Nov 21" (`day`). */
+export function runDay(at: number, timeZone?: string): string {
   return new Date(at).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
+    ...(timeZone === undefined ? {} : { timeZone }),
   });
+}
+
+/** The out-of-tokens toast (03 K8; 02 §5, `OUT_MSG`) with the weekday of the
+ * reset in the viewer's zone; with no reset known it names the weekly reset
+ * instead. */
+export function outOfTokensText(resetAt: number | null, timeZone?: string): string {
+  const until = resetAt === null ? "the weekly reset" : weekdayOf(resetAt, false, timeZone);
+  return `You're out of tokens until ${until}. You can still post, or add an API key in Usage.`;
 }
 
 export type RunBill = "included" | "key:anthropic" | "key:openai" | "included+key:anthropic";
