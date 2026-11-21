@@ -505,6 +505,13 @@ Not built: `03` V1-V7, T5 and L3 are removed, with the server routes, the
 
 ### M8a — Launch preparation
 
+Status: the squash, the launch runbook and the reset script are done; the
+staging reset, the rehearsals, the checks on staging, the staged secrets,
+the X app, the abuse mailbox and the named admins and first members are
+person steps, recorded in `runbooks/launch.md` §4. The squash replaced
+`0000_initial` and `0003_api_keys` to `0007_weekly_tokens` (M3's
+`0001_spaces` landed as `0005_spaces`).
+
 Scope, with production still on the current web app:
 - `web/docs/runbooks/launch.md` (new): the steps of §3.6 with commands,
   including the admin seeding of §3.5.
@@ -728,7 +735,8 @@ Backups: the old Litestream prefix, which holds all deleted data, is kept for
 Site admins after the wipe (decided, Q6): admins are set by handle, which is
 unique (the provider `login` is not, `04` I1). Through `fly ssh console`,
 the operator runs `npm run db:admin -- --invite` once per person who runs
-Session; it prints a root account invite (no `created_by`). Each of them
+Session (in the runtime image, which has no sources, the same command is
+`node /app/packages/server/dist/admin.mjs --invite`); it prints a root account invite (no `created_by`). Each of them
 opens it, signs in with GitHub or X, chooses a handle at the profile step
 and is active with no inviter. The operator then runs `npm run db:admin --
 <handle>`, which sets `is_admin` on that account (`bin/admin.ts` changes
@@ -757,8 +765,9 @@ waits for an invite.
    secret keys, X OAuth, web window, limits).
 4. `fly scale count 0 -a session-dev`; delete `/data/session.db` with its
    `-wal` and `-shm`, `/data/documents/*`, `/data/embeds/*` and
-   `/data/tmp/documents-backup.stamp` from a one-off machine with the volume
-   (`reset-database.md` §3).
+   `/data/tmp/documents-backup.stamp` from a one-off machine with the volume,
+   with the reset script, which refuses while a server's heartbeat is fresh
+   (`reset-database.md` §4).
 5. Deploy the build branch to production (`fly deploy web -c web/fly.toml`)
    and scale to 1. Boot runs `0000_initial.sql` on the empty file, records
    the Litestream generation id, closes `usage_events` rows still `open`
@@ -771,10 +780,12 @@ waits for an invite.
    and effort, post and ask first; the smoke test's invite redemption is
    the first invite used, and the checks after it are fixed forward.
 8. On failure before the first invite is used (a member's account invite
-   redeemed; the root invites of §3.5 do not count): `fly scale count 0`, restore
-   the old prefix as `LITESTREAM_REPLICA_URL`, deploy the recorded old image,
-   scale to 1, and set the `production` environment's branch rule back to
-   `main`. Nothing written to the new
+   redeemed; the root invites of §3.5 do not count): `fly scale count 0`,
+   delete the new database with the reset script (so that Litestream
+   restores the old one), restore the old prefix as `LITESTREAM_REPLICA_URL`,
+   deploy the recorded old image with `main`'s `fly.toml`, scale to 1,
+   restore `/data/documents` from the old archives, and set the `production`
+   environment's branch rule back to `main` (`launch.md` §6 step 8). Nothing written to the new
    build is kept. From the first invite used on, fixes go forward.
 9. After 30 days: delete the old Litestream prefix and the old image.
 

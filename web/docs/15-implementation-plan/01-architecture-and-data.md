@@ -227,6 +227,10 @@ launch (decision P19) and staging is reset after the squash, both with
 `runbooks/reset-database.md`. There is no `0002_drop_research.sql`.
 Acceptance: `db:generate` produces no diff in CI; `migrations.test.ts`
 migrates a fresh database, and after the squash finds no research table.
+Done in M8a: `web/packages/db/migrations/` holds one generated
+`0000_initial.sql` (the earlier `0000_initial` with the research tables and
+`0003_api_keys` to `0007_weekly_tokens` removed); a database made by them is
+refused at boot with `UnknownMigrationError`.
 
 **D6. Log epochs, the history id and restores.** A cursor token and an
 event id hold two history values, and a pull whose token holds either value

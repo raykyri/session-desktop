@@ -1,10 +1,9 @@
 // The server half of the sync core on SQLite (`15-implementation-plan/
 // 01-architecture-and-data.md` D1-D3, D6): the replicated records, the sync
-// bookkeeping, and the server-only tables beside them. Migration
-// `0005_spaces.sql` creates these tables. `src/sync/store.ts` is the only
-// code that reads or writes the first group; `put`, `create` and `del` of a
-// mutator's transaction reach `records` only through its `putRecord` and
-// `deleteRecord` (`01` D1).
+// bookkeeping, and the server-only tables beside them. `src/sync/store.ts`
+// is the only code that reads or writes the first group; `put`, `create` and
+// `del` of a mutator's transaction reach `records` only through its
+// `putRecord` and `deleteRecord` (`01` D1).
 
 import {
   index,
