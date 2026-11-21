@@ -69,10 +69,6 @@ jobs:
       # The container's network has no IPv6, so the server binds the IPv4
       # loopback (`web/e2e/constants.ts`, `E2E_HOST`).
       SESSION_E2E_HOST: 127.0.0.1
-      # The M4 feed views have no Linux baselines yet, so `visual.spec.ts`
-      # skips rather than fails. The commit that adds the baselines from the
-      # `update-visual-baselines` run removes this line.
-      SESSION_VISUAL_PENDING: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

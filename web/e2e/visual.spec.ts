@@ -7,13 +7,16 @@
 // cross-engine font rendering differences. The baselines are CI's own renders
 // (`12-testing-linting-ci.md` §4 says how to regenerate them).
 //
-// A missing baseline fails in CI. `SESSION_VISUAL_PENDING=1` (set in the
-// workflow while a set is being re-rendered) skips instead. Outside CI a
-// missing baseline is written, as Playwright does by default.
+// A missing baseline fails in CI, unless the file `e2e/visual.pending` exists
+// (committed while a set is being re-rendered; the commit that adds the
+// baselines deletes it), in which case it skips. Outside CI a missing baseline
+// is written, as Playwright does by default.
 
 import { existsSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
+
+const VISUAL_PENDING = new URL("./visual.pending", import.meta.url);
 
 import { APP_ORIGIN } from "./constants.js";
 import { signIn } from "./helpers.js";
@@ -50,10 +53,10 @@ test.describe("@visual", () => {
       testInfo.config.updateSnapshots === "all" || testInfo.config.updateSnapshots === "changed";
     test.skip(
       Boolean(process.env["CI"]) &&
-        process.env["SESSION_VISUAL_PENDING"] === "1" &&
+        existsSync(VISUAL_PENDING) &&
         !updating &&
         !existsSync(testInfo.snapshotPath("home-centred-1440-orange-blob-light.png")),
-      `visual baselines for ${process.platform} are pending (SESSION_VISUAL_PENDING=1)`,
+      `visual baselines for ${process.platform} are pending (e2e/visual.pending)`,
     );
 
     await signIn(page, { login: "e2e-visual" });

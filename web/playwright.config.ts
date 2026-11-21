@@ -33,7 +33,7 @@ export default defineConfig({
   outputDir: "./test-results",
   // `{platform}` is kept: a baseline rendered by macOS's rasterizer does not
   // match Linux's, so the two sets live side by side. Outside CI a missing
-  // baseline is written; in CI it fails unless `SESSION_VISUAL_PENDING=1`
+  // baseline is written; in CI it fails unless `e2e/visual.pending` exists
   // (`visual.spec.ts`). The Linux set is rendered by CI's e2e job
   // (`.github/workflows/web.yml`, `12-testing-linting-ci.md` §4).
   snapshotPathTemplate: "{testDir}/__screenshots__/{platform}/{arg}{ext}",
