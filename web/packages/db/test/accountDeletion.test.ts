@@ -2,7 +2,7 @@
 // plan `04` B6, §8): with the server stopped, the spaces step writes through a
 // sync core over the job's own connection.
 
-import { MUTATORS, Refusal, type StoredRecord } from "@session/mutators";
+import { MUTATORS, Refusal, type StoredRecord, type Tx } from "@session/mutators";
 import { SyncServer } from "@session/sync/server";
 import test from "ava";
 
@@ -273,12 +273,17 @@ test("a shell the person deleted earlier, with nothing left under it, goes", (t)
   t.false(all().some((r) => JSON.stringify(r).includes('"mel"')));
 });
 
-/** Runs `fn` with `comments.delete`'s `run` replaced by `run`. */
-function withCommentsDelete(run: () => never, fn: () => void) {
+/** Runs `fn` with `comments.delete`'s `run` replaced by one that leaves the
+ * comment a shell, as the real one would, and then throws `error`. */
+function withCommentsDelete(error: Error, fn: () => void) {
   const def = MUTATORS["comments.delete"];
   if (!def) throw new Error("comments.delete");
   const original = def.run;
-  def.run = run;
+  def.run = (tx: Tx, i: unknown) => {
+    const c = tx.byKey(`comment:${(i as { id: string }).id}`);
+    if (c?.kind === "comment") tx.put({ ...c, t: "", del: true });
+    throw error;
+  };
   try {
     fn();
   } finally {
@@ -306,14 +311,9 @@ function melsItems(t: Parameters<typeof createFixture>[0]) {
 
 test.serial("a delete that throws an error makes the job throw and change nothing", (t) => {
   const { db, mel, before, all } = melsItems(t);
-  withCommentsDelete(
-    () => {
-      throw new TypeError("a fault");
-    },
-    () => {
-      t.throws(() => accounts.deleteAccount(db, mel.id), { message: /INTERNAL_SERVER_ERROR/ });
-    },
-  );
+  withCommentsDelete(new TypeError("a fault"), () => {
+    t.throws(() => accounts.deleteAccount(db, mel.id), { message: /INTERNAL_SERVER_ERROR/ });
+  });
   t.deepEqual(all(), before);
   t.not(
     (
@@ -327,15 +327,10 @@ test.serial("a delete that throws an error makes the job throw and change nothin
 
 test.serial("a delete the mutator refuses makes the job throw and change nothing", (t) => {
   const { db, mel, before, all } = melsItems(t);
-  withCommentsDelete(
-    () => {
-      throw new Refusal("PRECONDITION_FAILED", "Refused here.");
-    },
-    () => {
-      t.throws(() => accounts.deleteAccount(db, mel.id), {
-        message: /PRECONDITION_FAILED Refused here\./,
-      });
-    },
-  );
+  withCommentsDelete(new Refusal("PRECONDITION_FAILED", "Refused here."), () => {
+    t.throws(() => accounts.deleteAccount(db, mel.id), {
+      message: /PRECONDITION_FAILED Refused here\./,
+    });
+  });
   t.deepEqual(all(), before);
 });
