@@ -31,10 +31,13 @@ test.afterEach.always(() => {
   configureReplica(null);
 });
 
-function serve(o: { refuseApply?: () => boolean } = {}) {
+function serve(
+  o: { refuseApply?: () => boolean; refusal?: { code: string; message: string } } = {},
+) {
   const f = new FakeSync();
   const base = f.fetchFor(ME);
-  // a refusal of every write while `refuseApply` holds (recorded: FORBIDDEN)
+  // a refusal of every write while `refuseApply` holds (recorded: FORBIDDEN,
+  // unless `refusal` names another)
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (o.refuseApply?.() && url.includes("/apply") && !f.offline)
@@ -44,8 +47,7 @@ function serve(o: { refuseApply?: () => boolean } = {}) {
             {
               ok: false,
               error: {
-                code: "FORBIDDEN",
-                message: "You can't save in this channel.",
+                ...(o.refusal ?? { code: "FORBIDDEN", message: "You can't save in this channel." }),
                 serverTime: f.clock.now(),
               },
             },
@@ -275,6 +277,19 @@ test.serial("a Retry the server refuses shows the refusal as an alert", async (t
     within(card(post) as HTMLElement).getByRole("button", { name: /^Save\b/ }),
     "rolled back",
   );
+});
+
+test.serial("a write a server limit leaves unsent shows the server's message", async (t) => {
+  const message = "You can save 600 threads an hour. Try again in 12 minutes.";
+  const { post } = serve({
+    refuseApply: () => true,
+    refusal: { code: "TOO_MANY_REQUESTS", message },
+  });
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null, "the post renders");
+  fireEvent.click(within(card(post) as HTMLElement).getByRole("button", { name: /^Save/ }));
+  await waitUntil(t, () => outboxToast() !== null, "Not sent");
+  t.is(outboxToast()?.querySelector("span")?.textContent, `Not sent. ${message}`);
 });
 
 test.serial("an offline save shows no Saved. toast", async (t) => {

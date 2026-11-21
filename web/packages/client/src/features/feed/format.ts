@@ -24,6 +24,13 @@ export function ktok(n: number): string {
 
 export const noun = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+/** How an account that was deleted is named (04 §8, B6): the records it
+ * left for other people's content carry `u: null`. */
+export const DELETED_ACCOUNT = "Deleted account";
+
+/** The name an author is shown by: the handle, or "Deleted account". */
+export const authorName = (u: string | null): string => u ?? DELETED_ACCOUNT;
+
 /** Clips at `n` characters on a word boundary with an ellipsis (`clip`). */
 export function clip(s: string, n: number): string {
   if (s.length <= n) return s;

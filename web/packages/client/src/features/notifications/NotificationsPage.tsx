@@ -130,7 +130,7 @@ function NotificationRow({ row }: { row: NotifRow }) {
       onClick={open}
     >
       <span className="nav-av">
-        <Avatar handle={row.actor ?? "?"} size="sm" />
+        <Avatar handle={row.actor} size="sm" />
         <span className={`nk nk-${row.type}`} aria-hidden="true">
           <Icon />
         </span>
@@ -141,7 +141,6 @@ function NotificationRow({ row }: { row: NotifRow }) {
         {parts.quote !== null ? (
           <span className={parts.reason ? "nr" : "nt"}>“{parts.quote}”</span>
         ) : null}
-        {parts.code ? <span className="nt">{parts.code}</span> : null}
         <small>
           {row.type === "invite_used" ? "Invites · " : row.channel ? `#${row.channel} · ` : ""}
           <time dateTime={row.createdAt}>{relTime(row.createdAt, now)}</time>

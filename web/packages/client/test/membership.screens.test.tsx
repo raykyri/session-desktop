@@ -124,7 +124,6 @@ const base: NotifRow = {
   where: "post",
   what: "ask",
   reason: null,
-  code: null,
   channel: "ml",
   target: null,
 };
@@ -151,9 +150,11 @@ test("the text of each notification kind, and of a coalesced one", (t) => {
     "@olga removed your post",
   );
   t.is(
-    notifText({ ...base, type: "invite_used", actor: "priya.n", code: "SESS-9TQ2-X8" }),
-    "@priya.n joined Session with your invite SESS-9TQ2-X8",
+    notifText({ ...base, type: "invite_used", actor: "priya.n" }),
+    "@priya.n joined Session with your invite",
   );
+  // an actor whose account was deleted
+  t.is(notifText({ ...base, actor: null }), "Deleted account replied to your post “A post”");
   // `n` counts writes, not people: a coalesced row names no number
   t.is(notifText({ ...base, others: true }), "@lettie and others replied to your post “A post”");
   // a thread without text, and one not loaded, are quoted as the mock does
@@ -1131,6 +1132,67 @@ test.serial(
     // the author keeps Delete on the placeholder
     const own = document.getElementById(`card-${ids.author}`) as HTMLElement;
     t.truthy(within(own).getByRole("button", { name: "More" }));
+  },
+);
+
+test.serial(
+  "the content of a deleted account reads “Deleted account”: a thread, a reply, a branch and a comment",
+  async (t) => {
+    let reply = "";
+    let thread = "";
+    prepare = (replica) => {
+      const r = replica.rawAll("reply").find((x) => x.th === SEED_POST && !x.del);
+      const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
+      const th = replica.rawAll("thread").find((x) => x.id === BRANCHED);
+      if (!r || !n || !th) throw new Error("fixtures missing");
+      reply = r.id;
+      thread = th.id;
+      replica.write([
+        { ...r, u: null },
+        { ...n, u: null },
+        { ...th, u: null },
+        {
+          kind: "comment",
+          id: OWN_COMMENT,
+          th: BRANCHED,
+          s: n.s,
+          node: n.id,
+          parent: null,
+          u: null,
+          t: "A comment left by a deleted account",
+          edited: false,
+          del: false,
+          mod: null,
+          createdAt: "2026-11-16T09:40:00Z",
+        },
+      ] as StoredRecord[]);
+    };
+    await renderApp("/");
+    await waitUntil(t, () => side(BRANCHED) !== null && side(SEED_POST) !== null, "the rows");
+    // the thread's avatar names the deleted account and shows no initials
+    const card = document.getElementById(`card-${thread}`) as HTMLElement;
+    const av = card.querySelector<HTMLElement>(".ttav");
+    t.regex(av?.getAttribute("title") ?? "", /^Deleted account · /);
+    t.is(av?.querySelector("[data-deleted-account]")?.textContent, "");
+    // the reply's row and card
+    const row = side(SEED_POST).querySelector<HTMLElement>(`[data-row="${reply}"]`);
+    t.regex(row?.textContent ?? "", /^Deleted account: /);
+    fireEvent.click(row as HTMLElement);
+    await waitUntil(
+      t,
+      () => side(SEED_POST).querySelector(".preview .who b") !== null,
+      "the reply's card",
+    );
+    t.is(side(SEED_POST).querySelector(".preview .who b")?.textContent, "Deleted account");
+    // the branch's card and the comment under it
+    fireEvent.click(within(side(BRANCHED)).getByRole("treeitem", { name: /how does the darknet/ }));
+    const comment = (
+      await within(side(BRANCHED)).findByText("A comment left by a deleted account")
+    ).closest(".brr") as HTMLElement;
+    t.is(comment.querySelector(".who b")?.textContent, "Deleted account");
+    const branch = comment.closest(".preview") as HTMLElement;
+    t.is(branch.querySelector(":scope > .who b")?.textContent, "Deleted account");
+    t.false((document.body.textContent ?? "").includes("@null"));
   },
 );
 

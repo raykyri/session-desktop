@@ -18,7 +18,7 @@ import { useFeedViewer } from "../feed/FeedContext.js";
 import { ConfirmDelete } from "../feed/FeedDialog.js";
 import { ModerationNote, rowText } from "../feed/Moderated.js";
 import { MoreMenu } from "../feed/MoreMenu.js";
-import { plainReply, relTime } from "../feed/format.js";
+import { authorName, plainReply, relTime } from "../feed/format.js";
 import { NotSentLine } from "../shell/NotSent.js";
 
 import { ReplyText } from "./ReplyText.js";
@@ -62,17 +62,17 @@ export function ReplyTree({
   const open = useThreadUiStore((state) => state.open);
   const close = useThreadUiStore((state) => state.close);
   const writes = useWrites();
-  const author = thread.u ?? "";
+  const author = thread.u;
   const rows = replyRows(replies, ui.collapsed);
   // Only a writer has composers (a sign-out leaves none behind).
   const composer = writer && ui.composer?.kind === "reply" ? ui.composer : null;
 
-  const replyBox = (parent: string | null, to: string) =>
+  const replyBox = (parent: string | null, to: string | null) =>
     composer && composer.parent === parent ? (
       <InlineComposer
         key={`r:${parent ?? "top"}`}
         draftKey={composerKey(thread.id, { kind: "reply", parent })}
-        placeholder={`Reply to @${to}`}
+        placeholder={to === null ? "Reply" : `Reply to @${to}`}
         submitLabel="Reply"
         onSubmit={async (text, draft) => {
           const top =
@@ -106,10 +106,10 @@ export function ReplyTree({
       ...(parent ? { expanded: !ui.collapsed.includes(reply.id) } : {}),
       content: (
         <span className="gq gq-av">
-          <span className="rav" title={reply.u ?? ""}>
-            <Avatar handle={reply.u ?? "?"} size="xs" />
+          <span className="rav" title={authorName(reply.u)}>
+            <Avatar handle={reply.u} size="xs" />
           </span>
-          <span className="sr-only">{reply.u}: </span>
+          <span className="sr-only">{authorName(reply.u)}: </span>
           <span className="gt">{rowText(reply, plainReply(reply.t))}</span>
           {hidden ? (
             <span className="rhid" aria-hidden="true">
@@ -159,7 +159,7 @@ export function ReplyTree({
               ? close(thread.id)
               : open(thread.id, { kind: "reply", parent: selectedRow.reply.id })
           }
-          composer={replyBox(selectedRow.reply.id, selectedRow.reply.u ?? "")}
+          composer={replyBox(selectedRow.reply.id, selectedRow.reply.u)}
         />
       ) : null}
       <div className="rfoot">
@@ -209,8 +209,8 @@ function ReplyCard({
   return (
     <div className={cn("preview", fade && "fadein")}>
       <div className="who">
-        <Avatar handle={reply.u ?? "?"} size="xs" />
-        <b>{reply.u ?? ""}</b>
+        <Avatar handle={reply.u} size="xs" />
+        <b>{authorName(reply.u)}</b>
         <time dateTime={reply.createdAt}>{relTime(reply.createdAt, now)}</time>
         {mine && active ? (
           <span className="ml-auto inline-flex self-center">

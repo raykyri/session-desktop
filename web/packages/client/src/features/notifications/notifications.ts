@@ -8,7 +8,7 @@
 import { spaceKey, threadKey, type NotifRec } from "@session/mutators";
 
 import { NotLoaded, UNKNOWN, known, type ReplicaSource } from "../../replica/source.js";
-import { clip } from "../feed/format.js";
+import { DELETED_ACCOUNT, clip } from "../feed/format.js";
 
 export type NotifKind = NotifRec["type"];
 
@@ -37,9 +37,6 @@ export interface NotifRow {
   what: "ask" | "post";
   /** The owner's reason for a removal. */
   reason: string | null;
-  /** What an `invite_used` record says of the code that was used, as the
-   * record holds it; null when it holds nothing. */
-  code: string | null;
   /** The channel's name; null for an invite. */
   channel: string | null;
   target: NotifTarget | null;
@@ -101,9 +98,6 @@ export function notificationsOf(source: ReplicaSource): NotifRow[] {
           : "post",
       what: thread?.k === "post" ? "post" : "ask",
       reason: n.type === "removed" ? n.note : null,
-      // an `invite_used` record's `note` holds the whole code, which the
-      // row does not show (M6 review C14)
-      code: null,
       channel: space?.name ?? null,
       target,
     };
@@ -127,15 +121,15 @@ export function unloadedThreads(source: ReplicaSource): { thread: string; space:
     .map((n) => ({ thread: n.th as string, space: n.sp as string }));
 }
 
-/** A row's text in parts: who (bold), what they did, the quoted title or
- * reason, and the code of an invite. */
+/** A row's text in parts: who (bold), what they did, and the quoted title
+ * or reason. An `invite_used` row names no code: the record holds none
+ * (`04` I1). */
 export interface NotifParts {
   who: string;
   text: string;
   quote: string | null;
   /** The quote is the removal's reason, not a title. */
   reason: boolean;
-  code: string | null;
 }
 
 /** The quoted title: the thread's, or what stands for it. */
@@ -144,14 +138,10 @@ export function titleOf(row: Pick<NotifRow, "title">): string {
 }
 
 export function notifParts(row: NotifRow): NotifParts {
-  const who = `@${row.actor ?? "someone"}${row.others ? " and others" : ""}`;
-  const on = (text: string) => ({
-    who,
-    text: `${text} `,
-    quote: titleOf(row),
-    reason: false,
-    code: null,
-  });
+  // an actor whose account was deleted is null (`04` P2)
+  const actor = row.actor === null ? DELETED_ACCOUNT : `@${row.actor}`;
+  const who = `${actor}${row.others ? " and others" : ""}`;
+  const on = (text: string) => ({ who, text: `${text} `, quote: titleOf(row), reason: false });
   switch (row.type) {
     case "mention":
       return on(` mentioned you in a ${row.where} on`);
@@ -167,23 +157,16 @@ export function notifParts(row: NotifRow): NotifParts {
         text: ` removed your ${row.what}${row.reason ? ": " : ""}`,
         quote: row.reason,
         reason: true,
-        code: null,
       };
     case "invite_used":
-      return {
-        who,
-        text: ` joined Session with your invite${row.code ? " " : ""}`,
-        quote: null,
-        reason: false,
-        code: row.code,
-      };
+      return { who, text: " joined Session with your invite", quote: null, reason: false };
   }
 }
 
 /** A row's whole text, as it reads. */
 export function notifText(row: NotifRow): string {
   const p = notifParts(row);
-  return `${p.who}${p.text}${p.quote === null ? "" : `“${p.quote}”`}${p.code ?? ""}`;
+  return `${p.who}${p.text}${p.quote === null ? "" : `“${p.quote}”`}`;
 }
 
 /** The summary line under the heading (W2.6). */

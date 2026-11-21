@@ -251,10 +251,14 @@ replica's, clipped at 64 characters, in quotes (`titleOf`):
   "@x removed your ask"). The mock also prints the title; the client cannot,
   because the removal erases the text and the notification carries none
   (01 C16, 04 O2);
-- `invite_used`: "@x joined Session with your invite SESS-XXXX-XX".
+- `invite_used`: "@x joined Session with your invite". The mock also
+  prints the code; the record stores none (04 I1).
 
-Coalesced `reply`, `branch` and `comment` records (01 C16) read "@x and N
-others …" (a plan addition; the mock has no coalescing). Opening a row
+A thread the replica has no text for is quoted as “a deleted thread”, and
+one it has not loaded as “a thread”. An actor whose account was deleted
+reads "Deleted account". Coalesced `reply`, `branch` and `comment` records
+(01 C16) read "@x and others …" (a plan addition; the mock has no
+coalescing): `n` counts writes, not people. Opening a row
 (`openNotif`) writes `notifications.markRead` and goes to the thread's address
 (§2.1, `/c/$name?t=&sel=`): a reply mention or reply selects that reply in
 the reply tree, a branch selects the new node, a comment or a comment mention

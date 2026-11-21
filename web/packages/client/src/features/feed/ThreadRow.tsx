@@ -37,7 +37,7 @@ import { FrozenChannel, useFeedViewer, useRunChoice } from "./FeedContext.js";
 import { ConfirmDelete } from "./FeedDialog.js";
 import { ModerationNote, rowText } from "./Moderated.js";
 import { MoreMenu, type MoreAction } from "./MoreMenu.js";
-import { clip, footerMeta, noun, relTime, showsSaveCount } from "./format.js";
+import { authorName, clip, footerMeta, noun, relTime, showsSaveCount } from "./format.js";
 import { RemovedIcon, ReplyArrowIcon, SaveIcon } from "./icons.js";
 
 /** A thread's row. Memoised: a row re-renders when its own records change
@@ -433,10 +433,13 @@ function ThreadCard({
           {deleted ? "[deleted]" : rowText(thread, thread.q)}
         </h3>
         {!ask ? <span className="ttm">#{space?.name ?? ""}</span> : null}
-        <span className="ttav" title={`${thread.u ?? ""} · ${relTime(thread.createdAt, now)}`}>
-          <Avatar handle={thread.u ?? "?"} size="sm" />
+        <span
+          className="ttav"
+          title={`${authorName(thread.u)} · ${relTime(thread.createdAt, now)}`}
+        >
+          <Avatar handle={thread.u} size="sm" />
           <span className="sr-only">
-            {thread.u ?? ""}, {relTime(thread.createdAt, now)}
+            {authorName(thread.u)}, {relTime(thread.createdAt, now)}
           </span>
         </span>
         <MoreMenu actions={actions} />

@@ -1535,8 +1535,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-C28 (C4) a missing title is not quoted",
     file: "../client/src/features/notifications/notifications.ts",
-    from: "    quote: titleOf(row),",
-    to: "    quote: row.title ?? null,",
+    from: "quote: titleOf(row), reason: false });",
+    to: "quote: row.title ?? null, reason: false });",
     packageOnly: true,
     files: ["test/membership.screens.test.tsx"],
   },
@@ -1597,10 +1597,13 @@ const MUTATIONS: Mutation[] = [
     files: ["test/membership.screens.test.tsx"],
   },
   {
-    name: "M6-C36 (C14) an invite_used row shows the code",
-    file: "../client/src/features/notifications/notifications.ts",
-    from: "      code: null,\n      channel: space?.name ?? null,",
-    to: '      code: n.type === "invite_used" ? n.note : null,\n      channel: space?.name ?? null,',
+    // C14's code went with the server's change (an `invite_used` record
+    // holds no code, `04` I1): M6-C36 is the deleted accounts that change
+    // brought (`u: null`)
+    name: "M6-C36 (u: null) a deleted account's content names nobody",
+    file: "../client/src/features/feed/format.ts",
+    from: "export const authorName = (u: string | null): string => u ?? DELETED_ACCOUNT;",
+    to: 'export const authorName = (u: string | null): string => u ?? "";',
     packageOnly: true,
     files: ["test/membership.screens.test.tsx"],
   },
@@ -1675,6 +1678,22 @@ const MUTATIONS: Mutation[] = [
     to: "    if ((false as boolean) && space === undefined && lookUp) {",
     packageOnly: true,
     files: ["test/replica.sync.test.ts"],
+  },
+  {
+    name: "M6-C46 (u: null) a deleted actor's notification names @someone",
+    file: "../client/src/features/notifications/notifications.ts",
+    from: "  const actor = row.actor === null ? DELETED_ACCOUNT : `@${row.actor}`;",
+    to: '  const actor = row.actor === null ? "@someone" : `@${row.actor}`;',
+    packageOnly: true,
+    files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C47 (Z1 messages) a write a limit left unsent hides the server's message",
+    file: "../client/src/features/shell/NotSent.tsx",
+    from: "  return error?.message ? error.message : null;",
+    to: "  return (false as boolean) && error?.message ? error.message : null;",
+    packageOnly: true,
+    files: ["test/outbox.screens.test.tsx"],
   },
 ];
 
