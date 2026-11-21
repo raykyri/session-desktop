@@ -2,6 +2,7 @@
 // `usage.get` and `usage.listRuns` over the ledger, with a run's question
 // read through the asker's current scope.
 
+import { usage as usageRepo } from "@session/db";
 import test from "ava";
 
 import type { Payer } from "../src/runs/ledger.js";
@@ -249,4 +250,15 @@ test("K3: at the reset boundary the week's usage and its runs start again", asyn
   // a call of the new week counts in it
   call(ledger, { runId: "friday", userId: user.id, payer: "included", at: reset, input: 700 });
   t.like(await caller.usage.get(), { used: 700 });
+});
+
+test("K3, K5: a member's allowance override is what usage.listRuns' share is of", async (t) => {
+  const ledger = new MemoryLedger();
+  const harness = createHarness(t, { deps: { ledger, now: () => NOW } });
+  const user = harness.addUser("overridden");
+  usageRepo.setWeeklyAllowance(harness.db, user.id, 1_500);
+  call(ledger, { runId: "r1", userId: user.id, payer: "included", at: NOW - HOUR, input: 600 });
+  const caller = harness.caller(user);
+  t.like(await caller.usage.get(), { allowance: 1_500, used: 600 });
+  t.like((await caller.usage.listRuns()).runs[0], { runId: "r1", share: 600 / 1_500 });
 });

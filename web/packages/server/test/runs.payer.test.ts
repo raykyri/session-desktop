@@ -353,6 +353,49 @@ test("a look-up stops at 2 searches and 4 steps", async (t) => {
   t.is(harness.ledger.rows({ runId: request.runId }).length, 4, "4 steps, 4 provider calls");
 });
 
+test("K2: a new thread's run that moved to the member's key bills its title and summary to included tokens", async (t) => {
+  const harness = createLoopHarness(t, { allowances: keyBilling });
+  const user = harness.addUser("titled-crosser");
+  const request = harness.runRequest(user.id, "fixture:success-with-tools", {
+    model: "claude-fable",
+    finalSteps: { title: true, summary: true },
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.true(
+    rows.some((row) => row.kind === "research" && row.payer === "key:anthropic"),
+    "the run moved to the key",
+  );
+  t.deepEqual(
+    rows.filter((row) => row.kind !== "research").map((row) => [row.kind, row.payer]),
+    [
+      ["title", "included"],
+      ["summary", "included"],
+    ],
+  );
+  t.is(harness.store.finishes(request.runId)[0]?.summary.bill, "included+key:anthropic");
+});
+
+test("E5: a run claimed on the member's key that finds no key at its start fails key_unset without a call", async (t) => {
+  const harness = createLoopHarness(t, {
+    allowances: { ...keyBilling, anthropicKey: () => null },
+  });
+  const user = harness.addUser("unset");
+  const request = harness.runRequest(user.id, "fixture:success", {
+    model: "claude-fable",
+    payer: "key:anthropic",
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "failed");
+  t.deepEqual(harness.store.finishes(request.runId)[0]?.summary.fail, {
+    why: "key",
+    detail: "key_unset",
+  });
+  t.deepEqual(harness.ledger.rows({ runId: request.runId }), [], "no provider call");
+  t.deepEqual(harness.streamed, []);
+});
+
 test("K2, K9: past the allowance plus overdraft a key-paid run makes no context summary call: a cached summary is used, else the context goes unsummarized", async (t) => {
   const harness = createLoopHarness(t, {
     allowances: keyBilling,

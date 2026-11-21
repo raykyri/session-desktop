@@ -277,6 +277,65 @@ test("a key the provider rejects is refused and not saved", async (t) => {
   savedNothing(t, harness);
 });
 
+test("K4: a rejected save leaves the key saved before it as it was", async (t) => {
+  let answer = 200;
+  const harness = createHarness(t, {
+    fetch: providerStub(() => Promise.resolve(new Response("{}", { status: answer }))).fetch,
+  });
+  const caller = harness.caller(harness.addUser("kept"));
+  await caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
+  const before = await caller.apiKeys.list();
+  t.like(before[0], { provider: "anthropic", status: "valid" });
+  answer = 401;
+  await t.throwsAsync(
+    caller.apiKeys.set({
+      provider: "anthropic",
+      raw: "sk-ant-api03-another-key-the-provider-rejects",
+    }),
+    { code: "BAD_REQUEST" },
+  );
+  t.deepEqual(await caller.apiKeys.list(), before);
+});
+
+test("K4: no log line names a stored key's sealed value: a key that does not open, a key a run rejected", async (t) => {
+  const harness = createHarness(t, { fetch: accepts().fetch });
+  const box = createSecretBox(harness.config.secretKey);
+  const allowances = storedAllowances({
+    db: harness.db,
+    box,
+    logger: harness.logger,
+    config: harness.config,
+  });
+  // a key sealed under another secret: reading it logs that it does not open
+  const rotated = harness.addUser("rotated-log");
+  const foreign = createSecretBox(Buffer.alloc(32, 9)).seal(
+    ANTHROPIC_KEY,
+    keyContext(rotated.id, "anthropic"),
+  );
+  keyRepo.save(harness.db, {
+    userId: rotated.id,
+    provider: "anthropic",
+    sealed: foreign,
+    last4: "a1f9",
+  });
+  t.is(allowances.anthropicKey(rotated.id), null);
+  // a key a run rejected
+  const rejected = harness.addUser("rejected-log");
+  await harness.caller(rejected).apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
+  const sealed = keyRepo.find(harness.db, rejected.id, "anthropic")?.sealed ?? "";
+  allowances.keyRejected?.(rejected.id, "anthropic", sealed);
+  t.is(keyRepo.find(harness.db, rejected.id, "anthropic")?.status, "invalid");
+
+  const lines = harness.logs.join("\n");
+  t.true(lines.includes("a stored api key does not open with the secret key"));
+  t.true(lines.includes("api key rejected during a run"));
+  for (const value of [foreign, sealed]) {
+    t.true(value.length > 20);
+    t.false(lines.includes(value), "the sealed value is not logged");
+  }
+  t.false(lines.includes(ANTHROPIC_KEY));
+});
+
 test("an unreachable provider refuses the save: a network error, a 5xx, a 429", async (t) => {
   const failing = [
     providerStub(() => Promise.reject(new TypeError("fetch failed"))),
@@ -415,6 +474,7 @@ test("a key a run finds rejected becomes invalid, and billing returns to pause",
   allowances.keyRejected?.(user.id, "anthropic", sealed ?? "");
   t.is(keyRepo.find(harness.db, user.id, "anthropic")?.status, "invalid");
   t.is(allowances.anthropicKey(user.id), null, "an invalid key pays for nothing");
+  t.is(allowances.validKey(user.id, "anthropic"), null, "nor is it a payer key");
   t.is(billing.get(harness.db, user.id), "pause");
   t.like((await caller.apiKeys.list())[0], { provider: "anthropic", status: "invalid" });
   await t.throwsAsync(caller.usage.setBilling({ mode: "key" }), { code: "PRECONDITION_FAILED" });
