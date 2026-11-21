@@ -1772,10 +1772,11 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* 8 px between the prefix and the text (the mockup has 2 px; review). */
 .pform .hwrap input {
   border: 0;
   box-shadow: none;
-  padding-left: 2px;
+  padding-left: 8px;
 }
 
 .pform .hwrap input:focus {
