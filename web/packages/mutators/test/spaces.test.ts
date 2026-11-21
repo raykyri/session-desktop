@@ -54,6 +54,16 @@ test("a private space admits through a link, once, until it expires", (t) => {
   t.is(e?.message, "This invite link has expired or was already used.");
 });
 
+test("a link stops admitting at its expiry time exactly", (t) => {
+  const { w, closed } = cast(t);
+  const r = ok(t, w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 1 })) as {
+    code: string;
+  };
+  w.advance(DAY);
+  refused(t, w.apply("eve", "spaces.join", { space: closed, invite: r.code }), "FORBIDDEN");
+  t.is(w.get(`member:${closed}:eve`), undefined);
+});
+
 test("a banned person cannot join, with or without a link", (t) => {
   const { w, open, closed } = cast(t);
   ok(t, w.apply("olga", "members.ban", { space: open, user: "eve" }));

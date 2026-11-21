@@ -2,14 +2,31 @@
 // by the owner only. Revoke and its Undo (restore).
 
 import { refuse } from "./errors.js";
+import type { InviteRec } from "./records.js";
 import { M, readable, ulidS, within } from "./rules.js";
 import { addDays, isoToMs } from "./time.js";
-import { define, UnknownRead } from "./tx.js";
+import { define, UnknownRead, type Tx } from "./tx.js";
 
 const linkOf = (id: string) => `invite:${id}`;
 
 /** Open invite links a channel may have at once (`04` Z1). */
 export const OPEN_LINKS_MAX = 50;
+
+/** Whether a link admits someone at `tx.now`: neither used, revoked nor
+ * expired. A link expires at `expiresAt`. */
+const isOpen = (tx: Tx, l: InviteRec) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now);
+
+/** At most 50 open links per channel (`04` Z1), for a write that makes one
+ * open: a new link, or a revoked one restored. Recorded: the state decides
+ * it, not a rate. */
+function roomForLink(tx: Tx, sp: string): void {
+  const open = tx.list("invite", { sp }).filter((l) => isOpen(tx, l)).length;
+  if (open >= OPEN_LINKS_MAX)
+    throw refuse(
+      "PRECONDITION_FAILED",
+      `This channel has ${OPEN_LINKS_MAX} open invite links. Revoke one to make another.`,
+    );
+}
 
 export const INVITES = {
   // `days` is bounded in the schema: an input that passes the schema never
@@ -36,16 +53,7 @@ export const INVITES = {
       }
     },
     run: (tx, i, v) => {
-      // at most 50 open links per channel (`04` Z1): open is neither used,
-      // revoked nor expired. Recorded: the state decides it, not a rate.
-      const open = tx
-        .list("invite", { sp: i.space })
-        .filter((l) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now)).length;
-      if (open >= OPEN_LINKS_MAX)
-        throw refuse(
-          "PRECONDITION_FAILED",
-          `This channel has ${OPEN_LINKS_MAX} open invite links. Revoke one to make another.`,
-        );
+      roomForLink(tx, i.space);
       const code = v["code"];
       // a client predicting this mutation has no code: the value is unknown
       if (code === undefined) throw new UnknownRead("the invite code");
@@ -78,7 +86,8 @@ export const INVITES = {
     },
   }),
 
-  // Undo of a revoke: the link works again until it expires.
+  // Undo of a revoke: the link works again until it expires. A link that
+  // would be open again counts against the channel's 50 (`04` Z1).
   "invites.restore": define({
     input: M["invites.restore"].input.extend({ id: ulidS }).strict(),
     who: "owner",
@@ -87,7 +96,10 @@ export const INVITES = {
     run: (tx, i) => {
       const l = readable(tx, linkOf(i.id), "invite");
       if (l.dead === "Used") throw refuse("PRECONDITION_FAILED", "This link was already used.");
-      if (l.dead === "Revoked") tx.put({ ...l, dead: null });
+      if (l.dead !== "Revoked") return null;
+      const restored = { ...l, dead: null };
+      if (isOpen(tx, restored)) roomForLink(tx, l.sp);
+      tx.put(restored);
       return null;
     },
   }),

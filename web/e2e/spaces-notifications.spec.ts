@@ -104,7 +104,7 @@ test("every kind reaches the viewer; the dot stays; a row opens its thread; Mark
   );
   await expect(rowOf(page, "removed")).toContainText(`${ann} removed your post: “${REASON}”`);
   await expect(rowOf(page, "removed")).not.toContainText("A post that is removed");
-  // the row shows no code of the invite (M6 review C14)
+  // the notification stores no code (`04` I1)
   await expect(rowOf(page, "invite_used")).toContainText(
     `@${w.newcomer} joined Session with your invite`,
   );

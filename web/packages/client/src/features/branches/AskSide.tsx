@@ -232,8 +232,8 @@ function rowContent(node: NodeRec, parentAuthor: string) {
         <span className="gq">{rowText(node, node.q)}</span>
       )}
       {node.u !== parentAuthor ? (
-        <span className="rav rav-r" title={node.u}>
-          <Avatar handle={node.u} size="xs" />
+        <span className="rav rav-r" title={node.u ?? ""}>
+          <Avatar handle={node.u ?? "?"} size="xs" />
           <span className="sr-only">, by {node.u}</span>
         </span>
       ) : null}

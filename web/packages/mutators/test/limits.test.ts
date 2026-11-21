@@ -70,3 +70,39 @@ test("a channel has at most 50 open invite links; used, revoked and expired ones
   w.ms += DAY + 1000;
   ok(t, w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 7 }));
 });
+
+test("a link no longer counts as open at its expiry time exactly", (t) => {
+  const { w, closed } = cast(t);
+  // the cast's link to #lab was used; these 50 are open
+  for (let k = 0; k < OPEN_LINKS_MAX; k++)
+    ok(t, w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 1 }));
+  refused(
+    t,
+    w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 7 }),
+    "PRECONDITION_FAILED",
+  );
+  w.ms += DAY;
+  ok(t, w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 7 }));
+});
+
+test("restoring a revoked link counts against the 50 open links", (t) => {
+  const { w, closed } = cast(t);
+  const ids: string[] = [];
+  for (let k = 0; k < OPEN_LINKS_MAX; k++) {
+    const id = w.id();
+    ids.push(id);
+    ok(t, w.apply("olga", "invites.create", { id, space: closed, days: k === 0 ? 1 : 7 }));
+  }
+  ok(t, w.apply("olga", "invites.revoke", { id: ids[1] }));
+  ok(t, w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 7 }));
+  const e = refused(t, w.apply("olga", "invites.restore", { id: ids[1] }), "PRECONDITION_FAILED");
+  t.is(e?.message, "This channel has 50 open invite links. Revoke one to make another.");
+  t.like(w.get(`invite:${ids[1] ?? ""}`), { dead: "Revoked" });
+  // a revoked link that has expired would not be open: restoring it is
+  // allowed at 50
+  ok(t, w.apply("olga", "invites.revoke", { id: ids[0] }));
+  ok(t, w.apply("olga", "invites.create", { id: w.id(), space: closed, days: 7 }));
+  w.ms += DAY;
+  ok(t, w.apply("olga", "invites.restore", { id: ids[0] }));
+  t.like(w.get(`invite:${ids[0] ?? ""}`), { dead: null });
+});

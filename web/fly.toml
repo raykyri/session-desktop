@@ -5,11 +5,15 @@
 # The positional `web` is the build context; without it flyctl hands Docker
 # the repository root, where `package.json` is the desktop's.
 #
-# Enables token quota limits to control LLM provider costs.
-# `SESSION_ENFORCE_LIMITS = "1"` makes the daily token and run limits refuse
-# rather than merely record. Turning it off is a deliberate act, which is why
-# it is here rather than defaulted in the code. Session is invite-only in
-# every deployment: an account without an invite waits (plan `04` I4).
+# Token spending is bounded by the weekly allowance, always enforced: each
+# member has SESSION_WEEKLY_TOKENS included tokens a week (reset Fridays 00:00
+# UTC), a run that crosses it continues on the member's Anthropic key or on
+# an overdraft of SESSION_OVERDRAFT_TOKENS per member per week, and no run
+# spends more than SESSION_RUN_MAX_TOKENS (`docs/06-auth-and-users.md` §8,
+# plan `03` K3, K9, L1). SESSION_ENFORCE_LIMITS and the SESSION_DAILY_*
+# settings are only reported by the legacy usage summary; nothing enforces
+# them. Session is invite-only in every deployment: an account without an
+# invite waits (plan `04` I4).
 #
 # Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
 # SESSION_X_CLIENT_ID, SESSION_X_CLIENT_SECRET,
@@ -44,6 +48,9 @@ kill_timeout = "30s"
   SESSION_ENFORCE_LIMITS = "1"
   SESSION_DAILY_TOKENS = "1000000"
   SESSION_DAILY_RUNS = "10"
+  SESSION_WEEKLY_TOKENS = "2000000"
+  SESSION_OVERDRAFT_TOKENS = "200000"
+  SESSION_RUN_MAX_TOKENS = "400000"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"

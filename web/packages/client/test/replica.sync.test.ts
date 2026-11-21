@@ -677,3 +677,34 @@ test("L1: a 21st queued ask is refused queue_full; its text returns to the compo
   t.deepEqual(restored, [draft]);
   t.is(r.get(threadKey(id)), UNKNOWN);
 });
+
+test("K8: an ask the server applies after the allowance ran out is refused out_of_tokens; its prediction rolls back and its text returns to the composer", async (t) => {
+  const { f, lounge } = world();
+  const { r, restored } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  // the replica saw tokens left; the server applies the write after another
+  // tab spent the rest of the week's
+  f.server.setPayerFacts(() => ({ includedLeft: false, billing: "pause", keys: [] }));
+  const id = f.id();
+  const draft = { key: "new-thread", text: "Sent with tokens left" };
+  const outcome = await r.mutate(
+    "threads.create",
+    {
+      id,
+      space: lounge,
+      kind: "ask",
+      q: "Sent with tokens left",
+      model: "claude-fable",
+      effort: "medium",
+    },
+    { draft },
+  );
+  t.like(outcome, {
+    ok: false,
+    error: { code: "PRECONDITION_FAILED", reason: "out_of_tokens" },
+  });
+  t.deepEqual(restored, [draft]);
+  t.is(r.get(threadKey(id)), UNKNOWN);
+  t.false(feedOf(r, { kind: "home" }).includes(id));
+});

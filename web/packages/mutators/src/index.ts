@@ -16,11 +16,17 @@ export {
   QUEUED_RUNS_MAX,
   addMember,
   checkModel,
+  countSaves,
+  firstPayer,
+  NO_KEY_TEXT,
+  payerFor,
+  type PayerDecision,
   needSpace,
   notFound,
   readable,
   refreshSpace,
   stale,
+  turnsOf,
   ulidS,
 } from "./rules.js";
 export * from "./staged.js";

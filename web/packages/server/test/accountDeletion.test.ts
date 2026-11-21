@@ -1,7 +1,10 @@
 // The account-deletion operator job in the spaces (plan `04` B6, P2): the
 // channels of a deleted owner are frozen and stay readable; a deleted
-// member's items go through the author's delete path and their user log and
-// memberships go; the handle stays taken and the identity is gone.
+// member's items go through the author's delete path, the shells kept for
+// other people's content lose the handle, and their user log and
+// memberships go; after it no stored record and no served snapshot names
+// the person but the moderation log; the handle stays taken and the
+// identity is gone.
 
 import { accounts, users } from "@session/db";
 import { frozenMessage, type StoredRecord } from "@session/mutators";
@@ -10,7 +13,7 @@ import test from "ava";
 
 import type { Harness } from "./helpers.js";
 import { createHarness } from "./helpers.js";
-import { Person, channels, newId } from "./syncHttp.js";
+import { MODEL, Person, channels, newId } from "./syncHttp.js";
 
 /** The job, through the server's own sync core, as the outer transaction so
  * the commit wakes the streams. */
@@ -30,6 +33,47 @@ async function signedOutSnapshot(h: Harness, log: string): Promise<Snapshot> {
 }
 
 const keys = (s: Snapshot) => s.records.map((r) => r.key);
+
+/** What the run loop writes when `node`'s run ends: a turn and the answer
+ * with `md`. */
+function answer(h: Harness, th: string, node: string, md: string): string {
+  const done = h.sync.server.serverApply({ me: "" }, (tx) => {
+    const run = tx.list("run", { th }).find((r) => r.node === node);
+    if (!run) throw new Error(`no run of ${node}`);
+    tx.put({ ...run, status: "complete", step: 3, finishedAt: tx.now });
+    tx.put({
+      kind: "turn",
+      run: run.id,
+      attempt: run.attempt,
+      n: 0,
+      th,
+      s: run.s,
+      role: "assistant",
+      blocks: [{ type: "text", text: md }],
+      createdAt: tx.now,
+    });
+    tx.put({
+      kind: "answer",
+      node,
+      th,
+      s: run.s,
+      u: run.u,
+      md,
+      pages: [],
+      tok: 10,
+      run: run.id,
+      attempt: run.attempt,
+      mod: null,
+    });
+    if (node === "r") {
+      const p = tx.byKey(`thread:${th}`);
+      if (p?.kind === "thread") tx.put({ ...p, running: false, sum: `Summary of ${md}` });
+    }
+    return run.id;
+  });
+  if (!done.ok) throw new Error(done.error.code);
+  return done.result;
+}
 
 function stored(h: Harness): StoredRecord[] {
   return h.sync.store.sqlite
@@ -70,6 +114,8 @@ test("B6: the frozen channels of a deleted owner", async (t) => {
   });
   // a person still deletes their own thread
   t.like(await mona.write("threads.delete", { id: post }), { ok: true });
+  // olga's invite links went with her
+  t.false(stored(h).some((r) => r.kind === "invite" && r.by === "olga"));
 
   // readable as before: the open channel by anyone, the private one by its members
   const lounge = await signedOutSnapshot(h, `space:${open}`);
@@ -120,13 +166,15 @@ test("P2: a deleted member's items go by the author's delete path; their user lo
       (r.kind === "notif" && r.to === "mel") ||
       (r.kind === "invite" && r.by === "mel"),
   );
-  // only mel's two threads name mel, deleted and with no text: the one with
-  // mona's reply is a shell, the other is gone
+  // nothing names mel; his two threads are deleted, with no text and no
+  // author: the one with mona's reply is a shell, the other is gone
+  t.deepEqual(mine, []);
+  const threads = left.filter((r) => r.kind === "thread" && (r.id === replied || r.id === lone));
   t.deepEqual(
-    mine.map((r) => (r.kind === "thread" ? [r.id, r.q, r.del, r.gone] : r.kind)).sort(),
+    threads.map((r) => (r.kind === "thread" ? [r.id, r.q, r.del, r.gone, r.u] : r.kind)).sort(),
     [
-      [replied, "", true, false],
-      [lone, "", true, true],
+      [replied, "", true, false, null],
+      [lone, "", true, true, null],
     ].sort(),
   );
   t.false(left.some((r) => r.kind === "reply" && r.id === reply));
@@ -137,4 +185,186 @@ test("P2: a deleted member's items go by the author's delete path; their user lo
   // moderation log entries stay until retention
   t.true(left.some((r) => r.kind === "modlog" && r.author === "mona"));
   t.false(users.handleAvailable(h.db, "mel"));
+});
+
+test("P2: no stored record and no served snapshot names the deleted person but the moderation log", async (t) => {
+  const h = createHarness(t);
+  const { olga, mona, mel, open, closed } = await channels(h);
+  // mel branches in mona's ask, and mona comments on that branch
+  const monasAsk = newId();
+  await mona.ok("threads.create", {
+    id: monasAsk,
+    space: open,
+    kind: "ask",
+    q: "Mona asks",
+    ...MODEL,
+  });
+  answer(h, monasAsk, "r", "Mona's answer");
+  const branch = newId();
+  await mel.ok("research.forkNode", {
+    id: branch,
+    thread: monasAsk,
+    parent: "r",
+    kind: "ask",
+    q: "MEL-BRANCH-Q",
+    ...MODEL,
+  });
+  const branchRun = answer(h, monasAsk, branch, "MEL-BRANCH-ANSWER");
+  await mona.ok("comments.create", {
+    id: newId(),
+    thread: monasAsk,
+    node: branch,
+    t: "Mona's comment",
+  });
+  // mel's own ask, with mona's branch under it
+  const melsAsk = newId();
+  await mel.ok("threads.create", {
+    id: melsAsk,
+    space: open,
+    kind: "ask",
+    q: "MEL-ASK-Q",
+    ...MODEL,
+  });
+  const rootRun = answer(h, melsAsk, "r", "MEL-ROOT-ANSWER");
+  const monasBranch = newId();
+  await mona.ok("research.forkNode", {
+    id: monasBranch,
+    thread: melsAsk,
+    parent: "r",
+    kind: "ask",
+    q: "Mona's branch",
+    ...MODEL,
+  });
+  // mel's reply to mona's post, with mona's reply under it; mel's lone post
+  const post = newId();
+  await mona.ok("threads.create", { id: post, space: open, kind: "post", q: "Mona's post" });
+  const melsReply = newId();
+  await mel.ok("research.createPostFollowUp", { id: melsReply, thread: post, t: "MEL-REPLY" });
+  await mona.ok("research.createPostFollowUp", {
+    id: newId(),
+    thread: post,
+    parent: melsReply,
+    t: "Mona's reply",
+  });
+  const lone = newId();
+  await mel.ok("threads.create", { id: lone, space: closed, kind: "post", q: "MEL-LONE" });
+  // mel's comment on mona's ask, his save and layout; olga bans him after
+  await mel.ok("comments.create", { id: newId(), thread: monasAsk, node: "r", t: "MEL-COMMENT" });
+  await mel.ok("saved.set", { kind: "thread", id: post, on: true });
+  await mel.ok("prefs.set", { layout: "wide" });
+  await olga.ok("members.ban", { space: closed, user: "mel" });
+  // mona was notified of mel's branch, reply and comment
+  t.true(stored(h).some((r) => r.kind === "notif" && r.to === "mona" && r.actor === "mel"));
+
+  deleteAccount(h, mel.user.id);
+
+  const left = stored(h);
+  const texts = [
+    "MEL-BRANCH-Q",
+    "MEL-BRANCH-ANSWER",
+    "MEL-ASK-Q",
+    "MEL-ROOT-ANSWER",
+    "MEL-REPLY",
+    "MEL-LONE",
+    "MEL-COMMENT",
+  ];
+  for (const r of left) {
+    const body = JSON.stringify(r);
+    for (const text of texts) t.false(body.includes(text), `${r.kind} holds ${text}`);
+    // the moderation log keeps the ban's entry until retention
+    if (r.kind !== "modlog") t.false(body.includes('"mel"'), `${r.kind} names mel: ${body}`);
+  }
+  t.true(left.some((r) => r.kind === "modlog" && r.author === "mel"));
+  // the shells stay for mona's content, without mel
+  t.like(
+    left.find((r) => r.kind === "node" && r.id === branch),
+    { del: true, u: null, q: "" },
+  );
+  t.like(
+    left.find((r) => r.kind === "thread" && r.id === melsAsk),
+    {
+      del: true,
+      gone: false,
+      u: null,
+      q: "",
+      sum: null,
+    },
+  );
+  t.like(
+    left.find((r) => r.kind === "reply" && r.id === melsReply),
+    { del: true, u: null, t: "" },
+  );
+  t.like(
+    left.find((r) => r.kind === "thread" && r.id === lone),
+    { gone: true, u: null },
+  );
+  t.false(left.some((r) => r.kind === "run" && (r.id === branchRun || r.id === rootRun)));
+  t.false(left.some((r) => r.kind === "turn" && (r.run === branchRun || r.run === rootRun)));
+  t.false(left.some((r) => r.kind === "ban" && r.u === "mel"));
+  t.true(left.some((r) => r.kind === "node" && r.id === monasBranch && r.u === "mona"));
+
+  // served: signed out, and to olga and mona, every log they read
+  const served = [
+    await signedOutSnapshot(h, `space:${open}`),
+    await signedOutSnapshot(h, `space:${closed}`),
+    await olga.snapshot(`space:${open}`),
+    await olga.snapshot(`space:${closed}`),
+    await olga.snapshot("user:olga"),
+    await mona.snapshot(`space:${open}`),
+    await mona.snapshot("user:mona"),
+  ];
+  for (const snap of served)
+    for (const { record } of snap.records) {
+      if (!record || record.kind === "modlog") continue;
+      const body = JSON.stringify(record);
+      t.false(body.includes('"mel"'), body);
+      for (const text of texts) t.false(body.includes(text), body);
+    }
+});
+
+test("P2: the job deletes comments, branches and bans of the person, and a thread whose replies were all theirs goes", async (t) => {
+  const h = createHarness(t);
+  const { olga, mona, mel, open } = await channels(h);
+  const ask = newId();
+  await mona.ok("threads.create", { id: ask, space: open, kind: "ask", q: "Mona asks", ...MODEL });
+  answer(h, ask, "r", "Mona's answer");
+  const comment = newId();
+  await mel.ok("comments.create", { id: comment, thread: ask, node: "r", t: "A comment" });
+  const node = newId();
+  await mel.ok("research.forkNode", {
+    id: node,
+    thread: ask,
+    parent: "r",
+    kind: "ask",
+    q: "And?",
+    ...MODEL,
+  });
+  const post = newId();
+  await mel.ok("threads.create", { id: post, space: open, kind: "post", q: "Mel's post" });
+  for (let k = 0; k < 2; k++)
+    await mel.ok("research.createPostFollowUp", { id: newId(), thread: post, t: `Mel ${k}` });
+  await olga.ok("members.ban", { space: open, user: "mel" });
+
+  deleteAccount(h, mel.user.id);
+  const left = stored(h);
+  t.false(left.some((r) => r.kind === "comment" && r.u === "mel"));
+  t.false(left.some((r) => r.kind === "comment" && r.id === comment));
+  t.false(left.some((r) => r.kind === "node" && r.u === "mel"));
+  t.false(left.some((r) => r.kind === "node" && r.id === node));
+  t.false(left.some((r) => r.kind === "ban" && r.u === "mel"));
+  t.like(
+    left.find((r) => r.kind === "thread" && r.id === post),
+    { del: true, gone: true },
+  );
+});
+
+test("the job over its own connection refuses while the server runs", async (t) => {
+  const h = createHarness(t);
+  const { mel } = await channels(h);
+  // boot starts the maintenance, which writes the heartbeat
+  h.sync.startMaintenance();
+  t.throws(() => accounts.deleteAccount(h.db, mel.user.id), {
+    message: /needs the server stopped/,
+  });
+  t.not(users.findByHandle(h.db, "mel")?.provider ?? null, null);
 });

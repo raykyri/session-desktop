@@ -8,12 +8,12 @@
 // the outbox toast (`NotSent.tsx`) instead of its confirmation.
 
 import { QUEUED_RUNS_MAX, type ApiError } from "@session/mutators";
-import type { Spaces } from "@session/shared";
+import { OUT_OF_TOKENS_TEXT, type Spaces } from "@session/shared";
 import { useMemo } from "react";
 
 import { showToast } from "../features/shell/Toast.js";
 
-import { useReplica } from "./ReplicaProvider.js";
+import { useOutOfTokens, useReplica } from "./ReplicaProvider.js";
 import type { Effort } from "./online.js";
 import { queuedRunsOf } from "./queries.js";
 import type { DraftRef, ReplicaSource, WriteOutcome } from "./source.js";
@@ -78,6 +78,15 @@ export interface Writes {
     effort: Effort;
     draft?: DraftRef | undefined;
   }): Promise<string | null>;
+  /** Run again (03 E4): a new attempt of a stopped run, on the model and
+   * effort the person picks. */
+  retry(input: {
+    thread: string;
+    node: string;
+    attempt: number;
+    model: string;
+    effort: Effort;
+  }): Promise<boolean>;
   deleteNode(thread: string, node: string): Promise<boolean>;
   promote(thread: string, node: string): Promise<string | null>;
   reply(thread: string, t: string, parent?: string, draft?: DraftRef): Promise<string | null>;
@@ -101,27 +110,40 @@ export interface Writes {
   setLayout(layout: "centred" | "wide"): Promise<boolean>;
 }
 
-export function makeWrites(source: ReplicaSource): Writes {
+export interface WritesOptions {
+  /** Whether a run on a model has no payer now (03 K8): such a write is
+   * refused before it is sent. Absent: none is. */
+  outOfTokens?: (model: string) => boolean;
+}
+
+export function makeWrites(source: ReplicaSource, options: WritesOptions = {}): Writes {
   const id = () => newUlid(source.now());
   const send = async (name: SpaceMutatorName, input: unknown, draft?: DraftRef) => {
     const outcome = await source.mutate(name, input, draft ? { draft } : {});
     if (!outcome.ok) showToast(refusalText(outcome.error), { alert: true });
     return outcome;
   };
-  /** A write that starts a run: refused here, before it is sent, while 20
-   * of the viewer's runs wait to start (02 §5, 03 L1); the server's
-   * `queue_full` refusal gets the same toast. The caller keeps the text. */
+  /** Whether a write that starts a run on `model` may be sent: not while
+   * nothing can pay for it (02 §5, 03 K8: the out-of-tokens toast), nor
+   * while 20 of the viewer's runs wait to start (03 L1: the queue toast). A
+   * refusal the server answers anyway shows its message. The caller keeps
+   * the text. */
+  const mayStart = (model: unknown): boolean => {
+    if (typeof model === "string" && options.outOfTokens?.(model)) {
+      showToast(OUT_OF_TOKENS_TEXT, { alert: true });
+      return false;
+    }
+    if (queuedRunsOf(source) >= QUEUED_RUNS_MAX) {
+      showToast(QUEUE_FULL_MESSAGE, { alert: true });
+      return false;
+    }
+    return true;
+  };
   const run = async (
     name: SpaceMutatorName,
     input: { id: string } & Record<string, unknown>,
     draft?: DraftRef,
-  ) => {
-    if (queuedRunsOf(source) >= QUEUED_RUNS_MAX) {
-      showToast(QUEUE_FULL_MESSAGE, { alert: true });
-      return null;
-    }
-    return made(name, input, false, draft);
-  };
+  ) => (mayStart(input["model"]) ? made(name, input, false, draft) : null);
   const made = async (
     name: SpaceMutatorName,
     input: { id: string } & Record<string, unknown>,
@@ -178,6 +200,17 @@ export function makeWrites(source: ReplicaSource): Writes {
         },
         draft,
       ),
+    retry: async ({ thread, node, attempt, model, effort }) => {
+      if (!mayStart(model)) return false;
+      const outcome = await send("research.retryNode", {
+        thread,
+        node,
+        base: { attempt },
+        model,
+        effort,
+      });
+      return outcome.ok;
+    },
     deleteNode: (thread, node) => done("followups.delete", { thread, node }),
     promote: async (thread, node) => {
       const made_ = await made("threads.create", { id: id(), from: { th: thread, node } });
@@ -219,5 +252,6 @@ export function makeWrites(source: ReplicaSource): Writes {
 
 export function useWrites(): Writes {
   const source = useReplica();
-  return useMemo(() => makeWrites(source), [source]);
+  const outOfTokens = useOutOfTokens();
+  return useMemo(() => makeWrites(source, { outOfTokens }), [source, outOfTokens]);
 }

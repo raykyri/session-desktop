@@ -651,8 +651,13 @@ channel's saves; `R4a`.
 - **Account deletion** stays an operator job (`06` §7). With spaces it
   deletes the person's threads, follow-ups, replies and comments through the
   author's delete path (a thread with others' replies stays an empty shell,
-  `AGENTS.md`), their user log, member records, sessions and open account
-  invites. It deletes the provider identity (sets `provider` and
+  `AGENTS.md`, with `u: null`, and a kept branch without its answer, run
+  and turns), their user log, member records, sessions and open account
+  invites; other people's records that name them as a notification's
+  `actor` or a link's `usedBy` get null there. It runs only while the
+  server is stopped (a heartbeat row in `server_meta`,
+  `runbooks/delete-account.md`) and in one transaction: any refusal aborts
+  it. It deletes the provider identity (sets `provider` and
   `provider_user_id` to null) and clears `users.email`; it keeps the
   `users` row with the handle, so the handle stays reserved, `modlog`
   entries naming them until retention, and their node in the invite tree
@@ -720,7 +725,13 @@ key counts waiting accounts in `signup_attempts` (§3.1).
 | `admin.models.*` | 60/min per site admin | procedure |
 
 The report row and the device pairing row are removed (no reporting;
-web-only build). Buckets are in memory in the single process (`06` §8). The invite tree lets
+web-only build). Buckets are in memory in the single process (`06` §8).
+The three `pre` rows count in sliding logs of the person's uses in the
+window, so "5/day" is at most 5 in any 24 hours, and a use is taken only
+when the write commits a change: a refused write, recorded or not, and one
+that changes nothing (a join of a channel already joined) take none. Their
+refusal names the limit and when a use is free again ("You can create 5
+channels a day. Try again in 22 hours."). The invite tree lets
 a site admin find who invited an abusive account. Site admins have no
 `/admin` control over accounts: deleting an account (which revokes its open
 links and sessions) or a channel is an operator job (§8, §4.5); there is no

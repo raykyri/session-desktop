@@ -26,6 +26,9 @@ export interface SignInOptions {
   /** The server to sign in on: the suite's (default) or the side server
    * (`constants.ts` `SIDE_ORIGIN`). */
   origin?: string;
+  /** Included tokens recorded as already spent this week (the billing spec,
+   * `03` K9). */
+  spent?: number;
 }
 
 export interface SignedInUser {
@@ -58,7 +61,11 @@ export function e2eLogin(base: string): string {
 export async function signIn(page: Page, options: SignInOptions): Promise<SignedInUser> {
   const response = await page.request.post(`${options.origin ?? APP_ORIGIN}/auth/test-login`, {
     headers: MUTATION_HEADERS,
-    data: { login: e2eLogin(options.login), isAdmin: options.isAdmin === true },
+    data: {
+      login: e2eLogin(options.login),
+      isAdmin: options.isAdmin === true,
+      ...(options.spent === undefined ? {} : { spent: options.spent }),
+    },
   });
   expect(response.ok(), `test-login failed: ${response.status()}`).toBe(true);
   return (await response.json()) as SignedInUser;

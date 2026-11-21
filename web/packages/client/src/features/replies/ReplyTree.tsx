@@ -106,8 +106,8 @@ export function ReplyTree({
       ...(parent ? { expanded: !ui.collapsed.includes(reply.id) } : {}),
       content: (
         <span className="gq gq-av">
-          <span className="rav" title={reply.u}>
-            <Avatar handle={reply.u} size="xs" />
+          <span className="rav" title={reply.u ?? ""}>
+            <Avatar handle={reply.u ?? "?"} size="xs" />
           </span>
           <span className="sr-only">{reply.u}: </span>
           <span className="gt">{rowText(reply, plainReply(reply.t))}</span>
@@ -159,7 +159,7 @@ export function ReplyTree({
               ? close(thread.id)
               : open(thread.id, { kind: "reply", parent: selectedRow.reply.id })
           }
-          composer={replyBox(selectedRow.reply.id, selectedRow.reply.u)}
+          composer={replyBox(selectedRow.reply.id, selectedRow.reply.u ?? "")}
         />
       ) : null}
       <div className="rfoot">
@@ -209,8 +209,8 @@ function ReplyCard({
   return (
     <div className={cn("preview", fade && "fadein")}>
       <div className="who">
-        <Avatar handle={reply.u} size="xs" />
-        <b>{reply.u}</b>
+        <Avatar handle={reply.u ?? "?"} size="xs" />
+        <b>{reply.u ?? ""}</b>
         <time dateTime={reply.createdAt}>{relTime(reply.createdAt, now)}</time>
         {mine && active ? (
           <span className="ml-auto inline-flex self-center">

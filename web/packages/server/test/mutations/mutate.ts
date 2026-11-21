@@ -24,12 +24,18 @@
 // store, the ledger, boot); M3-17 on each undo one fix of the M3 and M4
 // reviews, so that each fix's test is shown to fail without it. M5a-1 on
 // cover the owned runs of M5a (the run store and its fence, the loop's
-// limits and endings, the ledger, `/live`, and the mutators' run rules).
+// limits and endings, the ledger, `/live`, and the mutators' run rules);
+// M5b-1 on cover the payer, the allowance and the overdraft of M5b (the
+// pre stage's payer, the claim's re-check, the reset, the crossing).
+// M6-8 on undo one fix of the M6 server review each (the deletion job, the
+// privacy check, the pre-stage limits, the invite notification), named by
+// the review's row, so that each fix's test is shown to fail without it.
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
 // the test files whose source holds their titles, in the server's suite or
-// in the package named by `in` (the restore check, the store's own faults).
+// in the package named by `in` (the restore check, the store's own faults,
+// the mutators' turn erasure, rev rules and other rules of their own).
 // A type error or a failure of any other test does not count. `--check`
 // refuses a mutation without expected tests, and a title no test file holds.
 
@@ -306,7 +312,7 @@ const MUTATIONS: Mutation[] = [
     // run queue (`01` U6), so the same fault is that record not written
     name: "N16 an ask's queued run is not written",
     file: "../mutators/src/threads.ts",
-    from: '      queueRun(tx, run, tx.byKey(threadKey(i.id)) as ThreadRec, "r", i.model, i.effort);',
+    from: '      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));',
     to: "      void queueRun;",
   },
   {
@@ -1408,6 +1414,367 @@ const MUTATIONS: Mutation[] = [
     file: "src/trpc/routers/spaces.ts",
     from: "      return { space: view(store, r, reader) === null ? null : r.s };",
     to: "      return { space: view(store, r, reader) === undefined ? null : r.s };",
+  }, // ---- M5b: the payer, the allowance and the overdraft (03 K3, K8-K10) ----
+  {
+    name: "M5b-1 pre decides no payer: every run is paid by its model's first payer",
+    file: "../mutators/src/rules.ts",
+    from: "  return { pay: prePayer(ctx, model) };",
+    to: "  return { pay: firstPayer(model) };",
+  },
+  {
+    name: "M5b-2 the out-of-tokens refusal carries no reason",
+    file: "../mutators/src/rules.ts",
+    from: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT, undefined, "out_of_tokens")',
+    to: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT)',
+  },
+  {
+    name: "M5b-3 the Anthropic key pays whatever the billing setting",
+    file: "../mutators/src/rules.ts",
+    from: '    facts.billing === "key" &&\n',
+    to: "    facts.billing !== undefined &&\n",
+  },
+  {
+    name: "M5b-4 the sync server reads no payer facts",
+    file: "../sync/src/server/server.ts",
+    from: "      if (payer) pre.payerFacts = () => payer(u);",
+    to: "      void payer;",
+  },
+  {
+    name: "M5b-5 a member at the allowance still has included tokens left",
+    file: "src/runs/allowance.ts",
+    from: "    includedLeft: includedUsed(deps, userId) < deps.allowances.weekly(userId),",
+    to: "    includedLeft: includedUsed(deps, userId) <= deps.allowances.weekly(userId),",
+  },
+  {
+    name: "M5b-6 the payer facts ignore the billing setting",
+    file: "src/runs/allowance.ts",
+    from: "    billing: deps.allowances.billing(userId),",
+    to: '    billing: "pause",',
+  },
+  {
+    name: "M5b-7 the claim keeps the payer it was queued with",
+    file: "src/runs/dispatcher.ts",
+    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry) : run.payer;",
+    to: "      const payer = run.payer as ReturnType<typeof payerAtStart>;\n      void budgetDeps;",
+  },
+  {
+    name: "M5b-8 the claim does not write the payer to the run record",
+    file: "src/runs/recordStore.ts",
+    from: "        pay: queued.payer,\n",
+    to: "",
+  },
+  {
+    name: "M5b-9 the week starts on Thursday",
+    file: "src/runs/ledger.ts",
+    from: "  const sinceFriday = (day.getUTCDay() + 2) % 7;",
+    to: "  const sinceFriday = (day.getUTCDay() + 3) % 7;",
+  },
+  {
+    name: "M5b-10 an included run never moves to the member's key",
+    file: "src/runs/allowance.ts",
+    from: "    if (!this.allowanceSpent()) {\n      return null;\n    }\n    return anthropicKeyFor",
+    to: "    if (this.allowanceSpent() || !this.allowanceSpent()) {\n      return null;\n    }\n    return anthropicKeyFor",
+  },
+  {
+    name: "M5b-11 the overdraft limit is ten times SESSION_OVERDRAFT_TOKENS",
+    file: "src/runs/allowance.ts",
+    from: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens;",
+    to: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens * 10;",
+  },
+  // ---- M6: membership, moderation and the deletion job (the M6 review fixes) ----
+  {
+    name: "M6-8 D1: the job leaves the person's comments",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '  ["comment", "comments.delete", (r) => ({ id: (r as { id: string }).id })],\n',
+    to: "",
+  },
+  {
+    name: "M6-9 D3: the job leaves the person's branches",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '  [\n    "node",\n    "followups.delete",\n    (r) => ({ thread: (r as { th: string }).th, node: (r as { id: string }).id }),\n  ],\n',
+    to: "",
+  },
+  {
+    name: "M6-10 D8: the job leaves the bans of the person",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: 'const OWN_KINDS: readonly Kind[] = ["save", "notif", "prefs", "ban", "invite"];',
+    to: 'const OWN_KINDS: readonly Kind[] = ["save", "notif", "prefs", "invite"];',
+  },
+  {
+    name: "M6-11 D9: the job leaves the links the person made",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: 'const OWN_KINDS: readonly Kind[] = ["save", "notif", "prefs", "ban", "invite"];',
+    to: 'const OWN_KINDS: readonly Kind[] = ["save", "notif", "prefs", "ban"];',
+  },
+  {
+    name: "M6-12 D13: the job deletes threads before what is under them",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: "const DELETES: readonly [Kind, string, (r: StoredRecord) => unknown][] = [\n",
+    to: 'const DELETES: readonly [Kind, string, (r: StoredRecord) => unknown][] = [\n  ["thread", "threads.delete", (r) => ({ id: (r as { id: string }).id })],\n',
+    also: [
+      {
+        from: '  ["thread", "threads.delete", (r) => ({ id: (r as { id: string }).id })],\n];',
+        to: "];",
+      },
+    ],
+  },
+  {
+    name: "M6-13 D19: the job swallows a fault of a delete",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: "      def.run(tx, i, {});\n      out.items += 1;",
+    to: "      try {\n        def.run(tx, i, {});\n      } catch (e) {\n        if ((e as { code?: unknown }).code !== undefined) throw e;\n      }\n      out.items += 1;",
+  },
+  {
+    name: "M6-14 E4c: 60 joins an hour is 61",
+    file: "src/config.ts",
+    from: "  SESSION_LIMIT_JOINS_PER_HOUR: positiveInteger(60, 1),",
+    to: "  SESSION_LIMIT_JOINS_PER_HOUR: positiveInteger(61, 1),",
+  },
+  {
+    name: "M6-15 E5a: channels made are counted per hour",
+    file: "src/middleware/rateLimit.ts",
+    from: "    spacesCreated: { limit: limits.spacesPerDay, windowMs: DAY },",
+    to: "    spacesCreated: { limit: limits.spacesPerDay, windowMs: HOUR },",
+  },
+  {
+    name: "M6-16 E5b: joins are counted per minute",
+    file: "src/middleware/rateLimit.ts",
+    from: "    joins: { limit: limits.joinsPerHour, windowMs: HOUR },",
+    to: "    joins: { limit: limits.joinsPerHour, windowMs: MINUTE },",
+  },
+  {
+    name: "M6-17 E5c: channel invite links are counted per hour",
+    file: "src/middleware/rateLimit.ts",
+    from: "    channelInvites: { limit: limits.channelInvitesPerDay, windowMs: DAY },",
+    to: "    channelInvites: { limit: limits.channelInvitesPerDay, windowMs: HOUR },",
+  },
+  {
+    name: "M6-18 F1: a link at its expiry time counts as open",
+    file: "../mutators/src/invites.ts",
+    from: "const isOpen = (tx: Tx, l: InviteRec) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now);",
+    to: "const isOpen = (tx: Tx, l: InviteRec) => l.dead === null && isoToMs(l.expiresAt) >= isoToMs(tx.now);",
+  },
+  {
+    name: "M6-19 F7: a link admits at its expiry time",
+    file: "../mutators/src/spaces.ts",
+    from: "        isoToMs(link.expiresAt) > isoToMs(tx.now);",
+    to: "        isoToMs(link.expiresAt) >= isoToMs(tx.now);",
+  },
+  {
+    name: "M6-20 B8: the ban message names no channel",
+    file: "../mutators/src/tx.ts",
+    from: '      throw refuse("FORBIDDEN", `You are banned from #${s.name}.`);',
+    to: '      throw refuse("FORBIDDEN", "You are banned from this space.");',
+  },
+  {
+    name: "M6-21 G4: a failed invite_used write is ignored",
+    file: "src/trpc/routers/membership.ts",
+    from: "  if (!written.ok) throw new Error(`invite_used notification: ${written.error.code}`);",
+    to: "  if (false) throw new Error(`invite_used notification: ${String(written.ok)}`);",
+  },
+  {
+    name: "M6-22 G7: afterRedeem's error is swallowed",
+    file: "../db/src/repos/accountInvites.ts",
+    from: "      input.afterRedeem?.(tx, {\n",
+    to: "      try {\n      input.afterRedeem?.(tx, {\n",
+    also: [
+      {
+        from: "        inviteId: invite.id,\n      });\n      return {",
+        to: "        inviteId: invite.id,\n      });\n      } catch {\n        // swallowed\n      }\n      return {",
+      },
+    ],
+  },
+  {
+    name: "M6-23 H1: the check scans the file, not the WAL",
+    file: "src/ops/privacyCheck.ts",
+    from: "  const inWal = fileHolds(wal, input.text);",
+    to: "  const inWal = fileHolds(input.path, input.text) && false;",
+  },
+  {
+    name: "M6-24 H7: the pulls start at the removal",
+    file: "src/ops/privacyCheck.ts",
+    from: "        v: removedAt - 1,",
+    to: "        v: removedAt,",
+  },
+  {
+    name: "M6-25 H8: the snapshot text check always passes",
+    file: "src/ops/privacyCheck.ts",
+    from: "      check(`${who}'s snapshot holds no removed text`, !holdsText(snap, input.text));",
+    to: "      check(`${who}'s snapshot holds no removed text`, true);",
+  },
+  {
+    name: "M6-26 H9: the pull text check always passes",
+    file: "src/ops/privacyCheck.ts",
+    from: "        !resync && !holdsText(pulled, input.text),",
+    to: "        true,",
+  },
+  {
+    name: "M6-27 H10: the author's notification check always passes",
+    file: "src/ops/privacyCheck.ts",
+    from: '      check("the author has the removed notification", notes.length === 1);',
+    to: '      check("the author has the removed notification", true);',
+  },
+  {
+    name: "M6-28 H11: the notification text check always passes",
+    file: "src/ops/privacyCheck.ts",
+    from: '      check("the removed notification holds no removed text", !holdsText(notes, input.text));',
+    to: '      check("the removed notification holds no removed text", true);',
+  },
+  {
+    name: "M6-29 H12: the names-no-author check always passes",
+    file: "src/ops/privacyCheck.ts",
+    from: '          served === undefined || (served.kind === "thread" && served.u === null),',
+    to: "          true,",
+  },
+  {
+    name: "M6-30 H13: the script exits 0 always",
+    file: "scripts/privacy-check.ts",
+    from: "process.exitCode = report.ok ? 0 : 1;",
+    to: "process.exitCode = 0;",
+  },
+  {
+    name: "M6-31 H17: a hidden thread counts as removed",
+    file: "src/ops/privacyCheck.ts",
+    from: '    check("the thread is removed", thread.mod === "removed", `mod: ${String(thread.mod)}`);',
+    to: '    check("the thread is removed", thread.mod !== null, `mod: ${String(thread.mod)}`);',
+  },
+  {
+    name: "M6-32 I5: admin.models.setDefault is not limited",
+    file: "src/trpc/routers/models.ts",
+    from: "  setDefault: adminModelsProcedure",
+    to: "  setDefault: adminProcedure",
+  },
+  {
+    name: "M6-33 K2: a read notification is coalesced into",
+    file: "../mutators/src/notify.ts",
+    from: '      const old = tx.list("notif", { th }).find((n) => n.to === to && n.type === type && !n.read);',
+    to: '      const old = tx.list("notif", { th }).find((n) => n.to === to && n.type === type);',
+  },
+  {
+    name: "M6-34 K5: a coalesced notification keeps its first time",
+    file: "../mutators/src/notify.ts",
+    from: "        tx.put({ ...old, item, actor, n: old.n + 1, createdAt: tx.now });",
+    to: "        tx.put({ ...old, item, actor, n: old.n + 1 });",
+  },
+  {
+    name: "M6-35 Z1: pre-stage refusals are not counted for /metrics",
+    file: "src/middleware/rateLimit.ts",
+    from: "    this.#refusals.set(scope, (this.#refusals.get(scope) ?? 0) + 1);\n    const oldest",
+    to: "    const oldest",
+  },
+  {
+    name: "M6-36 S1a: a kept thread keeps its author",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '      if (r.kind === "thread") tx.put({ ...r, u: null, sum: null });',
+    to: '      if (r.kind === "thread") tx.put({ ...r, sum: null });',
+  },
+  {
+    name: "M6-37 S1b: kept branches and threads keep their answers",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '  for (const a of tx.list("answer", { u })) tx.del(keyOf(a));\n',
+    to: "",
+  },
+  {
+    name: "M6-38 S1c: a kept reply or comment keeps its author",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: "      else tx.put({ ...r, u: null });",
+    to: "      else tx.put({ ...r });",
+  },
+  {
+    name: "M6-39 S1d: notifications keep the person as their actor",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '    if (r?.kind === "notif" && r.actor === u) tx.put({ ...r, actor: null });',
+    to: '    if (r?.kind === "notif" && r.actor === u) continue;',
+  },
+  {
+    name: "M6-40 S1e: a link keeps the person as its user",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '    else if (r?.kind === "invite" && r.usedBy === u) tx.put({ ...r, usedBy: null });',
+    to: '    else if (r?.kind === "invite" && r.usedBy === u) continue;',
+  },
+  {
+    name: "M6-41 S2: the files are searched for the raw text only",
+    file: "src/ops/privacyCheck.ts",
+    from: "  const escaped = JSON.stringify(text).slice(1, -1);",
+    to: "  const escaped = text;",
+  },
+  {
+    name: "M6-42 S3a: the job runs while a server's heartbeat is fresh",
+    file: "../db/src/repos/accounts.ts",
+    from: '  if (!options.server) assertServerStopped(db, now(), "The account-deletion job");\n',
+    to: "",
+  },
+  {
+    name: "M6-43 S3b: the server writes no heartbeat at boot",
+    file: "src/sync/service.ts",
+    from: "    beat();\n    this.#heartbeat",
+    to: "    this.#heartbeat",
+  },
+  {
+    name: "M6-44 S4: the job leaves the person's run checkpoints",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: "    tx.delete(runLive).where(inArray(runLive.runId, runs)).run();\n",
+    to: "",
+  },
+  {
+    name: "M6-45 S5: the job leaves the account's API keys",
+    file: "../db/src/repos/accounts.ts",
+    from: "      tx.delete(apiKeys).where(eq(apiKeys.userId, userId)).run();\n",
+    to: "",
+  },
+  {
+    name: "M6-46 S6: a write that changes nothing takes a pre-stage use",
+    file: "../sync/src/server/server.ts",
+    from: "      if (out.staged && this.commit(out.staged, now) !== null) used.push(...(out.uses ?? []));",
+    to: "      if (out.staged) {\n        this.commit(out.staged, now);\n        used.push(...(out.uses ?? []));\n      }",
+  },
+  {
+    name: "M6-47 S7: a restored link is not counted",
+    file: "../mutators/src/invites.ts",
+    from: "      if (isOpen(tx, restored)) roomForLink(tx, l.sp);\n",
+    to: "",
+  },
+  {
+    name: "M6-48 S8: a deleted save stays in its thread's count",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '      if (r.kind === "save") countSaves(tx, r.th, -1);\n',
+    to: "",
+  },
+  {
+    name: "M6-49 S9: the job skips the person's old shells",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '      if (!now || (now.kind === "thread" && now.gone)) continue;',
+    to: '      if (!now || ("del" in now && now.del) || (now.kind === "thread" && now.gone)) continue;',
+  },
+  {
+    name: "M6-50 S10: the job swallows a refusal of a delete",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: "      def.run(tx, i, {});\n      out.items += 1;",
+    to: "      try {\n        def.run(tx, i, {});\n      } catch (e) {\n        if ((e as { code?: unknown }).code === undefined) throw e;\n      }\n      out.items += 1;",
+  },
+  {
+    name: "M6-51 S11a: a resync passes the pull's check",
+    file: "src/ops/privacyCheck.ts",
+    from: "        !resync && !holdsText(pulled, input.text),",
+    to: "        !holdsText(pulled, input.text),",
+  },
+  {
+    name: "M6-52 S11b: Litestream's local state is not scanned",
+    file: "src/ops/privacyCheck.ts",
+    from: "  if (existsSync(shadow)) {",
+    to: "  if (false && existsSync(shadow)) {",
+  },
+  {
+    name: "M6-53 S12: a pre-stage refusal has the default message",
+    file: "src/middleware/rateLimit.ts",
+    from: "      return left.allowed ? true : preLimitMessage(limit, spec, left.retryAfter);",
+    to: '      return left.allowed ? true : "Too many requests from your account. Try again in a minute.";',
+  },
+  {
+    name: "M6-54 S1f: kept branches keep their runs and turns",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '  for (const r of tx.list("run", { u })) dropRuns(tx, r.th, [r]);\n',
+    to: "",
   },
 ];
 
@@ -1417,7 +1784,7 @@ const MUTATIONS: Mutation[] = [
  * `in`, in that package's own; a mutation is killed only when one of them
  * fails. A failure of another test does not count, and a mutation without
  * an entry is refused by `--check`. */
-const EXPECTED: Record<string, { in?: "db" | "sync"; tests: string[] }> = {
+const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[] }> = {
   X1: {
     tests: [
       "a ban stops every write in its space",
@@ -1625,6 +1992,214 @@ const EXPECTED: Record<string, { in?: "db" | "sync"; tests: string[] }> = {
   "M3-74": { tests: ["boot: the restore check, open usage rows"] },
   "M3-75": { tests: ["Y3: a re-attach returns the stored lastSeq"] },
   "M3-76": { tests: ["spaces.threadSpace answers a thread's channel"] },
+  "M5a-1": { tests: ["E4: Stop then Run again within one millisecond"] },
+  "M5a-2": { tests: ["E2: two dispatchers racing for one queued run"] },
+  "M5a-3": { tests: ["G8: an asker removed from a private channel while queued"] },
+  "M5a-4": { tests: ["delete (G6): deleting a running node someone commented under"] },
+  "M5a-5": { tests: ["a ban while the member's run streams"] },
+  "M5a-6": { tests: ["E2: an ask is claimed, commits a turn per step"] },
+  "M5a-7a": { tests: ["T2: a private channel's deltas reach its members only"] },
+  "M5a-7b": { tests: ["T2: a hidden ask's deltas reach its author"] },
+  "M5a-8": { tests: ["T2: a private channel's deltas reach its members only"] },
+  "M5a-9": { tests: ["a crash leaves the run running and its row open"] },
+  "M5a-10": { tests: ["cancel: Stop aborts the stream"] },
+  "M5a-11a": { tests: ["E1: a thread removed in the second step of its run"] },
+  "M5a-11b": { in: "mutators", tests: ["removing a thread or a node erases its turns"] },
+  "M5a-11c": { in: "mutators", tests: ["removing a thread or a node erases its turns"] },
+  "M5a-11d": { tests: ["a thread its author deletes while another member's branch runs"] },
+  "M5a-12a": { in: "mutators", tests: ["a turn is read like its ask"] },
+  "M5a-12b": { in: "mutators", tests: ["a turn is read like its ask"] },
+  "M5a-13": { tests: ["T2: a hidden ask's deltas reach its author"] },
+  "M5a-14": { tests: ["L1: the 21st queued ask is refused queue_full"] },
+  "M5a-15": { tests: ["L1: the 21st queued ask is refused queue_full"] },
+  "M5a-16a": { tests: ["boot resumes an interrupted attempt at most twice"] },
+  "M5a-16b": { tests: ["boot resumes an interrupted attempt at most twice"] },
+  "M5a-17": { tests: ["cancel: Stop aborts the stream"] },
+  "M5a-18": { tests: ["E2: an ask is claimed, commits a turn per step"] },
+  "M5a-19": { tests: ["E2: an ask is claimed, commits a turn per step"] },
+  "M5a-20": { tests: ["K2: cached input counts at the model's ratio; the ledger keeps"] },
+  "M5a-21a": { tests: ["L2: a look-up that keeps calling tools stops at 2 searches"] },
+  "M5a-21b": { tests: ["L2: a look-up that keeps calling tools stops at 2 searches"] },
+  "M5a-22": { tests: ["a crash leaves the run running and its row open"] },
+  "M5a-23": { tests: ["E2: an ask is claimed, commits a turn per step"] },
+  "M5a-24": { tests: ["T2: a private channel's deltas reach its members only"] },
+  "M5a-25a": { tests: ["a drain ends the attempt interrupted"] },
+  "M5a-25b": { tests: ["a drain ends the attempt interrupted"] },
+  "M5a-26": { tests: ["T2: an ask hidden while its run streams keeps its answer hidden"] },
+  "M5a-27": { tests: ["E4: a run's new attempt is not claimed while its older attempt"] },
+  "M5a-28": { tests: ["E2: queued runs are admitted in the order they were queued"] },
+  "M5a-29": { tests: ["T3: a committed step moves /live to the next turn"] },
+  "M5a-30": { tests: ["T3: /live answers from the stored checkpoint"] },
+  "M5a-31": { tests: ["T3: a claim of an attempt claimed before jumps its delta sequence"] },
+  "M5a-32a": { tests: ["thread.running follows the root's run"] },
+  "M5a-32b": { tests: ["thread.running follows the root's run"] },
+  "M5a-32c": { tests: ["thread.running follows the root's run"] },
+  "M5a-33": { tests: ["G7: the context of a Continue under a tool-using root"] },
+  "M5a-34": { tests: ["K1: the ledger checkpoints a call's output every 2 s"] },
+  "M5a-35a": { tests: ["L2: a look-up that keeps fetching stops at 2 fetches"] },
+  "M5a-35b": { tests: ["L2: a look-up that keeps fetching stops at 2 fetches"] },
+  "M5a-36": { tests: ["a summary snapshot holds no turn records"] },
+  "M5a-37": { tests: ["E1: the fence fails for a thread written removed, gone or deleted"] },
+  "M5a-38": { tests: ["T3: /live is a plain read, limited per reader"] },
+  "M5a-39": { tests: ["G7: an ask hidden from the asker gives no context"] },
+  "M5a-40": { tests: ["G7: an ask hidden from the asker gives no context"] },
+  "M5a-41": {
+    tests: [
+      "thread.running follows the root's run",
+      "a ban while the member's run is queued ends it failed access at its claim",
+    ],
+  },
+  "M5a-42": { tests: ["a thread its author deletes while another member's branch runs"] },
+  "M5a-43": { tests: ["a ban while the member's run streams"] },
+  "M5a-44": { tests: ["delete (G6) kept as a shell"] },
+  "M5a-45": { tests: ["429 after a billed step: the re-queue writes the run's tok"] },
+  "M5a-46": { tests: ["the claim refused and a boot interrupt write the run's tok"] },
+  "M5a-47": { tests: ["the claim refused and a boot interrupt write the run's tok"] },
+  "M5a-48": { tests: ["D4: the checkpoint of a run no process is streaming"] },
+  "M5a-49": { tests: ["D4: the checkpoint of a run no process is streaming"] },
+  "M5a-50": { tests: ["429 after a billed step: the re-queue writes the run's tok"] },
+  "M5a-51": { tests: ["D4: the checkpoint of a run no process is streaming"] },
+  "M5a-52": { tests: ["D4: a re-queued run that ends at the payer re-check"] },
+  "M5a-53": { tests: ["D4: boot deletes the checkpoints no run continues"] },
+  "M5a-54": { tests: ["a drain while a tool call runs commits the step"] },
+  "M5a-55a": { tests: ["a resume leaves out a tool call without its result"] },
+  "M5a-55b": { tests: ["a resume leaves out a tool call without its result"] },
+  "M5a-56": { tests: ["L2: a look-up re-queued after a 429 keeps what its earlier claim spent"] },
+  "M5a-57": { tests: ["L2: a look-up re-queued after a 429 keeps what its earlier claim spent"] },
+  "M5a-58": { tests: ["L1: the wall clock counts from the run's first claim"] },
+  "M5a-59": { tests: ["a crash between a resume's record write and its count"] },
+  "M5a-60": { tests: ["E2: queued runs are admitted in the order they were queued"] },
+  "M5a-61": { tests: ["E2: queued runs are admitted in the order they were queued"] },
+  "M5a-62": { tests: ["T3: a claim of an attempt claimed before jumps its delta sequence"] },
+  "M5a-63": { tests: ["T3: a claim of an attempt claimed before jumps its delta sequence"] },
+  "M5a-64": { tests: ["T3: /live is a plain read, limited per reader"] },
+  "M5a-65": { tests: ["T3: /live is a plain read, limited per reader"] },
+  "M5a-66": { tests: ["E1: a thread removed in the second step of its run"] },
+  "M5b-1": {
+    tests: [
+      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K8: once the allowance is spent, billing key and a valid Anthropic key pay",
+    ],
+  },
+  "M5b-2": {
+    tests: ["K8: an ask while the allowance is spent is refused out_of_tokens"],
+  },
+  "M5b-3": {
+    tests: ["K8: with billing pause a valid Anthropic key does not pay"],
+  },
+  "M5b-4": {
+    in: "sync",
+    tests: [
+      "K8: an ask queued with tokens left and applied after they ran out is refused",
+      "K8: an ask queued with tokens left and applied once the member's key pays",
+    ],
+  },
+  "M5b-5": {
+    tests: [
+      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K10: a run queued while tokens were left and claimed after they ran out ends tokens",
+    ],
+  },
+  "M5b-6": {
+    tests: [
+      "K8: once the allowance is spent, billing key and a valid Anthropic key pay",
+      "K10: the claim decides the payer again and writes it to the run record",
+    ],
+  },
+  "M5b-7": {
+    tests: [
+      "K10: a run queued while tokens were left and claimed after they ran out ends tokens",
+      "a queued run admitted after the allowance is spent ends tokens without a provider call",
+    ],
+  },
+  "M5b-8": {
+    tests: [
+      "K10: the claim decides the payer again and writes it to the run record",
+      "K3, K10: a run queued on the member's key before the reset is claimed on included tokens",
+    ],
+  },
+  "M5b-9": {
+    tests: [
+      "K3: at the reset boundary the week's usage and its runs start again",
+      "the week starts on Friday 00:00 UTC",
+    ],
+  },
+  "M5b-10": {
+    tests: ["an included run that crosses the allowance moves to the member's Anthropic key"],
+  },
+  "M5b-11": {
+    tests: ["two concurrent runs of one member never exceed allowance plus overdraft"],
+  },
+  "M6-8": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
+  "M6-9": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
+  "M6-10": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
+  "M6-11": { tests: ["B6: the frozen channels of a deleted owner"] },
+  "M6-12": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
+  "M6-13": {
+    in: "db",
+    tests: ["a delete that throws an error makes the job throw and change nothing"],
+  },
+  "M6-14": { tests: ["limit: spaces.join, 60 an hour per user (pre)"] },
+  "M6-15": { tests: ["limit: the pre-stage limits hold for their whole window"] },
+  "M6-16": { tests: ["limit: the pre-stage limits hold for their whole window"] },
+  "M6-17": { tests: ["limit: the pre-stage limits hold for their whole window"] },
+  "M6-18": {
+    in: "mutators",
+    tests: ["a link no longer counts as open at its expiry time exactly"],
+  },
+  "M6-19": { in: "mutators", tests: ["a link stops admitting at its expiry time exactly"] },
+  "M6-20": {
+    in: "mutators",
+    tests: ["a ban stops every write in its space, the author's own included"],
+  },
+  "M6-21": { tests: ["a notification that cannot be written rolls the redemption back"] },
+  "M6-22": { in: "db", tests: ["an afterRedeem that throws makes activate rethrow"] },
+  "M6-23": { tests: ["text left only in the WAL fails the WAL's check"] },
+  "M6-24": { tests: ["after a removal the check passes for the file, the WAL and every reader"] },
+  "M6-25": { tests: ["before the removal each reader's checks find the text"] },
+  "M6-26": { tests: ["before the removal each reader's checks find the text"] },
+  "M6-27": { tests: ["before the removal each reader's checks find the text"] },
+  "M6-28": { tests: ["a removal note that quotes the text fails the notification's check"] },
+  "M6-29": { tests: ["before the removal each reader's checks find the text"] },
+  "M6-30": { tests: ["the script exits 1 when a check fails"] },
+  "M6-31": { tests: ["a hidden thread is not removed"] },
+  "M6-32": { tests: ["limit: admin.models.*, 60 a minute per site admin"] },
+  "M6-33": {
+    in: "mutators",
+    tests: ["a reply after the recipient read the coalesced notification"],
+  },
+  "M6-34": {
+    in: "mutators",
+    tests: ["a coalesced notification carries the time of the latest write"],
+  },
+  "M6-35": { tests: ["the pre-stage and procedure refusals are counted per bucket"] },
+  "M6-36": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M6-37": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M6-38": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M6-39": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M6-40": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M6-41": { tests: ["text with quotes, a backslash and a line break is found"] },
+  "M6-42": { in: "db", tests: ["the job refuses while a server's heartbeat is fresh"] },
+  "M6-43": { tests: ["the job over its own connection refuses while the server runs"] },
+  "M6-44": { in: "db", tests: ["the job deletes the checkpoints and resume counts"] },
+  "M6-45": { in: "db", tests: ["the job deletes the account's keys"] },
+  "M6-46": {
+    tests: ["limit: a refused write and a write that changes nothing take no pre-stage use"],
+  },
+  "M6-47": { in: "mutators", tests: ["restoring a revoked link counts against the 50 open links"] },
+  "M6-48": { in: "db", tests: ["a deleted save is taken off its thread's count"] },
+  "M6-49": {
+    in: "db",
+    tests: ["a shell the person deleted earlier, with nothing left under it, goes"],
+  },
+  "M6-50": {
+    in: "db",
+    tests: ["a delete the mutator refuses makes the job throw and change nothing"],
+  },
+  "M6-51": { tests: ["a pull that answers resync fails its check"] },
+  "M6-52": { tests: ["text in Litestream's local state beside the database fails its check"] },
+  "M6-53": { tests: ["limit: the pre-stage limits hold for their whole window"] },
+  "M6-54": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
 };
 
 /** What one suite said about a mutation. */
@@ -1722,7 +2297,7 @@ function results(r: { code: number; out: string }): SuiteResult {
 let sequences = "20";
 
 /** The packages whose suites a mutation's expected tests are in. */
-const SUITE_DIRS = { server: ".", db: "../db", sync: "../sync" } as const;
+const SUITE_DIRS = { server: ".", db: "../db", sync: "../sync", mutators: "../mutators" } as const;
 
 /** The test files of a suite whose source holds one of `titles`; the server's
  * conformance wrappers stand for the replica-proto test file they import. */

@@ -73,6 +73,7 @@ import {
   type AnyMutator,
   type Audience,
   type LogId,
+  type PayerFacts,
   type PreCtx,
   type PreLimit,
   type RunRec,
@@ -188,6 +189,8 @@ interface Outcome {
   result: StoredAnswer;
   recorded: boolean;
   staged?: Map<string, StoredRecord | null>;
+  /** The `pre`-stage limits the applied write asked a use of. */
+  uses?: PreLimit[];
 }
 
 export interface SyncServerOptions {
@@ -220,8 +223,12 @@ export interface SyncServerOptions {
 
 /** The counter of the `pre`-stage limits (`SyncServer.setPreLimits`). */
 export interface PreLimits {
-  /** Whether `u` has a use of `limit` left; uses it when so. */
-  take(u: string, limit: PreLimit): boolean;
+  /** Whether `u` has a use of `limit` left: true, or the message of the
+   * refusal. Takes nothing. */
+  check(u: string, limit: PreLimit): true | string;
+  /** Takes one use of `limit`: called once the write that asked for it
+   * committed a change. */
+  take(u: string, limit: PreLimit): void;
 }
 
 /** The result of `serverApply`: the function's result and the version of
@@ -247,14 +254,28 @@ export class SyncServer implements ServerHalf {
   private lastAt: number;
   /** Counts the `pre`-stage limits of `04` Z1 (`setPreLimits`). */
   private preLimits: PreLimits | null = null;
+  /** Reads what a run's payer is decided from (`setPayerFacts`). */
+  private payerFacts: ((u: string) => PayerFacts) | null = null;
 
   /** Sets what counts the `pre`-stage limits (channels made, channel invite
-   * links made and joins, per person; `04` Z1): `take` answers whether the
-   * person has a use of the limit left, and uses it. Null (the default)
-   * applies none: the prototype's suite and the tests of other rules. The
-   * web server sets its in-memory buckets here at boot. */
+   * links made and joins, per person; `04` Z1): `check` answers whether the
+   * person has a use of the limit left, and `take` uses one once the write
+   * committed a change. A refused write (recorded or not), and one that
+   * changes nothing (a join of a channel already joined), take no use. Null
+   * (the default) applies none: the prototype's suite and the tests of other
+   * rules. The web server sets its in-memory logs here at boot. */
   setPreLimits(limits: PreLimits | null): void {
     this.preLimits = limits;
+  }
+
+  /** Sets what the `pre` stage of a write that queues a run reads to decide
+   * who pays for it (`03` K8): the person's included tokens left (the
+   * ledger, open rows counted), their billing setting and their valid keys.
+   * Null (the default) decides nothing: each run is paid by its model's
+   * first payer (the prototype's suite, and a server with no run loop). The
+   * web server's run runtime sets it at boot. */
+  setPayerFacts(facts: ((u: string) => PayerFacts) | null): void {
+    this.payerFacts = facts;
   }
 
   constructor(options: SyncServerOptions) {
@@ -456,7 +477,10 @@ export class SyncServer implements ServerHalf {
     const client = store.client(m.clientId);
     if (!client || client.u !== u || client.seen <= now - this.clientIdleTtl)
       return fail(refuse("WRONG_CLIENT"));
-    return store.transaction(() => this.applyIn(u, m, client, now));
+    const used: PreLimit[] = [];
+    const answer = store.transaction(() => this.applyIn(u, m, client, now, used));
+    for (const limit of used) this.preLimits?.take(u, limit);
+    return answer;
   }
 
   /** The envelope's answer, in the apply transaction. */
@@ -465,6 +489,9 @@ export class SyncServer implements ServerHalf {
     m: z.infer<typeof envelopeSchema>,
     client: ClientRow,
     now: number,
+    /** Filled with the `pre`-stage limits whose use the write takes: those
+     * of a write that committed a change. */
+    used: PreLimit[],
   ): StoredAnswer {
     const store = this.store;
     store.putClient({ ...client, seen: now });
@@ -526,7 +553,7 @@ export class SyncServer implements ServerHalf {
       // one transaction: the record changes and notifications, the stored
       // answer (under the mutation id and each id it replaces) and the
       // client's seq
-      if (out.staged) this.commit(out.staged, now);
+      if (out.staged && this.commit(out.staged, now) !== null) used.push(...(out.uses ?? []));
       store.putAnswer({
         u,
         mutationId: m.mutationId,
@@ -610,12 +637,20 @@ export class SyncServer implements ServerHalf {
           ).length,
       };
       const limits = this.preLimits;
-      if (limits) pre.allow = (limit) => limits.take(u, limit);
+      const uses: PreLimit[] = [];
+      if (limits)
+        pre.allow = (limit) => {
+          const left = limits.check(u, limit);
+          if (left === true) uses.push(limit);
+          return left;
+        };
+      const payer = this.payerFacts;
+      if (payer) pre.payerFacts = () => payer(u);
       const values = def.pre?.(pre, input) ?? {};
       const ran = def.run(tx, input, values);
       const told = def.notify?.(tx, input, ran, { isAccount: (h) => this.store.isAccount(h) });
       const result = told === undefined ? ran : told;
-      return { result: { ok: true, result }, recorded: true, staged: tx.staged };
+      return { result: { ok: true, result }, recorded: true, staged: tx.staged, uses };
     } catch (e) {
       if (e instanceof Refusal) return final(e);
       // not a refusal: a fault of the server, not of the input. Nothing is

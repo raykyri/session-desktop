@@ -1,6 +1,12 @@
 // In-memory token buckets for the abuse limits of plan `04` Z1 (single
 // process, `06` §8). A refusal answers `TOO_MANY_REQUESTS` (HTTP 429) and
 // records nothing.
+//
+// The per-day and per-hour limits of the mutators' `pre` stage (channels
+// made, channel invite links made, joins) are sliding logs instead: the
+// times of the person's uses in the last window, so "5 a day" is at most 5
+// in any 24 hours. A token bucket refills continuously, which lets a full
+// bucket's 5 and the 5 that refill through in one day.
 
 import type { PreLimit } from "@session/mutators";
 import type { PreLimits } from "@session/sync/server";
@@ -19,6 +25,13 @@ export interface BucketSpec {
 interface Bucket {
   tokens: number;
   updatedAt: number;
+  windowMs: number;
+}
+
+/** A sliding log: the times of the uses in the last `windowMs`, oldest
+ * first. */
+interface UseLog {
+  uses: number[];
   windowMs: number;
 }
 
@@ -91,27 +104,56 @@ export type AbuseBucket = keyof ReturnType<typeof abuseBuckets>;
  * mutation take from it (`04` Z1). */
 export const writesKey = (userId: string): string => `writes:user:${userId}`;
 
-/** The bucket each `pre`-stage limit of a mutator counts in. */
+/** The bucket each `pre`-stage limit of a mutator counts in, and what its
+ * refusal says the limit is. */
 const PRE_BUCKETS = {
-  "spaces.create": "spacesCreated",
-  "invites.create": "channelInvites",
-  "spaces.join": "joins",
-} as const satisfies Record<PreLimit, AbuseBucket>;
+  "spaces.create": { bucket: "spacesCreated", what: "create", things: "channels" },
+  "invites.create": { bucket: "channelInvites", what: "make", things: "channel invite links" },
+  "spaces.join": { bucket: "joins", what: "join", things: "channels" },
+} as const satisfies Record<PreLimit, { bucket: AbuseBucket; what: string; things: string }>;
 
-/** The `pre`-stage limits of `04` Z1 over `limiter`'s buckets, keyed by the
- * person's handle (`SyncServer.setPreLimits`). */
+/** A window's length in words: "a day", "an hour", "a minute", or minutes. */
+function per(windowMs: number): string {
+  if (windowMs === DAY) return "a day";
+  if (windowMs === HOUR) return "an hour";
+  if (windowMs === MINUTE) return "a minute";
+  return `in ${Math.round(windowMs / MINUTE)} minutes`;
+}
+
+/** How long until a use is free again, in words, rounded up: minutes below
+ * two hours, hours above. */
+function wait(seconds: number): string {
+  const minutes = Math.max(1, Math.ceil(seconds / 60));
+  if (minutes < 120) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  return `${Math.ceil(minutes / 60)} hours`;
+}
+
+/** The message of a `pre`-stage refusal: the limit, and when a use is free
+ * again ("You can create 5 channels a day. Try again in 3 hours."). */
+export function preLimitMessage(limit: PreLimit, spec: BucketSpec, retryAfter: number): string {
+  const { what, things } = PRE_BUCKETS[limit];
+  return `You can ${what} ${spec.limit} ${things} ${per(spec.windowMs)}. Try again in ${wait(retryAfter)}.`;
+}
+
+/** The `pre`-stage limits of `04` Z1 over `limiter`'s sliding logs, keyed
+ * by the person's handle (`SyncServer.setPreLimits`). */
 export function preLimits(limiter: RateLimiter, limits: AbuseLimits): PreLimits {
   const buckets = abuseBuckets(limits);
+  const keyOf = (u: string, limit: PreLimit) => `${PRE_BUCKETS[limit].bucket}:user:${u}`;
+  const specOf = (limit: PreLimit) => buckets[PRE_BUCKETS[limit].bucket];
   return {
-    take: (u, limit) => {
-      const bucket = PRE_BUCKETS[limit];
-      return limiter.take(`${bucket}:user:${u}`, buckets[bucket]).allowed;
+    check: (u, limit) => {
+      const spec = specOf(limit);
+      const left = limiter.checkLog(keyOf(u, limit), spec);
+      return left.allowed ? true : preLimitMessage(limit, spec, left.retryAfter);
     },
+    take: (u, limit) => limiter.useLog(keyOf(u, limit), specOf(limit)),
   };
 }
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();
+  readonly #logs = new Map<string, UseLog>();
   readonly #held = new Set<string>();
   readonly #refusals = new Map<string, number>();
   readonly #now: () => number;
@@ -163,6 +205,33 @@ export class RateLimiter {
     return this.#refill(key, spec, this.#now()) >= cost;
   }
 
+  /** The uses of `key`'s sliding log in the last `spec.windowMs`. */
+  #recent(key: string, spec: BucketSpec, at: number): number[] {
+    return (this.#logs.get(key)?.uses ?? []).filter((t) => t > at - spec.windowMs);
+  }
+
+  /** Whether `key` had fewer than `spec.limit` uses in the last
+   * `spec.windowMs`, without using one. A refusal is counted for
+   * `/metrics`; `retryAfter` is when the oldest of them leaves the window. */
+  checkLog(key: string, spec: BucketSpec): RateLimitResult {
+    const at = this.#now();
+    const uses = this.#recent(key, spec, at);
+    if (uses.length < spec.limit) return { allowed: true, retryAfter: 0 };
+    const scope = key.split(":")[0] ?? key;
+    this.#refusals.set(scope, (this.#refusals.get(scope) ?? 0) + 1);
+    const oldest = uses[uses.length - spec.limit] ?? at;
+    return {
+      allowed: false,
+      retryAfter: Math.max(1, Math.ceil((oldest + spec.windowMs - at) / 1000)),
+    };
+  }
+
+  /** Records one use of `key`'s sliding log. */
+  useLog(key: string, spec: BucketSpec): void {
+    const at = this.#now();
+    this.#logs.set(key, { uses: [...this.#recent(key, spec, at), at], windowMs: spec.windowMs });
+  }
+
   /** Refusals per bucket scope since the process started, for
    * `session_rate_limited_total{bucket}` (`05` §4). */
   refusals(): ReadonlyMap<string, number> {
@@ -170,13 +239,20 @@ export class RateLimiter {
   }
 
   /** Evicts buckets idle for longer than their own window, which are full
-   * again, to bound memory in a long-running process. */
+   * again, and sliding logs whose last use left their window, to bound
+   * memory in a long-running process. */
   sweep(): number {
     const at = this.#now();
     let removed = 0;
     for (const [key, bucket] of [...this.#buckets.entries()]) {
       if (at - bucket.updatedAt > bucket.windowMs) {
         this.#buckets.delete(key);
+        removed += 1;
+      }
+    }
+    for (const [key, log] of [...this.#logs.entries()]) {
+      if (at - (log.uses[log.uses.length - 1] ?? 0) > log.windowMs) {
+        this.#logs.delete(key);
         removed += 1;
       }
     }
