@@ -61,3 +61,20 @@ test("an author's edit of a reply compares its rev; a delete keeps a top-level r
   t.like(w.get(`counts:${p}`), { r: 1 });
   refused(t, w.apply("mona", "replies.delete", { id: top }), "FORBIDDEN");
 });
+
+test("a top-level reply with only its author's replies under it goes with them (M1b review 9)", (t) => {
+  const { w, open } = cast(t);
+  const p = post(t, w, "mel", open);
+  const top = w.id();
+  const sub = w.id();
+  ok(t, w.apply("otto", "research.createPostFollowUp", { id: top, thread: p, t: "x" }));
+  ok(
+    t,
+    w.apply("otto", "research.createPostFollowUp", { id: sub, thread: p, t: "y", parent: top }),
+  );
+  t.like(w.get(`counts:${p}`), { r: 2 });
+  t.deepEqual(ok(t, w.apply("otto", "replies.delete", { id: top })), { kept: false });
+  t.is(w.get(`reply:${top}`), undefined);
+  t.is(w.get(`reply:${sub}`), undefined);
+  t.like(w.get(`counts:${p}`), { r: 0 });
+});

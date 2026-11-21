@@ -24,6 +24,7 @@ import {
   deleted,
   nodeOf,
   notAuthor,
+  nodesUnder,
   notGone,
   ownOrReadable,
   preRun,
@@ -156,10 +157,13 @@ export const NODES = {
     },
   }),
 
-  // The author deletes a node (`03` G6): a run still queued or running is
-  // cancelled first. A node with nodes or comments under it stays as a shell
-  // without text (`del`), as a thread does; one without is erased with its
-  // answer. The author may delete without read access, and in a frozen space.
+  // The author deletes a node (`03` G6). When someone else wrote under it (a
+  // node or a comment anywhere below it), it stays as a shell without text
+  // (`del`), as a thread does, and its run, if it has not ended, is
+  // cancelled. Otherwise it goes with everything under it, all the author's:
+  // the nodes below it, their answers, comments and run records, and the
+  // thread's count is written again (M1b review 9, 12). The author may delete
+  // without read access, and in a frozen space.
   "followups.delete": define({
     input: ulidFields(M["followups.delete"].input, ["thread", "node"]),
     who: "author",
@@ -173,14 +177,22 @@ export const NODES = {
       const n = nodeRef(tx, i.thread, i.node, "own");
       const reads = canRead(tx, n, tx.me);
       const th = { th: n.th };
+      const nodes = tx.list("node", th);
+      const under = nodesUnder(nodes, n.id);
+      const comments = tx.list("comment", th).filter((x) => under.has(x.node));
       const kept =
-        tx.list("node", th).some((x) => x.par === n.id) ||
-        tx.list("comment", th).some((x) => x.node === n.id);
-      cancel(tx, runOf(tx, n));
-      if (kept) tx.put({ ...n, q: "", look: null, quote: null, del: true });
-      else {
-        tx.del(answerKey(n.id));
-        tx.del(nodeKey(n.id));
+        nodes.some((x) => x.id !== n.id && under.has(x.id) && x.u !== tx.me) ||
+        comments.some((x) => x.u !== tx.me);
+      if (kept) {
+        cancel(tx, runOf(tx, n));
+        tx.put({ ...n, q: "", look: null, quote: null, del: true });
+      } else {
+        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);
+        for (const x of comments) tx.del(`comment:${x.id}`);
+        for (const id of under) {
+          tx.del(answerKey(id));
+          tx.del(nodeKey(id));
+        }
         recount(tx, tx.byKey(threadKey(n.th)) as ThreadRec);
       }
       return reads ? { kept } : null;

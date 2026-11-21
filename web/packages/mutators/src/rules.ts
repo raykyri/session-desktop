@@ -220,6 +220,20 @@ export function itemOf(tx: Tx, key: string): ThreadRec | NodeRec | ReplyRec | Co
   throw notFound();
 }
 
+/** The ids of a node and every node under it, at any depth. */
+export function nodesUnder(nodes: readonly NodeRec[], id: string): Set<string> {
+  const under = new Set([id]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const x of nodes)
+      if (!under.has(x.id) && under.has(x.par)) {
+        under.add(x.id);
+        grew = true;
+      }
+  }
+  return under;
+}
+
 /** Remove a moderated item for good: its text is erased from storage, and so
  * is everything under it (a thread's nodes, answers, runs, replies,
  * comments, saves and the mention notifications about it; a node's answer
@@ -276,15 +290,7 @@ export function erase(
       // queued run would spend tokens on erased text; M1a review 13)
       const th = { th: r.th };
       const nodes = tx.list("node", th);
-      const under = new Set([r.id]);
-      for (let grew = true; grew;) {
-        grew = false;
-        for (const x of nodes)
-          if (!under.has(x.id) && under.has(x.par)) {
-            under.add(x.id);
-            grew = true;
-          }
-      }
+      const under = nodesUnder(nodes, r.id);
       for (const x of nodes) if (x.id !== r.id && under.has(x.id)) drop(nodeKey(x.id));
       for (const x of tx.list("answer", th).filter((y) => under.has(y.node))) drop(keyOf(x));
       for (const x of tx.list("comment", th).filter((y) => under.has(y.node)))

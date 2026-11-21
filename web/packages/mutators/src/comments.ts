@@ -1,8 +1,9 @@
 // Comments on an ask node (`01` C4; `03` G4): a discussion under a branch
 // that starts no run, nested like replies (a parent is a top-level comment on
 // the same node). The author edits (comparing the comment's rev) and
-// deletes: a top-level comment with comments under it stays as an empty
-// shell (`t: ""`, `del`), one without is erased.
+// deletes: a top-level comment with someone else's comments under it stays
+// as an empty shell (`t: ""`, `del`); otherwise it is erased with the
+// author's own comments under it (M1b review 9).
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -105,10 +106,14 @@ export const COMMENTS = {
     run: (tx, i) => {
       const c = ownOrReadable(tx, `comment:${i.id}`, "comment");
       const reads = canRead(tx, c, tx.me);
-      const kept =
-        c.parent === null && tx.list("comment", { th: c.th }).some((x) => x.parent === c.id);
+      const under =
+        c.parent === null ? tx.list("comment", { th: c.th }).filter((x) => x.parent === c.id) : [];
+      const kept = under.some((x) => x.u !== tx.me);
       if (kept) tx.put({ ...c, t: "", del: true });
-      else tx.del(`comment:${c.id}`);
+      else {
+        for (const x of under) tx.del(`comment:${x.id}`);
+        tx.del(`comment:${c.id}`);
+      }
       return reads ? { kept } : null;
     },
   }),

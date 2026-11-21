@@ -52,3 +52,15 @@ test("an author's edit of a comment compares its rev; a delete keeps a top-level
   t.deepEqual(ok(t, w.apply("mel", "comments.delete", { id: sub })), { kept: false });
   t.is(w.get(`comment:${sub}`), undefined);
 });
+
+test("a top-level comment with only its author's comments under it goes with them (M1b review 9)", (t) => {
+  const { w, open } = cast(t);
+  const th = ask(t, w, "mel", open);
+  const c = w.id();
+  const sub = w.id();
+  ok(t, w.apply("otto", "comments.create", { id: c, thread: th, node: "r", t: "x" }));
+  ok(t, w.apply("otto", "comments.create", { id: sub, thread: th, node: "r", t: "y", parent: c }));
+  t.deepEqual(ok(t, w.apply("otto", "comments.delete", { id: c })), { kept: false });
+  t.is(w.get(`comment:${c}`), undefined);
+  t.is(w.get(`comment:${sub}`), undefined);
+});

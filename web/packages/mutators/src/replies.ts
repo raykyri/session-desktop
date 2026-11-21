@@ -1,7 +1,8 @@
 // Replies to a post (`01` C5, C15): one level of nesting, a reply's parent
 // is a top-level reply. The author edits (comparing the reply's rev) and
-// deletes: a top-level reply with replies under it stays as an empty shell
-// (`t: ""`, `del`), one without is erased.
+// deletes: a top-level reply with someone else's replies under it stays as
+// an empty shell (`t: ""`, `del`); otherwise it is erased with the author's
+// own replies under it (M1b review 9).
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -101,10 +102,12 @@ export const REPLIES = {
     run: (tx, i) => {
       const r = ownOrReadable(tx, `reply:${i.id}`, "reply");
       const reads = canRead(tx, r, tx.me);
-      const kept =
-        r.parent === null && tx.list("reply", { th: r.th }).some((x) => x.parent === r.id);
+      const under =
+        r.parent === null ? tx.list("reply", { th: r.th }).filter((x) => x.parent === r.id) : [];
+      const kept = under.some((x) => x.u !== tx.me);
       if (kept) tx.put({ ...r, t: "", del: true });
       else {
+        for (const x of under) tx.del(`reply:${x.id}`);
         tx.del(`reply:${r.id}`);
         recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);
       }

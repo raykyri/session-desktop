@@ -485,19 +485,40 @@ export function predictEffects(
       break;
     }
     case "followups.delete": {
-      // a node with nodes or comments under it stays as a shell without
-      // text; one without goes with its answer. Its run, if it has not
-      // ended, is cancelled first (`03` G6).
+      // a node someone else wrote under (a node or a comment at any depth
+      // below it) stays as a shell without text, its run cancelled if it
+      // has not ended; otherwise the node and everything below it goes, with
+      // their answers, comments and runs (`03` G6; M1b review 9, 12)
       const n = get(`node:${str("node")}`) as Extract<StoredRecord, { kind: "node" }>;
-      const kept = [...dump.values()].some(
-        (r) => (r.kind === "node" && r.par === n.id) || (r.kind === "comment" && r.node === n.id),
+      const nodes = ofThread(n.th, "node").map(
+        ([, x]) => x as Extract<StoredRecord, { kind: "node" }>,
       );
-      stopRun(get(`run:${n.run}`));
-      if (kept) keys.set(`node:${n.id}`, { q: "", look: null, quote: null, del: true });
-      else {
-        keys.set(`node:${n.id}`, null);
-        if (dump.has(`answer:${n.id}`)) keys.set(`answer:${n.id}`, null);
-        keys.set(`counts:${n.th}`, { r: ofThread(n.th, "node").length - 1 });
+      const below = new Set<string>([n.id]);
+      let size = 0;
+      while (size !== below.size) {
+        size = below.size;
+        for (const x of nodes) if (below.has(x.par)) below.add(x.id);
+      }
+      const comments = ofThread(n.th, "comment")
+        .map(([, x]) => x as Extract<StoredRecord, { kind: "comment" }>)
+        .filter((x) => below.has(x.node));
+      const kept =
+        nodes.some((x) => below.has(x.id) && x.u !== me) || comments.some((x) => x.u !== me);
+      if (kept) {
+        stopRun(get(`run:${n.run}`));
+        keys.set(`node:${n.id}`, { q: "", look: null, quote: null, del: true });
+      } else {
+        for (const id of below) {
+          keys.set(`node:${id}`, null);
+          if (dump.has(`answer:${id}`)) keys.set(`answer:${id}`, null);
+        }
+        for (const x of comments) keys.set(`comment:${x.id}`, null);
+        for (const [, x] of ofThread(n.th, "run") as [
+          string,
+          Extract<StoredRecord, { kind: "run" }>,
+        ][])
+          if (below.has(x.node)) keys.set(`run:${x.id}`, null);
+        keys.set(`counts:${n.th}`, { r: nodes.length - below.size });
       }
       const reads = mayRead(dump, n, me);
       out.result = (r) => JSON.stringify(r) === JSON.stringify(reads ? { kept } : null);
@@ -550,16 +571,23 @@ export function predictEffects(
     }
     case "replies.delete":
     case "comments.delete": {
-      // a top-level one with others under it stays, emptied; any other goes
+      // a top-level one with someone else's under it stays, emptied; any
+      // other goes, with the author's own under it (M1b review 9)
       const kind = name === "replies.delete" ? "reply" : "comment";
       const r = get(`${kind}:${str("id")}`) as Extract<StoredRecord, { kind: "reply" | "comment" }>;
-      const kept =
-        r.parent === null &&
-        [...dump.values()].some((x) => x.kind === kind && x.th === r.th && x.parent === r.id);
+      const children = [...dump.values()].filter(
+        (x): x is Extract<StoredRecord, { kind: "reply" | "comment" }> =>
+          x.kind === kind && x.th === r.th && r.parent === null && x.parent === r.id,
+      );
+      const kept = children.some((x) => x.u !== me);
       if (kept) keys.set(`${kind}:${r.id}`, { t: "", del: true });
       else {
         keys.set(`${kind}:${r.id}`, null);
-        if (kind === "reply") keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - 1 });
+        for (const x of children) keys.set(`${kind}:${x.id}`, null);
+        if (kind === "reply")
+          keys.set(`counts:${r.th}`, {
+            r: ofThread(r.th, "reply").length - 1 - children.length,
+          });
       }
       const reads = mayRead(dump, r, me);
       out.result = (x) => JSON.stringify(x) === JSON.stringify(reads ? { kept } : null);

@@ -208,7 +208,7 @@ test("G2: the client's prediction and the server's apply store the same prompt",
   );
 });
 
-test("G6: deleting a node with a running run cancels the run; a node with nothing under it is erased", (t) => {
+test("G6: a node with nothing of anyone else's under it is erased with its run; one with someone else's stays as a shell", (t) => {
   const { w, open } = cast(t);
   const th = ask(t, w, "mel", open);
   const lone = fork(t, w, "mona", th, "r", false);
@@ -218,19 +218,48 @@ test("G6: deleting a node with a running run cancels the run; a node with nothin
     kept: false,
   });
   t.is(w.get(`node:${lone}`), undefined);
-  t.like(w.get(`run:${run?.id ?? ""}`), {
-    status: "cancelled",
-    fail: { why: "stopped", at: null, cls: null },
-  });
+  // its run record goes with it (M1b review 12): the run loop finds it gone
+  t.is(w.get(`run:${run?.id ?? ""}`), undefined);
   t.like(w.get(`counts:${th}`), { r: 0 });
-  // a node with a node under it stays as a shell without text
+  // a node with only the author's own nodes and comments under it goes with
+  // all of them, their answers and runs (M1b review 9)
+  const top = fork(t, w, "mona", th);
+  const child = fork(t, w, "mona", th, top);
+  const grand = fork(t, w, "mona", th, child, false);
+  const c = w.id();
+  ok(t, w.apply("mona", "comments.create", { id: c, thread: th, node: child, t: "mine" }));
+  t.like(w.get(`counts:${th}`), { r: 3 });
+  t.deepEqual(ok(t, w.apply("mona", "followups.delete", { thread: th, node: top })), {
+    kept: false,
+  });
+  for (const k of [
+    `node:${top}`,
+    `node:${child}`,
+    `node:${grand}`,
+    `answer:${top}`,
+    `answer:${child}`,
+    `comment:${c}`,
+  ])
+    t.is(w.get(k), undefined, k);
+  t.false(w.all("run").some((r) => [top, child, grand].includes(r.node)));
+  t.like(w.get(`counts:${th}`), { r: 0 });
+  // a node with someone else's node under it, at any depth, stays as a
+  // shell without text, and its own run is cancelled
   const kept = fork(t, w, "mona", th);
-  fork(t, w, "otto", th, kept);
+  const mid = fork(t, w, "mona", th, kept);
+  fork(t, w, "otto", th, mid);
   t.deepEqual(ok(t, w.apply("mona", "followups.delete", { thread: th, node: kept })), {
     kept: true,
   });
   t.like(w.get(`node:${kept}`), { del: true, q: "" });
   t.truthy(w.get(`answer:${kept}`));
+  t.truthy(w.get(`node:${mid}`));
+  // and so does one with someone else's comment under it
+  const commented = fork(t, w, "mona", th);
+  ok(t, w.apply("otto", "comments.create", { id: w.id(), thread: th, node: commented, t: "x" }));
+  t.deepEqual(ok(t, w.apply("mona", "followups.delete", { thread: th, node: commented })), {
+    kept: true,
+  });
   // only the author; never the root
   const n = fork(t, w, "mona", th);
   refused(t, w.apply("otto", "followups.delete", { thread: th, node: n }), "FORBIDDEN");

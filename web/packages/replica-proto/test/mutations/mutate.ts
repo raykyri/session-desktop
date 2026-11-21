@@ -782,16 +782,17 @@ const MUTATIONS: Mutation[] = [
     to: '      if (run.status === "queued" || run.status === "running")',
   },
   {
+    // a kept node's run is cancelled; a deleted one's run records go (M1b review 12)
     name: "M1b-11 deleting a node leaves its run going",
     file: "../mutators/src/nodes.ts",
-    from: "      cancel(tx, runOf(tx, n));\n      if (kept)",
-    to: "      if (kept)",
+    from: "        cancel(tx, runOf(tx, n));\n",
+    to: "",
   },
   {
     name: "M1b-12 a node with nodes under it is erased by its author's delete",
     file: "../mutators/src/nodes.ts",
-    from: '        tx.list("node", th).some((x) => x.par === n.id) ||',
-    to: '        tx.list("node", th).some((x) => x.par === n.id && x.del) ||',
+    from: "        nodes.some((x) => x.id !== n.id && under.has(x.id) && x.u !== tx.me) ||",
+    to: "        nodes.some((x) => x.id !== n.id && under.has(x.id) && x.u !== tx.me && x.del) ||",
   },
   {
     name: "M1b-13 anyone cancels a run",
@@ -841,6 +842,18 @@ const MUTATIONS: Mutation[] = [
     file: "../mutators/src/rules.ts",
     from: "  if (p.gone) throw threadDeleted();",
     to: '  if (p.gone && p.q === "never") throw threadDeleted();',
+  },
+  {
+    name: "M1b-21 a reply with only its author's replies under it stays as a shell",
+    file: "../mutators/src/replies.ts",
+    from: "      const kept = under.some((x) => x.u !== tx.me);",
+    to: "      const kept = under.length > 0;",
+  },
+  {
+    name: "M1b-22 a deleted node's run records stay",
+    file: "../mutators/src/nodes.ts",
+    from: '        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);\n',
+    to: "",
   },
 ];
 
