@@ -35,6 +35,7 @@ test("applies every migration to an empty database", (t) => {
     t.deepEqual(
       tables.map((row) => row.name),
       [
+        "api_keys",
         "backfills",
         "collapsed_groups",
         "collapsed_places",
@@ -59,6 +60,7 @@ test("applies every migration to an empty database", (t) => {
         "run_turns",
         "sessions",
         "signup_attempts",
+        "site_settings",
         "tree_folder_membership",
         "tree_invites",
         "tree_member_removals",
@@ -67,6 +69,7 @@ test("applies every migration to an empty database", (t) => {
         "tree_views",
         "trees",
         "tweet_cache",
+        "usage_billing",
         "usage_events",
         "user_limits",
         "user_preferences",
@@ -84,21 +87,39 @@ test("applies every migration to an empty database", (t) => {
 });
 
 test("the history is the initial migration and the plan's numbered ones", (t) => {
-  // `01` D5: `0001_spaces` (M3) and `0002_accounts` (M6) follow the initial
-  // migration; M8a squashes them into one.
+  // The database has never been deployed with this schema; M8a squashes the
+  // history into one initial migration (runbooks/reset-database.md, plan
+  // `01` D5). Each milestone adds its own numbered migration beside it:
+  // `0003_api_keys` (M5b), `0004_accounts` (M6).
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
-  const tags = journal.entries.map((entry) => entry.tag);
-  t.true(tags.includes("0000_initial"));
-  t.true(tags.includes("0002_accounts"));
+  t.deepEqual(
+    journal.entries.map((entry) => entry.tag),
+    ["0000_initial", "0003_api_keys", "0004_accounts"],
+  );
   t.deepEqual(
     readdirSync(MIGRATIONS_FOLDER)
       .filter((name) => name.endsWith(".sql"))
-      .map((name) => name.replace(/\.sql$/, ""))
       .sort(),
-    [...tags].sort(),
+    ["0000_initial.sql", "0003_api_keys.sql", "0004_accounts.sql"],
   );
+});
+
+test("journal entries ascend in idx and strictly in when", (t) => {
+  // The migrator applies only entries whose `when` is later than the last
+  // applied one, so an entry out of order would be skipped silently on a
+  // database that already has a later one.
+  const journal = JSON.parse(
+    readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { idx: number; when: number; tag: string }[] };
+  for (let index = 1; index < journal.entries.length; index += 1) {
+    const previous = journal.entries[index - 1]!;
+    const entry = journal.entries[index]!;
+    t.true(entry.idx > previous.idx, `${entry.tag} idx after ${previous.tag}`);
+    t.true(entry.when > previous.when, `${entry.tag} when after ${previous.tag}`);
+    t.true(entry.tag.startsWith(String(entry.idx).padStart(4, "0")), `${entry.tag} matches idx`);
+  }
 });
 
 test("applies the file pragmas", (t) => {

@@ -89,7 +89,7 @@ M4, M5b and M6 rows (C16's notifications are written by each mutator's
 depends on M5a because the branch and comment notifications of C16 come
 from runs. `04` I1 (`users.status`, `handle`, `provider` and
 `provider_user_id`, `invites.code_hash` and `code_enc`) is built whole in
-M6 with its own generated migration, `0002_accounts.sql`; M3's
+M6 with its own migration, `0004_accounts.sql` (after M5b's `0003_api_keys.sql`); M3's
 `0001_spaces.sql` does not add those columns, and the M8a squash folds both
 into `0000_initial.sql`.
 
@@ -163,8 +163,7 @@ Scope:
   and device-run parts that are not built and the removal of the effect
   queue (question Q1); ADR-5 amended for
   X sign-in (`04` Z2); ADR-23 (user API keys, model payers, the weekly
-  allowance, runtime model settings; `03` §6, K15) drafted for decision
-  before M5b.
+  allowance, runtime model settings; `03` §6, K15), accepted before M5b.
 
 Exit criteria:
 - `cd web/packages/replica-proto && npm test && npm run mutate` exits 0.
@@ -441,7 +440,7 @@ W7.1-W7.3): sign-in with GitHub and with X, both required at launch, each
 account bound to one provider (`04` I1, I4, Z2; P1, Q8), with the staging X
 app working before this milestone starts; account invites with 30-bit
 codes, `users.status` (`waiting` or `active`; no suspension, `04` I6
-removed) and handles, the provider columns and `0002_accounts.sql`, admin
+removed) and handles, the provider columns and `0004_accounts.sql`, admin
 seeding by handle with `db:admin`, the invite tree, the "Join with invite?"
 flows and waiting accounts kept 90 days (`04` I1-I4); channel ownership and
 the member list (`04` B2, `02` W6.8; no moderator or admin roles and no

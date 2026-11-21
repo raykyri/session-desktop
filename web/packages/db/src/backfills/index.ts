@@ -29,7 +29,7 @@ interface LegacyInviteRow {
 }
 
 /**
- * `0002_accounts.sql` renames the old `invites` table, which keyed rows on
+ * `0004_accounts.sql` renames the old `invites` table, which keyed rows on
  * the plain code, to `invites_legacy`. This moves its rows into the new
  * `invites` with the SHA-256 of the code in place of the code and drops the
  * old table, so no column holds a plain code afterwards (04 §3.1). Old codes
@@ -37,7 +37,7 @@ interface LegacyInviteRow {
  * produces: they stay in the history but can no longer be redeemed.
  */
 const hashAccountInvites: Backfill = {
-  id: "0002-hash-account-invites",
+  id: "0004-hash-account-invites",
   description: "hash the plain account invite codes of invites_legacy into invites",
   run: (db) => {
     const legacy = db.all<{ name: string }>(

@@ -136,7 +136,9 @@ test("cancel: the stream is aborted and the row closes with the last counts", as
 });
 
 test("timeout: the stream is aborted and the row closes with the last counts", async (t) => {
-  const harness = createLoopHarness(t, { env: { SESSION_RUN_TIMEOUT_SECONDS: "2" } });
+  // The fixture's first text arrives about 0.9 s in and the stream never
+  // ends; 4 s leaves room for a loaded machine to reach that text.
+  const harness = createLoopHarness(t, { env: { SESSION_RUN_TIMEOUT_SECONDS: "4" } });
   const user = harness.addUser("slowpoke");
   const request = harness.runRequest(user.id, "fixture:timeout");
 

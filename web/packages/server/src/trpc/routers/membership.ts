@@ -21,7 +21,6 @@ import { accountInviteLink, cleanDisplayName, isAccountHandle } from "@session/s
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { open, seal } from "../../auth/secretBox.js";
 import { abuseBuckets } from "../../middleware/rateLimit.js";
 import type { AppContext } from "../base.js";
 import {
@@ -38,6 +37,16 @@ import {
 const codeContext = (userId: string) => `account-invite:${userId}`;
 
 const codeInput = z.object({ code: z.string().max(512) });
+
+/** An open link's code for its creator, or null when it no longer opens
+ * (`SESSION_SECRET_KEY` changed since the link was made). */
+function openCode(ctx: AppContext & { user: { id: string } }, sealed: string): string | null {
+  try {
+    return ctx.box.open(sealed, codeContext(ctx.user.id));
+  } catch {
+    return null;
+  }
+}
 
 /** The `auth.me` answer: the account and its pending invite. */
 export function meOf(ctx: Pick<AppContext, "db" | "user">): Me | null {
@@ -142,10 +151,7 @@ export interface TreeMember {
 export const accountInvitesRouter = router({
   list: memberProcedure.use(limit("inviteReads", "user")).query(({ ctx }): InvitesView => {
     const links = accountInvites.listForCreator(ctx.db, ctx.user.id).map((link) => {
-      const code =
-        link.codeEnc === null
-          ? null
-          : open(ctx.config.secretKey, link.codeEnc, codeContext(ctx.user.id));
+      const code = link.codeEnc === null ? null : openCode(ctx, link.codeEnc);
       return {
         id: link.id,
         state: link.state,
@@ -182,7 +188,7 @@ export const accountInvitesRouter = router({
       createdBy: ctx.user.id,
       exempt: ctx.user.isAdmin,
       openLimit: ctx.config.abuse.openInvites,
-      encrypt: (code) => seal(ctx.config.secretKey, code, codeContext(ctx.user.id)),
+      encrypt: (code) => ctx.box.seal(code, codeContext(ctx.user.id)),
     });
     if (!made.ok) {
       throw new TRPCError({

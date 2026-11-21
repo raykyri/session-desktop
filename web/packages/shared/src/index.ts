@@ -39,6 +39,7 @@ export * from "./markdown/turnTimeline.js";
 export * from "./markdown/wikilinks.js";
 
 export * from "./models/agents.js";
+export * from "./models/apiKeys.js";
 export * from "./models/registry.js";
 
 export * from "./research/history.js";

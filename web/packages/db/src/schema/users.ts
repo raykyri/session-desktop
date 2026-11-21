@@ -1,6 +1,6 @@
 // Accounts, account invites and the sign-up controls (plan `04` §3.1,
 // `01` C8; `docs/06-auth-and-users.md` §1, §3). Migration
-// `0002_accounts.sql` makes the tables this file declares.
+// `0004_accounts.sql` makes the tables this file declares.
 
 import { sql } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";

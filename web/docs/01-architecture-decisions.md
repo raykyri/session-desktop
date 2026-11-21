@@ -303,7 +303,7 @@ math is replaced by the library's positioning.
 
 ## ADR-10 Agent execution: an owned agent loop over provider APIs
 
-Status: amended by ADR-21.
+Status: amended by ADR-21 and ADR-23.
 
 Requirement: run research turns with four models on a hosted service, with
 uniform tooling, forking, resume, and cost control.
@@ -404,6 +404,8 @@ replaced by workspace creation, renaming, removal, reordering, and default
 selection.
 
 ## ADR-16 Models, effort, and access
+
+Status: amended by ADR-23.
 
 Choice: a code-level model registry: `gemini-flash` (Gemini 3.8 Flash on
 Vertex AI via a service account with Google Search grounding; default; runs
@@ -547,3 +549,76 @@ new attempt.
 
 Why: one connection carries both replicated changes and streaming, and the
 durable state is the same for owned and device runs.
+
+## ADR-23 Member API keys, explicit effort, site defaults and the payer
+
+Status: Accepted. The product owner approved the implementation plan that
+specifies it (`15-implementation-plan/03-agents-and-research.md` §6, K4,
+K7, K8, K11, K12, K15; decision P11).
+
+Amends ADR-10 and ADR-16.
+
+Requirement: members spend included tokens up to a weekly allowance and may
+continue on their own provider accounts; the composer offers the efforts each
+model accepts; the people who run Session choose what a new ask starts on
+without a deploy.
+
+Options
+1. Keep ADR-10 and ADR-16 as written: no member credentials, effort fixed at
+   medium, the default model in code, and `claude-fable` for admins only.
+2. Members add one Anthropic and one OpenAI key; effort is chosen per run
+   from the model's efforts; a site admin sets the default model and the
+   default effort at runtime; the server decides who pays.
+3. Option 2 with model availability, prices and per-member overrides set by
+   site admins.
+
+Choice: option 2.
+- Keys: one key per provider, Anthropic and OpenAI. The server checks the
+  format, then lists the provider's models during the `apiKeys.set` request
+  with a 10 s timeout. A key the provider rejects, a timeout and a network
+  error each refuse the save; there is no queued check. An accepted key is
+  stored encrypted with AES-256-GCM under `SESSION_SECRET_KEY` (bound to its
+  owner and provider), decrypted only for the duration of a provider call,
+  never logged and never returned: reads return the provider, the last four
+  characters and the status. A key a provider rejects during a run becomes
+  `invalid`. Calls made with a member's key do not use OpenRouter's
+  zero-data-retention routing; they fall under the member's own agreement
+  with the provider (K14).
+- Effort: every registry entry lists the efforts it accepts, and every new
+  run carries an explicit effort that the model accepts (`effort` is
+  required in `threads.create`, `research.forkNode` and
+  `research.retryNode`, and stored on node and run). There is no Default
+  effort (K12).
+- Site defaults: a site admin (`users.is_admin`) sets the default model and
+  the default effort (low, medium, high or max) in `site_settings`. The
+  default model must be payable with included tokens. The settings only
+  choose where a composer starts; the composer steps an effort the model
+  does not accept down to the highest accepted effort not above it. `pre`
+  and `run` do not read them (K15, P11).
+- Access: every registry entry is available to every member; the weekly
+  allowance replaces ADR-16's admin gate on `claude-fable`. Each entry lists
+  its payers (`included`, `key:anthropic`, `key:openai`); a model with only
+  key payers runs only on the member's key (K11).
+- Payer: the server decides the payer in the mutator's `pre` stage, from the
+  ledger (open rows counted), the member's billing setting (`pause` or
+  `key`) and the stored keys; the client predicts it from `usage.get` and
+  does not send an ask it predicts unpaid. Billing `key` needs a valid
+  Anthropic key, and removing or invalidating that key sets billing to
+  `pause` (K7, K8).
+
+Why: an allowance per member bounds included spending, so the expensive
+model no longer needs an admin gate, and a member's own key lets them keep
+asking after the allowance without the operator paying. Checking a key in
+the request that saves it gives the person the answer while they are on the
+page and needs no follow-up job (`01` S4 removed). Effort changes cost and
+answer depth, and the registry already carries per-model efforts, so fixing
+it at medium hid a choice the models offer. Runtime defaults let the
+operators move members to a better or cheaper model without a release.
+Option 3 adds settings the product does not need (decision Q9: no
+per-member overrides).
+
+Consequences: `SESSION_SECRET_KEY` is required in production, and losing it
+makes stored keys unreadable. `apiKeys.set` waits on a provider request of
+up to 10 s. The registry gains `payers`; effort is part of every run's
+inputs and is checked in `pre`. Changing the site defaults affects only composers opened afterwards;
+queued runs keep their model and effort (K13).

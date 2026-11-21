@@ -4,7 +4,7 @@
 // spaces screens read (channels, threads, saves, notifications) comes from
 // the replica (`02` §9), which is not part of this module.
 
-import type { Me, UserSettings } from "@session/shared";
+import type { ApiKeyProvider, Me, UserSettings } from "@session/shared";
 import {
   queryOptions,
   useMutation,
@@ -34,6 +34,10 @@ export const queryKeys = {
   runtimeConfig: () => ["runtimeConfig"] as const,
   usage: () => ["usage"] as const,
   adminUsers: () => ["adminUsers"] as const,
+  /** `usage.get` (03 K5, K6): the ring and the Usage page. */
+  weeklyUsage: () => ["usage", "week"] as const,
+  usageRuns: () => ["usage", "runs"] as const,
+  models: () => ["models"] as const,
 };
 
 /* -------------------------------------------------------------------------
@@ -66,6 +70,38 @@ export function updateSettings(input: SettingsUpdate) {
 
 export function getUsageSummary() {
   return trpc().usage.summary.query();
+}
+
+export function getWeeklyUsage() {
+  return trpc().usage.get.query();
+}
+
+export function listUsageRuns(input: { limit?: number; cursor?: string | null } = {}) {
+  return trpc().usage.listRuns.query(input);
+}
+
+export function setBilling(mode: "pause" | "key") {
+  return trpc().usage.setBilling.mutate({ mode });
+}
+
+export function setApiKey(input: { provider: ApiKeyProvider; raw: string }) {
+  return trpc().apiKeys.set.mutate(input);
+}
+
+export function removeApiKey(provider: ApiKeyProvider) {
+  return trpc().apiKeys.remove.mutate({ provider });
+}
+
+export function listModels() {
+  return trpc().models.list.query();
+}
+
+export function setDefaultModel(model: string) {
+  return trpc().admin.models.setDefault.mutate({ model });
+}
+
+export function setDefaultEffort(effort: string) {
+  return trpc().admin.models.setDefaultEffort.mutate({ effort });
 }
 
 export function listUsers() {
@@ -136,6 +172,122 @@ export function useUsageSummary() {
     queryFn: () => getUsageSummary(),
     refetchInterval: USAGE_REFRESH_MS,
     enabled: signedIn,
+  });
+}
+
+/** `usage.get` is online-only and not pushed: 30 s stale time (03 K6). */
+export const weeklyUsageQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.weeklyUsage(),
+    queryFn: () => getWeeklyUsage(),
+    staleTime: USAGE_REFRESH_MS,
+  });
+
+/** `models.list`, cached 60 s (03 K15): a change an admin makes reaches an
+ * open tab on its next fetch. */
+export const modelsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.models(),
+    queryFn: () => listModels(),
+    staleTime: 60_000,
+  });
+
+type WeeklyUsageReading = Awaited<ReturnType<typeof getWeeklyUsage>>;
+
+export function useWeeklyUsage(enabled = true) {
+  return useQuery({ ...weeklyUsageQueryOptions(), enabled });
+}
+
+export function useModels(enabled = true) {
+  return useQuery({ ...modelsQueryOptions(), enabled });
+}
+
+/** The Usage page's recent runs: the newest 6 (03 K5). */
+export function useUsageRuns() {
+  return useQuery({
+    queryKey: queryKeys.usageRuns(),
+    queryFn: () => listUsageRuns({ limit: 6 }),
+    staleTime: USAGE_REFRESH_MS,
+  });
+}
+
+export function useSetBilling() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: setBilling,
+    onSuccess: ({ billing }) =>
+      client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
+        old ? { ...old, billing } : old,
+      ),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
+  });
+}
+
+/** The saved key goes into the cached reading at once, so its row does not
+ * fall back to "Not set" until the refetch answers. */
+export function useSetApiKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: setApiKey,
+    onSuccess: (saved) =>
+      client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
+        old
+          ? {
+              ...old,
+              keys: [...old.keys.filter((key) => key.provider !== saved.provider), saved].sort(
+                (a, b) => a.provider.localeCompare(b.provider),
+              ),
+            }
+          : old,
+      ),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
+  });
+}
+
+/** Without an Anthropic key billing is `pause` (03 K7). */
+export function useRemoveApiKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: removeApiKey,
+    onSuccess: (_result, provider) =>
+      client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
+        old
+          ? {
+              ...old,
+              keys: old.keys.filter((key) => key.provider !== provider),
+              billing: provider === "anthropic" ? "pause" : old.billing,
+            }
+          : old,
+      ),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
+  });
+}
+
+type ModelsListing = Awaited<ReturnType<typeof listModels>>;
+
+/** The new setting goes into the cached listing at once, then the listing
+ * is refetched (02 W8.2). */
+export function useSetDefaultModel() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: setDefaultModel,
+    onSuccess: ({ defaultModel }) =>
+      client.setQueryData<ModelsListing>(queryKeys.models(), (old) =>
+        old ? { ...old, defaultModel } : old,
+      ),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.models() }),
+  });
+}
+
+export function useSetDefaultEffort() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: setDefaultEffort,
+    onSuccess: ({ defaultEffort }) =>
+      client.setQueryData<ModelsListing>(queryKeys.models(), (old) =>
+        old ? { ...old, defaultEffort } : old,
+      ),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.models() }),
   });
 }
 

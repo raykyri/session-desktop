@@ -81,8 +81,12 @@ function rejectingKeyProviders(): Providers {
 }
 
 test("a key rejected after the switch ends the run failed key with its earlier turns kept", async (t) => {
+  const rejectedKeys: [string, string, string][] = [];
   const harness = createLoopHarness(t, {
-    allowances: keyBilling,
+    allowances: {
+      ...keyBilling,
+      keyRejected: (userId, provider, apiKey) => rejectedKeys.push([userId, provider, apiKey]),
+    },
     providers: rejectingKeyProviders(),
   });
   const user = harness.addUser("revoked");
@@ -93,6 +97,8 @@ test("a key rejected after the switch ends the run failed key with its earlier t
   t.is((await harness.agent.run(request)).outcome, "failed");
   const [finish] = harness.store.finishes(request.runId);
   t.deepEqual(finish?.summary.fail, { why: "key" });
+  // `03` K4: the loop reports the key the provider rejected, once.
+  t.deepEqual(rejectedKeys, [[user.id, "anthropic", "sk-ant-member-key-0000000000"]]);
   t.true(
     harness.store.calls.some((call) => call.kind === "commitTurn" && call.runId === request.runId),
     "the first step's turns stay",

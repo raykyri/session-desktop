@@ -9,7 +9,9 @@
 
 import { router } from "./base.js";
 import { adminRouter, authRouter, settingsRouter, usageRouter } from "./routers/account.js";
+import { apiKeysRouter } from "./routers/keys.js";
 import { accountInvitesRouter, accountRouter, membersRouter } from "./routers/membership.js";
+import { modelsRouter } from "./routers/models.js";
 import { systemRouter } from "./routers/system.js";
 
 export const appRouter = router({
@@ -17,6 +19,8 @@ export const appRouter = router({
   auth: authRouter,
   settings: settingsRouter,
   usage: usageRouter,
+  apiKeys: apiKeysRouter,
+  models: modelsRouter,
   admin: adminRouter,
   account: accountRouter,
   accountInvites: accountInvitesRouter,

@@ -1,4 +1,4 @@
-import { DEFAULT_USER_SETTINGS, type User } from "@session/shared";
+import { DEFAULT_USER_SETTINGS, MODEL_REGISTRY, type User } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";
 import {
   RouterProvider,
@@ -58,6 +58,40 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
     "admin.listUsers": [],
     "settings.get": { ...DEFAULT_USER_SETTINGS },
     "system.runtimeConfig": { version: "0.0.0", models: [], limits: {}, features: {} },
+    // The fixture build's site defaults (`fixtureOnlineData`), so a screen
+    // reads the same model and effort with or without the server's answer.
+    "models.list": testModelListing(),
+    "usage.get": testWeeklyUsage(),
+    "usage.listRuns": { runs: [], nextCursor: null },
+  };
+}
+
+/** `models.list` over the registry, with the fixture build's defaults. */
+export function testModelListing(
+  defaults: { defaultModel?: string; defaultEffort?: string } = {},
+): unknown {
+  return {
+    models: MODEL_REGISTRY.map((m) => ({
+      id: m.id,
+      label: m.label,
+      provider: m.provider,
+      payers: m.payers,
+      efforts: m.efforts,
+    })),
+    defaultModel: defaults.defaultModel ?? "claude-fable",
+    defaultEffort: defaults.defaultEffort ?? "high",
+  };
+}
+
+/** `usage.get` for a member with nothing used, billing `pause` and no keys. */
+export function testWeeklyUsage(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    allowance: 2_000_000,
+    used: 0,
+    resetAt: Date.UTC(2026, 10, 27),
+    billing: "pause",
+    keys: [],
+    ...overrides,
   };
 }
 

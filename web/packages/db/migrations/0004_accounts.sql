@@ -9,7 +9,7 @@
 -- cascade into every table that references it.
 --
 -- The old `invites` table keyed rows on the plain code. It is renamed to
--- `invites_legacy`; the backfill `0002-hash-account-invites`
+-- `invites_legacy`; the backfill `0004-hash-account-invites`
 -- (`src/backfills/index.ts`) moves its rows into the new table with the
 -- code's hash and drops it, since SQLite has no SHA-256 for SQL to use.
 ALTER TABLE `invites` RENAME TO `invites_legacy`;

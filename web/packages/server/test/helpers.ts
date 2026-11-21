@@ -60,6 +60,9 @@ export interface HarnessOptions {
   /** The rate limiter's clock; a test of a budget pins it so the bucket does
    * not refill while the test runs. */
   limiterNow?: () => number;
+  /** The ledger, run texts, registry, key check timeout and clock the
+   * procedures read (`deps.ts`). */
+  deps?: Pick<ServerDeps, "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now">;
 }
 
 let githubIdCounter = 5000;
@@ -74,7 +77,6 @@ export function testConfig(directory: string, overrides: Record<string, string> 
     GITHUB_CLIENT_ID: "client-id",
     GITHUB_CLIENT_SECRET: "client-secret",
     SESSION_TEST_AUTH: "1",
-    SESSION_SECRET_KEY: Buffer.alloc(32, 7).toString("base64"),
     // Every provider has a credential, so no model is hidden as unavailable.
     GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',
     GOOGLE_VERTEX_PROJECT: "session-test",
@@ -101,6 +103,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     db,
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
+    ...options.deps,
   };
   const deps: ServerDeps = { ...base, runs: options.createRuns?.(base) ?? runs };
   const app = createApp({

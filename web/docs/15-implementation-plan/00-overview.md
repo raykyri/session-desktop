@@ -173,8 +173,8 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   on the sync SSE connection (03 §1, §5).
 - Included tokens are a weekly allowance; cached input counts at the
   provider's discount ratio; the server decides the payer in the mutator's
-  `pre` stage; members may add Anthropic and OpenAI keys (ADR-23, to be
-  written); the Effort submenu lists the chosen model's efforts, with no
+  `pre` stage; members may add Anthropic and OpenAI keys (ADR-23,
+  accepted); the Effort submenu lists the chosen model's efforts, with no
   cost hint and no cap; every new run carries an explicit effort (03 K2,
   K3, K4, K8, K12).
 - Tokens are billed at spend time: each provider call opens a

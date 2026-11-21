@@ -6,12 +6,13 @@ import type { Me, User, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
 
-import { seal } from "../../auth/secretBox.js";
 import { endSession } from "../../auth/session.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../base.js";
 import { repo, required } from "../errors.js";
 
+import { usageProcedures } from "./keys.js";
 import { checkInviteProcedure, meOf } from "./membership.js";
+import { adminModelsRouter } from "./models.js";
 
 export interface StoredSettings extends UserSettings {
   researchLaunchInstruction: string | null;
@@ -72,6 +73,7 @@ export const settingsRouter = router({
 });
 
 export const usageRouter = router({
+  ...usageProcedures,
   summary: protectedProcedure.input(z.undefined()).query(({ ctx }) =>
     repo(() =>
       usage.summary(ctx.db, ctx.user.id, {
@@ -106,6 +108,8 @@ export interface AdminUser extends User {
 }
 
 export const adminRouter = router({
+  /** The Site Admin settings: default model and default effort (`03` K15). */
+  models: adminModelsRouter,
   listUsers: adminProcedure.query(({ ctx }): AdminUser[] =>
     repo(() =>
       users.listUsers(ctx.db).map((user) => ({
@@ -155,7 +159,7 @@ export const adminRouter = router({
         const made = accountInvites.create(ctx.db, {
           createdBy: ctx.user.id,
           exempt: true,
-          encrypt: (code) => seal(ctx.config.secretKey, code, `account-invite:${ctx.user.id}`),
+          encrypt: (code) => ctx.box.seal(code, `account-invite:${ctx.user.id}`),
         });
         if (made.ok) codes.push(made.code);
       }

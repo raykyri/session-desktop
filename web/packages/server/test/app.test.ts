@@ -8,7 +8,13 @@ import { join } from "node:path";
 import { auth } from "@session/db";
 import test from "ava";
 
-import { ConfigError, findDotenvFile, loadConfig, validatedOrigin } from "../src/config.js";
+import {
+  ConfigError,
+  DEVELOPMENT_SECRET_KEY,
+  findDotenvFile,
+  loadConfig,
+  validatedOrigin,
+} from "../src/config.js";
 import { createLogger } from "../src/logger.js";
 import { sweepExpired } from "../src/main.js";
 import { RATE_LIMITS, RateLimiter } from "../src/middleware/rateLimit.js";
@@ -117,9 +123,28 @@ test("test-only auth is impossible in production", (t) => {
   const config = testConfig("/tmp/session-config", {
     NODE_ENV: "production",
     SESSION_TEST_AUTH: "1",
+    SESSION_SECRET_KEY: "ab".repeat(32),
   });
   t.false(config.testAuthEnabled);
   t.true(config.isProduction);
+});
+
+test("production needs its own secret key; development uses the fixed one", (t) => {
+  const missing = t.throws(() => testConfig("/tmp/session-config", { NODE_ENV: "production" }));
+  t.true(missing instanceof ConfigError);
+  t.regex((missing as ConfigError).issues.join("\n"), /SESSION_SECRET_KEY: required in production/);
+  const malformed = t.throws(() =>
+    testConfig("/tmp/session-config", { SESSION_SECRET_KEY: "too-short" }),
+  );
+  t.regex((malformed as ConfigError).issues.join("\n"), /SESSION_SECRET_KEY/);
+  const hex = testConfig("/tmp/session-config", { SESSION_SECRET_KEY: "ab".repeat(32) });
+  t.is(hex.secretKey.length, 32);
+  t.is(hex.secretKey[0], 0xab);
+  const base64 = testConfig("/tmp/session-config", {
+    SESSION_SECRET_KEY: Buffer.alloc(32, 7).toString("base64"),
+  });
+  t.deepEqual(base64.secretKey, Buffer.alloc(32, 7));
+  t.deepEqual(testConfig("/tmp/session-config").secretKey, DEVELOPMENT_SECRET_KEY);
 });
 
 test("the auth routes are rate limited per address", async (t) => {

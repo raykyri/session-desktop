@@ -1,16 +1,19 @@
-// The administrator view (07 §3): who has an account, what they used today,
-// and the two levers an administrator has — per-account daily limits and
-// sign-up codes (`admin.createInvites`; a code lets one new account in).
+// The Site Admin page (02 W8.2, 07 §3): the two site settings, the default
+// model and the default effort (03 K15), then who has an account, what they
+// used today, per-account daily limits and sign-up codes
+// (`admin.createInvites`; a code lets one new account in).
 //
-// The page is rendered only for an administrator. That is a courtesy, not the
-// control: every procedure behind it is an `adminProcedure`, which answers
-// `FORBIDDEN` whatever the client chooses to show (`06-auth-and-users.md` §8).
+// The route answers not found to anyone but a site admin (`app/router.tsx`).
+// That is a courtesy, not the control: every procedure behind it is an
+// `adminProcedure`, which answers `FORBIDDEN` whatever the client chooses to
+// show (`06-auth-and-users.md` §8).
 
 import { modelsFor } from "@session/shared";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/account.js";
+import { SiteAdminSettings } from "../features/admin/SiteAdminSettings.js";
 import { PageFrame } from "../features/shell/Frames.js";
 import { ControlButton } from "../ui/Button.js";
 import { Field, Input } from "../ui/Field.js";
@@ -94,91 +97,94 @@ export function AdminPage() {
     );
   }
 
-  // The Site Admin settings (default model and effort, 02 W8.2) join this
-  // page with 03 K15; the account table and sign-up codes are the current
-  // server's.
+  // The Site Admin settings (02 W8.2) first; the account table and sign-up
+  // codes are the current server's.
   return (
-    <PageFrame title="Site Admin">
-      <div className="mt-4 flex flex-col gap-8">
+    <PageFrame title="Site Admin" narrow>
+      <p className="lede">Settings for everyone on Session.</p>
+      <SiteAdminSettings />
+      <div className="mt-8 flex flex-col gap-8">
         <section className="flex flex-col gap-3">
           <h2 className="text-fg-heading m-0 text-base font-semibold">Accounts</h2>
           {users.isLoading ? <p className="text-fg-muted m-0 text-base">Loading…</p> : null}
           {users.data ? (
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="text-fg-muted text-left">
-                  <th scope="col" className="py-1 font-medium">
-                    Account
-                  </th>
-                  <th scope="col" className="py-1 font-medium">
-                    Model access
-                  </th>
-                  <th scope="col" className="py-1 font-medium">
-                    Runs today
-                  </th>
-                  <th scope="col" className="py-1 font-medium">
-                    Tokens today
-                  </th>
-                  <th scope="col" className="py-1 font-medium">
-                    Cost
-                  </th>
-                  <th scope="col" className="py-1 font-medium">
-                    Daily tokens
-                  </th>
-                  <th scope="col" className="py-1 font-medium">
-                    Daily runs
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.data.map((user) => {
-                  // `reasoningTokens` is included in `outputTokens`; excluding it
-                  // from this sum prevents double-counting and matches the server
-                  // limit (`db/repos/usage.ts:admissionCheck`).
-                  const tokens = user.usage.inputTokens + user.usage.outputTokens;
-                  return (
-                    <tr key={user.id} className="border-border-divider border-t">
-                      <td className="py-1.5">
-                        {user.login}
-                        {user.isAdmin ? <span className="text-fg-muted"> · admin</span> : null}
-                      </td>
-                      <td className="py-1.5">
-                        {/* The full list is the title: five labels is wider
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="text-fg-muted text-left">
+                    <th scope="col" className="py-1 font-medium">
+                      Account
+                    </th>
+                    <th scope="col" className="py-1 font-medium">
+                      Model access
+                    </th>
+                    <th scope="col" className="py-1 font-medium">
+                      Runs today
+                    </th>
+                    <th scope="col" className="py-1 font-medium">
+                      Tokens today
+                    </th>
+                    <th scope="col" className="py-1 font-medium">
+                      Cost
+                    </th>
+                    <th scope="col" className="py-1 font-medium">
+                      Daily tokens
+                    </th>
+                    <th scope="col" className="py-1 font-medium">
+                      Daily runs
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.data.map((user) => {
+                    // `reasoningTokens` is included in `outputTokens`; excluding it
+                    // from this sum prevents double-counting and matches the server
+                    // limit (`db/repos/usage.ts:admissionCheck`).
+                    const tokens = user.usage.inputTokens + user.usage.outputTokens;
+                    return (
+                      <tr key={user.id} className="border-border-divider border-t">
+                        <td className="py-1.5">
+                          {user.login}
+                          {user.isAdmin ? <span className="text-fg-muted"> · admin</span> : null}
+                        </td>
+                        <td className="py-1.5">
+                          {/* The full list is the title: five labels is wider
                             than the column, and the gated one is what an
                             administrator is looking for. */}
-                        <span
-                          className="text-fg-muted block max-w-60 truncate"
-                          title={modelAccess(user)}
-                        >
-                          {modelAccess(user)}
-                        </span>
-                      </td>
-                      <td className="py-1.5">{user.usage.runs}</td>
-                      <td className="py-1.5">{formatTokens(tokens)}</td>
-                      <td className="py-1.5">{formatCost(user.usage.costEstimateMicros)}</td>
-                      <td className="py-1.5">
-                        <LimitCell
-                          userId={user.login}
-                          label="Daily tokens"
-                          value={user.limits.dailyTokens}
-                          onSave={(dailyTokens) =>
-                            setLimits.mutate({ userId: user.id, dailyTokens })
-                          }
-                        />
-                      </td>
-                      <td className="py-1.5">
-                        <LimitCell
-                          userId={user.login}
-                          label="Daily runs"
-                          value={user.limits.dailyRuns}
-                          onSave={(dailyRuns) => setLimits.mutate({ userId: user.id, dailyRuns })}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          <span
+                            className="text-fg-muted block max-w-60 truncate"
+                            title={modelAccess(user)}
+                          >
+                            {modelAccess(user)}
+                          </span>
+                        </td>
+                        <td className="py-1.5">{user.usage.runs}</td>
+                        <td className="py-1.5">{formatTokens(tokens)}</td>
+                        <td className="py-1.5">{formatCost(user.usage.costEstimateMicros)}</td>
+                        <td className="py-1.5">
+                          <LimitCell
+                            userId={user.login}
+                            label="Daily tokens"
+                            value={user.limits.dailyTokens}
+                            onSave={(dailyTokens) =>
+                              setLimits.mutate({ userId: user.id, dailyTokens })
+                            }
+                          />
+                        </td>
+                        <td className="py-1.5">
+                          <LimitCell
+                            userId={user.login}
+                            label="Daily runs"
+                            value={user.limits.dailyRuns}
+                            onSave={(dailyRuns) => setLimits.mutate({ userId: user.id, dailyRuns })}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : null}
         </section>
 

@@ -4,12 +4,14 @@
 // and handed to the component only when it differs (structural equality), so
 // a write to one thread does not re-render another thread's row (W9.1).
 
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
+import { queryKeys, useModels, useWeeklyUsage } from "../api/account.js";
 import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
 
-import { defaultOnlineData, type OnlineData } from "./online.js";
+import { defaultOnlineData, withServerData, type OnlineData } from "./online.js";
 import { UNKNOWN, emptyReplica, type ReplicaSource, type Unknown } from "./source.js";
 
 /** How a build makes the viewer's replica. */
@@ -29,11 +31,14 @@ export function configureReplica(next: ReplicaConfig | null): void {
 interface ReplicaContextValue {
   source: ReplicaSource;
   online: OnlineData;
+  /** A member reads `models.list` and `usage.get` from the server. */
+  member: boolean;
 }
 
 const ReplicaContext = createContext<ReplicaContextValue>({
   source: emptyReplica(null),
   online: defaultOnlineData(),
+  member: false,
 });
 
 const viewerKey = (viewer: Viewer) =>
@@ -60,9 +65,10 @@ export function ReplicaProvider({
     [key, given],
   );
   useEffect(() => () => (made as { dispose?: () => void }).dispose?.(), [made]);
+  const member = viewer.kind === "member";
   const value = useMemo(
-    () => ({ source: made, online: { ...defaultOnlineData(), ...config?.online } }),
-    [made],
+    () => ({ source: made, online: { ...defaultOnlineData(), ...config?.online }, member }),
+    [made, member],
   );
   return <ReplicaContext.Provider value={value}>{children}</ReplicaContext.Provider>;
 }
@@ -71,8 +77,46 @@ export function useReplica(): ReplicaSource {
   return useContext(ReplicaContext).source;
 }
 
+/** The viewer's run records that have ended: a change means the ring's
+ * reading may have moved (03 K6). */
+function endedRunsOf(source: ReplicaSource): number {
+  return source
+    .all("run")
+    .filter((run) => run.u === source.me && run.status !== "queued" && run.status !== "running")
+    .length;
+}
+
+/**
+ * The online-only data (02 §9.1): for a member, `models.list` and
+ * `usage.get` from the server over the build's values (03 K6, K15). The
+ * usage is refetched when one of the member's runs ends in the replica.
+ * Must be rendered inside the app's query client.
+ */
 export function useOnlineData(): OnlineData {
-  return useContext(ReplicaContext).online;
+  const { online, member } = useContext(ReplicaContext);
+  const models = useModels(member);
+  const usage = useWeeklyUsage(member);
+  const ended = useReplicaQuery(endedRunsOf, []);
+  const client = useQueryClient();
+  const seen = useRef<number | null>(null);
+  useEffect(() => {
+    if (ended === UNKNOWN) return;
+    if (seen.current !== null && seen.current !== ended) {
+      void client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() });
+    }
+    seen.current = ended;
+  }, [ended, client]);
+  const usageData = usage.data;
+  const readAt = usage.dataUpdatedAt;
+  return useMemo(
+    () =>
+      withServerData(
+        online,
+        models.data,
+        usageData === undefined ? undefined : { ...usageData, readAt },
+      ),
+    [online, models.data, usageData, readAt],
+  );
 }
 
 /** Structural equality over plain data (records, arrays, objects). */

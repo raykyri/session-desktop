@@ -4,7 +4,7 @@
 import { accountInvites, accounts } from "@session/db";
 import test from "ava";
 
-import { open, seal } from "../src/auth/secretBox.js";
+import { createSecretBox } from "../src/secretBox.js";
 
 import type { Harness } from "./helpers.js";
 import { PUBLIC_ORIGIN, createHarness } from "./helpers.js";
@@ -92,9 +92,10 @@ test("another account's list never contains the caller's codes", async (t) => {
   t.false(JSON.stringify(other).includes(mine.code));
   t.deepEqual(other.links, []);
   // A code sealed for one account does not open as another's.
-  const sealed = seal(harness.config.secretKey, mine.code, "account-invite:A");
-  t.is(open(harness.config.secretKey, sealed, "account-invite:A"), mine.code);
-  t.is(open(harness.config.secretKey, sealed, "account-invite:B"), null);
+  const box = createSecretBox(harness.config.secretKey);
+  const sealed = box.seal(mine.code, "account-invite:A");
+  t.is(box.open(sealed, "account-invite:A"), mine.code);
+  t.throws(() => box.open(sealed, "account-invite:B"));
   const stored = harness.db.$client.prepare(`SELECT code_enc AS enc FROM invites`).get() as {
     enc: string;
   };

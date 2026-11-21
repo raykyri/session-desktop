@@ -192,6 +192,7 @@ are removed (`14-legacy-inventory.md` §3).
 | `SESSION_ALLOWED_GITHUB_LOGINS` | optional allowlist, narrower than the invite gate (unset = any GitHub account with a valid invite) |
 | `SESSION_METRICS_TOKEN` | bearer token for `GET /metrics` (unset = the route 404s) |
 | `SENTRY_DSN` | optional error reporting |
+| `SESSION_SECRET_KEY` | 32-byte AES-256-GCM key (`openssl rand -base64 32`) that encrypts members' API keys at rest; required in production, and backed up outside Fly: losing it makes stored keys unreadable (ADR-23) |
 
 Sign-up is gated by `SESSION_REQUIRE_INVITE = "1"` in `[env]` (§2), not by a
 secret. Mint codes from `/admin` as an admin; the first admin is granted with
