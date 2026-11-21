@@ -4,6 +4,8 @@ import { join } from "node:path";
 
 import test from "ava";
 import SqliteDatabase from "better-sqlite3";
+import { getTableName, is } from "drizzle-orm";
+import { SQLiteTable } from "drizzle-orm/sqlite-core";
 
 import {
   MIGRATIONS_FOLDER,
@@ -42,8 +44,9 @@ function readJournal(folder = MIGRATIONS_FOLDER): { entries: JournalEntry[] } {
   };
 }
 
-/** The tables `0000_initial.sql` still creates that the schema no longer
- * declares: M8a's squash drops them (plan `01` D5). */
+/** The research tables of the earlier history, deleted with the research
+ * schema in M4 (plan `01` A2, `02` W1.1). After the M8a squash no migration
+ * creates them (plan `01` D5). */
 const RESEARCH_TABLES = new Set([
   "collapsed_groups",
   "collapsed_places",
@@ -77,11 +80,15 @@ const RESEARCH_TABLES = new Set([
   "workspaces",
 ]);
 
-test("applies every migration to an empty database", (t) => {
+test("a fresh database migrates through 0000_initial.sql alone and holds no research table", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "session-migrate-"));
   const path = join(directory, "session.db");
   try {
     const db = openDatabase(path);
+    const applied = db.$client.prepare(`SELECT hash FROM __drizzle_migrations`).all() as {
+      hash: string;
+    }[];
+    t.is(applied.length, 1, "one migration applied");
     const tables = db.$client
       .prepare(
         `SELECT name FROM sqlite_master
@@ -89,70 +96,38 @@ test("applies every migration to an empty database", (t) => {
          ORDER BY name`,
       )
       .all() as { name: string }[];
+    const names = tables.map((row) => row.name);
     // The whole set, so a table the schema no longer declares is caught too.
-    // The research tables are still created by `0000_initial.sql`, though
-    // the schema no longer declares them; M8a squashes the migrations into
-    // one generated from the schema, and this list loses them then (plan
-    // `01` D5).
+    t.deepEqual(names, [
+      "api_keys",
+      "backfills",
+      "change_log",
+      "invites",
+      "log_epochs",
+      "oauth_states",
+      "records",
+      "registry",
+      "run_live",
+      "run_resumes",
+      "save_counts",
+      "server_head",
+      "server_meta",
+      "sessions",
+      "signup_attempts",
+      "site_settings",
+      "sync_answers",
+      "sync_clients",
+      "sync_seq_answers",
+      "tombstones",
+      "usage_billing",
+      "usage_events",
+      "user_limits",
+      "user_preferences",
+      "users",
+    ]);
     t.deepEqual(
-      tables.map((row) => row.name),
-      [
-        "api_keys",
-        "backfills",
-        "change_log",
-        "collapsed_groups",
-        "collapsed_places",
-        "embed_assets",
-        "feed_items",
-        "folders",
-        "followup_queue",
-        "highlights",
-        "image_refs",
-        "interface_drafts",
-        "invites",
-        "log_epochs",
-        "node_messages",
-        "node_summaries",
-        "nodes",
-        "notifications",
-        "oauth_states",
-        "records",
-        "registry",
-        "research_drafts",
-        "research_images",
-        "response_snapshots",
-        "run_attempts",
-        "run_live",
-        "run_queue",
-        "run_resumes",
-        "run_turns",
-        "save_counts",
-        "server_head",
-        "server_meta",
-        "sessions",
-        "signup_attempts",
-        "site_settings",
-        "sync_answers",
-        "sync_clients",
-        "sync_seq_answers",
-        "tombstones",
-        "tree_folder_membership",
-        "tree_invites",
-        "tree_member_removals",
-        "tree_members",
-        "tree_subscriptions",
-        "tree_views",
-        "trees",
-        "tweet_cache",
-        "usage_billing",
-        "usage_events",
-        "user_limits",
-        "user_preferences",
-        "users",
-        "widget_revisions",
-        "widget_state",
-        "workspaces",
-      ],
+      names.filter((name) => RESEARCH_TABLES.has(name) || name === "invites_legacy"),
+      [],
     );
     t.is(tableRowCount(db, "users"), 0);
     closeDatabase(db);
@@ -161,55 +136,54 @@ test("applies every migration to an empty database", (t) => {
   }
 });
 
-test("the history is the initial migration and the plan's numbered ones", (t) => {
-  // The database has never been deployed with this schema; M8a squashes the
-  // history into one initial migration (runbooks/reset-database.md, plan
-  // `01` D5). Each milestone adds its own numbered migration beside it:
-  // `0003_api_keys` (M5b), `0004_accounts` (M6), `0005_spaces` (M3; the
-  // plan's `0001_spaces`, numbered after the ones that landed first),
-  // `0006_runs` (M5a), `0007_weekly_tokens` (M5b's allowance override).
-  const journal = JSON.parse(
-    readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
-  ) as { entries: { tag: string }[] };
+test("the schema declares no research table", (t) => {
+  const declared = Object.values(schema).flatMap((value) =>
+    is(value, SQLiteTable) ? [getTableName(value)] : [],
+  );
+  t.true(declared.length > 0);
   t.deepEqual(
-    journal.entries.map((entry) => entry.tag),
-    [
-      "0000_initial",
-      "0003_api_keys",
-      "0004_accounts",
-      "0005_spaces",
-      "0006_runs",
-      "0007_weekly_tokens",
-    ],
+    declared.filter((name) => RESEARCH_TABLES.has(name)),
+    [],
+  );
+});
+
+test("the history is the one initial migration", (t) => {
+  // M8a squashed 0000_initial and 0003-0007 into one 0000_initial.sql
+  // generated from the schema (plan `01` D5). A database made by the earlier
+  // history is not upgraded: it answers UnknownMigrationError at boot and is
+  // replaced (runbooks/reset-database.md). Later schema changes add numbered
+  // migrations after this one.
+  const { entries } = readJournal();
+  t.deepEqual(
+    entries.map((entry) => entry.tag),
+    ["0000_initial"],
   );
   t.deepEqual(
     readdirSync(MIGRATIONS_FOLDER)
       .filter((name) => name.endsWith(".sql"))
       .sort(),
-    [
-      "0000_initial.sql",
-      "0003_api_keys.sql",
-      "0004_accounts.sql",
-      "0005_spaces.sql",
-      "0006_runs.sql",
-      "0007_weekly_tokens.sql",
-    ],
+    ["0000_initial.sql"],
   );
+  t.deepEqual(readdirSync(join(MIGRATIONS_FOLDER, "meta")).sort(), [
+    "0000_snapshot.json",
+    "_journal.json",
+  ]);
 });
 
 test("journal entries ascend: idx and when strictly increase together", (t) => {
   const { entries } = readJournal();
-  for (let index = 1; index < entries.length; index += 1) {
-    const previous = entries[index - 1] as JournalEntry;
-    const entry = entries[index] as JournalEntry;
+  t.true(entries.length > 0);
+  entries.forEach((entry, index) => {
+    t.true(entry.tag.startsWith(String(entry.idx).padStart(4, "0")), `${entry.tag} matches idx`);
+    const previous = entries[index - 1];
+    if (!previous) return;
     t.true(entry.idx > previous.idx, `${entry.tag}: idx after ${previous.tag}`);
     // Drizzle's migrator skips an entry dated before the last applied one.
     t.true(entry.when > previous.when, `${entry.tag}: when after ${previous.tag}`);
-    t.true(entry.tag.startsWith(String(entry.idx).padStart(4, "0")), `${entry.tag} matches idx`);
-  }
+  });
 });
 
-test("0005_spaces creates the records indexes of 01 D1 and the change log's, and seeds the server head", (t) => {
+test("0000_initial creates the records indexes of 01 D1 and the change log's, and seeds the server head", (t) => {
   const db = openDatabase(":memory:");
   const indexes = (table: string) =>
     (db.$client.prepare(`PRAGMA index_list(\`${table}\`)`).all() as { name: string }[]).flatMap(
@@ -265,9 +239,7 @@ test("every migration has a snapshot, chained, and the latest one holds the sche
   for (let index = 1; index < snapshots.length; index += 1) {
     t.is(snapshots[index]?.prevId, snapshots[index - 1]?.id, `${entries[index]?.tag} chains`);
   }
-  // What `drizzle-kit generate` would emit now: nothing for the declared
-  // tables (they are in the latest snapshot), only the drops of the research
-  // tables the squash removes.
+  // What `drizzle-kit generate` would emit now: nothing.
   const latest = snapshots.at(-1);
   if (!latest) throw new Error("no snapshot");
   const kit = (await import("drizzle-kit/api")) as unknown as DrizzleKitApi;
@@ -275,11 +247,7 @@ test("every migration has a snapshot, chained, and the latest one holds the sche
     latest,
     await kit.generateSQLiteDrizzleJson(schema, latest.id),
   );
-  const unexpected = statements.filter((statement) => {
-    const dropped = /^DROP TABLE `([a-z_]+)`;$/.exec(statement.trim())?.[1];
-    return dropped === undefined || !RESEARCH_TABLES.has(dropped);
-  });
-  t.deepEqual(unexpected, []);
+  t.deepEqual(statements, []);
 });
 
 test("a migration dated before one already applied fails startup", (t) => {
@@ -288,13 +256,19 @@ test("a migration dated before one already applied fails startup", (t) => {
   const path = join(directory, "session.db");
   try {
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+    const journal = readJournal(folder);
+    const first = journal.entries[0] as JournalEntry;
+    const writeJournal = () =>
+      writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify(journal, null, 2));
+    // A database that applied the initial migration and a later one.
+    journal.entries.push({ ...first, idx: 2, when: first.when + 2, tag: "0002_next" });
+    writeJournal();
+    writeFileSync(join(folder, "0002_next.sql"), "CREATE TABLE `next_table` (`id` text);");
     closeDatabase(openDatabase(path, { migrationsFolder: folder }));
     // Another branch's migration merged later, but dated before the last one
     // applied: drizzle's migrator would skip it.
-    const journal = readJournal(folder);
-    const first = journal.entries[0] as JournalEntry;
     journal.entries.splice(1, 0, { ...first, idx: 1, when: first.when + 1, tag: "0001_late" });
-    writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify(journal, null, 2));
+    writeJournal();
     writeFileSync(join(folder, "0001_late.sql"), "CREATE TABLE `late_table` (`id` text);");
 
     const client = new SqliteDatabase(path);

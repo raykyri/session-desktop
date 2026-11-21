@@ -117,17 +117,19 @@ expire on their own.
 
 ### Everyday commands
 
-| Command                              | What it does                                               |
-| ------------------------------------ | ---------------------------------------------------------- |
-| `npm run dev`                        | Server and client with reload                              |
-| `npm run check`                      | Types, lint, format, schema drift                          |
-| `npm test`                           | Unit tests across the four packages                        |
-| `npm run test:e2e`                   | Playwright, against fixture providers                      |
-| `npm run db:admin -- <github login>` | Grants admin, which unlocks Claude Fable and the user list |
-| `npm run db:studio`                  | Browse the database                                        |
+| Command                        | What it does                                                        |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `npm run dev`                  | Server and client with reload                                       |
+| `npm run check`                | Types, lint, format, schema drift                                   |
+| `npm test`                     | Unit tests across the four packages                                 |
+| `npm run test:e2e`             | Playwright, against fixture providers                               |
+| `npm run db:admin -- --invite` | Prints a root invite; `-- <handle>` makes that account a site admin |
+| `npm run db:studio`            | Browse the database                                                 |
 
-Runtime state is stored in `web/.data` — the database, cached embed images, temp files.
-Delete the directory to start clean.
+Runtime state is stored in `web/.data`: the database and temp files.
+Delete the directory to start clean. A database made before the M8a
+migration squash is refused at boot (`UnknownMigrationError`); reset it the
+same way (`docs/runbooks/reset-database.md`, "Local development").
 
 ### Running with no credentials (for testing, etc.)
 
@@ -206,12 +208,19 @@ fly secrets set -a session-dev \
   AWS_ACCESS_KEY_ID=... \
   AWS_SECRET_ACCESS_KEY=... \
   SESSION_METRICS_TOKEN="$(openssl rand -hex 32)" \
-  SESSION_SECRET_KEY="$(openssl rand -base64 32)"
+  SESSION_X_CLIENT_ID=... \
+  SESSION_X_CLIENT_SECRET=... \
+  SESSION_SECRET_KEY=<32 bytes of base64> \
+  SESSION_CURSOR_KEY=<another 32 bytes of base64>
 ```
 
-The server refuses to start in production without `SESSION_SECRET_KEY`: it
-encrypts members' API keys at rest. Keep a copy outside Fly; a lost key makes
-every stored API key unreadable, and members have to add theirs again.
+Make the two keys with `openssl rand -base64 32` and keep both outside Fly.
+The server refuses to start in production without `SESSION_SECRET_KEY` (it
+seals members' API keys and open invite codes; a lost key makes them
+unreadable) and without `SESSION_CURSOR_KEY` (it seals sync cursors; it may
+not equal `SESSION_SECRET_KEY`). `docs/runbooks/launch.md` §2 lists every
+variable production refuses to start without and where each value comes
+from.
 
 Three of those are not optional before real traffic. Without
 `LITESTREAM_REPLICA_URL` the database has no backup. Without
@@ -241,22 +250,27 @@ process left behind. `/healthz` answers 503 until that finishes and again from
 the first moment of a drain, so Fly's proxy follows the boot rather than
 routing into a process that cannot finish what it accepts.
 
-### 5. Grant the first admin
+### 5. Seed the first site admins
 
-Sign in once through the browser so the account exists, then flip the flag on
-the machine. `npm run db:admin` does not work there — the runtime image
-contains the server bundle and production dependencies only, with no sources
-and no `tsx`:
+Admins are set by handle (plan `05` §3.5). The runtime image has no sources
+and no `tsx`, so it holds `npm run db:admin` bundled as
+`packages/server/dist/admin.mjs`. Print a root invite per person:
 
 ```sh
-fly ssh console -a session-dev -C "node -e \"
-  const db = require('better-sqlite3')('/data/session.db');
-  const r = db.prepare('update users set is_admin = 1 where login = ?').run('<github login>');
-  if (r.changes === 0) throw new Error('no account with that login');
-\""
+fly ssh console -a session-dev
+# inside:
+setpriv --reuid=1000 --regid=1000 --clear-groups node /app/packages/server/dist/admin.mjs --invite
 ```
 
-Admin unlocks Claude Fable, the user list, and per-account limit overrides.
+The person opens the printed link, signs in with GitHub or X and chooses a
+handle. Then promote that handle:
+
+```sh
+setpriv --reuid=1000 --regid=1000 --clear-groups node /app/packages/server/dist/admin.mjs <handle>
+```
+
+A site admin sets the default model and the default effort on `/admin`
+before inviting anyone (`docs/runbooks/launch.md` §6 step 6).
 
 ### 6. Verify
 
@@ -286,7 +300,11 @@ Users see a pause, not a loss.
 
 **There is no rollback path.** Migrations run forward on boot and the server
 does not start if the database has a migration unsupported by the image, so redeploying an
-older image after a migration will not start. Roll forward instead.
+older image after a migration will not start. Roll forward instead. The
+migration history is one generated `0000_initial.sql` since the M8a squash; a
+database made by the earlier migrations is refused at boot and replaced with
+`docs/runbooks/reset-database.md`. The launch keeps its own rollback point
+until the first member's invite is used (`docs/runbooks/launch.md` §5).
 
 **Limits are on.** Every member, admins included, has a weekly allowance of
 included tokens (`SESSION_WEEKLY_TOKENS`) and a per-member overdraft
