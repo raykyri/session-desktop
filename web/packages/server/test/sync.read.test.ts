@@ -26,7 +26,9 @@ const read = (h: ReturnType<typeof createHarness>, body: unknown, cookie?: strin
   });
 
 test("forty open channels and a private one in one request, signed out, each filtered by its scope", async (t) => {
-  const h = createHarness(t, { env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "2" } });
+  const h = createHarness(t, {
+    env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "2", SESSION_LIMIT_SPACES_PER_DAY: "41" },
+  });
   const olga = new Person(h, h.addUser("olga"));
   const open: string[] = [];
   for (let i = 0; i < 40; i++) {

@@ -109,6 +109,8 @@ COPY --from=build /app/packages/server/package.json ./packages/server/package.js
 COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=build /app/packages/client/dist/app ./packages/client/dist/app
 COPY --from=build /app/packages/server/dist/server.mjs ./packages/server/dist/server.mjs
+# The privacy check after a removal (`runbooks/privacy-check.md`).
+COPY --from=build /app/packages/server/dist/privacy-check.mjs ./packages/server/dist/privacy-check.mjs
 # Resolved as `../../db/migrations` from the server bundle (`main.ts`).
 COPY --from=build /app/packages/db/migrations ./packages/db/migrations
 COPY --from=build /app/scripts ./scripts

@@ -59,7 +59,7 @@ export function BranchCard({
   now: number;
   onSelect: (id: string | null) => void;
 }) {
-  const { writer, me } = useFeedViewer();
+  const { writer, active, me } = useFeedViewer();
   const ui = useThreadUi(thread);
   const open = useThreadUiStore((state) => state.open);
   const close = useThreadUiStore((state) => state.close);
@@ -84,7 +84,7 @@ export function BranchCard({
           if (id) revealThread(id);
         }),
     });
-  if (writer && mine) {
+  if (active && mine) {
     const reason = pending
       ? "Available when the answer finishes"
       : promoted

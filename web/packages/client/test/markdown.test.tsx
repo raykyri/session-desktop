@@ -27,7 +27,7 @@ test.serial("safeHref gates every destination the model wrote", (t) => {
   const safe = screen.getByRole("link", { name: "ok" });
   t.is(safe.getAttribute("href"), "https://example.com/a");
   t.is(safe.getAttribute("target"), "_blank");
-  t.is(safe.getAttribute("rel"), "noopener noreferrer");
+  t.is(safe.getAttribute("rel"), "noopener noreferrer nofollow ugc");
   // The rejected destination keeps its text and loses its link.
   t.is(screen.queryByRole("link", { name: "bad" }), null);
   t.truthy(screen.getByText("bad"));

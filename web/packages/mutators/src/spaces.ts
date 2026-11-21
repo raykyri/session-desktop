@@ -4,7 +4,7 @@
 import { isClosed, isOwnerOf, roleIn } from "./access.js";
 import { refuse } from "./errors.js";
 import { memberKey } from "./records.js";
-import { M, addMember, bad, needSpace, refreshSpace, ulidS } from "./rules.js";
+import { M, addMember, bad, needSpace, refreshSpace, ulidS, within } from "./rules.js";
 import { isoToMs } from "./time.js";
 import { define } from "./tx.js";
 import { channelName } from "./validate.js";
@@ -20,6 +20,8 @@ export const SPACES = {
     who: "user",
     intent: "none",
     ids: (i) => [i.id],
+    // 5 channels a day per person (`04` Z1)
+    pre: (ctx) => (within(ctx, "spaces.create"), {}),
     run: (tx, i) => {
       const name = channelName(i.name);
       if (name === null) throw bad("name", "a channel name: a-z, 0-9 and -, 2 to 30 characters");
@@ -82,6 +84,8 @@ export const SPACES = {
         isoToMs(link.expiresAt) > isoToMs(tx.now);
       if (!live) throw refuse("FORBIDDEN", "This invite link has expired or was already used.");
     },
+    // 60 joins an hour per person (`04` Z1)
+    pre: (ctx) => (within(ctx, "spaces.join"), {}),
     run: (tx, i) => {
       const s = needSpace(tx, i.space);
       if (roleIn(tx, s.id, tx.me)) return null;
