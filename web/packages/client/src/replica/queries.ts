@@ -89,11 +89,14 @@ export function useChannels(): ChannelView[] | Unknown {
   return useReplicaQuery(channelsOf, []);
 }
 
-/** The channel of a name; null only once the replica has every space. */
+/** The channel of a name; null only once the replica has every space it
+ * may read and has asked the server for the name (a private channel's
+ * landing). */
 export function channelByName(source: ReplicaSource, name: string): ChannelView | null {
   const s = source.all("space").find((x) => x.name === name);
   if (s) return channelView(source, s);
   if (!source.complete("space")) throw new NotLoaded();
+  if (source.lookUp && !source.lookUp(name)) throw new NotLoaded();
   return null;
 }
 

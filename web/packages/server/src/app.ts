@@ -24,6 +24,7 @@ import { RateLimiter, abuseBuckets, rateLimitByUserOrIp } from "./middleware/rat
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
+import { storeDirectory } from "./sync/directory.js";
 import { protocolCheck } from "./sync/protocol.js";
 import { syncRoutes } from "./sync/routes.js";
 import { SyncService } from "./sync/service.js";
@@ -62,6 +63,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   const logger = deps.logger ?? defaultLogger(deps.config.env);
   const sync = deps.sync ?? new SyncService({ db: deps.db, config: deps.config, logger });
   deps.sync = sync;
+  deps.directory ??= storeDirectory(sync.store);
   const app = new Hono<AppEnv>();
 
   app.use("*", requestContext(logger));
@@ -80,10 +82,12 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
 
   // `04` Z1: snapshots per user, or per IP signed out. Mounted ahead of the
   // sync routes (`01` A1, M3), so it applies as they land.
-  app.use(
-    "/api/sync/snapshot",
-    rateLimitByUserOrIp(limiter, "snapshots", abuseBuckets(deps.config.abuse).snapshots),
-  );
+  // `POST /api/sync/read` (several logs in one request) counts once.
+  for (const path of ["/api/sync/snapshot", "/api/sync/read"])
+    app.use(
+      path,
+      rateLimitByUserOrIp(limiter, "snapshots", abuseBuckets(deps.config.abuse).snapshots),
+    );
 
   // The acceptance suite's test access (`01` A1): only in a test server.
   if (deps.config.env === "test") app.route("/api/sync/test", syncTestRoutes(sync));

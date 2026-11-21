@@ -100,3 +100,19 @@ if (!Element.prototype.scrollTo) {
     if (options?.top !== undefined) this.scrollTop = options.top;
   };
 }
+// Nor `scrollBy`, which an opening composer scrolls into view with.
+if (!Element.prototype.scrollBy) {
+  Element.prototype.scrollBy = function scrollBy(
+    this: Element,
+    options?: ScrollToOptions | number,
+    y?: number,
+  ) {
+    if (typeof options === "number") {
+      this.scrollLeft += options;
+      this.scrollTop += y ?? 0;
+      return;
+    }
+    this.scrollLeft += options?.left ?? 0;
+    this.scrollTop += options?.top ?? 0;
+  };
+}

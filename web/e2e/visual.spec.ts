@@ -19,8 +19,8 @@ import { expect, test, type Page } from "@playwright/test";
 const VISUAL_PENDING = new URL("./visual.pending", import.meta.url);
 
 import { APP_ORIGIN } from "./constants.js";
+import { FIRST_ASK } from "./fixtureWorld.js";
 import { PROTOCOL_HEADERS, signIn } from "./helpers.js";
-import { FIRST_ASK } from "./spaces.js";
 
 type Appearance = "dark" | "light";
 type ColorTheme = "green-blob" | "orange-blob";

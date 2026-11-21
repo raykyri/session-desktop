@@ -11,6 +11,7 @@ import type { Allowances } from "./runs/allowance.js";
 import type { Ledger } from "./runs/ledger.js";
 import type { RunTexts } from "./runs/runTexts.js";
 import type { RunsService } from "./runs/service.js";
+import type { SpaceDirectory } from "./spaces/directory.js";
 import type { SyncService } from "./sync/service.js";
 
 export interface ServerDeps {
@@ -42,6 +43,8 @@ export interface ServerDeps {
   keyCheckTimeoutMs?: number;
   /** The clock of the usage week; `Date.now` when absent. */
   now?: () => number;
+  /** Where `spaces.directory` reads the open channels; none when absent. */
+  directory?: SpaceDirectory;
 }
 
 /** Per-request state the middlewares publish and the handlers read. */

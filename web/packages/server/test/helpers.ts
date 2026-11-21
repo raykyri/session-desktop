@@ -68,7 +68,10 @@ export interface HarnessOptions {
   limiterNow?: () => number;
   /** The ledger, run texts, registry, key check timeout and clock the
    * procedures read (`deps.ts`). */
-  deps?: Pick<ServerDeps, "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now">;
+  deps?: Pick<
+    ServerDeps,
+    "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now" | "directory"
+  >;
   /** The sync core's options besides the database and config: its clock and
    * mutators (`sync/service.ts`). */
   sync?: Omit<SyncServiceOptions, "db" | "config">;

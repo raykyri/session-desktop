@@ -1,17 +1,14 @@
-// Shared steps of the spaces specs (02 §12.2). The client of the end-to-end
-// build reads the fixture replica (02 §9.6): the members mockup's channels
-// and threads, read as @ines.v by a signed-in member and through the read
-// rules signed out. Each page load starts from the fixtures again.
+// Shared steps of the spaces specs (02 §12.2). The client reads the sync
+// replica over the suite's server (02 §9.1); each spec writes the channels
+// and threads it reads through the sync routes first (`world.ts`).
 
 import { expect, type Page } from "@playwright/test";
 
 import { signIn } from "./helpers.js";
 
-/** The mockup's first thread: an ask by @ines.v in #public with three
- * passage trees. */
-export const FIRST_ASK = "01M7HWGZJGT7JTFFVSYPX055KV";
-/** A post by @hal_b in #public with three replies. */
-export const REPLY_POST_TEXT = "Is anyone else seeing the follow-up count lag";
+/** Why a step is not run against this server: an ask is queued and answered
+ * by the run loop, which arrives with M5a. */
+export const NO_RUNS = "Asks are answered by the run loop (05 M5a); this server queues them.";
 
 export async function openFeed(page: Page, path = "/") {
   await page.goto(path);
@@ -19,8 +16,9 @@ export async function openFeed(page: Page, path = "/") {
 }
 
 export async function signInAndOpen(page: Page, login: string, path = "/") {
-  await signIn(page, { login });
+  const user = await signIn(page, { login });
   await openFeed(page, path);
+  return user;
 }
 
 /** The card of a thread by a piece of its title. */
@@ -39,30 +37,6 @@ export function toast(page: Page, role: "status" | "alert" = "status") {
   return page.locator("[data-toast-region]").and(page.getByRole(role)).locator(".feed-toast");
 }
 
-interface FixtureControls {
-  hold: (state: "queued" | "running" | null) => void;
-  flush: () => void;
-  seedPosts: (channel: string, count: number) => Promise<void>;
-}
-
-interface FixtureWindow {
-  __sessionFixtures: FixtureControls;
-}
-
-/** Keeps new runs at "Researching" (or queued) until `flushRuns`
- * (`window.__sessionFixtures` of the fixture build, `fixtureReplica.ts`). */
-export const holdRuns = (page: Page, state: "queued" | "running" | null) =>
-  page.evaluate((s) => (window as unknown as FixtureWindow).__sessionFixtures.hold(s), state);
-/** Answers every held run. */
-export const flushRuns = (page: Page) =>
-  page.evaluate(() => (window as unknown as FixtureWindow).__sessionFixtures.flush());
-/** Writes `count` posts to a channel as the viewer. */
-export const seedPosts = (page: Page, channel: string, count: number) =>
-  page.evaluate(
-    ([name, n]) => (window as unknown as FixtureWindow).__sessionFixtures.seedPosts(name, n),
-    [channel, count] as const,
-  );
-
 /** Waits until the feed's scroll offset is the same on two polls in a row. */
 export async function scrollSettled(page: Page) {
   const scroller = page.locator("[data-shell-scroll]");
@@ -80,8 +54,7 @@ export async function scrollSettled(page: Page) {
     .toBe(true);
 }
 
-/** A client-side navigation: the fixtures survive it, where a page load
- * starts them again. */
+/** A client-side navigation, without a page load. */
 export async function navigate(page: Page, path: string) {
   await page.evaluate((to) => {
     history.pushState(null, "", to);
@@ -98,4 +71,16 @@ export async function compose(page: Page, text: string, mode: "Ask" | "Post" = "
   const field = page.getByRole("textbox", { name: "Ask or post" });
   await field.fill(text);
   await page.getByRole("button", { name: mode, exact: true }).click();
+}
+
+/** A handle's avatar text (`initialsOf` of `ui/Avatar.tsx`): the first
+ * letters of its first two parts split at `.` or `_`, otherwise its first
+ * two letters, upper-cased. */
+export function initials(handle: string): string {
+  const parts = handle.split(/[._]/).filter(Boolean);
+  const letters =
+    parts.length > 1
+      ? `${(parts[0] ?? "").slice(0, 1)}${(parts[1] ?? "").slice(0, 1)}`
+      : handle.slice(0, 2);
+  return letters.toUpperCase();
 }

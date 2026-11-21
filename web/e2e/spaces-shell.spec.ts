@@ -1,14 +1,41 @@
 // The app shell end to end (02 §2.2, W2.2, W2.3, W2.7; 05 M4): where the app
 // bar sits per layout and width band, the bar hiding on scroll without moving
-// the page, the site footer on feeds and pages, and the signed-out bar.
+// the page, the site footer on feeds and pages, the signed-out bar, and the
+// tab's client id across a reload and in a duplicated tab (01 Y3).
 //
-// The client reads the fixture replica (02 §9.6): the feeds are the
-// mockup's threads, read as @ines.v when signed in.
+// The feeds are a channel of olga's that the viewer joined, with posts
+// written through the sync routes before the specs run (`world.ts`).
 
 import { expect, test, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
 import { signIn } from "./helpers.js";
+import { channelName, person, ulid } from "./world.js";
+
+const LOGIN = "e2e-shell";
+const lounge = { name: "", id: "" };
+const lab = { name: "" };
+
+test.beforeAll(async ({ browser }) => {
+  const olga = await person(browser, "e2e-shell-olga");
+  const me = await person(browser, LOGIN);
+  lounge.name = channelName("shell");
+  lounge.id = await olga.channel(lounge.name);
+  lab.name = channelName("shell-lab");
+  await olga.channel(lab.name, { vis: "private" });
+  await me.join(lounge.id);
+  // enough rows to scroll the feed
+  await olga.all(
+    Array.from(
+      { length: 16 },
+      (_, i) =>
+        [
+          "threads.create",
+          { id: ulid(), space: lounge.id, kind: "post", q: `Shell post ${i + 1}` },
+        ] as const,
+    ),
+  );
+});
 
 /** The abuse mailbox of the origin the client was built for (`SESSION_PUBLIC_ORIGIN`
  * in `playwright.config.ts`). */
@@ -76,9 +103,9 @@ const fullWidth = (width: number) => (): [number, number] => [0, width];
 
 /** Home, a channel, Browse and Usage, with the heading of each page; a feed
  * (null) shows its threads. */
-const SCREENS: [string, string | null][] = [
+const screens = (): [string, string | null][] => [
   ["/", null],
-  ["/c/sci-fi", null],
+  [`/c/${lounge.name}`, null],
   ["/browse", "Browse channels"],
   ["/usage", "Usage and API keys"],
 ];
@@ -100,7 +127,7 @@ async function openHome(page: Page) {
 
 test.describe("signed in", () => {
   test.beforeEach(async ({ page }) => {
-    await signIn(page, { login: "e2e-shell" });
+    await signIn(page, { login: LOGIN });
   });
 
   test("the bar's placement per layout and width", async ({ page }) => {
@@ -218,11 +245,57 @@ test.describe("signed in", () => {
   });
 
   test("the site footer ends every feed and page", async ({ page }) => {
-    for (const [path, screen] of SCREENS) {
+    for (const [path, screen] of screens()) {
       await page.goto(path);
       await expectScreen(page, path, screen);
       await expectSiteFooter(page, path);
     }
+  });
+
+  test("a reload keeps the tab's client id; a duplicated tab registers a new one", async ({
+    page,
+    context,
+  }) => {
+    const registers: { sent: { clientId?: string }; answer: Record<string, unknown> }[] = [];
+    const watch = (p: Page) =>
+      p.on("response", async (res) => {
+        if (!res.url().endsWith("/api/sync/register")) return;
+        registers.push({
+          sent: (res.request().postDataJSON() ?? {}) as { clientId?: string },
+          answer: (await res.json()) as Record<string, unknown>,
+        });
+      });
+    watch(page);
+    await openHome(page);
+    await expect.poll(() => registers.length).toBe(1);
+    const first = registers[0];
+    expect(first?.sent.clientId).toBeUndefined();
+    expect(first?.answer).toMatchObject({ ok: true, reattached: false });
+    const id = first?.answer["clientId"];
+
+    // A reload re-attaches the stored id.
+    await page.reload();
+    await expect(page.locator(".tcard").first()).toBeVisible();
+    await expect.poll(() => registers.length).toBe(2);
+    expect(registers[1]?.sent.clientId).toBe(id);
+    expect(registers[1]?.answer).toMatchObject({ ok: true, clientId: id, reattached: true });
+
+    // A duplicated tab inherits a copy of sessionStorage; the first tab holds
+    // the id's Web Lock, so the copy registers a new id.
+    const stored = await page.evaluate(() => sessionStorage.getItem("session-client"));
+    expect(stored).toContain(String(id));
+    const tab = await context.newPage();
+    watch(tab);
+    await tab.addInitScript((value) => {
+      if (value && !sessionStorage.getItem("session-client"))
+        sessionStorage.setItem("session-client", value);
+    }, stored);
+    await openHome(tab);
+    await expect.poll(() => registers.length).toBe(3);
+    expect(registers[2]?.sent.clientId).toBeUndefined();
+    expect(registers[2]?.answer).toMatchObject({ ok: true, reattached: false });
+    expect(registers[2]?.answer["clientId"]).not.toBe(id);
+    await tab.close();
   });
 
   test("a member's bar", async ({ page }) => {
@@ -245,8 +318,8 @@ test.describe("signed out", () => {
     const bar = page.getByRole("banner");
     await expect(bar.getByRole("link", { name: "Session home" })).toBeVisible();
     // Signed out, the strip lists the open channels.
-    await expect(bar.getByRole("link", { name: "#public" })).toBeVisible();
-    await expect(bar.getByRole("link", { name: "#grant-review" })).toHaveCount(0);
+    await expect(bar.getByRole("link", { name: `#${lounge.name}` })).toBeVisible();
+    await expect(bar.getByRole("link", { name: `#${lab.name}` })).toHaveCount(0);
     await expect(bar.getByRole("button", { name: "Join with invite" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Sign in" })).toBeVisible();
     // One scope signed out, so no picker; no ring, Saved, layout toggle or
@@ -271,7 +344,7 @@ test.describe("signed out", () => {
 
   test("the site footer ends the feeds and Browse", async ({ page }) => {
     // Usage needs an account: signed out it goes to the sign-in page.
-    for (const [path, screen] of SCREENS.filter(([target]) => target !== "/usage")) {
+    for (const [path, screen] of screens().filter(([target]) => target !== "/usage")) {
       await page.goto(path);
       await expectScreen(page, path, screen);
       await expectSiteFooter(page, path);

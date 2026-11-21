@@ -19,6 +19,7 @@ import type { RunTexts } from "../runs/runTexts.js";
 import { UNAVAILABLE_RUN_TEXTS } from "../runs/runTexts.js";
 import type { SecretBox } from "../secretBox.js";
 import { createSecretBox } from "../secretBox.js";
+import { EMPTY_DIRECTORY, type SpaceDirectory } from "../spaces/directory.js";
 import type { SyncService } from "../sync/service.js";
 
 export interface AppContext {
@@ -43,6 +44,8 @@ export interface AppContext {
   box: SecretBox;
   keyCheckTimeoutMs: number | undefined;
   now: () => number;
+  /** The open channels, for `spaces.directory`. */
+  directory: SpaceDirectory;
 }
 
 export interface ContextInput {
@@ -76,6 +79,7 @@ export function createAppContext(
     box: createSecretBox(deps.config.secretKey),
     keyCheckTimeoutMs: deps.keyCheckTimeoutMs,
     now: deps.now ?? Date.now,
+    directory: deps.directory ?? EMPTY_DIRECTORY,
   };
 }
 

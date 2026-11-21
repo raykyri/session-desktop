@@ -1,13 +1,15 @@
 // Binds this tab's account-scoped local state to the signed-in account
-// (02 §9.4): the composer drafts and `threadUi` (selections and open
-// composers); the sync client's stored `{clientId, userId}` joins them with
-// the replica (§9.2).
+// (02 §9.4): the composer drafts, `threadUi` (selections and open
+// composers) and the sync client's stored `{clientId, userId}` (§9.2,
+// `replica/tabClient.ts`).
 //
 // - A route guard calls `claimLocalAccountState` with the session's user id
 //   before the first render: another account's drafts are dropped.
 // - Without a session the drafts stay stored but unreadable, so signing in
 //   again as the same account restores them.
-// - Sign-out clears them.
+// - Sign-out clears them and the stored client id.
+
+import { forgetTabClientId } from "../replica/tabClient.js";
 
 import { claimDrafts, hideDrafts, resetDrafts } from "./drafts.js";
 import { useThreadUiStore } from "./threadUi.js";
@@ -29,5 +31,6 @@ export function claimLocalAccountState(userId: string | null): void {
 /** Clears all local state of the account on sign-out. */
 export function clearLocalAccountState(): void {
   resetDrafts(null);
+  forgetTabClientId();
   useThreadUiStore.getState().reset();
 }
