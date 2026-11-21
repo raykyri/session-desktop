@@ -242,7 +242,7 @@
   height: 11px;
   margin-top: calc((var(--fs-title) * 1.44 - 11px) / 2);
   border-radius: 50%;
-  border: 1.5px solid var(--text-dim);
+  border: 1.5px solid var(--tree-node);
   background: var(--content-card-bg);
   position: relative;
   z-index: 1;
@@ -696,7 +696,7 @@
 
 .graph svg.rail circle {
   fill: var(--research-feed-bg);
-  stroke: var(--text-dim);
+  stroke: var(--tree-node);
   stroke-width: 1.5;
 }
 
@@ -859,8 +859,8 @@
   overflow-y: auto;
   margin-top: 6px;
   padding-bottom: 8px;
-  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 18px), transparent);
-  mask-image: linear-gradient(to bottom, black calc(100% - 18px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - 18px), transparent);
 }
 
 .preview .pf {

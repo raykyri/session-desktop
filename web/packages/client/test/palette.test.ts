@@ -20,7 +20,10 @@ const mockupHtml = readFileSync(
 
 /** Each mockup role and the tokens that carry it. The mockup's `--page`
  * (the window behind its frame), `--on-accent` (unused by its controls) and
- * its card shadows have no token. */
+ * its card shadows have no token. Two roles depart from the mockup for
+ * contrast (W11.2, `contrast.test.ts`) and are not compared: `--placeholder`
+ * (`--placeholder-color`) and the tree rails (`--tree-rail`, the mockup's
+ * `--border-strong`). */
 const ROLES: Record<string, readonly string[]> = {
   chrome: ["--chrome-header-bg"],
   pane: ["--right-pane-bg"],
@@ -32,7 +35,7 @@ const ROLES: Record<string, readonly string[]> = {
   "control-hover": ["--control-bg-hover"],
   "control-border": ["--control-border"],
   divider: ["--surface-divider"],
-  "border-strong": ["--surface-border-strong", "--tree-rail"],
+  "border-strong": ["--surface-border-strong"],
   "fill-subtle": ["--surface-fill-subtle"],
   "fill-hover": ["--surface-fill-hover"],
   accent: ["--accent-color", "--focus-ring"],
@@ -46,7 +49,6 @@ const ROLES: Record<string, readonly string[]> = {
   "t-muted": ["--text-muted"],
   "t-faint": ["--text-faint"],
   "t-dim": ["--text-dim"],
-  placeholder: ["--placeholder-color"],
   good: ["--status-success-fg"],
   warn: ["--status-active-fg"],
   bad: ["--status-attention-fg"],

@@ -22,7 +22,8 @@ const FIXTURE_STRINGS = [
 test("a build without the fixtures has no fixture strings", async (t) => {
   const out = mkdtempSync(join(tmpdir(), "session-client-build-"));
   const previous = process.env["VITE_SESSION_FIXTURES"];
-  process.env["VITE_SESSION_FIXTURES"] = "0";
+  // unset, as in a production build, not "0"
+  delete process.env["VITE_SESSION_FIXTURES"];
   try {
     await build({
       root: clientDirectory,
