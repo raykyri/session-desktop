@@ -268,10 +268,11 @@ const MUTATIONS: Mutation[] = [
     to: "",
   },
   {
+    // the rev rule moved to `StagedTx` (M1b review 2): the same fault there
     name: "N8 a record written again at a deleted key restarts at rev 1",
-    file: "src/server.ts",
-    from: "const rev = (prev?.rev ?? this.registry.get(reg) ?? 0) + 1;",
-    to: "const rev = (prev?.rev ?? 0) + 1;",
+    file: "../mutators/src/staged.ts",
+    from: "const rev = (committed?.rev ?? this.source.lastRev?.(registryKey(r)) ?? 0) + 1;",
+    to: "void registryKey;\n    const rev = (committed?.rev ?? 0) + 1;",
   },
   {
     name: "N9 a finished run writes text to a removed item",

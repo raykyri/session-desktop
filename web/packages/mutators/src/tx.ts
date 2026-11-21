@@ -61,6 +61,13 @@ export interface Reads extends Reader {
 export interface Tx extends Reads {
   /** The actor's handle. */
   readonly me: string;
+  /** True on the server. A client's prediction (false) skips the reads its
+   * replica cannot answer by design, and the effects that need them: the
+   * ban check (bans are the owner's records), other people's saves and
+   * notifications in a cascade, a private channel's true save count. The
+   * server's answer and records replace the prediction when the write is
+   * confirmed. */
+  readonly server: boolean;
   /** The server's time for this mutation (ISO, seconds). */
   readonly now: string;
   /** Write a new record. CONFLICT when its id was ever used, or its key exists. */

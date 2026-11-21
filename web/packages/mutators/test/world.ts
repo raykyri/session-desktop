@@ -76,17 +76,19 @@ class Store implements Source {
   idTaken(id: string): boolean {
     return this.registry.has(id);
   }
+  lastRev(name: string): number | undefined {
+    return this.registry.get(name);
+  }
+  /** Commit staged writes with the revs `StagedTx` gave them. */
   commit(staged: ReadonlyMap<string, StoredRecord | null>) {
     for (const [key, next] of staged) {
       if (next === null) {
         this.records.delete(key);
         continue;
       }
-      const reg = registryKey(next);
-      const rev = (this.records.get(key)?.rev ?? this.registry.get(reg) ?? 0) + 1;
-      this.records.set(key, { ...next, rev });
-      this.registry.set(reg, rev);
-      this.written.push({ ...next, rev });
+      this.records.set(key, next);
+      this.registry.set(registryKey(next), next.rev);
+      this.written.push(next);
     }
   }
 }
@@ -133,7 +135,7 @@ export class World {
   /** Write a record as it is, outside any mutator (what an operator job or
    * the run loop writes). */
   put(r: Draft) {
-    const tx = new StagedTx(this.store, "", "", "");
+    const tx = new StagedTx(this.store, "", "", "", "server");
     tx.put(r);
     this.store.commit(tx.staged);
   }
@@ -161,7 +163,7 @@ export class World {
           parsed.error.issues.map((x) => `input.${x.path.join(".")}: ${x.code}`),
         ).toError(),
       };
-    const tx = new StagedTx(this.store, me, msToIso(this.ms), o.mutationId ?? this.id());
+    const tx = new StagedTx(this.store, me, msToIso(this.ms), o.mutationId ?? this.id(), "server");
     const ctx: PreCtx = {
       me,
       now: this.ms,
@@ -212,7 +214,7 @@ export class World {
       },
       idTaken: () => false,
     };
-    const tx = new StagedTx(replica, me, msToIso(this.ms), this.id());
+    const tx = new StagedTx(replica, me, msToIso(this.ms), this.id(), "client");
     return { prediction: predict(tx, MUTATORS[name] as AnyMutator, input), tx };
   }
 
