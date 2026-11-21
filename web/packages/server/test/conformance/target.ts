@@ -387,6 +387,23 @@ export class HttpTestServer implements TestServer {
         })
       ).json;
     }
+    if (actor === null) {
+      // the route answers a signed-out caller 401 before it reads the body
+      // (`sync/routes.ts`); the suite checks the server half's answer, whose
+      // checks of the envelope's shape come before the sign-in, so that is
+      // read through the test route that hands the envelope to it as sent
+      const refused = await this.#request<{ code?: string }>("POST", "/api/sync/apply", null, {
+        envelopes: [envelope],
+      });
+      if (refused.status !== 401 || refused.json.code !== "UNAUTHORIZED")
+        throw new Error(`a signed-out apply answered ${refused.status}`);
+      return (
+        await this.#request<ApplyResult>("POST", "/api/sync/test/apply-unreadable", null, {
+          envelope,
+          unreadable: [],
+        })
+      ).json;
+    }
     const now = this.#options.clock.now();
     const sent = this.#batched
       ? [

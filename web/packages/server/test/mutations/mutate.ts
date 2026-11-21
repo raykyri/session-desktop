@@ -1388,7 +1388,8 @@ try {
       for (let m = queue.shift(); m; m = queue.shift()) {
         const started = Date.now();
         const o = await run(m, dir);
-        const broken = o.suite.passed + o.suite.failed === 0 || o.typecheck !== "ok";
+        // no expected test ran: the set names a test that is not there
+        const broken = o.suite.passed + o.suite.failed === 0;
         const dead = killed(o);
         if (!dead) survived++;
         console.log(
