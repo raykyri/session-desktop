@@ -56,6 +56,7 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   reply: { open: PUBLIC, closed: MEMBERS },
   comment: { open: PUBLIC, closed: MEMBERS },
   run: { open: PUBLIC, closed: MEMBERS },
+  turn: { open: PUBLIC, closed: MEMBERS },
   // closedMembers: the member list of a private space is for its members; a
   // person reads their own membership
   member: { open: PUBLIC, closed: row("none", "own", "all", "all") },
@@ -83,6 +84,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   reply: null,
   comment: null,
   run: null,
+  turn: null,
   ban: null,
   invite: null,
   modlog: null,
@@ -104,6 +106,7 @@ const SPACE: Record<Kind, ((r: never) => string) | null> = {
   reply: (r: { s: string }) => r.s,
   comment: (r: { s: string }) => r.s,
   run: (r: { s: string }) => r.s,
+  turn: (r: { s: string }) => r.s,
   member: (r: { sp: string }) => r.sp,
   request: (r: { sp: string }) => r.sp,
   ban: (r: { sp: string }) => r.sp,
@@ -125,6 +128,7 @@ const IN_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "reply",
   "comment",
   "run",
+  "turn",
   "member",
   "request",
   "ban",

@@ -4,11 +4,11 @@
 // `run_turns`, `run_attempts`, `response_snapshots`, `node_messages`,
 // `node_summaries`, `run_queue`, `user_preferences`) and publish on the
 // research event bus. Those tables and the bus were removed with the research
-// API (plan `01` A2, M4). The loop now calls this interface instead, and
-// nothing in this build implements it. M5a implements it over the `run`,
-// turn and answer records (`03` §1-§3): writes through `serverApply` with
-// attempt fencing (`03` E1), the in-flight checkpoint in `run_live` and
-// deltas as ephemeral events on the sync SSE stream (`03` T1-T4).
+// API (plan `01` A2, M4). The loop now calls this interface instead;
+// `recordStore.ts` implements it over the `run`, turn and answer records
+// (`03` §1-§3): writes through `serverApply` with attempt fencing (`03` E1),
+// the in-flight checkpoint in `run_live` and deltas as ephemeral events on
+// the sync SSE stream (`03` T1-T4).
 //
 // Token usage is not written here: it goes to the ledger (`ledger.ts`),
 // whose writes are never fenced (`03` K1, E1).

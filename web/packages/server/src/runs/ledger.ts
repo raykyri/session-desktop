@@ -10,7 +10,7 @@
 //
 // Allowance reads count open rows, so a member's concurrent runs see each
 // other's spending as of their last checkpoint. Rows hold ids and numbers, no
-// text. The SQLite implementation extends `usage_events` (M5a, `01` D-items);
+// text. `sqliteLedger.ts` implements it over `usage_events`;
 // `memoryLedger.ts` is the in-memory one the tests use.
 
 import type { ModelEntry, ModelProvider } from "@session/shared";
@@ -131,21 +131,11 @@ export interface Ledger {
  * output can go unbilled after a crash. */
 export const LEDGER_CHECKPOINT_MS = 2_000;
 
-/**
- * How much a cached input token counts, as the ratio of the provider's
- * cached-input price to its input price (`03` K2, decision P12).
- *
- * K2 puts this on the registry entry (`ModelEntry.cachedInputRatio`); until
- * the registry has the field, the server keeps the table here. A model
- * without an entry counts cached input in full, which never undercounts.
- */
-const CACHED_INPUT_RATIOS: Readonly<Partial<Record<ModelProvider, number>>> = {
-  anthropic: 0.1,
-  vertex: 0.1,
-};
-
-export function cachedInputRatio(entry: Pick<ModelEntry, "provider">): number {
-  return CACHED_INPUT_RATIOS[entry.provider] ?? 1;
+/** How much a cached input token counts for `entry`: its registry ratio
+ * (`ModelEntry.cachedInputRatio`, `03` K2, decision P12), or 1 for a model
+ * without one, which never undercounts. */
+export function cachedInputRatio(entry: Pick<ModelEntry, "cachedInputRatio">): number {
+  return entry.cachedInputRatio ?? 1;
 }
 
 /** Input plus output, with cached input at its ratio, rounded up (`03` K2). */

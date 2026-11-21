@@ -9,6 +9,7 @@ import type { Config } from "./config.js";
 import type { Logger } from "./logger.js";
 import type { Allowances } from "./runs/allowance.js";
 import type { Ledger } from "./runs/ledger.js";
+import type { RunLive } from "./runs/recordStore.js";
 import type { RunTexts } from "./runs/runTexts.js";
 import type { RunsService } from "./runs/service.js";
 import type { SyncService } from "./sync/service.js";
@@ -40,6 +41,10 @@ export interface ServerDeps {
   models?: readonly ModelEntry[];
   /** How long `apiKeys.set` waits for the provider; 10 s when absent. */
   keyCheckTimeoutMs?: number;
+  /** `GET /api/runs/:id/live` (`03` T3): the run's committed turns and the
+   * turn still streaming, for a reader who may read it; null answers
+   * NOT_FOUND. Every run is NOT_FOUND when absent. */
+  runLive?: (runId: string, reader: string | null) => RunLive | null;
   /** The clock of the usage week; `Date.now` when absent. */
   now?: () => number;
 }

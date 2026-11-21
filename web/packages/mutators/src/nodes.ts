@@ -9,6 +9,7 @@ import { refuse } from "./errors.js";
 import { Notifier } from "./notify.js";
 import {
   answerKey,
+  keyOf,
   nodeKey,
   threadKey,
   type NodeRec,
@@ -36,6 +37,7 @@ import {
   runOf,
   stale,
   text,
+  turnsOf,
   ulidFields,
 } from "./rules.js";
 import { define, type Tx } from "./tx.js";
@@ -187,7 +189,9 @@ export const NODES = {
         cancel(tx, runOf(tx, n));
         tx.put({ ...n, q: "", look: null, quote: null, del: true });
       } else {
-        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);
+        const runs = tx.list("run", th).filter((x) => under.has(x.node));
+        for (const x of runs) tx.del(`run:${x.id}`);
+        for (const x of turnsOf(tx, n.th, runs)) tx.del(keyOf(x));
         for (const x of comments) tx.del(`comment:${x.id}`);
         for (const id of under) {
           tx.del(answerKey(id));

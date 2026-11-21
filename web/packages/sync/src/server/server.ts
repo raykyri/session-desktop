@@ -154,7 +154,14 @@ function outOfBounds(v: unknown, maxDepth: number, maxNodes: number): "deep" | "
 const REPLACED = "*";
 
 /** The kinds a summary leaves out: what is under a thread. */
-const CONTENT_KINDS: ReadonlySet<string> = new Set(["node", "answer", "reply", "comment", "run"]);
+const CONTENT_KINDS: ReadonlySet<string> = new Set([
+  "node",
+  "answer",
+  "reply",
+  "comment",
+  "run",
+  "turn",
+]);
 
 /** The logs a record with this audience is written to: its space's log
  * (none for saves and notifications, which live in user logs only) and its

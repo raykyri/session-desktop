@@ -57,6 +57,7 @@ export const CONTENT_KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "reply",
   "comment",
   "run",
+  "turn",
 ]);
 
 /** The thread a record belongs to, or null. */
