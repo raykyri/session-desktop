@@ -14,7 +14,7 @@
 
 import type { RunRec } from "@session/mutators";
 import { onlineManager } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import test, { type ExecutionContext } from "ava";
 
 import {
@@ -221,21 +221,33 @@ test.serial(
 );
 
 test.serial("C1: usage.get is fetched again once the reading's week resets", async (t) => {
+  // The Usage page over the empty replica, whose clock is `Date.now()`: it
+  // renders in far less than the 2 s to the reset, so a refetch scheduled
+  // too early lands before it.
   let resetAt = 0;
   const fetchedAt: number[] = [];
-  const app = await openFeed(t, {
-    "usage.get": () => {
-      const now = replica().now();
-      fetchedAt.push(now);
-      if (fetchedAt.length === 1) {
-        resetAt = now + 400;
-        return testWeeklyUsage({ used: SPENT, resetAt });
-      }
-      return testWeeklyUsage({ used: 0, resetAt: now + 7 * 86_400_000 });
+  const app = await renderApp("/usage", {
+    responses: {
+      "usage.get": () => {
+        const now = Date.now();
+        fetchedAt.push(now);
+        if (fetchedAt.length === 1) {
+          resetAt = now + 2_000;
+          return testWeeklyUsage({ used: SPENT, resetAt });
+        }
+        return testWeeklyUsage({ used: 0, resetAt: now + 7 * 86_400_000 });
+      },
     },
   });
   await waitUntil(t, () => usageCalls(app) >= 1, "the first reading");
-  await waitUntil(t, () => /^2M of 2M/.test(ring().getAttribute("aria-label") ?? ""), "new week");
+  // the refetch comes 1 s after the reset, past `waitFor`'s default wait
+  await waitFor(
+    () => {
+      if (!/^2M of 2M/.test(ring().getAttribute("aria-label") ?? ""))
+        throw new Error("the new week's reading");
+    },
+    { timeout: 10_000 },
+  );
   const refetch = fetchedAt[1] ?? 0;
   t.true(refetch >= resetAt, `fetched again ${refetch - resetAt} ms after the reset, not before`);
 });
