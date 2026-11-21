@@ -1801,6 +1801,19 @@ const MUTATIONS: Mutation[] = [
     from: '  for (const r of tx.list("run", { u })) dropRuns(tx, r.th, [r]);\n',
     to: "",
   },
+  // ---- M5b client review, CD6: the `detail` of a `key` failure ----
+  {
+    name: "M5b-CD6a a 403 is recorded as a rejected key",
+    file: "src/runs/loop.ts",
+    from: 'fail: { why: "key", detail: rejected ? "key_rejected" : "key_forbidden" },',
+    to: 'fail: { why: "key", detail: "key_rejected" },',
+  },
+  {
+    name: "M5b-CD6b the run record drops the key failure's detail",
+    file: "src/runs/recordStore.ts",
+    from: '    ...(fail.why === "key" ? { detail: fail.detail } : {}),\n',
+    to: "",
+  },
 ];
 
 /** The tests that must fail for a mutation to count as killed, by id: the
@@ -2238,6 +2251,12 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M6-52": { tests: ["text in Litestream's local state beside the database fails its check"] },
   "M6-53": { tests: ["limit: the pre-stage limits hold for their whole window"] },
   "M6-54": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
+  "M5b-CD6a": {
+    tests: ["a 403 fails the run with the provider's message and leaves the key valid"],
+  },
+  "M5b-CD6b": {
+    tests: ["person's key rejected mid-run: failed key, the key marked invalid, closed at 0"],
+  },
 };
 
 /** What one suite said about a mutation. */
