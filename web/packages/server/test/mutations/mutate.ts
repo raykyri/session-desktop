@@ -258,7 +258,7 @@ const MUTATIONS: Mutation[] = [
     name: "N5 a token that does not open counts as version 0",
     file: "../sync/src/server/server.ts",
     from: "    const c = this.tokens.open(cursor, now);\n",
-    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now };\n",
+    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now, hid: this.store.history() };\n",
   },
   {
     // visibility no longer changes (`01` C11): the space log whose history is
@@ -1064,7 +1064,7 @@ const EXPECTED: Record<string, { in?: "db" | "sync"; tests: string[] }> = {
   X19: { tests: ["every tombstone is pruned after 30 days"] },
   N15: { tests: ["answers under (client, seq) expire after 7 days"] },
   N20: { tests: ["S2: reads keep no state"] },
-  N29: { in: "db", tests: ["a deleted record's id stays taken"] },
+  N29: { tests: ["N29: a deleted record's id is never used again"] },
   N9: { tests: ["R5: a removed thread's text is in no value at rest"] },
   "R2-22": { tests: ["S2: reads keep no state"] },
   "M3-1": { tests: ["S1: a request without Session-Protocol"] },

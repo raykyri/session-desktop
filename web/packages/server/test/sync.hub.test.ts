@@ -127,7 +127,8 @@ test("closeServer closes a connection that never ends after the grace", async (t
   await closeServer(server, 300);
   const took = Date.now() - started;
   t.true(took >= 250 && took < 1500, `took ${took} ms`);
-  t.is(await pending, "closed");
+  // closed by the server, not by the client's own timeout
+  t.is(await Promise.race([pending, sleep(1000).then(() => "still open")]), "closed");
 });
 
 test("the queue is bounded in bytes as well as events", async (t) => {
@@ -221,6 +222,9 @@ test("after a resync a stream is unsubscribed from the log: one resync, then not
   await sleep(300);
   t.is(pulls.n, 0);
   t.is(await s.until("resync", 300), null);
+  // nor does a run's delta of that log reach it
+  h.sync.hub.ephemeral(log as LogId, "run.delta", { text: "after the removal" }, () => true);
+  t.is(await s.until("run.delta", 300), null);
   await s.close();
 });
 

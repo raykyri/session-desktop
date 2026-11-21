@@ -270,7 +270,7 @@ const MUTATIONS: Mutation[] = [
     name: "N5 a token that does not open counts as version 0",
     file: "../sync/src/server/server.ts",
     from: "    const c = this.tokens.open(cursor, now);\n",
-    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now };\n",
+    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now, hid: this.store.history() };\n",
   },
   {
     // visibility no longer changes (`01` C11): the space log whose history is
