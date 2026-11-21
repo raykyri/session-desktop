@@ -6,6 +6,7 @@
 // callback and a broken CSRF check, and both fail in ways that look like
 // something else.
 
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -110,7 +111,22 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: optionalString,
   GITHUB_CLIENT_SECRET: optionalString,
   SESSION_ALLOWED_GITHUB_LOGINS: optionalString,
-  SESSION_REQUIRE_INVITE: flag(false),
+  SESSION_X_CLIENT_ID: optionalString,
+  SESSION_X_CLIENT_SECRET: optionalString,
+  // 32 bytes, base64 or hex: encrypts open invite codes for their creators
+  // (`01` S3, `04` I1). Required in production.
+  SESSION_SECRET_KEY: optionalString,
+
+  // Abuse limits (`04` Z1); the defaults are the plan's.
+  SESSION_LIMIT_WRITES_PER_MINUTE: positiveInteger(60, 1),
+  SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: positiveInteger(30, 1),
+  SESSION_LIMIT_AUTH_PER_MINUTE: positiveInteger(20, 1),
+  SESSION_LIMIT_FAILED_CHECKS_PER_HOUR: positiveInteger(10, 1),
+  SESSION_LIMIT_WAITING_PER_IP_PER_DAY: positiveInteger(5, 1),
+  SESSION_LIMIT_OPEN_INVITES: positiveInteger(3, 1),
+  SESSION_LIMIT_INVITES_PER_DAY: positiveInteger(10, 1),
+  SESSION_LIMIT_INVITE_READS_PER_MINUTE: positiveInteger(60, 1),
+  SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE: positiveInteger(30, 1),
 
   GOOGLE_APPLICATION_CREDENTIALS_JSON: optionalString,
   GOOGLE_VERTEX_PROJECT: optionalString,
@@ -149,6 +165,9 @@ const envSchema = z.object({
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
+  // Fixture OAuth endpoints served by this server (`auth/fixtureOAuth.ts`),
+  // for the end-to-end suite. Never in production.
+  SESSION_FIXTURE_OAUTH: flag(false),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -185,6 +204,28 @@ export interface ProviderCredentials {
   anthropic: boolean;
 }
 
+/** The abuse limits of `04` Z1, validated at boot. Rates are per window; the
+ * window is in each name. */
+export interface AbuseLimits {
+  writesPerMinute: number;
+  snapshotsPerMinute: number;
+  authPerMinute: number;
+  failedChecksPerHour: number;
+  waitingPerIpPerDay: number;
+  openInvites: number;
+  invitesPerDay: number;
+  inviteReadsPerMinute: number;
+  handleChecksPerMinute: number;
+}
+
+/** `SESSION_SECRET_KEY`: 32 bytes as base64 (44 characters) or hex (64). */
+export function parseSecretKey(value: string): Buffer | null {
+  const bytes = /^[0-9a-f]{64}$/i.test(value)
+    ? Buffer.from(value, "hex")
+    : Buffer.from(value, "base64");
+  return bytes.length === 32 ? bytes : null;
+}
+
 export interface Config {
   env: RawEnv["NODE_ENV"];
   isProduction: boolean;
@@ -199,9 +240,17 @@ export interface Config {
   tmpDir: string;
 
   github: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
+  x: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
   allowedGithubLogins: string[] | null;
-  requireInvite: boolean;
+  /** AES-256-GCM key for open invite codes (`01` S3). */
+  secretKey: Buffer;
+  /** True when `SESSION_SECRET_KEY` was unset outside production and the key
+   * is random per process: open codes are unreadable after a restart. */
+  secretKeyEphemeral: boolean;
   testAuthEnabled: boolean;
+  /** OAuth endpoints answered by this server's fixture routes. */
+  fixtureOAuth: boolean;
+  abuse: AbuseLimits;
 
   vertex: { credentialsJson: string | null; project: string | null; location: string };
   openrouterApiKey: string | null;
@@ -271,9 +320,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ]);
     }
   }
+  const isProduction = value.NODE_ENV === "production";
+  let secretKey: Buffer;
+  let secretKeyEphemeral = false;
+  if (value.SESSION_SECRET_KEY !== null) {
+    const parsed = parseSecretKey(value.SESSION_SECRET_KEY);
+    if (parsed === null) {
+      throw new ConfigError(["SESSION_SECRET_KEY: expected 32 bytes as base64 or hex"]);
+    }
+    secretKey = parsed;
+  } else if (isProduction) {
+    throw new ConfigError(["SESSION_SECRET_KEY: required in production"]);
+  } else {
+    secretKey = randomBytes(32);
+    secretKeyEphemeral = true;
+  }
+  if (isProduction && value.SESSION_FIXTURE_OAUTH) {
+    throw new ConfigError(["SESSION_FIXTURE_OAUTH: not allowed in production"]);
+  }
   return {
     env: value.NODE_ENV,
-    isProduction: value.NODE_ENV === "production",
+    isProduction,
     host: value.HOST,
     port: value.PORT,
 
@@ -289,10 +356,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientSecret: value.GITHUB_CLIENT_SECRET,
       callbackUrl: `${value.SESSION_PUBLIC_ORIGIN}/auth/github/callback`,
     },
+    x: {
+      clientId: value.SESSION_X_CLIENT_ID,
+      clientSecret: value.SESSION_X_CLIENT_SECRET,
+      callbackUrl: `${value.SESSION_PUBLIC_ORIGIN}/auth/x/callback`,
+    },
     allowedGithubLogins: splitLogins(value.SESSION_ALLOWED_GITHUB_LOGINS),
-    requireInvite: value.SESSION_REQUIRE_INVITE,
+    secretKey,
+    secretKeyEphemeral,
     // Never in production, whatever the variable says (`03-api-and-events.md` §5).
-    testAuthEnabled: value.SESSION_TEST_AUTH && value.NODE_ENV !== "production",
+    testAuthEnabled: value.SESSION_TEST_AUTH && !isProduction,
+    fixtureOAuth: value.SESSION_FIXTURE_OAUTH && !isProduction,
+    abuse: {
+      writesPerMinute: value.SESSION_LIMIT_WRITES_PER_MINUTE,
+      snapshotsPerMinute: value.SESSION_LIMIT_SNAPSHOTS_PER_MINUTE,
+      authPerMinute: value.SESSION_LIMIT_AUTH_PER_MINUTE,
+      failedChecksPerHour: value.SESSION_LIMIT_FAILED_CHECKS_PER_HOUR,
+      waitingPerIpPerDay: value.SESSION_LIMIT_WAITING_PER_IP_PER_DAY,
+      openInvites: value.SESSION_LIMIT_OPEN_INVITES,
+      invitesPerDay: value.SESSION_LIMIT_INVITES_PER_DAY,
+      inviteReadsPerMinute: value.SESSION_LIMIT_INVITE_READS_PER_MINUTE,
+      handleChecksPerMinute: value.SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE,
+    },
 
     vertex: {
       credentialsJson: value.GOOGLE_APPLICATION_CREDENTIALS_JSON,

@@ -10,18 +10,17 @@ import { version } from "@session/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 
-import type { OAuthClient } from "./auth/github.js";
-import { githubRoutes } from "./auth/github.js";
-import { clearSessionCookie, sessionLoader } from "./auth/session.js";
+import { authRoutes } from "./auth/routes.js";
+import { clearSessionCookie, clientKey, sessionLoader } from "./auth/session.js";
 import type { AppEnv, ServerDeps } from "./deps.js";
 import type { Readiness } from "./health.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger } from "./logger.js";
 import { MetricsRegistry, renderMetrics } from "./metrics.js";
-import { csrfGuard } from "./middleware/csrf.js";
+import { csrfGuard, rejectAuthorizationHeader } from "./middleware/csrf.js";
 import { requestLogging } from "./middleware/logging.js";
 import { requestMetrics } from "./middleware/metrics.js";
-import { RateLimiter } from "./middleware/rateLimit.js";
+import { RateLimiter, abuseBuckets, rateLimitByUserOrIp } from "./middleware/rateLimit.js";
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
@@ -45,8 +44,6 @@ export interface CreateAppOptions extends ServerDeps {
    * a test that builds the app directly wants (`13-deployment-fly.md` §5). */
   readiness?: Readiness;
   metrics?: MetricsRegistry;
-  /** Replaced by the auth tests, which have no GitHub to talk to. */
-  createOAuthClient?: (deps: ServerDeps) => OAuthClient;
   clientDistDirectory?: string;
 }
 
@@ -55,7 +52,6 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     limiter = new RateLimiter(),
     readiness = createReadiness("ready"),
     metrics = new MetricsRegistry(),
-    createOAuthClient,
     clientDistDirectory,
     ...deps
   } = options;
@@ -63,12 +59,21 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   app.use("*", requestContext(logger));
+  app.use("*", clientKey(deps.config));
   app.use("*", requestMetrics(metrics));
   app.use("*", requestLogging());
   app.use("*", securityHeaders(deps.config));
 
+  app.use("*", rejectAuthorizationHeader());
   app.use("*", csrfGuard(deps.config));
   app.use("*", sessionLoader(deps));
+
+  // `04` Z1: snapshots per user, or per IP signed out. Mounted ahead of the
+  // sync routes (`01` A1, M3), so it applies as they land.
+  app.use(
+    "/api/sync/snapshot",
+    rateLimitByUserOrIp(limiter, "snapshots", abuseBuckets(deps.config.abuse).snapshots),
+  );
 
   // Fly's check. 503 until migrations and run reconciliation are done and
   // again from the first moment of the drain, so the proxy never routes to a
@@ -99,20 +104,14 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
         config: deps.config,
         registry: metrics,
         health: readiness.state(),
+        limiter,
       }),
       200,
       { "Content-Type": "text/plain; version=0.0.4; charset=utf-8", "Cache-Control": "no-store" },
     );
   });
 
-  app.route(
-    "/",
-    githubRoutes({
-      deps: { ...deps, logger },
-      limiter,
-      ...(createOAuthClient ? { createClient: createOAuthClient } : {}),
-    }),
-  );
+  app.route("/", authRoutes({ deps: { ...deps, logger }, limiter }));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
   // clear, so the mutation is mirrored here rather than given a `Set-Cookie`
@@ -136,6 +135,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
         return createAppContext({ ...deps, logger }, limiter, c.get("logger"), {
           user: c.get("user"),
           clientIp: c.get("clientIp"),
+          ipKey: c.get("ipKey"),
           sessionToken: c.get("sessionToken"),
         }) as unknown as Record<string, unknown>;
       },

@@ -14,9 +14,16 @@ import type { ShellChannel } from "../src/features/shell/shellData.js";
 import { viewerOf } from "../src/features/shell/viewer.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
-import { renderApp, renderInRouter, resetDocumentRoot, testUser, waitUntil } from "./helpers.js";
+import {
+  renderApp,
+  renderInRouter,
+  resetDocumentRoot,
+  testUser,
+  waitUntil,
+  waitingTestUser,
+} from "./helpers.js";
 
-const waitingUser = () => ({ ...testUser({ login: "new.one" }), status: "waiting" });
+const waitingUser = () => waitingTestUser();
 
 test.beforeEach(() => {
   localStorage.clear();

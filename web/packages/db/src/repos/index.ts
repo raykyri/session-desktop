@@ -8,9 +8,11 @@
 // namespace import, so this spelling is what keeps a module that nothing uses
 // visible as an error rather than silently retained.
 
+import * as accountInvites from "./accountInvites.js";
+import * as accounts from "./accounts.js";
 import * as auth from "./auth.js";
 import * as preferences from "./preferences.js";
 import * as usage from "./usage.js";
 import * as users from "./users.js";
 
-export { auth, preferences, usage, users };
+export { accountInvites, accounts, auth, preferences, usage, users };

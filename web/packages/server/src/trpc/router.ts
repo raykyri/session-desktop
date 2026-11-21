@@ -9,6 +9,7 @@
 
 import { router } from "./base.js";
 import { adminRouter, authRouter, settingsRouter, usageRouter } from "./routers/account.js";
+import { accountInvitesRouter, accountRouter, membersRouter } from "./routers/membership.js";
 import { systemRouter } from "./routers/system.js";
 
 export const appRouter = router({
@@ -17,6 +18,9 @@ export const appRouter = router({
   settings: settingsRouter,
   usage: usageRouter,
   admin: adminRouter,
+  account: accountRouter,
+  accountInvites: accountInvitesRouter,
+  members: membersRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -18,16 +18,27 @@ import { createAppRouter } from "../src/app/router.js";
 
 import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
 
+/** An active account; its handle is its login unless given. */
 export function testUser(overrides: Partial<User> = {}): User {
+  const login = overrides.login ?? "raymond";
   return {
     id: "u1",
-    login: "raymond",
+    login,
     name: "Raymond",
     avatarUrl: null,
     isAdmin: false,
     createdAt: 1_700_000_000_000,
+    handle: login,
+    displayName: overrides.name ?? "Raymond",
+    status: "active",
+    provider: "github",
     ...overrides,
   };
+}
+
+/** A waiting account: signed in, no invite, no handle (04 §3.1). */
+export function waitingTestUser(overrides: Partial<User> = {}): User {
+  return testUser({ login: "new.one", handle: null, displayName: null, status: "waiting", ...overrides });
 }
 
 /** What the shell reads over tRPC. Every one of them has to answer with

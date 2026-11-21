@@ -12,9 +12,9 @@ import {
   readPendingInvite,
 } from "../src/lib/pendingInvite.js";
 
-import { renderApp, resetDocumentRoot, testUser, waitUntil } from "./helpers.js";
+import { renderApp, resetDocumentRoot, testUser, waitUntil, waitingTestUser } from "./helpers.js";
 
-const waitingUser = () => ({ ...testUser({ login: "new.one" }), status: "waiting" }) as never;
+const waitingUser = () => waitingTestUser();
 
 /** A valid ULID. */
 const THREAD = "01JD3Q9ZK4M7V2X8N5B6C1T0RS";

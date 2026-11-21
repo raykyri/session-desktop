@@ -27,6 +27,8 @@ export interface RequestVariables {
   user: User | null;
   sessionToken: string | null;
   clientIp: string;
+  /** The hashed per-IP limit key (`hashClientIp`): IPv6 by /64 prefix. */
+  ipKey: string;
 }
 
 export interface AppEnv {

@@ -23,10 +23,10 @@ import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
-import { renderApp, testUser, waitUntil } from "./helpers.js";
+import { renderApp, testUser, waitUntil, waitingTestUser } from "./helpers.js";
 
 const FIRST = "01M7HWGZJGT7JTFFVSYPX055KV";
-const waiting = () => ({ ...testUser({ login: "new.one" }), status: "waiting" }) as never;
+const waiting = () => waitingTestUser();
 
 let made: FixtureReplica[] = [];
 test.beforeEach(() => {

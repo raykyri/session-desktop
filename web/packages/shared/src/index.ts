@@ -25,6 +25,7 @@ export type * from "./wire/index.js";
 export * from "./schemas/index.js";
 
 export * from "./app/helpers.js";
+export * from "./app/inviteCode.js";
 export * from "./app/taggedInstructions.js";
 
 export * from "./journal/activity.js";

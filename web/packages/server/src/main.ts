@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve } from "@hono/node-server";
-import { auth, closeDatabase, openDatabase } from "@session/db";
+import { accounts, auth, closeDatabase, openDatabase } from "@session/db";
 
 import { createApp } from "./app.js";
 import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
@@ -68,7 +68,8 @@ export {
 } from "./backups.js";
 
 /** Prunes expired rate limit buckets, user sessions, OAuth states and sign-up
- * attempts. */
+ * attempts, and deletes waiting accounts older than 90 days (plan `04`
+ * §3.1, decision S4): scheduled maintenance, not a queue. */
 export function sweepExpired(
   deps: ServerDeps,
   limiter: RateLimiter,
@@ -80,6 +81,7 @@ export function sweepExpired(
     sessions: auth.deleteExpiredSessions(deps.db),
     oauthStates: auth.deleteExpiredOAuthStates(deps.db),
     signupAttempts: auth.deleteSignupAttemptsBefore(deps.db, at - auth.SIGNUP_ATTEMPT_RETENTION_MS),
+    waitingAccounts: accounts.sweepWaiting(deps.db, at),
   };
   logger.debug(swept, "swept expired state");
 }
@@ -122,6 +124,12 @@ export function main(): RunningServer {
   loadDotenvForDevelopment();
   const config = loadConfig();
   const logger = defaultLogger(config.env);
+  if (config.secretKeyEphemeral) {
+    logger.warn(
+      { setting: "SESSION_SECRET_KEY" },
+      "SESSION_SECRET_KEY is unset: open invite codes cannot be shown again after a restart",
+    );
+  }
   prepareDataDirectories(config);
   writeVertexCredentials(config);
 

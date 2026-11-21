@@ -1,7 +1,7 @@
 // Session cookie management and authentication middleware
 // (`06-auth-and-users.md` §1, §4).
 
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac } from "node:crypto";
 
 import { auth, users } from "@session/db";
 import type { User } from "@session/shared";
@@ -10,6 +10,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import type { Config } from "../config.js";
 import type { AppEnv, ServerDeps } from "../deps.js";
+import { ipLimitKey } from "../net/ipKey.js";
 
 export const SESSION_COOKIE = "session";
 
@@ -41,16 +42,22 @@ export function sessionCookieFrom(c: Context<AppEnv>): string | null {
 }
 
 /**
- * Hashes client IP addresses stored in `signup_attempts`. Uses the deployment's
- * GitHub client secret as HMAC salt to prevent rainbow table and enumeration
- * attacks against IPv4 space. If GitHub credentials are not configured, falls
- * back to an ephemeral process-level random salt.
+ * The per-IP key of the abuse limits and of `signup_attempts` (04 Z1): the
+ * address, or its /64 prefix for IPv6 (`ipLimitKey`), under an HMAC keyed
+ * with `SESSION_SECRET_KEY`, so a database read gives no addresses and the
+ * IPv4 space cannot be enumerated against it.
  */
-const FALLBACK_IP_SALT = randomBytes(32).toString("hex");
-
 export function hashClientIp(config: Config, ip: string): string {
-  const salt = config.github.clientSecret ?? FALLBACK_IP_SALT;
-  return createHmac("sha256", salt).update(ip, "utf8").digest("hex");
+  return createHmac("sha256", config.secretKey).update(ipLimitKey(ip), "utf8").digest("hex");
+}
+
+/** Publishes `ipKey`, the hashed limit key of the client address. After
+ * `requestContext`, which sets `clientIp`. */
+export function clientKey(config: Config): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    c.set("ipKey", hashClientIp(config, c.get("clientIp")));
+    await next();
+  };
 }
 
 export function userForToken(deps: ServerDeps, token: string | null): User | null {

@@ -83,19 +83,21 @@ test("applies every migration to an empty database", (t) => {
   }
 });
 
-test("the history is a single initial migration", (t) => {
-  // The database has never been deployed with this schema; the history stays
-  // flat until it is (runbooks/reset-database.md).
+test("the history is the initial migration and the plan's numbered ones", (t) => {
+  // `01` D5: `0001_spaces` (M3) and `0002_accounts` (M6) follow the initial
+  // migration; M8a squashes them into one.
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
+  const tags = journal.entries.map((entry) => entry.tag);
+  t.true(tags.includes("0000_initial"));
+  t.true(tags.includes("0002_accounts"));
   t.deepEqual(
-    journal.entries.map((entry) => entry.tag),
-    ["0000_initial"],
-  );
-  t.deepEqual(
-    readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql")),
-    ["0000_initial.sql"],
+    readdirSync(MIGRATIONS_FOLDER)
+      .filter((name) => name.endsWith(".sql"))
+      .map((name) => name.replace(/\.sql$/, ""))
+      .sort(),
+    [...tags].sort(),
   );
 });
 
