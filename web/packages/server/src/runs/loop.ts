@@ -395,7 +395,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     if (!first) {
       if (request.payer !== "included") {
         return settle("failed", {
-          fail: { why: "key" },
+          fail: { why: "key", detail: "key_unset" },
           error: {
             errorClass: "auth",
             message: "The API key for this run is missing or no longer valid.",
@@ -744,7 +744,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     // far stay.
     if (keyLost) {
       return settle("failed", {
-        fail: { why: "key" },
+        fail: { why: "key", detail: "key_changed" },
         error: {
           errorClass: "auth",
           message: KEY_STOPPED_MESSAGE,
@@ -781,14 +781,18 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       // error on a key that still authenticates: the run fails and the key
       // stays valid, with the provider's message as the detail.
       if (classified.errorClass === "auth" && current.payer !== "included") {
-        if (current.key !== undefined && isKeyRejection(streamError)) {
+        const rejected = isKeyRejection(streamError);
+        if (current.key !== undefined && rejected) {
           deps.allowances.keyRejected?.(
             userId,
             current.payer === "key:openai" ? "openai" : "anthropic",
             current.key.sealed,
           );
         }
-        return settle("failed", { fail: { why: "key" }, error: classified });
+        return settle("failed", {
+          fail: { why: "key", detail: rejected ? "key_rejected" : "key_forbidden" },
+          error: classified,
+        });
       }
       return settle("failed", { fail: failureOf(classified), error: classified });
     }

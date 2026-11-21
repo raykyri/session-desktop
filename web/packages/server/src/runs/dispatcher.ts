@@ -264,7 +264,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
             : summaryOf(
                 ledger,
                 run.runId,
-                { why: "key" },
+                { why: "key", detail: "key_only" },
                 { errorClass: "auth", message: NO_KEY_TEXT, detail: "no key for a key-only model" },
               ),
         );

@@ -24,6 +24,7 @@ import {
   useUsageRuns,
   useWeeklyUsage,
 } from "../../api/account.js";
+import { refusalMessage } from "../../lib/toast.js";
 import { clip } from "../feed/format.js";
 import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
@@ -38,10 +39,6 @@ interface KeyView {
   provider: ApiKeyProvider;
   last4: string;
   status: "valid" | "invalid";
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Something went wrong.";
 }
 
 function CheckCircle() {
@@ -85,6 +82,10 @@ function RecentRuns() {
       <h3 id="usage-runs">Recent runs</h3>
       {runs.isPending ? (
         <p className="uempty" role="status" aria-label="Loading" aria-busy="true" />
+      ) : runs.isError && !runs.data ? (
+        <p className="ferr" role="alert">
+          Couldn&apos;t load your runs. Reload to try again.
+        </p>
       ) : list.length === 0 ? (
         <p className="uempty">No runs yet this week.</p>
       ) : (
@@ -132,7 +133,7 @@ function BillingSection({ billing, keys }: { billing: "pause" | "key"; keys: Key
             ? "Asks will continue on your API key."
             : "Asks will pause until the reset.",
         ),
-      onError: (refusal) => setError(errorMessage(refusal)),
+      onError: (refusal) => setError(refusalMessage(refusal)),
     });
   };
   const keyHint = anthropic
@@ -243,9 +244,12 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
           // Nothing was saved: the form comes back with the text kept.
           setChecking(null);
           setForm(true);
-          setError(errorMessage(refusal));
+          setError(refusalMessage(refusal));
           requestAnimationFrame(() => input.current?.focus());
         },
+        // The raw key is the mutation's input: once answered, the mutation
+        // leaves the cache (`useSetApiKey` keeps it for no time).
+        onSettled: () => setKey.reset(),
       },
     );
   };
@@ -259,16 +263,17 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
       },
       onError: (refusal) => {
         setConfirming(false);
-        showToast(errorMessage(refusal), { alert: true });
+        showToast(refusalMessage(refusal), { alert: true });
       },
     });
   };
 
   const name = <b className="kname">{info.name}</b>;
+  // 03 K14, shown in every state of the row.
   const note = (
     <p className="knote">
-      Asks on this key go to {info.name} directly and fall under your own agreement with {info.name}
-      .
+      Asks on this key go to {info.name} directly. OpenRouter&apos;s zero-data-retention routing
+      does not apply to them; they fall under your own agreement with {info.name}.
     </p>
   );
 
@@ -354,40 +359,36 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
             {error}
           </p>
         ) : null}
-        {note}
       </div>
     );
   } else if (stored) {
     body = (
-      <>
-        <div className="kstate">
-          {name}
-          <span className="kmask">
-            {info.prefix}••••{stored.last4}
+      <div className="kstate">
+        {name}
+        <span className="kmask">
+          {info.prefix}••••{stored.last4}
+        </span>
+        {stored.status === "valid" ? (
+          <span className="chip kchip ok">
+            <CheckCircle />
+            Valid
           </span>
-          {stored.status === "valid" ? (
-            <span className="chip kchip ok">
-              <CheckCircle />
-              Valid
-            </span>
-          ) : (
-            <span className="chip kchip bad">Invalid</span>
-          )}
-          <span className="grow" />
-          <button
-            ref={removeButton}
-            type="button"
-            className="btn2 sm"
-            onClick={() => {
-              setConfirming(true);
-              requestAnimationFrame(() => keep.current?.focus());
-            }}
-          >
-            Remove
-          </button>
-        </div>
-        {note}
-      </>
+        ) : (
+          <span className="chip kchip bad">Invalid</span>
+        )}
+        <span className="grow" />
+        <button
+          ref={removeButton}
+          type="button"
+          className="btn2 sm"
+          onClick={() => {
+            setConfirming(true);
+            requestAnimationFrame(() => keep.current?.focus());
+          }}
+        >
+          Remove
+        </button>
+      </div>
     );
   } else {
     body = (
@@ -419,7 +420,10 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
       <span className="sr-only" aria-live="polite" data-key-status="">
         {announced}
       </span>
-      <div className="kb">{body}</div>
+      <div className="kb">
+        {body}
+        {note}
+      </div>
     </div>
   );
 }

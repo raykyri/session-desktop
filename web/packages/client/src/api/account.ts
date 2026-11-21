@@ -140,7 +140,10 @@ export function useRuntimeConfig() {
   return useQuery(runtimeConfigQueryOptions());
 }
 
-/** Usage is not pushed; a mounted reader refreshes every 30 s. */
+/** Usage is not pushed: a reading is stale after 30 s, and a reader that
+ * mounts after that fetches it again. It is also refetched when one of the
+ * member's runs ends and when its week resets (`UsageRefresh` in
+ * `replica/ReplicaProvider.tsx`), and after a write refused for it. */
 export const USAGE_REFRESH_MS = 30_000;
 
 /** `usage.get` is online-only and not pushed: 30 s stale time (03 K6). */
@@ -192,11 +195,14 @@ export function useSetBilling() {
 }
 
 /** The saved key goes into the cached reading at once, so its row does not
- * fall back to "Not set" until the refetch answers. */
+ * fall back to "Not set" until the refetch answers. The mutation's input is
+ * the raw key: it is not kept in the mutation cache once the mutation has no
+ * observer (`gcTime: 0`; the Usage page resets it when it settles). */
 export function useSetApiKey() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: setApiKey,
+    gcTime: 0,
     onSuccess: (saved) =>
       client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
         old

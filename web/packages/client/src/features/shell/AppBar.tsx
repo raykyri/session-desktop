@@ -60,7 +60,8 @@ export interface AppBarProps {
   currentChannel: string | null;
   onJoin?: ((channel: ShellChannel) => void) | undefined;
   onNewChannel?: (() => void) | undefined;
-  usage: UsageReading;
+  usage: UsageReading | null;
+  usageOffline?: boolean;
   savedCount: number;
   onSaved: boolean;
   layout: FeedLayout;
@@ -126,7 +127,7 @@ export function AppBar(props: AppBarProps) {
         <>
           {viewer.kind === "member" ? (
             <>
-              <UsageRing reading={props.usage} />
+              <UsageRing reading={props.usage} offline={props.usageOffline ?? false} />
               <SavedButton count={props.savedCount} current={props.onSaved} />
               {props.isFeed ? (
                 <LayoutToggle layout={props.layout} onToggle={props.onToggleLayout} />

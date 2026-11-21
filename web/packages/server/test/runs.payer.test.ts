@@ -111,7 +111,7 @@ test("a key rejected after the switch ends the run failed key with its earlier t
 
   t.is((await harness.agent.run(request)).outcome, "failed");
   const [finish] = harness.store.finishes(request.runId);
-  t.deepEqual(finish?.summary.fail, { why: "key" });
+  t.deepEqual(finish?.summary.fail, { why: "key", detail: "key_rejected" });
   // `03` K4: the loop reports the key the provider rejected, once, by its
   // sealed value.
   t.deepEqual(rejectedKeys, [[user.id, "anthropic", MEMBER_KEY.sealed]]);
@@ -145,7 +145,7 @@ test("a 403 fails the run with the provider's message and leaves the key valid",
   });
   t.is((await harness.agent.run(request)).outcome, "failed");
   const [finish] = harness.store.finishes(request.runId);
-  t.deepEqual(finish?.summary.fail, { why: "key" });
+  t.deepEqual(finish?.summary.fail, { why: "key", detail: "key_forbidden" });
   t.regex(finish?.summary.error?.detail ?? "", /permission_error: this key may not use/);
   t.deepEqual(rejectedKeys, [], "a 403 does not mark the key invalid");
 });
@@ -208,7 +208,7 @@ for (const change of ["removed", "replaced", "invalid", "billing"] as const) {
     const { harness, request, result } = await runWithChange(t, change);
     t.is(result.outcome, "failed");
     const [finish] = harness.store.finishes(request.runId);
-    t.deepEqual(finish?.summary.fail, { why: "key" });
+    t.deepEqual(finish?.summary.fail, { why: "key", detail: "key_changed" });
     t.is(finish?.summary.error?.message, KEY_STOPPED_MESSAGE);
     // One provider call: the next step was never made.
     t.is(harness.ledger.rows({ runId: request.runId }).length, 1);

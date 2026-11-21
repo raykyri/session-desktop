@@ -17,13 +17,24 @@ export function usedShare(used: number, allowance: number): number {
   return Math.min(1, Math.max(0, used / allowance));
 }
 
-/** Token counts as the mock prints them (`fmtTok`): 2M, 1.25M, 340k, 900. */
-export function formatTokens(count: number): string {
+/**
+ * Token counts as the mock prints them (`fmtTok`): 2M, 1.25M, 340k, 900.
+ * Rounded to the nearest, a count that rounds to 1000k reads 1M. With
+ * `down` the count is rounded down instead, so an allowance with anything
+ * used never reads as the whole allowance ("1.99M of 2M", not "2M of 2M").
+ */
+export function formatTokens(count: number, down = false): string {
   if (count >= 1_000_000) {
     if (count % 1_000_000 === 0) return `${count / 1_000_000}M`;
-    return `${(count / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
+    const millions = down
+      ? (Math.floor(count / 10_000) / 100).toFixed(2)
+      : (count / 1_000_000).toFixed(2);
+    return `${millions.replace(/\.?0+$/, "")}M`;
   }
-  if (count >= 1000) return `${Math.round(count / 1000)}k`;
+  if (count >= 1000) {
+    const thousands = down ? Math.floor(count / 1000) : Math.round(count / 1000);
+    return thousands >= 1000 ? "1M" : `${thousands}k`;
+  }
   return String(count);
 }
 
@@ -47,10 +58,53 @@ export interface UsageReading {
   readAt?: number | undefined;
 }
 
-/** "N of M included tokens left this week; resets in 2 days 5 h". */
-export function usageLabel(reading: UsageReading, now: number = Date.now()): string {
+/** The reading while it describes the current week: null when there is
+ * none, or when its week has already reset (`resetsAt` at or before `now`),
+ * since what it says was used no longer counts (03 K6, K8). */
+export function currentReading(reading: UsageReading | null, now: number): UsageReading | null {
+  if (reading === null) return null;
+  return reading.resetsAt !== null && reading.resetsAt <= now ? null : reading;
+}
+
+/** The ring's label with no current reading (before `usage.get` answers,
+ * when it fails, or after the reading's reset). */
+export const UNKNOWN_USAGE_LABEL = "Included tokens left this week: unknown";
+
+/** When a reading was taken, in the viewer's zone: "3:05 PM" on the day of
+ * `now`, else "Nov 20, 3:05 PM". */
+export function readTime(at: number, now: number, timeZone?: string): string {
+  const zone = timeZone === undefined ? {} : { timeZone };
+  const day = (ms: number) => new Date(ms).toLocaleDateString("en-US", zone);
+  const time = new Date(at).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    ...zone,
+  });
+  if (day(at) === day(now)) return time;
+  const date = new Date(at).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...zone,
+  });
+  return `${date}, ${time}`;
+}
+
+/**
+ * "N of M included tokens left this week; resets in 2 days 5 h". Offline
+ * (02 §2.2 item 4) it names when the reading was taken: "… left this week as
+ * of 3:05 PM; resets in …". With no current reading it is
+ * `UNKNOWN_USAGE_LABEL`.
+ */
+export function usageLabel(
+  reading: UsageReading | null,
+  now: number = Date.now(),
+  options: { offline?: boolean; timeZone?: string } = {},
+): string {
+  if (reading === null) return UNKNOWN_USAGE_LABEL;
   const left = Math.max(0, reading.allowance - reading.used);
-  const base = `${formatTokens(left)} of ${formatTokens(reading.allowance)} included tokens left this week`;
+  let base = `${formatTokens(left, true)} of ${formatTokens(reading.allowance)} included tokens left this week`;
+  if (options.offline && reading.readAt !== undefined)
+    base += ` as of ${readTime(reading.readAt, now, options.timeZone)}`;
   return reading.resetsAt === null
     ? base
     : `${base}; resets in ${formatResetIn(reading.resetsAt - now)}`;

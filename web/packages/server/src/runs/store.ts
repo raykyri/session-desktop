@@ -13,7 +13,7 @@
 // Token usage is not written here: it goes to the ledger (`ledger.ts`),
 // whose writes are never fenced (`03` K1, E1).
 
-import type { Turn } from "@session/shared";
+import type { Spaces, Turn } from "@session/shared";
 import type { ModelMessage } from "ai";
 
 import type { ClassifiedError, RunErrorClass } from "./errors.js";
@@ -80,7 +80,7 @@ export type AttemptOutcome = "complete" | "failed" | "cancelled" | "interrupted"
 export type RunFailure =
   | { why: "stopped" }
   | { why: "tokens" }
-  | { why: "key" }
+  | { why: "key"; detail: Spaces.RunKeyDetail }
   | { why: "rate"; at: number }
   | { why: "access" }
   | { why: "interrupted" }

@@ -146,6 +146,7 @@ function failOf(fail: RunFailure | undefined): RunRec["fail"] {
     why: fail.why,
     at: fail.why === "rate" ? fail.at : null,
     cls: fail.why === "error" ? fail.cls : null,
+    ...(fail.why === "key" ? { detail: fail.detail } : {}),
   };
 }
 
