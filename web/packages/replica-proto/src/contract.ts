@@ -1,12 +1,21 @@
 // The server half's interface: what a client sends (`register`, `apply`) and
 // reads (`snapshot`, `pull`). The adversarial suite in `test/` is written
-// against these types and `TestServer` only, so a later `@session/sync` server
-// half can run the same suite by providing a `ServerFactory`.
+// against these types and `TestServer` only; `@session/sync`'s server half
+// runs it through `sync-target.ts` (M2). The protocol's constants are
+// `@session/sync`'s (`wire.ts`), so both targets and the suite share them.
 //
 // Everything is synchronous in this prototype; the suite awaits every call,
 // so an implementation may return promises (`Awaitable`).
 
-import type { AnyMutator, ApiError, ErrorCode, LogId, StoredRecord } from "@session/mutators";
+import type { AnyMutator, ApiError, LogId, StoredRecord } from "@session/mutators";
+import type { RegisterOptions, Tier as SyncTier } from "@session/sync/client";
+
+export {
+  MAX_REPLACES,
+  MIN_PROTOCOL_VERSION,
+  PROTOCOL_VERSION,
+  UNRECORDED,
+} from "@session/sync/client";
 
 export type Awaitable<T> = T | Promise<T>;
 
@@ -15,15 +24,8 @@ export interface Actor {
   readonly u: string;
 }
 
-/** The protocol version this prototype speaks, and the lowest it accepts.
- * Version 3 added `clientTime` to the envelope, and made cursors tokens.
- * Version 4 added `queuedAt` and `replaces`, and `TOO_LARGE`. */
-export const PROTOCOL_VERSION = 4;
-export const MIN_PROTOCOL_VERSION = 4;
-
-/** The most mutation ids a reminted envelope may name in `replaces`: a client
- * keeps the newest ones. */
-export const MAX_REPLACES = 16;
+/** Protocol version 4 added `queuedAt`, `replaces` and `TOO_LARGE`
+ * (`@session/sync` `PROTOCOL_VERSION`). */
 
 /** One outbox entry as the client sends it: a mutator's name and input, the
  * client that sends it, its place in that client's sequence, and the
@@ -60,31 +62,14 @@ export interface Envelope {
   queuedAt: number;
 }
 
-/** The answers that record nothing: the envelope's `seq` is not used up, the
- * same `seq` may be sent again, and the client keeps the write queued. The
- * transient ones (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE,
- * INTERNAL_SERVER_ERROR, CLOCK_SKEW) say nothing about the write itself; the
- * client sends it again later. TOO_LARGE, and a BAD_REQUEST for a malformed
- * or too deep envelope, record nothing either (it has no usable `seq`).
- *
- * Every other answer, applied or refused, uses up the `seq` and is recorded
- * in the same commit as the write's changes: under (user, mutation id) for 7
- * days, or, for a mutation id that is malformed or already used for another
- * change, under (client, seq) for 7 days. Sent again, the same envelope gets
- * the recorded answer. So OUT_OF_ORDER means the server has no answer for
- * this mutation id, and the client may send the write again with
- * `expectedSeq`. */
-export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
-  "UPGRADE_REQUIRED",
-  "UNAUTHORIZED",
-  "WRONG_CLIENT",
-  "OUT_OF_ORDER",
-  "CLOCK_SKEW",
-  "TOO_MANY_REQUESTS",
-  "SERVICE_UNAVAILABLE",
-  "INTERNAL_SERVER_ERROR",
-  "TOO_LARGE",
-]);
+/** The answers that record nothing (`UNRECORDED`, from `@session/sync`):
+ * the envelope's `seq` is not used up, the same `seq` may be sent again, and
+ * the client keeps the write queued. Every other answer, applied or
+ * refused, uses up the `seq` and is recorded in the same commit as the
+ * write's changes: under (user, mutation id) for 7 days, or, for a mutation
+ * id that is malformed or already used for another change, under (client,
+ * seq) for 7 days. So OUT_OF_ORDER means the server has no answer for this
+ * mutation id, and the client may send the write again with `expectedSeq`. */
 
 /** An answer as the server keeps it for replays (`StorageScan.answers`). */
 export type StoredAnswer = { ok: true; result: unknown } | { ok: false; error: ApiError };
@@ -99,7 +84,9 @@ export type ApplyResult =
 
 /** A new client id; or TOO_MANY_REQUESTS (the person registered 20 clients
  * in the past day), UNAUTHORIZED or INTERNAL_SERVER_ERROR. */
-export type RegisterResult = { ok: true; clientId: string } | { ok: false; error: ApiError };
+export type RegisterResult =
+  | { ok: true; clientId: string; lastSeq?: number; reattached?: boolean }
+  | { ok: false; error: ApiError };
 
 /** Where a replica of one log stands: an opaque token the server sealed with
  * AES-256-GCM under a key only the server holds. Sealed in it are the log,
@@ -117,12 +104,16 @@ export type Cursor = string;
 
 export type Change = { key: string; op: "put"; record: StoredRecord } | { key: string; op: "del" };
 
-/** Replication tier of a snapshot: `full` records, or `summary` (threads
- * without their nodes, answers, replies, comments and runs). Pulls are not tiered in this prototype. */
-export type Tier = "full" | "summary";
+/** Replication tier of a snapshot (`@session/sync`'s): `full` records,
+ * `summary` (threads without their nodes, answers, replies, comments and
+ * runs), the web `window` and a promotion's `threads`. The prototype server
+ * serves `full` and `summary`. Pulls are not tiered. */
+export type Tier = SyncTier;
 
 export interface ReadOptions {
   tier?: Tier;
+  /** The threads the tab opened (`window`, `threads`). */
+  threads?: string[];
   /** The reading client: its last processed `seq` comes back as `lastSeq`. */
   clientId?: string;
 }
@@ -138,6 +129,8 @@ export interface Snapshot {
   records: { key: string; record: StoredRecord }[];
   cursor: Cursor;
   lastSeq: LastSeq;
+  /** The threads a tiered snapshot served in full. */
+  full?: string[];
 }
 
 export type Pull =
@@ -149,8 +142,9 @@ export type Pull =
   | { resync: true };
 
 export interface ServerHalf {
-  /** A new client id, bound to the caller. */
-  register(actor: Actor | null): Awaitable<RegisterResult>;
+  /** A new client id, bound to the caller, or the caller's own re-attached
+   * (`clientId`, `01` Y3). */
+  register(actor: Actor | null, options?: RegisterOptions): Awaitable<RegisterResult>;
   apply(actor: Actor | null, envelope: Envelope): Awaitable<ApplyResult>;
   snapshot(actor: Actor | null, log: LogId, options?: ReadOptions): Awaitable<Snapshot>;
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options?: ReadOptions): Awaitable<Pull>;

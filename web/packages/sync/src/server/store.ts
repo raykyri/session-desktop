@@ -135,9 +135,9 @@ export interface ServerStore extends Source {
   /** How many client ids `u` registered at or after `at` (ms); re-attaches
    * are not registrations. */
   registrationsSince(u: string, at: number): number;
-  /** Delete the clients last used before `at`. */
+  /** Delete the clients last used at or before `at`. */
   pruneClients(at: number): void;
-  /** Forget registrations made before `at` (a store that counts them from
+  /** Forget registrations made at or before `at` (a store that counts them from
    * `clients.created_at` has nothing to do). */
   pruneRegistrations(at: number): void;
 
@@ -147,7 +147,7 @@ export interface ServerStore extends Source {
   putAnswer(row: AnswerRow): void;
   seqAnswer(clientId: string, seq: number): SeqAnswerRow | undefined;
   putSeqAnswer(row: SeqAnswerRow): void;
-  /** Delete the answers (both kinds) recorded before `at`. */
+  /** Delete the answers (both kinds) recorded at or before `at`. */
   pruneAnswers(at: number): void;
 
   // ---- accounts (`users`) ----

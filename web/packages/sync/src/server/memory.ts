@@ -313,14 +313,14 @@ export class MemoryStore implements ServerStore {
 
   pruneClients(at: number) {
     for (const [id, c] of this.clients) {
-      if (c.seen >= at) break;
+      if (c.seen > at) break;
       this.remove(this.clients, id);
     }
   }
 
   pruneRegistrations(at: number) {
     for (const [u, times] of this.registrations) {
-      if ((times.at(-1) ?? 0) >= at) break;
+      if ((times.at(-1) ?? 0) > at) break;
       this.remove(this.registrations, u);
     }
   }
@@ -345,11 +345,11 @@ export class MemoryStore implements ServerStore {
 
   pruneAnswers(at: number) {
     for (const [k, d] of this.answers) {
-      if (d.at >= at) break;
+      if (d.at > at) break;
       this.remove(this.answers, k);
     }
     for (const [k, a] of this.seqAnswers) {
-      if (a.at >= at) break;
+      if (a.at > at) break;
       this.remove(this.seqAnswers, k);
     }
   }

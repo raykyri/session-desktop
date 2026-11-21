@@ -198,6 +198,11 @@ export interface SyncServerOptions {
    * only when `retain` runs (the prototype's behaviour, which its suite
    * reads through `scanStorage`). */
   expireEveryCall?: boolean;
+  /** How long a client id lives idle, and how many new ids a person may
+   * register in a day (default: the web's 7 days and 50, `01` Y3). The
+   * prototype's suite runs with its own figures, for clients that keep an
+   * outbox for days (90 days and 20). */
+  clients?: { idleTtl?: number; perDay?: number };
 }
 
 /** The result of `serverApply`: the function's result and the version of
@@ -215,6 +220,8 @@ export class SyncServer implements ServerHalf {
   private readonly tokens: Tokens;
   private readonly window: WindowSettings;
   private readonly expireEveryCall: boolean;
+  private readonly clientIdleTtl: number;
+  private readonly registrationsPerDay: number;
   /** The server's time: never decreasing, so every table's expiry order is
    * the order of its times. */
   private lastAt: number;
@@ -227,6 +234,8 @@ export class SyncServer implements ServerHalf {
     this.tokens = new Tokens(options.cursorKeys);
     this.window = options.window ?? WEB_WINDOW;
     this.expireEveryCall = options.expireEveryCall ?? false;
+    this.clientIdleTtl = options.clients?.idleTtl ?? CLIENT_IDLE_TTL;
+    this.registrationsPerDay = options.clients?.perDay ?? REGISTRATIONS_PER_DAY;
     this.lastAt = this.clock.now();
   }
 
@@ -260,7 +269,7 @@ export class SyncServer implements ServerHalf {
     s.transaction(() => {
       s.pruneTombstones(now - TOMBSTONE_TTL);
       s.pruneAnswers(now - DEDUP_TTL);
-      s.pruneClients(now - CLIENT_IDLE_TTL);
+      s.pruneClients(now - this.clientIdleTtl);
       s.pruneRegistrations(now - DAY);
     });
   }
@@ -325,12 +334,12 @@ export class SyncServer implements ServerHalf {
         // idle 7 days; not counted against the limit
         if (options.clientId !== undefined) {
           const c = store.client(options.clientId);
-          if (!c || c.u !== u || c.seen <= now - CLIENT_IDLE_TTL)
+          if (!c || c.u !== u || c.seen <= now - this.clientIdleTtl)
             return { ok: false, error: refuse("WRONG_CLIENT").toError() };
           store.putClient({ ...c, seen: now });
           return { ok: true, clientId: c.clientId, lastSeq: c.last, reattached: true };
         }
-        if (store.registrationsSince(u, now - DAY + 1) >= REGISTRATIONS_PER_DAY)
+        if (store.registrationsSince(u, now - DAY + 1) >= this.registrationsPerDay)
           return { ok: false, error: refuse("TOO_MANY_REQUESTS").toError() };
         let id: string;
         do id = ulid(now, this.random);
@@ -409,7 +418,7 @@ export class SyncServer implements ServerHalf {
     const now = this.begin();
     const store = this.store;
     const client = store.client(m.clientId);
-    if (!client || client.u !== u || client.seen <= now - CLIENT_IDLE_TTL)
+    if (!client || client.u !== u || client.seen <= now - this.clientIdleTtl)
       return fail(refuse("WRONG_CLIENT"));
     return store.transaction(() => this.applyIn(u, m, client, now));
   }
@@ -591,8 +600,8 @@ export class SyncServer implements ServerHalf {
     fn: (tx: Tx) => T,
   ): ServerApplyResult<T> {
     const now = this.now();
-    const mutationId = spec.mutationId ?? ulid(now, this.random);
     try {
+      const mutationId = spec.mutationId ?? ulid(now, this.random);
       return this.store.transaction(() => {
         const tx = new StagedTx(this.store, spec.me, msToIso(now), mutationId, "server");
         const result = fn(tx);
@@ -624,7 +633,7 @@ export class SyncServer implements ServerHalf {
   private lastSeq(u: string | null, clientId: string | undefined, now: number): LastSeq {
     if (u === null || clientId === undefined) return null;
     const c = this.store.client(clientId);
-    if (!c || c.u !== u || c.seen <= now - CLIENT_IDLE_TTL) return null;
+    if (!c || c.u !== u || c.seen <= now - this.clientIdleTtl) return null;
     this.store.putClient({ ...c, seen: now });
     return c.last;
   }
