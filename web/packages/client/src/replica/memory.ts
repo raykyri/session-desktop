@@ -193,7 +193,9 @@ export class MemoryReplica implements ReplicaSource, Source {
       return { ok: false, error: { code: "UNAUTHORIZED", message: "Sign in to do this." } };
     const def = MUTATORS[name];
     if (!def) return { ok: false, error: { code: "BAD_REQUEST", message: `No mutator ${name}.` } };
-    const tx = new StagedTx(this, me, msToIso(this.clock()), newUlid(this.clock()));
+    // A prediction over the fixture records; the fixture then runs `notify`
+    // on it in the server's place.
+    const tx = new StagedTx(this, me, msToIso(this.clock()), newUlid(this.clock()), "client");
     const prediction = predict(tx, def, input);
     if ("unknown" in prediction)
       return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "Not available." } };
