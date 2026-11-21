@@ -15,7 +15,11 @@ const proxied = ["/api", "/auth", "/embeds", "/images", "/healthz", "/metrics"];
 /** `web/`, which holds the server's `.env`. */
 const webDirectory = fileURLToPath(new URL("../..", import.meta.url));
 
-export default defineConfig(({ mode }) => ({
+/** The repository's mockups, whose fixtures the fixture replica loads
+ * (`src/replica/fixtureReplica.ts`, 02 §9.6). */
+const mockupsDirectory = fileURLToPath(new URL("../../../docs/mockups", import.meta.url));
+
+export default defineConfig(({ mode, command }) => ({
   plugins: [react(), tailwindcss()],
   // The public origin, for the site footer's abuse address (02 W2.7). Read at
   // build time from the environment or `web/.env`; a build without it uses
@@ -27,10 +31,18 @@ export default defineConfig(({ mode }) => ({
         loadEnv(mode, webDirectory, "SESSION_PUBLIC_ORIGIN")["SESSION_PUBLIC_ORIGIN"] ??
         "",
     ),
+    // The fixture replica (02 §9.6): on in the development server unless
+    // `VITE_SESSION_FIXTURES=0`, and in a build only with
+    // `VITE_SESSION_FIXTURES=1` (the end-to-end build). Off, the fixture
+    // chunk is not built.
+    __SESSION_FIXTURES__: JSON.stringify(
+      (process.env["VITE_SESSION_FIXTURES"] ?? (command === "serve" ? "1" : "0")) === "1",
+    ),
   },
   server: {
     host: "127.0.0.1",
     port: 1480,
+    fs: { allow: [webDirectory, mockupsDirectory] },
     proxy: Object.fromEntries(
       proxied.map((path) => [
         path,
