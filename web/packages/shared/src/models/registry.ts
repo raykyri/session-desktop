@@ -62,6 +62,11 @@ export interface ModelEntry {
    * default model (K15). */
   payers: readonly ModelPayer[];
   pricing: ModelPricing;
+  /** How much a cached input token counts toward the allowance: the ratio
+   * of the provider's cached-input price to its input price (`03` K2,
+   * decision P12). Absent: cached input counts in full, which never
+   * undercounts. */
+  cachedInputRatio?: number;
 }
 
 const STANDARD_EFFORTS: readonly ReasoningEffort[] = ["low", "medium", "high"];
@@ -82,6 +87,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     defaultEffort: "medium",
     payers: INCLUDED,
     pricing: { input: 0.75, output: 3.75 },
+    cachedInputRatio: 0.1,
   },
   {
     id: "deepseek-flash",
@@ -126,6 +132,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     defaultEffort: "medium",
     payers: ["included", "key:anthropic"],
     pricing: { input: 10, output: 50 },
+    cachedInputRatio: 0.1,
   },
 ];
 

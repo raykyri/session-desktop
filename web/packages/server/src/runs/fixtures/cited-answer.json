@@ -1,0 +1,425 @@
+{
+  "scenario": "cited-answer",
+  "description": "A read page and an answer of several passages that cites it: what the end-to-end branch, look-up and selection specs build on.",
+  "steps": [
+    {
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "text-start",
+          "id": "t0"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Reading the page."
+        },
+        {
+          "type": "text-end",
+          "id": "t0"
+        },
+        {
+          "type": "tool-call",
+          "toolCallId": "call-fetch-1",
+          "toolName": "web_fetch",
+          "input": "{\"url\":\"https://example.com/bloom-filters\"}"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "tool-calls",
+            "raw": "tool_use"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 900,
+              "noCache": 900,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 20,
+              "text": 20,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "delayMs": 5,
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "text-start",
+          "id": "t1"
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "Bloom "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "filters "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "answer "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "set "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "membership "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "with "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "tunable "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "false "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "positive "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "rate.[^1] "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "A "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "lookup "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "hashes "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "key "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "k "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "times "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "and "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "checks "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "k "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "bits.\n\nIn "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "these "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "systems, "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "public "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "score "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "decides "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "which "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "entries "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "are "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "kept, "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "and "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "filter "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "never "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "reports "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "false "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "negative.\n\n- "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "Space "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "grows "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "linearly "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "with "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "number "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "of "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "keys.\n- "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "Deleting "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "key "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "needs "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "counting "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "filter.\n\nEach "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "extra "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "hash "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "function "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "lowers "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "false "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "positive "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "rate "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "until "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "filter "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "fills.[^1]"
+        },
+        {
+          "type": "text-end",
+          "id": "t1"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "stop",
+            "raw": "end_turn"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 1400,
+              "noCache": 1400,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 120,
+              "text": 120,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

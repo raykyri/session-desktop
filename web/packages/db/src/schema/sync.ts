@@ -170,16 +170,34 @@ export const saveCounts = sqliteTable("save_counts", {
   saves: integer("saves").notNull(),
 });
 
-/** D3, `03` T4: the in-flight checkpoint text of a run's attempt, deleted
- * when the attempt finishes. */
+/** D3, `03` T3, T4: the in-flight checkpoint text of a run's attempt, at
+ * most 1 s or 4 KiB behind the stream: the turn still streaming (`n`, the
+ * number its `turn` record will have) and the `seq` of the last delta its
+ * text includes. Written outside the change log; deleted when the attempt
+ * ends, except an interrupted one, which keeps it so the resumed stream
+ * continues its delta sequence. */
 export const runLive = sqliteTable(
   "run_live",
   {
     runId: text("run_id").notNull(),
     attempt: integer("attempt").notNull(),
     turnId: text("turn_id").notNull(),
+    n: integer("n").notNull().default(0),
     md: text("md").notNull(),
+    seq: integer("seq").notNull().default(0),
     updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.runId, table.attempt] })],
+);
+
+/** D3, `03` E2: how many times boot resumed an interrupted attempt; at most
+ * two, then the run stays `interrupted` with Run again. */
+export const runResumes = sqliteTable(
+  "run_resumes",
+  {
+    runId: text("run_id").notNull(),
+    attempt: integer("attempt").notNull(),
+    resumes: integer("resumes").notNull(),
   },
   (table) => [primaryKey({ columns: [table.runId, table.attempt] })],
 );

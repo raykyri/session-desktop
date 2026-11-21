@@ -69,6 +69,7 @@ import {
 } from "@session/sync/client";
 
 import { retryAfterOf, type HttpSyncTransport } from "./http.js";
+import { RunLiveTexts, type LiveText } from "./runLive.js";
 import {
   UNKNOWN,
   type DraftRef,
@@ -82,7 +83,9 @@ type SpaceMutatorName = Spaces.SpaceMutatorName;
 
 /** The transport the replica reads and writes through: the sync routes and
  * their event stream. */
-export type SyncHttp = SyncTransport & Pick<HttpSyncTransport, "events">;
+export type SyncHttp = SyncTransport &
+  Pick<HttpSyncTransport, "events"> &
+  Partial<Pick<HttpSyncTransport, "live">>;
 
 export type ClaimResult = HeldClientId | { error: ApiError };
 
@@ -150,6 +153,7 @@ const CONTENT_KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "reply",
   "comment",
   "run",
+  "turn",
 ]);
 
 /** How long the opens of summary rows rendering together are gathered. */
@@ -244,8 +248,16 @@ export class SyncReplica implements ReplicaSource {
   private recomputing: Promise<void> | null = null;
   private recomputeAgain = false;
 
+  /** The text of runs still streaming (`03` T2, T3). */
+  private readonly runTexts: RunLiveTexts;
+
   constructor(options: SyncReplicaOptions) {
     this.options = options;
+    const live = options.transport.live?.bind(options.transport);
+    this.runTexts = new RunLiveTexts({
+      read: (run) => (live ? live(run) : Promise.resolve(null)),
+      onChange: () => this.changed(),
+    });
     this.me = options.me;
     this.writer = options.writer && options.me !== null;
     this.clock = options.clock ?? { now: () => Date.now() };
@@ -618,6 +630,8 @@ export class SyncReplica implements ReplicaSource {
                     this.restartStream();
                 });
               }
+            } else if (e.type === "delta") {
+              this.runTexts.apply(e.delta);
             } else if (e.type === "resync") {
               if (e.id) this.lastEventId = e.id;
               void this.resync(gen, e.log);
@@ -628,6 +642,8 @@ export class SyncReplica implements ReplicaSource {
           opened = true;
           wait = 1000;
           this.options.onConnection?.("open");
+          // deltas sent while the stream was down are not replayed (`03` T3)
+          this.runTexts.reconnected(this.runningRuns());
           this.retryOpens();
           await r.done;
         } else refused = r;
@@ -791,6 +807,22 @@ export class SyncReplica implements ReplicaSource {
 
   now(): number {
     return this.client?.serverNow() ?? this.clock.now();
+  }
+
+  /** The streaming text of a run's current attempt while it runs (`03`
+   * T2, T3); null when none is held. */
+  liveText(run: string): LiveText | null {
+    const r = this.client?.get(`run:${run}`);
+    const text = this.runTexts.get(run);
+    if (r?.kind !== "run" || r.status !== "running" || text?.attempt !== r.attempt) return null;
+    return text;
+  }
+
+  /** The runs the replica holds as running. */
+  private runningRuns(): string[] {
+    return this.all("run")
+      .filter((r) => r.status === "running")
+      .map((r) => r.id);
   }
 
   private userLogLoaded(): boolean {

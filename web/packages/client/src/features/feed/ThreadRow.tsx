@@ -21,7 +21,7 @@ import { useWrites } from "../../replica/writes.js";
 import { useThreadUi, useThreadUiStore } from "../../stores/threadUi.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { AskSide } from "../branches/AskSide.js";
-import { RunStatus } from "../branches/RunStatus.js";
+import { RunNote, RunProgress, isStoppedRun } from "../branches/RunStatus.js";
 import { SelectionActions } from "../branches/SelectionActions.js";
 import { indexTree, isActiveRun, othersUnder, passageTrees } from "../branches/tree.js";
 import { RemoveDialog } from "../channels/RemoveDialog.js";
@@ -442,11 +442,9 @@ function ThreadCard({
           ) : (
             <div className="answer" role="status" aria-label="Loading" aria-busy="true" />
           )
-        ) : pending ? (
+        ) : pending || (isStoppedRun(run) && !answer) ? (
           <div className="answer">
-            <p>
-              <RunStatus run={run} />
-            </p>
+            <RunProgress thread={thread.id} node="r" run={run} />
           </div>
         ) : (
           <>
@@ -458,6 +456,7 @@ function ThreadCard({
               proseRef={proseRef}
               id={`pr-${thread.id}`}
             />
+            <RunNote run={run} />
             {proseRef ? (
               <SelectionActions
                 proseRef={proseRef}

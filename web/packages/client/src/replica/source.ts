@@ -134,6 +134,9 @@ export interface ReplicaSource {
    * those it holds: it asked the server (a private channel's landing, 04
    * I5). The first call asks. */
   lookUp?(name: string): boolean;
+  /** The streaming text of a run's current attempt while it runs (`03`
+   * T2, T3): the turn number it belongs to and its text so far. */
+  liveText?(run: string): { attempt: number; n: number; text: string } | null;
 }
 
 /** Thrown by `known` for a read the replica cannot answer; `useReplicaQuery`
