@@ -1,5 +1,5 @@
-// Sessions, the OAuth handshake, sign-up attempts, and per-user limits
-// (`docs/06-auth-and-users.md` §1, §2, §3, §8). Account invites are
+// Sessions, the OAuth handshake and sign-up attempts
+// (`docs/06-auth-and-users.md` §1, §2, §3). Account invites are
 // `accountInvites.ts`.
 
 import { createHash, randomBytes } from "node:crypto";
@@ -9,7 +9,7 @@ import { and, count, eq, gte, lt, sql } from "drizzle-orm";
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { oauthStates, sessions } from "../schema/sessions.js";
-import { signupAttempts, userLimits } from "../schema/users.js";
+import { signupAttempts } from "../schema/users.js";
 import { now } from "../time.js";
 
 /** Inactivity timeout duration after which a session is invalidated. */
@@ -228,42 +228,4 @@ export function countSignupAttempts(
     )
     .get();
   return row?.value ?? 0;
-}
-
-export interface UserDailyLimits {
-  dailyTokens: number | null;
-  dailyRuns: number | null;
-}
-
-/** Returns user daily limit overrides, or null if deployment defaults apply. */
-export function getUserLimits(db: SessionDatabase, userId: string): UserDailyLimits | null {
-  const row = db.select().from(userLimits).where(eq(userLimits.userId, userId)).get();
-  return row ? { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns } : null;
-}
-
-/**
- * Updates specified user daily limits. Passing null resets a limit to
- * deployment defaults, while undefined preserves existing overrides.
- */
-export function setUserLimits(
-  db: SessionDatabase,
-  userId: string,
-  limits: Partial<UserDailyLimits>,
-): UserDailyLimits {
-  const at = now();
-  const changed: Partial<UserDailyLimits> & { updatedAt: number } = { updatedAt: at };
-  if (limits.dailyTokens !== undefined) changed.dailyTokens = limits.dailyTokens;
-  if (limits.dailyRuns !== undefined) changed.dailyRuns = limits.dailyRuns;
-  const row = db
-    .insert(userLimits)
-    .values({
-      userId,
-      dailyTokens: limits.dailyTokens ?? null,
-      dailyRuns: limits.dailyRuns ?? null,
-      updatedAt: at,
-    })
-    .onConflictDoUpdate({ target: userLimits.userId, set: changed })
-    .returning()
-    .get();
-  return { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns };
 }

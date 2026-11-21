@@ -31,11 +31,13 @@ export interface MemberKey {
   sealed: string;
 }
 
-/** A member's allowance settings. M5b reads them from `user_limits`, the
- * billing setting and the stored keys (`03` K3, K4, K7). */
+/** A member's allowance settings: the weekly allowance (their
+ * `user_limits` override or the deployment's), the billing setting and the
+ * stored keys (`03` K3, K4, K7); `storedAllowances` in `keys/`. */
 export interface Allowances {
-  /** Included tokens per week: `SESSION_WEEKLY_TOKENS` unless the member has
-   * an override. */
+  /** Included tokens per week: the member's `user_limits` override, else
+   * `SESSION_WEEKLY_TOKENS` (`weeklyAllowance`). Every allowance check reads
+   * it: `usage.get`, `pre`, the dispatcher and the loop. */
   weekly(userId: string): number;
   billing(userId: string): Billing;
   /** The sealed value of the member's `valid` key for `provider`, or null:
@@ -52,8 +54,8 @@ export interface Allowances {
   keyRejected?(userId: string, provider: KeyProvider, sealed: string): void;
 }
 
-/** Every member on the configured allowance, billing `pause`, no keys: the
- * settings until M5b stores them. */
+/** Every member on the configured allowance, billing `pause`, no keys:
+ * tests that store none of these settings. */
 export function configAllowances(config: Pick<Config, "limits">): Allowances {
   return {
     weekly: () => config.limits.weeklyTokens,

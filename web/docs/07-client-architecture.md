@@ -131,7 +131,7 @@ Query keys (factory in `api/queries.ts`):
 ["me"]                                   auth.me
 ["settings"]                             settings.get
 ["runtimeConfig"]                        system.runtimeConfig (models)
-["usage"]                                usage.summary
+["usage", "week"]                        usage.get
 ["workspaces"]                           workspaces.list
 ["folders", workspaceId]                 folders.get
 ["trees", { workspaceId, includeArchived }]  research.listTrees
@@ -152,7 +152,7 @@ bridge and the mutations share need the keys, and the hooks need the writers,
 placing the keys beneath both layers rather than alongside either.
 
 Defaults: `staleTime: Infinity` for event-patched lists (events keep them
-fresh), `refetchOnWindowFocus: false`, `retry: 1`. `usage.summary` and
+fresh), `refetchOnWindowFocus: false`, `retry: 1`. `usage.get` and
 `admin.listUsers` use a 30-second stale time because events do not update token
 counts, which would otherwise remain stale after the initial load.
 Mutations write their returned objects into the cache (`setQueryData`) using

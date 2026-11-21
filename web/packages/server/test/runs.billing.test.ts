@@ -6,6 +6,7 @@
 // the dispatcher decides it again when it claims the run; the week resets
 // on Friday 00:00 UTC, read through an injected clock.
 
+import { usage as usageRepo } from "@session/db";
 import { OUT_OF_TOKENS_TEXT, runFailureText } from "@session/shared";
 import type { ApplyResult } from "@session/sync/server";
 import type { ExecutionContext } from "ava";
@@ -290,3 +291,47 @@ test("K3, K9: the overdraft counts in the week it happened and does not carry ov
   t.false(budget.allowanceSpent(), "a new week");
   t.is(budget.stopReason("included"), null);
 });
+
+test.serial(
+  "K3: a member with an allowance override is metered against it: usage.get, pre, the claim and the overdraft stop",
+  async (t) => {
+    const w = await runsWorld(t, {
+      allowances: "stored",
+      env: { SESSION_OVERDRAFT_TOKENS: "1500" },
+      ledgerCheckpointMs: 50,
+      start: false,
+    });
+    usageRepo.setWeeklyAllowance(w.db, w.mona.user.id, 1_500);
+    t.like(await w.caller(w.mona.user).usage.get(), { allowance: 1_500, used: 0 });
+    t.like(await w.caller(w.mel.user).usage.get(), { allowance: 2_000_000 });
+
+    // the loop: the overdraft stop comes at the override plus the overdraft
+    const { run } = await w.ask(w.mona, w.open, "fixture:endless-answer");
+    t.like(w.run(run), { status: "queued", pay: "included" });
+    w.rt.dispatcher.start();
+    t.like(await w.settled(run), { status: "complete", note: OVERDRAFT_STOP_NOTE });
+    const counted = w.rows(run).reduce((n, r) => n + r.counted, 0);
+    t.true(counted >= 3_000, `stopped at ${counted}`);
+    t.true(counted < 2_000_000);
+    w.rt.dispatcher.stop();
+
+    // pre: the override is spent, so the next ask is kept with its run
+    // failed tokens; another member with the same spending still runs
+    await w.mona.register();
+    const input = askInput(w.open);
+    keptFailedTokens(t, w, await w.mona.write("threads.create", input), input);
+    spend(w, w.mel.user.id, 3_000, Date.now());
+    const mel = await w.ask(w.mel, w.open, "fixture:success within the deployment's allowance");
+    t.like(w.run(mel.run), { status: "queued", pay: "included" });
+
+    // the claim: an ask queued within the override and claimed after it was
+    // spent ends failed tokens
+    usageRepo.setWeeklyAllowance(w.db, w.mona.user.id, 1_000_000);
+    const queued = await w.ask(w.mona, w.open, "fixture:success queued within the override");
+    t.like(w.run(queued.run), { status: "queued", pay: "included" });
+    usageRepo.setWeeklyAllowance(w.db, w.mona.user.id, 1_000);
+    w.rt.dispatcher.tick();
+    t.like(w.run(queued.run), { status: "failed", fail: { why: "tokens" } });
+    t.like(await w.caller(w.mona.user).usage.get(), { allowance: 1_000 });
+  },
+);

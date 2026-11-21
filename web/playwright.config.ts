@@ -107,7 +107,6 @@ export default defineConfig({
       // No search key on purpose: `web_search` is then not registered at all,
       // so a fixture that calls it fails the call locally instead of reaching
       // a vendor from CI (`04-agent-runtime.md` §11).
-      SESSION_ENFORCE_LIMITS: "0",
       // A member's overdraft past the weekly allowance (`03` K9): small, so
       // the billing spec's run reaches it in seconds. Only that spec's
       // member, who starts near the allowance, comes near it.

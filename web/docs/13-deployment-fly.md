@@ -44,9 +44,9 @@ kill_timeout = "30s"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
-  SESSION_ENFORCE_LIMITS = "1"
-  SESSION_DAILY_TOKENS = "1000000"
-  SESSION_DAILY_RUNS = "10"
+  SESSION_WEEKLY_TOKENS = "2000000"
+  SESSION_OVERDRAFT_TOKENS = "200000"
+  SESSION_RUN_MAX_TOKENS = "400000"
   SESSION_REQUIRE_INVITE = "1"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
@@ -88,24 +88,23 @@ machine size before raising the per-provider run caps.
 
 Rate limits and invite restrictions are enabled in production. Because the hosted service incurs direct provider token costs, these settings are defined explicitly in `fly.toml` rather than falling back to permissive local development defaults:
 
-- `SESSION_ENFORCE_LIMITS = "1"` enforces `SESSION_DAILY_TOKENS` and
-  `SESSION_DAILY_RUNS` by rejecting requests that exceed those quotas. At `0`,
-  usage is recorded without blocking requests. This is suitable for local
-  development but not for a public deployment.
+- `SESSION_WEEKLY_TOKENS`, `SESSION_OVERDRAFT_TOKENS` and
+  `SESSION_RUN_MAX_TOKENS` bound what members spend: a weekly allowance of
+  included tokens per member, an overdraft past it shared by the member's
+  runs, and a cap per run (`06-auth-and-users.md` §8). They are always
+  enforced; there is no switch.
 - `SESSION_REQUIRE_INVITE = "1"` means an account is created only against a
   code an admin minted (`06-auth-and-users.md` §3). `SESSION_ALLOWED_GITHUB_LOGINS`
   is the narrower alternative; with neither, sign-up is open to anyone who can
   reach the host.
 - `SESSION_QUEUED_PER_USER = "20"` caps what one account may have *waiting*.
   Because `SESSION_RUNS_PER_USER` limits only concurrently active runs, an unconstrained queue could allow an automated script to enqueue hundreds of requests, committing the server to costly serial execution. Refused at launch with
-  `TOO_MANY_REQUESTS`; admins are exempt; enforced regardless of
-  `SESSION_ENFORCE_LIMITS`, because it bounds the queue itself rather
-  than the day's spend. Checked again inside the transaction that admits the
+  `TOO_MANY_REQUESTS`; admins are exempt; it bounds the queue itself rather
+  than the week's spend. Checked again inside the transaction that admits the
   node, so concurrent launches cannot pass it together.
 
-Per-account overrides for the daily limits are stored in `user_limits` and are set
-from `/admin`, so raising one account's ceiling does not mean turning
-enforcement off.
+A member's own weekly allowance is a `user_limits` row (`weekly_tokens`), so
+raising one member's allowance does not change anyone else's.
 
 Deploying:
 

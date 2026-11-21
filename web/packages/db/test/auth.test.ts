@@ -109,37 +109,3 @@ test("counts sign-up attempts by IP address and time window", (t) => {
   t.is(auth.countSignupAttempts(fixture.db, "ip-a", at - 5_000), 1);
   t.is(auth.countSignupAttempts(fixture.db, "ip-b", at - 60_000), 1);
 });
-
-test("defaults per-user limits to null and persists updates", (t) => {
-  const fixture = createFixture(t);
-  t.is(auth.getUserLimits(fixture.db, fixture.userId), null);
-  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 5 }), {
-    dailyTokens: 5,
-    dailyRuns: null,
-  });
-  t.deepEqual(auth.getUserLimits(fixture.db, fixture.userId), {
-    dailyTokens: 5,
-    dailyRuns: null,
-  });
-});
-
-test("updates specific limits independently and resets on explicit null", (t) => {
-  const fixture = createFixture(t);
-  auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 5, dailyRuns: 3 });
-  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyRuns: 7 }), {
-    dailyTokens: 5,
-    dailyRuns: 7,
-  });
-  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 9 }), {
-    dailyTokens: 9,
-    dailyRuns: 7,
-  });
-  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: null }), {
-    dailyTokens: null,
-    dailyRuns: 7,
-  });
-  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, {}), {
-    dailyTokens: null,
-    dailyRuns: 7,
-  });
-});

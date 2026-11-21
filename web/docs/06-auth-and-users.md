@@ -148,7 +148,9 @@ metered, admins included.
   including open rows, so a member's concurrent runs see each other's
   spending.
 - The allowance is `SESSION_WEEKLY_TOKENS` (2,000,000) per member per week,
-  reset Fridays 00:00 UTC (K3).
+  reset Fridays 00:00 UTC, or the member's own allowance in `user_limits`
+  (`weekly_tokens`; K3). `usage.get`, the `pre` stage, the dispatcher and the
+  run loop all read it through one function (`weeklyAllowance`).
 - Who pays for a run is decided when the write that queues it applies, in the
   mutator's `pre` stage (K8): included tokens while any are left; once they
   are spent, the member's Anthropic key when the Usage page's setting is
@@ -173,10 +175,6 @@ metered, admins included.
   "Stopped: this week's included tokens ran out." It does not carry over.
 - Per run: `SESSION_RUN_MAX_TOKENS` (400,000), whoever pays, and at most
   `SESSION_QUEUED_PER_USER` (20) queued runs per member (L1).
-
-`SESSION_DAILY_TOKENS`, `SESSION_DAILY_RUNS` and `SESSION_ENFORCE_LIMITS` are
-still read and reported by the legacy `usage.summary` procedure and the
-runtime configuration's `limits` (`system.ts`); nothing enforces them.
 
 Sign-up throttling (later): per-IP attempts per hour, minimum GitHub account
 age (`github_created_at`), and sign-up codes as described in §3.
