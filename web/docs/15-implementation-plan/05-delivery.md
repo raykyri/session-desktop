@@ -51,8 +51,9 @@ web-only scope).
 Each milestone ends with a merge to the build branch (§3.0) whose checks pass
 on their own; none depends on a later one to be verified. Until M8b, the
 current web app (not in use) stays in production, deployed from the existing
-`main` of `session-desktop` with its rules (`AGENTS.md`); the build branch,
-`session-web`, deploys only to staging (§3.1).
+`main` of `session-desktop` with its rules (`AGENTS.md`); CI deploys nothing
+from the build branch, `session-web`, and staging is deployed by hand
+(§3.1).
 
 ### 1.1 Commands referred to below
 
@@ -271,7 +272,7 @@ Scope:
   implements it over HTTP against a server on a temp SQLite file. A test
   importing replica-proto is test code, so "nothing in the app imports it"
   holds.
-- Staging app and the build branch's deploy job (§3.1, §3.2).
+- Staging app, deployed by hand (§3.1, §3.2).
 
 Exit criteria:
 - `cd web && npm test --workspace @session/server -- 'test/conformance/**'`
@@ -506,7 +507,7 @@ Not built: `03` V1-V7, T5 and L3 are removed, with the server routes, the
 ### M8a — Launch preparation
 
 Status: the squash, the launch runbook and the reset script are done; the
-staging reset, the rehearsals, the checks on staging, the staged secrets,
+staging reset, the rehearsals, the checks on staging, the prepared secrets,
 the X app, the abuse mailbox and the named admins and first members are
 person steps, recorded in `runbooks/launch.md` §4. The squash replaced
 `0000_initial` and `0003_api_keys` to `0007_weekly_tokens` (M3's
@@ -518,11 +519,17 @@ Scope, with production still on the current web app:
 - `01` D5's squash: with the research schema gone (M4), the migrations of the
   build branch are replaced by one generated `0000_initial.sql`; staging is
   reset with `runbooks/reset-database.md` and redeployed.
-- A restore rehearsal on staging from a Litestream generation, checking the
-  boot-time generation check bumps the epochs (`01` D6).
-- Production secrets staged with `fly secrets set --stage -a session-dev`
-  (§3.4), including the new `LITESTREAM_REPLICA_URL` prefix and the X OAuth
-  client of the production X app.
+- A restore rehearsal on staging from a Litestream backup, checking that
+  the boot-time restore check replaces the history id (`01` D6): Litestream
+  0.5 has no generation ids, so the check compares the identity of the
+  database file (device, inode, creation time) with the one recorded at the
+  last boot (`web/packages/db/src/sync/restore.ts`).
+- Production secret values prepared and stored outside Fly (§3.4,
+  `runbooks/launch.md` §4.9), including the new `LITESTREAM_REPLICA_URL`
+  prefix and the X OAuth client of the production X app. They are staged
+  on launch day, after the `production` environment's branch rule is
+  narrowed (§3.6 step 3): staged earlier, a deploy of `main` would apply
+  them to the current app.
 - X access on the production X app confirmed with the access level Q8
   requires; this is a launch blocker, and there is no GitHub-only launch.
 - The abuse mailbox, `abuse@<host>` for the host of `SESSION_PUBLIC_ORIGIN`
@@ -595,7 +602,8 @@ every path cited in 01-05 and in `web/docs` stays valid and `web.yml` keeps
 its `working-directory: web`. Later commits make the changes the milestones
 schedule; the carry-over commit changes nothing but `AGENTS.md` and
 `README.md`. `web.yml`'s `deploy` job runs only on `refs/heads/main`, so on
-`session-web` it deploys nothing until M3 points it at staging.
+`session-web` it deploys nothing until the launch commit points it at
+production (§3.6 step 1); staging is deployed by hand (§3.1).
 
 Carried over (what the build reuses):
 
@@ -608,7 +616,7 @@ Carried over (what the build reuses):
 | `web/packages/client` | Build, providers, design-system layer (`ui/`, `styles/`), Markdown pipeline, stores, routes kept by `02` §1 | Research features deleted (`02` W1.1, M4); new features per 02 |
 | `web/docs` (with `runbooks/` and this plan), `web/e2e`, `web/scripts`, `web/Dockerfile`, `web/fly.toml`, `web/litestream.yml`, `web/package.json`, `web/package-lock.json`, `web/tsconfig*.json`, `web/eslint.config.js`, `web/playwright.config.ts`, `web/SETUP.md` | ADRs, design documents, runbooks, CI, deployment | e2e specs replaced per `02` §12.2 |
 | `docs/mockups/session-web-members.html`, `session-web-spaces.html`, `session-web-spaces-fixtures.js`, `-mock-api.js`, `-jobs.js`, `-scenarios.js` | The product surface and first write definitions; `spacesMock.test.ts` and the fixture replica load them by path | None |
-| `.github/workflows/web.yml` | The web CI (`check`, `test`, `e2e`, `docker`, `deploy`) | Its `deploy` job targets staging until launch (§3.1) |
+| `.github/workflows/web.yml` | The web CI (`check`, `test`, `e2e`, `docker`, `deploy`) | Its `deploy` job runs for `main` only until the launch commit points it at `session-web` and production (§3.1) |
 | `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `README.md` | Repository instructions | `AGENTS.md` and `README.md` rewritten for the web build in the carry-over commit: the desktop paragraphs (Tauri, Swift support, desktop imports of `@session/shared`) are dropped, and "Planned" keeps the sync core without the desktop, phone and device-run parts (Q1) |
 
 Left behind on `session-desktop`: `src/` (the desktop frontend), `src-tauri/`
@@ -636,11 +644,12 @@ volume, `strategy = "immediate"`. With the build on its own branch:
   deployment branch rule allows only `session-web`, so a push to `main`
   cannot redeploy the old app over the new one; `main`'s files are not
   changed for this.
-- On `session-web`, `web.yml`'s `deploy` job runs on pushes to
-  `session-web` and targets the staging app (`-c web/fly.staging.toml`)
-  from M3; in M8b the same change that launches points it at production,
-  which from then on deploys from `session-web` only. No
-  `legacy-web` branch is needed.
+- On `session-web`, `web.yml`'s `deploy` job runs only for `main`, so CI
+  deploys nothing from the build branch. Staging is deployed by hand, `fly
+  deploy web -c web/fly.staging.toml` (`runbooks/launch.md` §4.1). In M8b
+  the launch commit points the job at `session-web` and production, which
+  from then on deploys from `session-web` only. No `legacy-web` branch is
+  needed.
 - From M1a, a CI job runs replica-proto's `npm test`; from M3, the
   conformance suite runs inside the server's `npm test`.
 - `npm run mutate` (replica-proto, and from M3 the server copy) is too slow
@@ -667,15 +676,17 @@ machine. Staging is reset after the M8a squash.
   WAL size is monitored (§4).
 - A restore moves the database back in time while clients hold cursors and
   confirmed answers from after the restored point. Decided (E6): boot
-  compares the Litestream generation id recorded in the database with the
-  current one and bumps every log epoch on a difference (`01` D6), so every
-  cursor resyncs; `runbooks/restore.md` states this and records the restore
+  compares the generation of the database file recorded in the database
+  with the current one and replaces the history id on a difference (`01`
+  D6), so every cursor resyncs. Litestream 0.5 has no generation ids: the
+  generation is the identity of the file (device, inode, creation time),
+  which a restore changes (`web/packages/db/src/sync/restore.ts`); `runbooks/restore.md` states this and records the restore
   time. Writes confirmed after the restored point are lost: their recorded
   answers are gone. Web clients hold no outbox across a reload, so those
   writes are not resent. The runbook states this window (Litestream lag,
   seconds).
-- Erased content stays in Litestream generations for as long as they are
-  retained (`01` D4). Decided: backups have no retention requirement; the
+- Erased content stays in the Litestream replica for as long as its
+  snapshots and LTX files are retained (`01` D4). Decided: backups have no retention requirement; the
   30-day retention is set for recovery. A restore to a point before a
   removal serves the removed content again; the runbook repeats the
   removals applied after the restore point (from the JSON logs).
@@ -727,7 +738,9 @@ research, collaboration, embed and tweet table. Files under
 is no export. The production database is replaced by an empty one built from
 `0000_initial.sql` with `runbooks/reset-database.md` (stop the app, point
 `LITESTREAM_REPLICA_URL` at a new prefix, delete the database and the volume
-directories, deploy).
+directories, deploy). At the launch, the current database and documents are
+moved aside on the volume for a rollback rather than deleted, and deleted
+30 days later (`runbooks/launch.md` §6 steps 4 and 9).
 
 Backups: the old Litestream prefix, which holds all deleted data, is kept for
 30 days after launch as the only rollback source (§3.6 step 8), then deleted.
@@ -755,39 +768,61 @@ waits for an invite.
 
 ### 3.6 Launch sequence (M8b)
 
+`runbooks/launch.md` §6 has the commands; the Fly and Litestream behaviour
+they depend on and the repository cannot confirm is checked on staging
+first (`launch.md` §4.13).
+
 1. Freeze: merge the launch commit to the build branch; CI green (`check`,
-   `test`, `e2e`, `docker`). Set the `production` environment's deployment
-   branch rule to `session-web` only (§3.1) and point `session-web`'s
-   `deploy` job at production.
-2. Record the rollback point: the current image of `session-dev` and the old
-   Litestream prefix and generation.
-3. Apply the staged secrets (new `LITESTREAM_REPLICA_URL` prefix, cursor and
-   secret keys, X OAuth, web window, limits).
-4. `fly scale count 0 -a session-dev`; delete `/data/session.db` with its
-   `-wal` and `-shm`, `/data/documents/*`, `/data/embeds/*` and
-   `/data/tmp/documents-backup.stamp` from a one-off machine with the volume,
-   with the reset script, which refuses while a server's heartbeat is fresh
-   (`reset-database.md` §4).
-5. Deploy the build branch to production (`fly deploy web -c web/fly.toml`)
-   and scale to 1. Boot runs `0000_initial.sql` on the empty file, records
-   the Litestream generation id, closes `usage_events` rows still `open`
+   `test`, `e2e`, `docker`; the conformance suite is run by hand,
+   `launch.md` §4.12). Set the `production` environment's deployment
+   branch rule to `session-web` only (§3.1); the launch commit points
+   `session-web`'s `deploy` job at production. Build and push the launch
+   image without deploying it.
+2. Record the rollback point: the current image of `session-dev` and its
+   commit, that commit's `fly.toml`, the old Litestream prefix, the volume
+   id, and the current value of every secret step 3 changes or unsets;
+   force a documents archive.
+3. Stage the secrets prepared in M8a (the new `LITESTREAM_REPLICA_URL`
+   prefix, the cursor and secret keys, the X OAuth client; unset
+   `SESSION_ALLOWED_GITHUB_LOGINS` unless kept) and check them: the deploy
+   of step 5 applies them, and the current app still replicates to the old
+   prefix.
+4. `fly scale count 0 -a session-dev`; on a one-off machine with the
+   volume, restore the old prefix to a scratch file and check its
+   integrity; list the reset's targets with the reset script, which takes
+   an exclusive lock on the database and refuses while another process has
+   it open (`reset-database.md`); move `/data/session.db` with its `-wal`
+   and `-shm`, `.session.db-litestream` and `/data/documents` aside to
+   `/data/pre-launch`; delete `/data/embeds` and
+   `/data/tmp/documents-backup.stamp` with the reset script. The last
+   check: the new prefix is still empty.
+5. Deploy the launch image to production (`fly deploy -c web/fly.toml
+   --image <launch image> --ha=false`) and check that one machine runs on
+   the recorded volume. Boot runs `0000_initial.sql` on the empty file,
+   records the file's generation, closes `usage_events` rows still `open`
    and marks runs still `running` as `interrupted` (none on an empty
    file), then starts the run dispatcher and the scheduled maintenance
    jobs (`01` S5).
 6. Seed the site admins (§3.5); the admins set the default model and the
    default effort.
 7. Smoke checks (M8b exit): sign-in with each provider, the default model
-   and effort, post and ask first; the smoke test's invite redemption is
-   the first invite used, and the checks after it are fixed forward.
+   and effort, post and ask first, Litestream replicating to the new
+   prefix; the smoke test's invite redemption is the first invite used,
+   and the checks after it are fixed forward.
 8. On failure before the first invite is used (a member's account invite
    redeemed; the root invites of §3.5 do not count): `fly scale count 0`,
-   delete the new database with the reset script (so that Litestream
-   restores the old one), restore the old prefix as `LITESTREAM_REPLICA_URL`,
-   deploy the recorded old image with `main`'s `fly.toml`, scale to 1,
-   restore `/data/documents` from the old archives, and set the `production`
-   environment's branch rule back to `main` (`launch.md` §6 step 8). Nothing written to the new
-   build is kept. From the first invite used on, fixes go forward.
-9. After 30 days: delete the old Litestream prefix and the old image.
+   delete the new database with the reset script and move the files of
+   `/data/pre-launch` back, set the recorded secret values again, deploy
+   the recorded old image with its commit's `fly.toml`, scale to 1, and
+   set the `production` environment's branch rule back to `main`
+   (`launch.md` §6 step 8). Without `/data/pre-launch`, the old image's
+   entrypoint restores the database from the old prefix, and
+   `/data/documents` is restored from the old archives before it starts.
+   Nothing written to the new build is kept. A later launch needs another
+   empty prefix and newly prepared secrets. From the first invite used on,
+   fixes go forward.
+9. After 30 days: delete the old Litestream prefix, `/data/pre-launch`, the
+   volume snapshot and the old image.
 
 ## 4. Observability
 

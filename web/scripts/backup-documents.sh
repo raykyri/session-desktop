@@ -11,10 +11,13 @@
 # boot and every hour it checks the stamp file's age and runs the script when
 # the stamp is missing or a day old. The stamp is touched only after a
 # successful run, so its age is the time since the last good archive
-# (`session_documents_backup_age_seconds`). To force one from inside the
-# machine:
+# (`session_documents_backup_age_seconds`). To force one, run it as the
+# `session` user (uid 1000) that runs the server: run as root, it leaves a
+# stamp owned by root, which the server's later scheduled runs cannot
+# update:
 #
-#   fly ssh console -a session-dev -C "/app/scripts/backup-documents.sh"
+#   fly ssh console -a session-dev -C \
+#     "setpriv --reuid=1000 --regid=1000 --clear-groups /app/scripts/backup-documents.sh"
 
 set -eu
 

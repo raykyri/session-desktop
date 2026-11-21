@@ -10,7 +10,9 @@ to the app's IPs plus the `_acme-challenge` CNAME.
 Staging is a second app, `session-staging`, with its own volume, bucket
 prefix, OAuth apps and secrets (plan `05` §3.2). Its configuration file,
 `web/fly.staging.toml`, is not yet in the repository; `runbooks/launch.md`
-§4.1 makes it from `web/fly.toml`.
+§4.1 makes it from `web/fly.toml`. No CI job deploys staging: it is deployed
+by hand, `fly deploy web -c web/fly.staging.toml` (`runbooks/launch.md`
+§4.1).
 
 The web build has no widget preview origin. The `artifacts.session.dev`
 certificate of the earlier build is removed 30 days after launch
@@ -121,9 +123,10 @@ fly secrets set -a session-dev ...                   # §4
 fly deploy web -c web/fly.toml
 ```
 
-Create the storage volume prior to running the initial deployment: with
-`strategy = "immediate"`, the deployment will fail if the required volume
-does not already exist when the machine starts.
+`fly.toml`'s `[[mounts]]` sets `initial_size = "20gb"`, from which Fly
+creates the volume at the first deploy when the app has none (Fly's
+behaviour, not verified here). `fly volumes create` before the first deploy
+fixes the volume's region and size explicitly instead.
 
 Site admins are seeded by handle (plan `05` §3.5): a root invite printed on
 the machine, redeemed by the person, who chooses a handle, then promoted by
@@ -190,16 +193,20 @@ where each value comes from.
 | `ANTHROPIC_API_KEY` | Claude Fable 5.1 (org configured for 30-day retention) |
 | `PARALLEL_API_KEY`, `TAVILY_API_KEY` | search vendors for `web_search` (either or both; none = search unavailable) |
 | `LITESTREAM_REPLICA_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | SQLite backups and document archive |
-| `SESSION_ALLOWED_GITHUB_LOGINS` | optional allowlist of GitHub logins, on top of the invite requirement; unset at launch |
+| `SESSION_DOCUMENTS_REPLICA_URL` | optional; where the documents archive goes, `${LITESTREAM_REPLICA_URL}/documents` when unset (`web/scripts/backup-documents.sh`) |
+| `AWS_ENDPOINT_URL_S3`, `AWS_REGION` | the bucket's S3 endpoint and region, read by Litestream and `web/scripts/s3-put.mjs`; Fly sets the endpoint for a Tigris bucket |
+| `SESSION_ALLOWED_GITHUB_LOGINS` | optional allowlist of GitHub logins, on top of the invite requirement; it does not restrict X sign-ins; unset at launch |
 | `SESSION_METRICS_TOKEN` | bearer token for `GET /metrics` (unset = the route 404s) |
-| `SENTRY_DSN` | optional error reporting |
+| `SENTRY_DSN` | read by `config.ts` and unused: the build has no error reporting |
 
 ## 5. Boot and shutdown
 
 Boot (`main.ts`, `boot.ts`; plan `01` S5): validate env → write the Vertex
 credential file → open the database (pragmas) → refuse a database that
-records a migration this build does not know (`UnknownMigrationError`), then
-`migrate()` → backfills → the restore check (plan `01` D6: a file of another
+records a migration this build does not know (`UnknownMigrationError`: one
+log line naming `runbooks/reset-database.md`, exit 1), then `migrate()` →
+backfills → the first heartbeat row (operator jobs refuse while it is
+fresh, `runbooks/delete-account.md`) → the restore check (plan `01` D6: a file of another
 generation, or an operator's request, replaces the sync history id) → close
 `usage_events` rows left `open` → mark runs still `running` as `interrupted`
 → start the run dispatcher and the maintenance jobs → listen. `/healthz`

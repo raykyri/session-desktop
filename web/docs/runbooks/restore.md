@@ -2,10 +2,15 @@
 
 How to bring `session-dev` (or `session-staging`) back from its backups:
 `session.db` from Litestream, and `/data/documents` from the daily archives
-when the database is one of the earlier build (a rollback, `launch.md` §8),
-followed by the verification steps required to validate database integrity
-and application health. Source of truth for what is backed up:
+when the database is one of the earlier build (a rollback, `launch.md` §6
+step 8), followed by the verification steps required to validate database
+integrity and application health. Source of truth for what is backed up:
 `13-deployment-fly.md` §6.
+
+Fly and Litestream behaviour marked "unverified" here is checked on staging
+in `launch.md` §4.13 (U1-U12). Every `aws s3` command takes
+`--endpoint-url <endpoint>`, the bucket's S3 endpoint (the app's
+`AWS_ENDPOINT_URL_S3`; Fly sets it for Tigris).
 
 Available backup sources:
 
@@ -39,21 +44,34 @@ fly scale count 0 -a session-dev      # or: fly machine stop <id>
 ## 2. Restore `session.db`
 
 From a machine with the secrets in its environment — easiest is the app's own
-image, started with the volume attached and the entrypoint overridden:
+image, started in the volume's region (`fly volumes list -a session-dev`)
+with the volume attached and the entrypoint overridden. `--shell` is taken
+not to run the entrypoint and to give the machine the app's secrets
+(unverified, U1); `--vm-memory 2048` gives the restore room for a large
+database (unverified flag and size, U10):
 
 ```sh
-fly machine run --shell -a session-dev --volume session_data:/data <image>
+fly machine run --shell -a session-dev -r <region> --vm-memory 2048 \
+  --volume session_data:/data <image>
 # inside:
-export LITESTREAM_REPLICA_URL=...       # already in the environment on the app
-litestream restore -config /etc/litestream.yml -o /data/session.db.restored "$LITESTREAM_REPLICA_URL"
+printenv LITESTREAM_REPLICA_URL         # the prefix to restore from; set it if it is not that one
+litestream restore -config /etc/litestream.yml -o /data/session.db.restored /data/session.db
 ```
 
-Point-in-time instead of latest:
+The command names the database path of `/etc/litestream.yml`
+(`${SESSION_DATA_DIR}/session.db`); Litestream reads the replica URL from
+that file, which expands `LITESTREAM_REPLICA_URL` from the environment.
+The earlier form, which passed the replica URL as well as `-config`, is not
+used: Litestream is reported to reject that combination (unverified for
+0.5.17, U2).
+
+Point-in-time instead of latest (whether 0.5.17 has `-timestamp` is
+unverified, U2):
 
 ```sh
 litestream restore -config /etc/litestream.yml \
   -timestamp 2026-03-04T05:00:00Z \
-  -o /data/session.db.restored "$LITESTREAM_REPLICA_URL"
+  -o /data/session.db.restored /data/session.db
 ```
 
 Inspect the database before replacing the active file. The image has no
@@ -69,11 +87,15 @@ cd /app && node -e '
 `integrity_check` prints `ok`; `head` is the last sync version the restored
 file holds.
 
-Then swap, keeping the old file until the verification below passes:
+Then swap, keeping the old file until the verification below passes.
+Litestream's local state, `.session.db-litestream/`, describes the file
+being replaced; left beside the restored, older file it would no longer
+match it, so it goes too:
 
 ```sh
 mv /data/session.db /data/session.db.broken 2>/dev/null || true
 rm -f /data/session.db-wal /data/session.db-shm
+rm -rf /data/.session.db-litestream
 mv /data/session.db.restored /data/session.db
 chown session:session /data/session.db
 ```
@@ -132,9 +154,30 @@ point, from the JSON logs (`moderation.decide` with `decision: "removed"`).
 ## 3. Restore `/data/documents`
 
 The archives are `documents-<timestamp>-full.tar.gz` and
-`...-incremental.tar.gz` under `documents/` in the same bucket. Restore the
-most recent `full`, then every `incremental` newer than it, oldest first;
-paths inside the archive are relative to the data directory.
+`...-incremental.tar.gz` under `documents/` of the replica prefix, or under
+`SESSION_DOCUMENTS_REPLICA_URL` when it is set. Restore the most recent
+`full`, then every `incremental` newer than it, oldest first; paths inside
+the archive are relative to the data directory.
+
+The image has no S3 download command. Download the archives on a
+workstation, then copy them into the machine that has the volume (the
+one-off machine of §2, or the app's machine) with `fly ssh sftp`
+(unverified, U8):
+
+```sh
+# on the workstation:
+aws s3 ls --endpoint-url <endpoint> <replica URL>/documents/
+aws s3 cp --endpoint-url <endpoint> --recursive \
+  --exclude '*' --include 'documents-<newest full timestamp>-full.tar.gz' \
+  --include 'documents-*-incremental.tar.gz' \
+  <replica URL>/documents/ ./restore/
+# drop the incrementals older than that full one from ./restore, then:
+fly ssh console -a session-dev -C "mkdir -p /tmp/restore"
+fly ssh sftp shell -a session-dev
+# sftp: put ./restore/<archive> /tmp/restore/<archive>, once per archive
+```
+
+Then, inside the machine:
 
 ```sh
 cd /data
@@ -193,10 +236,15 @@ increase activity during the first minute.
 
 - Delete `/data/session.db.broken` once the verification passes, not before.
 - Litestream begins replicating the restored file immediately; confirm with
-  `fly logs` (a `sync` line within a second or two of the first write).
+  `fly logs` (a `sync` line within a second or two of the first write). That
+  a restore of the latest point then returns the post-restore state is
+  unverified and checked on staging (U3).
 - For a database of the earlier build, force a documents archive to
-  establish a baseline marker for subsequent incremental backups:
-  `fly ssh console -a session-dev -C "/app/scripts/backup-documents.sh"`.
+  establish a baseline marker for subsequent incremental backups. Run it as
+  the `session` user (uid 1000): run as root, the script leaves a stamp
+  file owned by root, which the server's later scheduled archives, running
+  as `session`, cannot update:
+  `fly ssh console -a session-dev -C "setpriv --reuid=1000 --regid=1000 --clear-groups /app/scripts/backup-documents.sh"`.
   Otherwise the server runs one at boot when the marker is missing or a day
   old; `session_documents_backup_age_seconds` shows when it last succeeded.
 
