@@ -14,7 +14,9 @@
 //   run was queued (`payerFor` of `@session/mutators`). A run nothing can
 //   pay for now ends `failed { why: "tokens" }` (or `key`, for a key-only
 //   model without its key) without a provider call; otherwise the claim
-//   writes the payer to the run record (`pay`).
+//   writes the payer to the run record (`pay`). An attempt claimed before
+//   (a 429 re-queue, a resume) is admitted on included tokens while the
+//   member is below the allowance plus the overdraft limit (K9).
 //
 // A 429 re-queues the run with backoff 5 s, 20 s, 60 s; the next 429 fails it
 // `rate` with `at` 60 s ahead (`03` E5). The backoff is kept in memory: after
@@ -244,8 +246,11 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
       if (busy.has(run.runId) || !admit(run, at)) continue;
       const entry = findModel(run.model);
       // `03` K10: the payer is decided again, by the rule of `pre`, before
-      // the attempt starts; the claim writes it to the run record.
-      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry) : run.payer;
+      // the attempt starts; the claim writes it to the run record. An
+      // attempt that already ran (a 429 re-queue, a resume) continues on
+      // overdraft up to the loop's limit (K9).
+      const ran = run.ran === true || ledger.runTokens(run.runId, run.attempt) > 0;
+      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, ran) : run.payer;
       if (payer === "out_of_tokens" || payer === "no_key") {
         store.settleQueued(
           run,

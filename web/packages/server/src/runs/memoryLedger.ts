@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 
 import type {
   CallEnding,
+  CallKind,
   Ledger,
   LedgerCall,
   LedgerCounts,
@@ -117,10 +118,10 @@ export class MemoryLedger implements Ledger {
     return total;
   }
 
-  runPayers(runId: string, attempt: number): ReadonlySet<Payer> {
+  runPayers(runId: string, kind?: CallKind): ReadonlySet<Payer> {
     const payers = new Set<Payer>();
     for (const row of this.#rows.values())
-      if (row.runId === runId && row.attempt === attempt) payers.add(row.payer);
+      if (row.runId === runId && (kind === undefined || row.kind === kind)) payers.add(row.payer);
     return payers;
   }
 
@@ -139,7 +140,7 @@ export class MemoryLedger implements Ledger {
       };
       run.counted += row.counted;
       if (row.payer === "included") run.includedCounted += row.counted;
-      run.payers.add(row.payer);
+      if (row.kind === "research") run.payers.add(row.payer);
       run.startedAt = Math.min(run.startedAt, row.openedAt);
       runs.set(row.runId, run);
     }

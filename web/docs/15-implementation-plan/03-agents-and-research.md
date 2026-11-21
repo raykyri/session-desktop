@@ -263,7 +263,7 @@ at 0.
 | Provider `429` | Re-queued with backoff 5 s, 20 s, 60 s (`05-run-lifecycle-and-streaming.md` §8); after the third, `failed { why: "rate", at }` with `at` 60 s ahead | closed at 0; each retry opens a new row |
 | Other provider error | `failed { why: "error", cls }` from `classifyRunError` | closed with the last counts (0 if refused before streaming) |
 | Deployment credential rejected (`401`/`403` on included tokens) | `failed { why: "error", cls: "auth" }`; logged with the class, and a new `session_run_failures_total{cls}` counter alerts on any `auth` | closed at 0 |
-| Person's key rejected mid-run (`401`/`403`, or key removed) | `failed { why: "key" }` at that step; the key becomes `invalid` (K4) | closed at 0 (key removed: the call in progress finishes and closes normally; the run ends at its next step, K4) |
+| Person's key rejected mid-run (`401`/`403`, or key removed, replaced, or billing moved from `key` to `pause`) | `failed { why: "key" }` at that step; a rejected key becomes `invalid` (K4) | closed at 0 (key removed, replaced or billing moved: the call in progress finishes and closes normally; the run ends at its next step, K4, K7) |
 | Wall clock (`SESSION_RUN_TIMEOUT_SECONDS`, 900) | `failed { why: "error", cls: "timeout" }`, as now | stream aborted; closed with the last counts |
 | Per-run token cap (L1) | `complete`, with the note "Stopped at the run's token limit." after the answer | stream aborted at the checkpoint that reaches the cap; closed with the last counts |
 | Allowance reached mid-run | continues: the next step uses the person's Anthropic key, or the run continues on overdraft (K9) | the step's row closes normally; the next step's row carries the new payer |
@@ -377,7 +377,8 @@ Acceptance: a fixture test for each way a call can end (finish, cancel,
 timeout, error, superseded, overdraft stop, process kill) finds a closed row
 whose tokens match what the fixture provider streamed (within the 2 s
 checkpoint bound for the kill case); the sum of a run's rows equals the run
-record's `tok`.
+record's `tok`, and `bill` names the payers of its research rows, both over
+every attempt and every claim of the run.
 
 **K2. What counts.** Input plus output tokens, with reasoning tokens inside
 output as the AI SDK reports them (`06-auth-and-users.md` §8). Cached input
@@ -387,8 +388,15 @@ price for that model (for example 0.1 where cached input costs a tenth),
 taken from the model registry entry (`ModelEntry.cachedInputRatio`, new), and
 the ledger stores both the raw token counts and the counted total. The title
 and summary steps of a new thread (E2) count toward the asker's allowance
-(`05-run-lifecycle-and-streaming.md` §8 bills them to the asker). Tokens paid
-by a person's key are recorded but do not count toward the allowance.
+(`05-run-lifecycle-and-streaming.md` §8 bills them to the asker), and so does
+the context summary of a long thread, whoever pays for the run. Once included
+usage reaches allowance plus the overdraft limit (K9), none of these calls is
+made: the title is the question, clipped as a title with no generated one is
+(`defaultTitle`, 72 characters), the thread gets no summary line, and the
+context goes without a new summary (a cached one is still used). The run's
+`bill` names the payers of its research calls only, so a key-paid thread is
+labelled with its key. Tokens paid by a person's key are recorded but do not
+count toward the allowance.
 
 **K3. The weekly allowance.** 2,000,000 included tokens per active member per
 week (`SESSION_WEEKLY_TOKENS`, overridable per user in `user_limits`), reset
@@ -502,7 +510,10 @@ checkpoint.
   and the run's `bill` is `included+key:anthropic` ("Included + Anthropic
   key", the split label in `charge()`); otherwise the run continues on
   overdraft. If the key is rejected after the switch, the run ends
-  `failed { why: "key" }` (E5).
+  `failed { why: "key" }` (E5). While the allowance is not spent (after the
+  weekly reset, or a larger allowance), the next step of a run on the
+  Anthropic key, on a model included tokens may pay for, moves back to
+  included tokens (K8).
 - Overdraft is limited per member, not per run:
   `SESSION_OVERDRAFT_TOKENS` (default 200,000 per member per week) is shared
   by all of the member's runs. When included usage reaches allowance plus
@@ -511,20 +522,35 @@ checkpoint.
   the last turn, and the run ends `complete` with the note "Stopped: this
   week's included tokens ran out." (E5). Overdraft does not carry into the
   next week.
+- The step-boundary check applies the limits of the next step's payer (a
+  step that moves to the person's key is not stopped by the overdraft limit)
+  and counts the estimated input of the next request: a request whose input
+  would reach allowance plus the limit, or the run's token cap, is not made,
+  and the run stops there as at a checkpoint. A call
+  therefore starts only while its input estimate fits, and each running
+  attempt passes the limit by at most one checkpoint interval of output,
+  plus the amount by which the provider's input count exceeds the estimate.
 - The per-run token cap (L1) still applies to each run.
 
 Acceptance: a fixture run crossing the boundary writes ledger rows with both
 payers; two concurrent fixture runs of one member together never exceed
 allowance plus overdraft limit by more than one checkpoint interval of
-output, and both end with the stop note; a fixture run whose key is rejected
-after the switch ends `key` with its earlier turns kept.
+output per run, and both end with the stop note; a fixture run whose next
+request's input would pass the limit makes no further call; a fixture run
+whose key is rejected after the switch ends `key` with its earlier turns
+kept.
 
 **K10. Queued runs at the reset.** A run that failed with `tokens` is not
 run again automatically at the reset; the person presses Run again. Runs
 waiting in the dispatcher queue are re-checked before they start
 (`05-run-lifecycle-and-streaming.md` §8); one whose payer is now `none` ends
-`failed { why: "tokens" }`. Acceptance: a queued run admitted after the
-allowance is spent ends `tokens` without a provider call.
+`failed { why: "tokens" }`. An attempt that already ran (`startedAt` set, or
+ledger rows of its own: a 429 re-queue or a resume) may have crossed into
+overdraft (K9), so where the rule answers `none` it is admitted on included
+tokens while included usage is below allowance plus the overdraft limit.
+Acceptance: a queued run admitted after the allowance is spent ends `tokens`
+without a provider call; a run re-queued by 429s after it crossed the
+allowance ends `rate`, not `tokens`.
 
 ### 6.4 Models and effort
 
@@ -632,9 +658,11 @@ not above the default effort.
 **L1. Owned runs.** 25 steps (`MAX_STEPS` in `runs/loop.ts`), 15 minutes wall
 clock (`SESSION_RUN_TIMEOUT_SECONDS`, 900), 20 searches and 20 fetches
 (`tools/context.ts`), as now; plus a new per-run token cap of 400,000 tokens
-(`SESSION_RUN_MAX_TOKENS`). Overdraft is bounded per member, not by this cap
-(K9). A run at the token cap ends `complete` with its answer so far and the
-note of E5. Concurrency: 2 running owned runs per user
+(`SESSION_RUN_MAX_TOKENS`). The cap counts one attempt: a 429 re-queue or a
+resume continues the attempt's count, and Run again starts a fresh 400,000.
+Overdraft is bounded per member, not by this cap (K9). A run at the token cap
+ends `complete` with its answer so far and the note of E5. Concurrency: 2
+running owned runs per user
 (`SESSION_RUNS_PER_USER`) and the per-provider caps of
 `04-agent-runtime.md` §10; 20 queued runs per user
 (`SESSION_QUEUED_PER_USER`). Beyond that the mutator's `pre` stage refuses

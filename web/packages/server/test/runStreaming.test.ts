@@ -10,6 +10,7 @@ import test from "ava";
 
 import { RUN_LIVE_READS } from "../src/app.js";
 import { registerFixture } from "../src/runs/fixtureProvider.js";
+import { weekOf } from "../src/runs/ledger.js";
 import { RESUME_SEQ_GAP, RecordRunStore } from "../src/runs/recordStore.js";
 import type { RunDelta, RunLive } from "../src/runs/recordStore.js";
 
@@ -480,8 +481,35 @@ test.serial(
       anthropicKey: () => null,
       openaiKey: () => null,
     };
-    const w = await runsWorld(t, { allowances, backoffMs: [10, 10, 10] });
+    const clock = { at: Date.now() };
+    const w = await runsWorld(t, {
+      allowances,
+      env: { SESSION_OVERDRAFT_TOKENS: "100000" },
+      backoffMs: [60_000],
+      now: () => clock.at,
+    });
     const { run } = await w.ask(w.mona, w.open, "fixture:written-step-then-throttle");
+    await waitFor(() => w.run(run).status === "queued" && w.rows(run).length >= 2, "the re-queue");
+    t.is(liveRows(w).length, 1);
+    // another run spends past the allowance plus overdraft during the
+    // backoff, so the next claim finds nothing to pay, even for an attempt
+    // that ran (`03` K10)
+    const counts = { inputTokens: 200_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 };
+    const id = w.ledger.open({
+      runId: "another-run",
+      attempt: 1,
+      userId: w.mona.user.id,
+      payer: "included",
+      week: weekOf(clock.at),
+      kind: "research",
+      provider: "anthropic",
+      model: "claude-fable",
+      cachedInputRatio: 1,
+      counts,
+      openedAt: clock.at,
+    });
+    w.ledger.close(id, counts, "finish", clock.at);
+    clock.at += 60_000;
     t.like(await w.settled(run), { status: "failed", fail: { why: "tokens" } });
     t.deepEqual(liveRows(w), []);
   },

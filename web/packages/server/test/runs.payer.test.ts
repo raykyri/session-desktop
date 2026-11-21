@@ -11,8 +11,10 @@ import { billLabel } from "../src/runs/allowance.js";
 import { registerFixture } from "../src/runs/fixtureProvider.js";
 import { weekOf } from "../src/runs/ledger.js";
 import { KEY_STOPPED_MESSAGE } from "../src/runs/loop.js";
+import { CONTEXT_BUDGET_TOKENS, estimateTokens } from "../src/runs/messages.js";
 import type { Providers } from "../src/runs/providers.js";
 import { createProviders } from "../src/runs/providers.js";
+import type { ContextMessage } from "../src/runs/store.js";
 
 import { testConfig } from "./helpers.js";
 import { createLoopHarness, fakeNetwork } from "./runsHelpers.js";
@@ -46,6 +48,26 @@ test("an included run that crosses the allowance moves to the member's Anthropic
   t.is(finish?.summary.bill, "included+key:anthropic");
   t.is(finish?.summary.tok, harness.ledger.runTokens(request.runId));
   t.is(finish?.summary.note, undefined, "key-paid steps are not stopped by the overdraft limit");
+});
+
+test("K9: a step that crosses allowance plus overdraft with billing key moves to the key, not to the stop", async (t) => {
+  // allowance 1 plus overdraft 1,000: the first step's 940 and the next
+  // request's input pass the limit, but the next step is the key's
+  const harness = createLoopHarness(t, {
+    allowances: keyBilling,
+    env: { SESSION_OVERDRAFT_TOKENS: "1000" },
+  });
+  const user = harness.addUser("crosser-near-the-limit");
+  const request = harness.runRequest(user.id, "fixture:success-with-tools", {
+    model: "claude-fable",
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.is(rows[0]?.payer, "included");
+  t.true(rows.length >= 2);
+  t.true(rows.slice(1).every((row) => row.payer === "key:anthropic"));
+  t.is(harness.store.finishes(request.runId)[0]?.summary.note, undefined);
 });
 
 test("with billing pause the run continues on overdraft", async (t) => {
@@ -349,4 +371,116 @@ test("a look-up stops at 2 searches and 4 steps", async (t) => {
     "the third search is refused by the budget",
   );
   t.is(harness.ledger.rows({ runId: request.runId }).length, 4, "4 steps, 4 provider calls");
+});
+
+test("K2: a new thread's run that moved to the member's key bills its title and summary to included tokens", async (t) => {
+  const harness = createLoopHarness(t, { allowances: keyBilling });
+  const user = harness.addUser("titled-crosser");
+  const request = harness.runRequest(user.id, "fixture:success-with-tools", {
+    model: "claude-fable",
+    finalSteps: { title: true, summary: true },
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.true(
+    rows.some((row) => row.kind === "research" && row.payer === "key:anthropic"),
+    "the run moved to the key",
+  );
+  t.deepEqual(
+    rows.filter((row) => row.kind !== "research").map((row) => [row.kind, row.payer]),
+    [
+      ["title", "included"],
+      ["summary", "included"],
+    ],
+  );
+  t.is(harness.store.finishes(request.runId)[0]?.summary.bill, "included+key:anthropic");
+});
+
+test("E5: a run claimed on the member's key that finds no key at its start fails key_unset without a call", async (t) => {
+  const harness = createLoopHarness(t, {
+    allowances: { ...keyBilling, anthropicKey: () => null },
+  });
+  const user = harness.addUser("unset");
+  const request = harness.runRequest(user.id, "fixture:success", {
+    model: "claude-fable",
+    payer: "key:anthropic",
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "failed");
+  t.deepEqual(harness.store.finishes(request.runId)[0]?.summary.fail, {
+    why: "key",
+    detail: "key_unset",
+  });
+  t.deepEqual(harness.ledger.rows({ runId: request.runId }), [], "no provider call");
+  t.deepEqual(harness.streamed, []);
+});
+
+test("K2, K9: past the allowance plus overdraft a key-paid run makes no context summary call: a cached summary is used, else the context goes unsummarized", async (t) => {
+  const harness = createLoopHarness(t, {
+    allowances: keyBilling,
+    env: { SESSION_OVERDRAFT_TOKENS: "1" },
+  });
+  const user = harness.addUser("compacted");
+  const at = Date.now();
+  // included usage already past allowance (1) plus overdraft (1)
+  const spent = harness.ledger.open({
+    runId: "earlier",
+    attempt: 1,
+    userId: user.id,
+    payer: "included",
+    week: weekOf(at),
+    kind: "research",
+    provider: "vertex",
+    model: "gemini-flash",
+    cachedInputRatio: 1,
+    counts: { inputTokens: 5_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+    openedAt: at,
+  });
+  harness.ledger.close(
+    spent,
+    { inputTokens: 5_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+    "finish",
+    at,
+  );
+  // four earlier exchanges, together over the context budget
+  const long = "The earlier exchange discussed this at length. ".repeat(3_000);
+  const history: ContextMessage[] = ["n1", "n2", "n3", "n4"].flatMap((nodeId) => [
+    { nodeId, message: { role: "user", content: `question ${nodeId} ${long}` }, model: null },
+    {
+      nodeId,
+      message: { role: "assistant", content: `answer ${nodeId} ${long}` },
+      model: "claude-fable",
+    },
+  ]);
+  t.true(estimateTokens(history.map((m) => m.message)) > CONTEXT_BUDGET_TOKENS);
+  const ask = () =>
+    harness.runRequest(user.id, "fixture:success", {
+      model: "claude-fable",
+      payer: "key:anthropic",
+      history,
+    });
+
+  const first = ask();
+  t.is((await harness.agent.run(first)).outcome, "complete");
+  t.deepEqual(
+    harness.ledger.rows({ runId: first.runId }).map((row) => [row.kind, row.payer]),
+    [["research", "key:anthropic"]],
+    "no context summary call",
+  );
+  const sent = JSON.stringify(harness.streamed.at(-1)?.prompt);
+  t.true(sent.includes("question n1"), "the context goes as it is");
+  t.false(sent.includes("Summary of the earlier conversation"));
+
+  // a summary cached by an earlier run is read, not made
+  harness.store.summaries?.write("n2", "The thread so far established the basics.");
+  const second = ask();
+  t.is((await harness.agent.run(second)).outcome, "complete");
+  t.deepEqual(
+    harness.ledger.rows({ runId: second.runId }).map((row) => row.kind),
+    ["research"],
+  );
+  const summarized = JSON.stringify(harness.streamed.at(-1)?.prompt);
+  t.true(summarized.includes("The thread so far established the basics."));
+  t.false(summarized.includes("question n1"));
 });

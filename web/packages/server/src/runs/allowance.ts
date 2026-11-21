@@ -13,7 +13,7 @@ import type { ModelEntry } from "@session/shared";
 
 import type { Config } from "../config.js";
 
-import type { Ledger, Payer } from "./ledger.js";
+import type { CallKind, Ledger, Payer } from "./ledger.js";
 import { weekOf } from "./ledger.js";
 import type { BillLabel } from "./store.js";
 
@@ -122,19 +122,38 @@ export function payerFacts(deps: BudgetDeps, userId: string): PayerFacts {
   };
 }
 
+/** True while the member's included usage, open rows counted, is below the
+ * allowance plus `SESSION_OVERDRAFT_TOKENS`: the limit at which the loop
+ * stops included-token calls (`03` K9). */
+export function withinOverdraft(deps: BudgetDeps, userId: string): boolean {
+  return includedUsed(deps, userId) < deps.allowances.weekly(userId) + deps.limits.overdraftTokens;
+}
+
 /**
  * The payer of an attempt about to start (`03` K8, K10): the rule `pre`
  * applied when the run was queued (`payerFor`), over the facts as they are
  * now. A run whose payer is now `out_of_tokens` ends `failed { why:
  * "tokens" }`, and one on a key-only model without its key `failed { why:
  * "key" }`, both without a provider call.
+ *
+ * `ran` is set for a claim of an attempt that already ran: a re-queue after
+ * a 429, or a resume after a drain or a crash. Such an attempt may have
+ * crossed into overdraft legitimately (K9), so where the first claim's rule
+ * answers `out_of_tokens` it continues on `included` while the member's
+ * usage is below the allowance plus the overdraft limit, the limit the loop
+ * stops it at. A first claim keeps the strict rule.
  */
 export function payerAtStart(
   deps: BudgetDeps,
   userId: string,
   entry: Pick<ModelEntry, "payers">,
+  ran = false,
 ): PayerDecision {
-  return payerFor(entry.payers, payerFacts(deps, userId));
+  const decision = payerFor(entry.payers, payerFacts(deps, userId));
+  if (decision === "out_of_tokens" && ran && withinOverdraft(deps, userId)) {
+    return "included";
+  }
+  return decision;
 }
 
 /** The limits one attempt checks while it runs. */
@@ -154,6 +173,14 @@ export class RunBudget {
   /** True once the member's included usage reached the allowance. */
   allowanceSpent(): boolean {
     return includedUsed(this.#deps, this.#userId) >= this.#deps.allowances.weekly(this.#userId);
+  }
+
+  /** True once the member's included usage reached the allowance plus the
+   * overdraft limit (`03` K9). The title, summary and context-summary calls
+   * bill included tokens whoever pays for the run (K2), and each is one call
+   * with no checkpoint, so the loop skips them from here on. */
+  includedExhausted(): boolean {
+    return !withinOverdraft(this.#deps, this.#userId);
   }
 
   /** The asker's Anthropic key when the next step of an `included` run on
@@ -186,20 +213,46 @@ export class RunBudget {
    * every payer (`03` L1); the overdraft limit stops only calls paid with
    * included tokens, once the member's included usage reaches the allowance
    * plus `SESSION_OVERDRAFT_TOKENS` (`03` K9).
+   *
+   * `nextInput` is the estimated input of the request about to start, given
+   * at a step boundary (0 at a checkpoint, where the call has started): a
+   * request whose input would reach a limit is not made. So a call starts
+   * only while its input estimate fits below both limits, and a running call
+   * stops at its next checkpoint once a limit is reached: each running
+   * attempt passes a limit by at most one checkpoint interval of output,
+   * plus the amount by which the provider's input count exceeds the
+   * estimate.
    */
-  stopReason(payer: Payer): StopReason | null {
-    if (this.#deps.ledger.runTokens(this.#runId, this.#attempt) >= this.#deps.limits.runMaxTokens) {
+  stopReason(payer: Payer, nextInput = 0): StopReason | null {
+    const runTokens = this.#deps.ledger.runTokens(this.#runId, this.#attempt);
+    if (runTokens + nextInput >= this.#deps.limits.runMaxTokens) {
       return "run_cap";
     }
     if (payer !== "included") {
       return null;
     }
     const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens;
-    return includedUsed(this.#deps, this.#userId) >= limit ? "overdraft" : null;
+    return includedUsed(this.#deps, this.#userId) + nextInput >= limit ? "overdraft" : null;
   }
 }
 
-/** The run record's `bill` from the payers its calls used (`03` K9). */
+/** The call kind whose payers name a run's `bill`: title, summary and
+ * context-summary calls bill included tokens whoever pays for the run
+ * (`03` K2), so a key-paid thread is labelled with its key. */
+export const BILLED_KIND: CallKind = "research";
+
+/**
+ * The run record's `bill` from the ledger (`03` §1, K1, K9): the payers of
+ * the run's research calls, every attempt and every claim, so that `bill`
+ * covers the same rows as `tok`. A run whose only calls were metadata calls
+ * (included tokens, K2) is `included`; one with no call, null.
+ */
+export function runBill(ledger: Pick<Ledger, "runPayers">, runId: string): BillLabel | null {
+  return billLabel(ledger.runPayers(runId, BILLED_KIND)) ?? billLabel(ledger.runPayers(runId));
+}
+
+/** The run record's `bill` from the payers of its research calls (`03`
+ * K9, `runBill`). */
 export function billLabel(payers: ReadonlySet<Payer>): BillLabel | null {
   if (payers.size === 0) {
     return null;

@@ -27,7 +27,9 @@
 // limits and endings, the ledger, `/live`, and the mutators' run rules);
 // M5b-1 on cover the payer, the allowance and the overdraft of M5b (the
 // pre stage's payer, the claim's re-check, the reset, the crossing, the
-// key-only model, a member's own allowance).
+// key-only model, a member's own allowance). M5b-16 on undo one fix of the
+// M5b server review each (S1-S6), and M5b-T1 on are the breakages the M5b
+// test-strength review found no test for, each named by the review's row.
 // M6-8 on undo one fix of the M6 server review each (the deletion job, the
 // privacy check, the pre-stage limits, the invite notification), named by
 // the review's row, so that each fix's test is shown to fail without it.
@@ -1457,8 +1459,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M5b-7 the claim keeps the payer it was queued with",
     file: "src/runs/dispatcher.ts",
-    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry) : run.payer;",
-    to: "      const payer = run.payer as ReturnType<typeof payerAtStart>;\n      void budgetDeps;",
+    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, ran) : run.payer;",
+    to: "      const payer = run.payer as ReturnType<typeof payerAtStart>;\n      void budgetDeps;\n      void ran;",
   },
   {
     name: "M5b-8 the claim does not write the payer to the run record",
@@ -1507,6 +1509,176 @@ const MUTATIONS: Mutation[] = [
     file: "src/trpc/routers/keys.ts",
     from: "      allowance: ctx.allowances.weekly(ctx.user.id),",
     to: "      allowance: ctx.config.limits.weeklyTokens,",
+  },
+  // ---- M5b review fixes (S1-S6), named by the review's row ----
+  {
+    name: "M5b-16 S1: a re-claim of an attempt that ran is held to the first claim's rule",
+    file: "src/runs/dispatcher.ts",
+    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, ran) : run.payer;",
+    to: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, false) : run.payer;\n      void ran;",
+  },
+  {
+    name: "M5b-17 S1: an attempt with ledger rows of its own is not taken as one that ran",
+    file: "src/runs/dispatcher.ts",
+    from: "      const ran = run.ran === true || ledger.runTokens(run.runId, run.attempt) > 0;",
+    to: "      const ran = run.ran === true;",
+  },
+  {
+    name: "M5b-18 S1: a re-claim is admitted past the allowance plus overdraft",
+    file: "src/runs/allowance.ts",
+    from: '  if (decision === "out_of_tokens" && ran && withinOverdraft(deps, userId)) {',
+    to: '  if (decision === "out_of_tokens" && ran) {',
+  },
+  {
+    name: "M5b-19 S2: the title call is made past the allowance plus overdraft",
+    file: "src/runs/loop.ts",
+    from: "      const title = budget.includedExhausted()\n",
+    to: "      const title = false\n",
+  },
+  {
+    name: "M5b-20 S2: the summary line call is made past the allowance plus overdraft",
+    file: "src/runs/loop.ts",
+    from: "    if (request.finalSteps?.summary && owned() && !signal.aborted && !budget.includedExhausted()) {",
+    to: "    if (request.finalSteps?.summary && owned() && !signal.aborted) {",
+  },
+  {
+    name: "M5b-21 S2: the context summary call is made past the allowance plus overdraft",
+    file: "src/runs/loop.ts",
+    from: "          budget.includedExhausted()\n            ? Promise.resolve(null)\n",
+    to: "          false\n            ? Promise.resolve(null)\n",
+  },
+  {
+    name: "M5b-22 S2: the bill counts the title and summary calls",
+    file: "src/runs/allowance.ts",
+    from: "  return billLabel(ledger.runPayers(runId, BILLED_KIND)) ?? billLabel(ledger.runPayers(runId));",
+    to: "  return billLabel(ledger.runPayers(runId)) ?? billLabel(ledger.runPayers(runId, BILLED_KIND));",
+  },
+  {
+    name: "M5b-23 S3: the end of an attempt writes the summary's bill",
+    file: "src/runs/recordStore.ts",
+    from: "      const bill = spent.bill === undefined ? summary.bill : spent.bill;",
+    to: "      const bill = summary.bill;",
+  },
+  {
+    name: "M5b-24 S3: the bill names the latest attempt's payers only",
+    file: "src/runs/sqliteLedger.ts",
+    from: '        "SELECT DISTINCT payer FROM usage_events WHERE run_id = ? AND kind = ?",',
+    to: '        "SELECT DISTINCT payer FROM usage_events e WHERE run_id = ? AND kind = ? AND attempt = (SELECT max(attempt) FROM usage_events m WHERE m.run_id = e.run_id)",',
+  },
+  {
+    name: "M5b-25 S4: a run on the member's key never moves back to included tokens",
+    file: "src/runs/loop.ts",
+    from: "        stepNumber > 0 &&\n",
+    to: "        stepNumber < 0 &&\n",
+  },
+  {
+    name: "M5b-26 S5: the step boundary ignores the next request's input",
+    file: "src/runs/loop.ts",
+    from: "                nextInputEstimate(done.at(-1)?.content),",
+    to: "                0 * nextInputEstimate(done.at(-1)?.content),",
+  },
+  {
+    name: "M5b-27 S6: a stored valid key that does not open counts for the payer",
+    file: "src/keys/apiKeys.ts",
+    from: '  return row !== null && view(deps, row).status === "valid" ? row.sealed : null;',
+    to: '  return row?.status === "valid" ? row.sealed : null;',
+  },
+  {
+    name: "M5b-28 S5: the step boundary checks the limits of the step that ended, not the next",
+    file: "src/runs/loop.ts",
+    from: "              payForNextStep(done.length);\n",
+    to: "",
+  },
+  // ---- M5b test-strength review: breakages no test caught, named by the review's row ----
+  {
+    name: "M5b-T1 A1: included usage at the allowance leaves it unspent",
+    file: "src/runs/allowance.ts",
+    from: "    return includedUsed(this.#deps, this.#userId) >= this.#deps.allowances.weekly(this.#userId);",
+    to: "    return includedUsed(this.#deps, this.#userId) > this.#deps.allowances.weekly(this.#userId);",
+  },
+  {
+    name: "M5b-T2 O1: the step boundary does not check the limits",
+    file: "src/runs/loop.ts",
+    from: "              const reason = budget.stopReason(\n                current?.payer ?? request.payer,\n                nextInputEstimate(done.at(-1)?.content),\n              );\n",
+    to: "              const reason = null as StopReason | null;\n              void done;\n              void nextInputEstimate;\n",
+  },
+  {
+    name: "M5b-T3 O4: metadata calls bill the run's current payer",
+    file: "src/runs/loop.ts",
+    from: '      meter.wrap(model, { entry, payer: "included", kind });',
+    to: '      meter.wrap(model, { entry, payer: current?.payer ?? "included", kind });',
+  },
+  {
+    name: "M5b-T4 M1: a checkpoint does not move the time of the last one",
+    file: "src/runs/meter.ts",
+    from: "    this.#lastCheckpointAt = at;\n",
+    to: "",
+  },
+  {
+    name: "M5b-T5 M2: a checkpoint waits twice checkpointMs",
+    file: "src/runs/meter.ts",
+    from: "    if (at - this.#lastCheckpointAt < this.#meter.deps.checkpointMs) {",
+    to: "    if (at - this.#lastCheckpointAt < this.#meter.deps.checkpointMs * 2) {",
+  },
+  {
+    name: "M5b-T6 M13: a call opened at the reset counts in the week before",
+    file: "src/runs/meter.ts",
+    from: "      week: weekOf(openedAt),",
+    to: "      week: weekOf(openedAt - 1),",
+  },
+  {
+    name: "M5b-T7 M14: streamed reasoning is not counted in the output",
+    file: "src/runs/meter.ts",
+    from: '      case "reasoning-delta":\n        this.#output += part.delta;\n',
+    to: '      case "reasoning-delta":\n',
+  },
+  {
+    name: "M5b-T8 A9: the payer facts never list an OpenAI key",
+    file: "src/runs/allowance.ts",
+    from: 'const KEY_PROVIDERS: readonly KeyProvider[] = ["anthropic", "openai"];',
+    to: 'const KEY_PROVIDERS: readonly KeyProvider[] = ["anthropic"];',
+  },
+  {
+    name: "M5b-T9 P6: a key-only model without its key is failed tokens in pre",
+    file: "../mutators/src/rules.ts",
+    from: '  if (decision === "no_key") return firstPayer(model);',
+    to: '  if (decision === "no_key") return null;',
+  },
+  {
+    name: "M5b-T10 K7d: a rejected save removes the key saved before it",
+    file: "src/keys/apiKeys.ts",
+    from: '  if (checked === "rejected") {\n    throw new TRPCError',
+    to: '  if (checked === "rejected") {\n    keyRepo.remove(deps.db, userId, provider);\n    throw new TRPCError',
+  },
+  {
+    name: "M5b-T11 K9c: the log of a key that does not open names its sealed value",
+    file: "src/keys/apiKeys.ts",
+    from: '    deps.logger.warn({ userId, provider }, "a stored api key does not open with the secret key");',
+    to: '    deps.logger.warn(\n      { userId, provider, sealed: row.sealed },\n      "a stored api key does not open with the secret key",\n    );',
+  },
+  {
+    name: "M5b-T12 K9d: the log of a key a run rejected names its sealed value",
+    file: "src/keys/apiKeys.ts",
+    from: '    deps.logger.info({ userId, provider }, "api key rejected during a run");',
+    to: '    deps.logger.info({ userId, provider, sealed: opened.sealed }, "api key rejected during a run");',
+  },
+  {
+    name: "M5b-T13 K14: an invalid key that still opens counts for the payer",
+    file: "src/keys/apiKeys.ts",
+    from: '  return row !== null && view(deps, row).status === "valid" ? row.sealed : null;',
+    to: "  return row !== null && opens(deps, row) ? row.sealed : null;",
+  },
+  {
+    name: "M5b-T14 U7: usage.listRuns' share is of the deployment's allowance",
+    file: "src/trpc/routers/keys.ts",
+    from: "      const allowance = ctx.allowances.weekly(ctx.user.id);",
+    to: "      const allowance = ctx.config.limits.weeklyTokens;",
+  },
+  {
+    name: "M5b-T15 P4: billing key pays with the key while included tokens are left",
+    file: "../mutators/src/rules.ts",
+    from: '  if (facts.includedLeft) return "included";',
+    to: '  if (facts.includedLeft && facts.billing !== "key") return "included";',
   },
   // ---- M6: membership, moderation and the deletion job (the M6 review fixes) ----
   {
@@ -2213,6 +2385,88 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   },
   "M5b-15": {
     tests: ["K3: a member with an allowance override is metered against it"],
+  },
+  "M5b-16": {
+    tests: [
+      "K9, K10: an attempt re-queued by 429s after it crossed the allowance is claimed again on overdraft",
+    ],
+  },
+  "M5b-17": {
+    tests: ["K9, K10: a queued attempt with ledger rows of its own is claimed on overdraft"],
+  },
+  "M5b-18": {
+    tests: [
+      "K9, K10: a claim of an attempt that ran is admitted below the allowance plus overdraft",
+    ],
+  },
+  "M5b-19": {
+    tests: [
+      "K2, K9: past the allowance plus overdraft, key-paid asks make no title or summary call",
+    ],
+  },
+  "M5b-20": {
+    tests: [
+      "K2, K9: past the allowance plus overdraft, key-paid asks make no title or summary call",
+    ],
+  },
+  "M5b-21": {
+    tests: [
+      "K2, K9: past the allowance plus overdraft a key-paid run makes no context summary call",
+    ],
+  },
+  "M5b-22": {
+    tests: ["K8: once the allowance is spent, billing key and a valid Anthropic key pay"],
+  },
+  "M5b-23": {
+    tests: [
+      "K1, K9: a run failed rate after a billed step has the tok and bill of its rows",
+      "K1, K9: a run failed by a store write that threw has the tok and bill of its rows",
+      "K1, K9: a re-claim on another payer keeps the first claim's payer in the bill",
+      "K1, K9: after Run again on another payer, tok and bill cover both attempts",
+    ],
+  },
+  "M5b-24": {
+    tests: ["K1, K9: after Run again on another payer, tok and bill cover both attempts"],
+  },
+  "M5b-25": {
+    tests: ["K8, K9: a run on the member's key moves back to included tokens at the next step"],
+  },
+  "M5b-26": {
+    tests: ["K9: the step boundary counts the next request's input"],
+  },
+  "M5b-27": {
+    tests: ["K4, K8: a stored key that does not open is no payer"],
+  },
+  "M5b-28": {
+    tests: ["K9: a step that crosses allowance plus overdraft with billing key moves to the key"],
+  },
+  "M5b-T1": { tests: ["K9: included usage exactly at the allowance spends it"] },
+  "M5b-T2": {
+    tests: ["K9: the step boundary alone stops a run past allowance plus overdraft"],
+  },
+  "M5b-T3": {
+    tests: ["K2: a new thread's run that moved to the member's key bills its title and summary"],
+  },
+  "M5b-T4": {
+    tests: ["K1: consecutive checkpoint writes of a row are at least checkpointMs apart"],
+  },
+  "M5b-T5": { tests: ["K1: a checkpoint is written once checkpointMs has passed, exactly"] },
+  "M5b-T6": { tests: ["K1, K3: a call opened at Friday 00:00:00.000 UTC"] },
+  "M5b-T7": { tests: ["K1, K2: a call cancelled after streaming only reasoning"] },
+  "M5b-T8": { tests: ["K8, K11: a key-only model with a valid OpenAI key"] },
+  "M5b-T9": { tests: ["K8, K11, E5: a key-only model without the key"] },
+  "M5b-T10": { tests: ["K4: a rejected save leaves the key saved before it as it was"] },
+  "M5b-T11": { tests: ["K4: no log line names a stored key's sealed value"] },
+  "M5b-T12": { tests: ["K4: no log line names a stored key's sealed value"] },
+  "M5b-T13": {
+    tests: ["a key a run finds rejected becomes invalid, and billing returns to pause"],
+  },
+  "M5b-T14": {
+    tests: ["K3, K5: a member's allowance override is what usage.listRuns' share is of"],
+  },
+  "M5b-T15": {
+    in: "mutators",
+    tests: ["K8: with included tokens left, billing key and a valid Anthropic key still pay"],
   },
   "M6-8": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
   "M6-9": { tests: ["P2: the job deletes comments, branches and bans of the person"] },

@@ -180,6 +180,39 @@ test("a queued run admitted after the allowance is spent ends tokens without a p
   t.deepEqual(harness.ledger.rows({ runId: "run-broke" }), []);
 });
 
+test("K9, K10: a queued attempt with ledger rows of its own is claimed on overdraft, past the allowance", async (t) => {
+  const harness = setup(t, { env: { SESSION_WEEKLY_TOKENS: "1000" } });
+  const user = harness.addUser("resumed");
+  // the attempt itself spent the allowance before it was queued again
+  const spent = harness.ledger.open({
+    runId: "run-resumed",
+    attempt: 1,
+    userId: user.id,
+    payer: "included",
+    week: weekOf(Date.now()),
+    kind: "research",
+    provider: "vertex",
+    model: "gemini-flash",
+    cachedInputRatio: 1,
+    counts: { inputTokens: 1_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+    openedAt: Date.now(),
+  });
+  harness.ledger.close(
+    spent,
+    { inputTokens: 1_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+    "finish",
+    Date.now(),
+  );
+  harness.store.enqueue({ runId: "run-resumed", userId: user.id, userText: "fixture:success" });
+  const dispatcher = dispatcherFor(harness);
+
+  t.is(dispatcher.tick(), 1);
+  await dispatcher.idle();
+  const run = harness.store.runs.get("run-resumed")!;
+  t.is(run.claims, 1);
+  t.is(run.status, "complete");
+});
+
 test("boot closes open rows, interrupts running runs and resumes them at most twice", async (t) => {
   const harness = setup(t);
   const user = harness.addUser("crashed");
