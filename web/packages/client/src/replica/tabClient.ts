@@ -8,6 +8,7 @@
 // away; sign-out releases it and clears the stored id.
 
 import {
+  CLIENT_ID_KEY,
   claimClientId,
   forgetClientId,
   storeClientId,
@@ -37,24 +38,63 @@ export function browserTabDeps(): TabClientDeps {
 
 type Claim = HeldClientId | { error: Extract<RegisterResult, { ok: false }>["error"] };
 
-let current: { userId: string; claim: Promise<Claim>; held: HeldClientId | null } | null = null;
+interface Entry {
+  userId: string;
+  claim: Promise<Claim>;
+  held: HeldClientId | null;
+  /** A sign-out, or a claim for another account, came after it: it writes
+   * nothing and keeps no lock. */
+  ended: boolean;
+}
+
+let current: Entry | null = null;
+/** The account the tab's client id is for now; null after sign-out. */
+let account: string | null = null;
+
+/** A refusal for a claim that a sign-out overtook. */
+const SIGNED_OUT = { code: "UNAUTHORIZED", message: "Signed out." } as const;
+
+function end(entry: Entry | null): void {
+  if (!entry) return;
+  entry.ended = true;
+  entry.held?.release();
+  entry.held = null;
+}
 
 /** The tab's client id for `userId`, claimed once per tab and account. A
- * claim that failed (no answer, a refusal) is tried again on the next call. */
+ * claim that failed (no answer, a refusal) is tried again on the next call.
+ * A claim still pending at sign-out (or at a claim for another account)
+ * writes no id when it settles and releases its lock. */
 export function tabClientId(
   userId: string,
   register: (options?: RegisterOptions) => Promise<RegisterResult>,
   deps: TabClientDeps = browserTabDeps(),
 ): Promise<Claim> {
+  account = userId;
   if (current?.userId === userId) return current.claim;
-  if (current?.held) current.held.release();
-  const entry: { userId: string; claim: Promise<Claim>; held: HeldClientId | null } = {
+  end(current);
+  const entry: Entry = {
     userId,
     claim: Promise.resolve({ error: { code: "SERVICE_UNAVAILABLE", message: "" } }),
     held: null,
+    ended: false,
   };
-  entry.claim = claimClientId({ userId, storage: deps.storage, locks: deps.locks, register }).then(
-    (claim) => {
+  // writes after the end of the claim are dropped
+  const storage = {
+    getItem: (k: string) => deps.storage.getItem(k),
+    setItem: (k: string, v: string) => {
+      if (!entry.ended) deps.storage.setItem(k, v);
+    },
+    removeItem: (k: string) => {
+      if (!entry.ended) deps.storage.removeItem(k);
+    },
+  };
+  entry.claim = claimClientId({ userId, storage, locks: deps.locks, register }).then(
+    (claim): Claim => {
+      if (entry.ended) {
+        if (!("error" in claim)) claim.release();
+        return { error: SIGNED_OUT };
+      }
       if ("error" in claim) {
         if (current === entry) current = null;
       } else entry.held = claim;
@@ -70,14 +110,17 @@ export function tabClientId(
 }
 
 /** A client id the sync client registered itself (after WRONG_CLIENT): the
- * tab keeps it instead of the previous one. */
+ * tab keeps it instead of the previous one, unless the account signed out
+ * or changed (before or while the lock was taken). */
 export async function keepTabClientId(
   userId: string,
   clientId: string,
   lastSeq: number,
   deps: TabClientDeps = browserTabDeps(),
 ): Promise<void> {
+  if (account !== userId) return;
   const previous = current?.userId === userId ? (current.held ?? undefined) : undefined;
+  const before = current;
   const held = await storeClientId({
     userId,
     clientId,
@@ -86,22 +129,41 @@ export async function keepTabClientId(
     locks: deps.locks,
     ...(previous ? { previous } : {}),
   });
-  current = { userId, claim: Promise.resolve(held), held };
+  if (account !== userId || current !== before || before?.ended) {
+    // signed out, or another account claimed meanwhile: keep nothing
+    held.release();
+    try {
+      const stored = JSON.parse(deps.storage.getItem(CLIENT_ID_KEY) ?? "null") as {
+        clientId?: string;
+      } | null;
+      if (stored?.clientId === clientId) deps.storage.removeItem(CLIENT_ID_KEY);
+    } catch {
+      // nothing readable stored
+    }
+    return;
+  }
+  current = { userId, claim: Promise.resolve(held), held, ended: false };
 }
 
-/** Sign-out: clear the stored id and release its lock. */
+/** Sign-out: clear the stored id and release its lock; a claim in progress
+ * writes nothing when it settles. */
 export function forgetTabClientId(deps: Pick<TabClientDeps, "storage"> = browserTabDeps()): void {
-  const held = current?.held ?? undefined;
+  const entry = current;
+  const held = entry?.held ?? undefined;
   current = null;
+  account = null;
+  if (entry) entry.ended = true;
   try {
     forgetClientId(deps.storage, held);
   } catch {
     // no sessionStorage: nothing stored
   }
+  if (entry) entry.held = null;
 }
 
 /** Forget the claim without touching storage (tests). */
 export function resetTabClientForTests(): void {
   current?.held?.release();
   current = null;
+  account = null;
 }

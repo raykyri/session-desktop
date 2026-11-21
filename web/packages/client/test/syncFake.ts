@@ -3,7 +3,12 @@
 // apply, snapshot, pull and the event stream, with the protocol check, the
 // signed-out answers and the `426`. The client's HTTP transport and replica
 // run against it as against the real server. `offline` makes every request
-// fail as a dropped connection does.
+// fail as a dropped connection does. `/read` keeps the server's rules: a
+// request names each log once, and one of `threads` reads only holds at
+// most 20 logs and 100 thread ids. `registerNamesUser` adds the user to
+// register's answer (the additive `user` field); `readError` answers one
+// read with an error in its place, and `refuseReads` refuses whole
+// requests (429 with `Retry-After`).
 
 import { MUTATORS, type LogId, type SpaceRec, type StoredRecord } from "@session/mutators";
 import {
@@ -39,6 +44,8 @@ export interface SeenRequest {
   body: unknown;
   headers: Record<string, string>;
   status: number;
+  /** `Date.now()` when it was made. */
+  at: number;
 }
 
 const encoder = new TextEncoder();
@@ -47,6 +54,17 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+
+/** A refusal of the request (`{ code, message, serverTime }`) with its
+ * `Retry-After`. */
+const refusal = (r: { status: number; code: string; retryAfter?: number }, now: number) =>
+  new Response(JSON.stringify({ code: r.code, message: "Refused.", serverTime: now }), {
+    status: r.status,
+    headers: {
+      "Content-Type": "application/json",
+      ...(r.retryAfter !== undefined ? { "Retry-After": String(r.retryAfter) } : {}),
+    },
   });
 
 /** A stand-in for the event id: the cursor map in base64 (the server seals
@@ -64,6 +82,17 @@ export class FakeSync {
   upgrade = false;
   /** The apply route answers nothing until released (a request in flight). */
   holdApply: Promise<void> | null = null;
+  /** Register's answer names the user. */
+  registerNamesUser = false;
+  /** An error to answer in place of a read, or null to answer it. */
+  readError: ((read: Record<string, unknown>) => string | null) | null = null;
+  /** Refuse every `/read` request with this status and code, and a
+   * `Retry-After` in seconds. */
+  refuseReads: { status: number; code: string; retryAfter?: number } | null = null;
+  /** Refuse every `/events` request the same way. */
+  refuseEvents: { status: number; code: string; retryAfter?: number } | null = null;
+  /** Requests the fake refused for breaking the server's rules. */
+  readonly broken: string[] = [];
   readonly requests: SeenRequest[] = [];
   readonly streams = new Set<Stream>();
   private readonly clientIds = new Map<string, string>();
@@ -181,7 +210,14 @@ export class FakeSync {
       const method = init?.method ?? "GET";
       const body =
         typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
-      const seen: SeenRequest = { method, path: url.pathname, body, headers, status: 0 };
+      const seen: SeenRequest = {
+        method,
+        path: url.pathname,
+        body,
+        headers,
+        status: 0,
+        at: Date.now(),
+      };
       this.requests.push(seen);
       if (this.offline) throw new TypeError("Failed to fetch");
       const res = await this.route(u, url, method, headers, body, init?.signal ?? null);
@@ -211,7 +247,8 @@ export class FakeSync {
           actor,
           typeof body["clientId"] === "string" ? { clientId: body["clientId"] } : {},
         );
-        return json(r.ok ? 200 : r.error.code === "WRONG_CLIENT" ? 409 : 400, r);
+        const answer = r.ok && this.registerNamesUser ? { ...r, user: u } : r;
+        return json(r.ok ? 200 : r.error.code === "WRONG_CLIENT" ? 409 : 400, answer);
       }
       case "/api/sync/apply": {
         const envelopes = body["envelopes"];
@@ -252,8 +289,28 @@ export class FakeSync {
             message: "Expected { reads }.",
             serverTime: now,
           });
+        if (this.refuseReads) return refusal(this.refuseReads, now);
+        const list = reads as Record<string, unknown>[];
+        const logs = list.map((r) => r["log"]);
+        const threadsOnly = list.every((r) => r["tier"] === "threads");
+        const ids = list.reduce(
+          (n, r) => n + (Array.isArray(r["threads"]) ? r["threads"].length : 0),
+          0,
+        );
+        const rule =
+          new Set(logs).size !== logs.length
+            ? "a log named twice"
+            : threadsOnly && (list.length > 20 || ids > 100)
+              ? "a threads request over 20 logs or 100 ids"
+              : null;
+        if (rule) {
+          this.broken.push(rule);
+          return json(400, { code: "BAD_REQUEST", message: rule, serverTime: now });
+        }
         const clientId = typeof body["clientId"] === "string" ? body["clientId"] : undefined;
-        const answers = (reads as Record<string, unknown>[]).map((r) => {
+        const answers = list.map((r) => {
+          const code = this.readError?.(r) ?? null;
+          if (code) return { error: { code, message: "" } };
           const log = r["log"] as LogId;
           if (typeof r["cursor"] === "string")
             return this.server.pull(actor, log, r["cursor"], clientId ? { clientId } : {});
@@ -280,6 +337,7 @@ export class FakeSync {
   ): Response {
     const now = this.clock.now();
     if (u === null) return json(401, { code: "UNAUTHORIZED", message: "", serverTime: now });
+    if (this.refuseEvents) return refusal(this.refuseEvents, now);
     const clientId = url.searchParams.get("clientId") ?? "";
     if (this.store.client(clientId)?.u !== u)
       return json(409, { code: "WRONG_CLIENT", message: "", serverTime: now });

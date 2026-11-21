@@ -16,7 +16,7 @@ import { cn } from "../../lib/cn.js";
 import { prefersReducedMotion } from "../../lib/motion.js";
 import { useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import { askTreeOf, repliesOf, threadOf, type ThreadView } from "../../replica/queries.js";
-import { UNKNOWN } from "../../replica/source.js";
+import { UNAVAILABLE_TEXT, UNKNOWN } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { useThreadUi, useThreadUiStore } from "../../stores/threadUi.js";
 import { Avatar } from "../../ui/Avatar.js";
@@ -136,23 +136,39 @@ function RemovedCard({ view }: { view: ThreadView }) {
 }
 
 /** A row whose thread's own records are not loaded (a summary thread, 01
- * R3) asks for them once it renders. */
-function useOpenUnloaded(thread: string, value: unknown): void {
+ * R3) asks for them once it renders. True while they could not be fetched
+ * (offline, a refused read): the row shows "Available when online." */
+function useOpenUnloaded(thread: string, value: unknown): boolean {
   const source = useReplica();
   const unloaded = value === UNKNOWN;
   useEffect(() => {
     if (unloaded) source.open?.(thread);
   }, [source, thread, unloaded]);
+  const unavailable = useReplicaQuery((s) => s.unavailable?.(thread) ?? false, [thread]);
+  return unloaded && unavailable === true;
+}
+
+/** The side column of a summary row whose records could not be fetched. */
+function UnavailableNote() {
+  return (
+    <div className="stick" role="status" data-unavailable="">
+      <p className="text-fg-muted text-[13px]">{UNAVAILABLE_TEXT}</p>
+    </div>
+  );
 }
 
 function PostRow({ view, now }: { view: ThreadView; now: number }) {
   const replies = useReplicaQuery((source) => repliesOf(source, view.thread.id), [view.thread.id]);
-  useOpenUnloaded(view.thread.id, replies);
+  const unavailable = useOpenUnloaded(view.thread.id, replies);
   return (
     <FeedRow
       rowId={view.thread.id}
       side={
-        replies === UNKNOWN ? null : (
+        replies === UNKNOWN ? (
+          unavailable ? (
+            <UnavailableNote />
+          ) : null
+        ) : (
           <div className="stick replies">
             <ReplyTree thread={view.thread} replies={replies} channel={view.space} now={now} />
           </div>
@@ -171,7 +187,7 @@ function PostRow({ view, now }: { view: ThreadView; now: number }) {
 function AskRow({ view, now }: { view: ThreadView; now: number }) {
   const { thread } = view;
   const tree = useReplicaQuery((source) => askTreeOf(source, thread.id), [thread.id]);
-  useOpenUnloaded(thread.id, tree);
+  const unavailable = useOpenUnloaded(thread.id, tree);
   const proseRef = useRef<HTMLDivElement>(null);
   const [passages, setPassages] = useState(0);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -247,6 +263,7 @@ function AskRow({ view, now }: { view: ThreadView; now: number }) {
         groups={groups}
         quoted={quoted}
         proseRef={proseRef}
+        unavailable={unavailable}
       />
     </FeedRow>
   );
@@ -260,6 +277,7 @@ function ThreadCard({
   quoted,
   proseRef,
   replyOthers = false,
+  unavailable = false,
 }: {
   view: ThreadView;
   now: number;
@@ -270,6 +288,8 @@ function ThreadCard({
   /** Whether someone else replied to a post; null while the replies are not
    * loaded. */
   replyOthers?: boolean | null;
+  /** An ask's records could not be fetched: "Available when online." */
+  unavailable?: boolean;
 }) {
   const { thread, counts, space, saved } = view;
   const { writer, signedOut, signIn, me } = useFeedViewer();
@@ -415,7 +435,13 @@ function ThreadCard({
       </div>
       {ask ? (
         !index ? (
-          <div className="answer" role="status" aria-label="Loading" aria-busy="true" />
+          unavailable ? (
+            <div className="answer text-fg-muted" role="status" data-unavailable="">
+              {UNAVAILABLE_TEXT}
+            </div>
+          ) : (
+            <div className="answer" role="status" aria-label="Loading" aria-busy="true" />
+          )
         ) : pending || (isStoppedRun(run) && !answer) ? (
           <div className="answer">
             <RunProgress thread={thread.id} node="r" run={run} />

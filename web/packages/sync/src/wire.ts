@@ -103,7 +103,13 @@ export type StoredAnswer =
  * protocol version is unchanged. */
 export type ApplyResult =
   | { ok: true; result: unknown; serverTime: number; replay?: true }
-  | { ok: false; error: ApiError & { serverTime: number }; replay?: true };
+  | { ok: false; error: ApiError & { serverTime: number } & RetryAfter; replay?: true };
+
+/** How long the server asked the client to wait (`Retry-After`, read by the
+ * HTTP transport from a 429 or 503), in milliseconds. Never sent in a body. */
+export interface RetryAfter {
+  retryAfterMs?: number;
+}
 
 /** The wire schema of an answer, for a client reading it over HTTP. */
 export const applyResultSchema = spaces.spaceApplyAnswerSchema;
@@ -117,10 +123,12 @@ export interface RegisterOptions {
  * the server processed for it (0 for a new one); or TOO_MANY_REQUESTS (50
  * new ids in the past day), WRONG_CLIENT (a stored id that is unknown,
  * another user's or idle for 7 days), FORBIDDEN (a waiting account),
- * UNAUTHORIZED or INTERNAL_SERVER_ERROR. */
+ * UNAUTHORIZED or INTERNAL_SERVER_ERROR. `user`: the handle of the person
+ * the id is bound to (optional and additive: a client that gets none asks
+ * the session who is signed in before it sends under a new id). */
 export type RegisterResult =
-  | { ok: true; clientId: string; lastSeq: number; reattached: boolean }
-  | { ok: false; error: ApiError };
+  | { ok: true; clientId: string; lastSeq: number; reattached: boolean; user?: string }
+  | { ok: false; error: ApiError & RetryAfter };
 
 /** Where a replica of one log stands: an opaque token the server sealed with
  * AES-256-GCM (Y6). Nothing of it can be read without the key, and its length
