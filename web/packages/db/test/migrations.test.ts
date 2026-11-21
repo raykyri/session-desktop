@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,6 +6,7 @@ import { join } from "node:path";
 import test from "ava";
 import SqliteDatabase from "better-sqlite3";
 import { getTableName, is } from "drizzle-orm";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { SQLiteTable } from "drizzle-orm/sqlite-core";
 
 import {
@@ -248,6 +250,94 @@ test("every migration has a snapshot, chained, and the latest one holds the sche
     await kit.generateSQLiteDrizzleJson(schema, latest.id),
   );
   t.deepEqual(statements, []);
+});
+
+/** The hand-added statement of `0000_initial.sql`: the one row of
+ * `server_head`, which drizzle-kit does not generate. */
+const SERVER_HEAD_SEED = "INSERT INTO `server_head` (`id`, `version`) VALUES (1, 0);";
+
+/** The statements of a migration file: split at drizzle-kit's breakpoints,
+ * `--` comment lines dropped, whitespace runs made one space. */
+function statementsOf(sql: string): string[] {
+  return sql
+    .split("--> statement-breakpoint")
+    .map((part) =>
+      part
+        .split("\n")
+        .filter((line) => !line.trimStart().startsWith("--"))
+        .join("\n")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter((statement) => statement.length > 0);
+}
+
+test("M3-M14: 0000_initial.sql is what drizzle-kit generates from the schema, plus the server_head row", async (t) => {
+  // An edit of a column default, a unique index, a CHECK, an index or a
+  // cascade in the file, or of the schema without the file, shows here.
+  const kit = (await import("drizzle-kit/api")) as unknown as DrizzleKitApi;
+  const empty = await kit.generateSQLiteDrizzleJson({});
+  const generated = await kit.generateSQLiteMigration(
+    empty,
+    await kit.generateSQLiteDrizzleJson(schema),
+  );
+  const file = statementsOf(readFileSync(join(MIGRATIONS_FOLDER, "0000_initial.sql"), "utf8"));
+  t.is(file.filter((s) => s === SERVER_HEAD_SEED).length, 1, "the server_head row, once");
+  t.true(generated.length > 40);
+  t.deepEqual(
+    file.filter((s) => s !== SERVER_HEAD_SEED).sort(),
+    generated.flatMap((s) => statementsOf(s)).sort(),
+  );
+});
+
+/** The sha256 of `0000_initial.sql` as databases record it. */
+const INITIAL_SHA256 = "3cb541f571022fe462590aebeb92b63386055e4a8ad83475a3c6ffc4c1486243";
+
+test("R10: 0000_initial.sql is the file deployed databases recorded", (t) => {
+  const hash = createHash("sha256")
+    .update(readFileSync(join(MIGRATIONS_FOLDER, "0000_initial.sql")))
+    .digest("hex");
+  t.is(
+    hash,
+    INITIAL_SHA256,
+    "0000_initial.sql changed. A database records each migration's hash, and one whose hash " +
+      "this build does not know is refused at boot (UnknownMigrationError), so an edit of this " +
+      "file, a comment included, stops every deployed database. After launch a schema change " +
+      "is a new migration (0001_...) and 0000_initial.sql is never edited. Before launch, " +
+      "regenerate 0000_initial.sql from the schema, add the server_head row by hand, and " +
+      "update INITIAL_SHA256 here.",
+  );
+  // drizzle's migrator hashes the file's text the same way
+  t.true(
+    readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER }).some(
+      (migration) => migration.hash === INITIAL_SHA256,
+    ),
+  );
+});
+
+test("B4: a database whose migrations are all unknown, as one from before the squash, is refused", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-presquash-"));
+  const path = join(directory, "session.db");
+  try {
+    // the earlier history's six migrations, none of which this build has
+    const client = new SqliteDatabase(path);
+    client.exec(
+      "CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, hash text NOT NULL, created_at numeric)",
+    );
+    const hashes = ["a", "b", "c", "d", "e", "f"].map((c) => c.repeat(64));
+    hashes.forEach((hash, k) =>
+      client
+        .prepare("INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)")
+        .run(hash, 1_700_000_000_000 + k),
+    );
+    t.deepEqual(unknownMigrations(client), hashes);
+    client.close();
+    const error = t.throws(() => openDatabase(path), { instanceOf: UnknownMigrationError });
+    t.regex(error?.message ?? "", /6 unrecognized migration\(s\)/);
+    t.regex(error?.message ?? "", /web\/docs\/runbooks\/reset-database\.md/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("a migration dated before one already applied fails startup", (t) => {
