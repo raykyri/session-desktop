@@ -78,6 +78,7 @@ import {
   type Envelope,
   type LastSeq,
   type ReadOptions,
+  type Snapshot,
   type SyncTransport,
   type Tier,
 } from "../wire.js";
@@ -85,7 +86,26 @@ import {
 import { OverlaySource } from "./predict.js";
 import { Replica, threadOf, type StorageAdapter } from "./replica.js";
 
-export type SyncOutcome = "snapshot" | "pull" | "resync";
+/** How a read of a log ended. `dropped`: the log was dropped while the read
+ * was in flight, and its answer was not applied. */
+export type SyncOutcome = "snapshot" | "pull" | "resync" | "dropped";
+
+/** What opening a thread came to (R3): held in full; not fetched (no
+ * answer, a refused read, or the log was dropped meanwhile); or not served
+ * by the server. */
+export type OpenOutcome = "full" | "unavailable" | "missing";
+
+/** The answer of `openMany`: each thread's outcome, and the error of the
+ * read that failed, if one did (its `retryAfterMs` when the server named a
+ * wait). */
+export interface OpenMany {
+  outcomes: Map<string, OpenOutcome>;
+  error?: unknown;
+}
+
+/** The most thread ids one `threads` read names: the server takes at most
+ * 100 ids in a request of `threads` reads. */
+export const MAX_THREADS_PER_READ = 100;
 
 /** How long the `queue` policy keeps a write (3 days, Y10). */
 export const OUTBOX_TTL = 3 * 86_400_000;
@@ -182,12 +202,15 @@ export type WriteEvent =
  * server's minimum (reload, `01` S1); the end of the person's access to a
  * private space (R4: "You are no longer a member of #name."); and a client
  * id the client registered itself (after WRONG_CLIENT), for the tab to keep
- * (`storeClientId`, Y3). */
+ * (`storeClientId`, Y3); and a session signed in as another person than the
+ * client's (`user`: the handle signed in, null for none), found when the
+ * client registered. The client then sends nothing more. */
 export type ClientEvent =
   | WriteEvent
   | { type: "upgrade" }
   | { type: "left"; log: LogId; space: string; name: string }
-  | { type: "client"; clientId: string; lastSeq: number };
+  | { type: "client"; clientId: string; lastSeq: number }
+  | { type: "user"; user: string | null };
 
 export interface SyncClientOptions {
   /** The person this client reads and writes for; null: signed out. */
@@ -208,6 +231,10 @@ export interface SyncClientOptions {
   clientId?: string | null;
   lastSeq?: number;
   restore?: ClientState;
+  /** The handle the session (the cookie) is signed in as now, null signed
+   * out. Asked after `register` issued an id, when its answer names no
+   * user, before anything is sent under that id. A rejection is no answer. */
+  whoAmI?: () => Promise<string | null>;
 }
 
 /** Replace every string in `v` that `map` names. */
@@ -295,6 +322,15 @@ export class SyncClient {
   private readonly sending = new Set<Pending>();
   /** Reads of each log, one at a time, in order. */
   private readonly reads = new Map<LogId, Promise<unknown>>();
+  /** How many times each log was dropped: the answer of a read sent before
+   * a drop is not applied. */
+  private readonly drops = new Map<LogId, number>();
+  /** How many reads moved each log's cursor (pulls and snapshots). */
+  private readonly cursorReads = new Map<LogId, number>();
+  /** The tier each log was last read with, for a resync. */
+  private readonly tiers = new Map<LogId, Tier | undefined>();
+  /** The session is signed in as another person: nothing more is sent. */
+  private otherUser = false;
 
   // ---- the view ----
   private overlay = new Map<string, StoredRecord | null>();
@@ -331,6 +367,12 @@ export class SyncClient {
 
   get clientId(): string | null {
     return this.clientIdValue;
+  }
+
+  /** Whether `register` found the session signed in as another person, or
+   * signed out: the client sends nothing more. */
+  get sessionChanged(): boolean {
+    return this.otherUser;
   }
 
   /** The client's time: its clock, corrected by the offset learned from
@@ -389,6 +431,7 @@ export class SyncClient {
     { ok: true; clientId: string } | { ok: false; error: ApiError & { serverTime: number } }
   > {
     if (this.clientIdValue !== null) return { ok: true, clientId: this.clientIdValue };
+    if (this.otherUser) return { ok: false, error: this.otherUserError() };
     if (!this.ownOutbox())
       return {
         ok: false,
@@ -405,6 +448,27 @@ export class SyncClient {
     }
     if (!r.ok)
       return { ok: false, error: { ...r.error, serverTime: r.error.serverTime ?? this.now() } };
+    // The id is bound to whoever the session is signed in as now: another
+    // tab may have signed in as someone else since this client was made.
+    let user: string | null | undefined = r.user;
+    if (user === undefined && this.options.whoAmI) {
+      try {
+        user = await this.options.whoAmI();
+      } catch {
+        return {
+          ok: false,
+          error: (noAnswer(this.now()) as { error: ApiError & { serverTime: number } }).error,
+        };
+      }
+    }
+    if (user !== undefined && user !== this.options.user) {
+      if (!this.otherUser) {
+        this.otherUser = true;
+        this.emit({ type: "user", user });
+      }
+      return { ok: false, error: this.otherUserError() };
+    }
+    if (this.otherUser) return { ok: false, error: this.otherUserError() };
     const changed = this.clientIdValue !== r.clientId;
     this.clientIdValue = r.clientId;
     this.acked = r.lastSeq ?? 0;
@@ -417,10 +481,26 @@ export class SyncClient {
     return { ok: true, clientId: r.clientId };
   }
 
+  private otherUserError(): ApiError & { serverTime: number } {
+    return {
+      code: "UNAUTHORIZED",
+      message: "This tab is now signed in as another person.",
+      serverTime: this.now(),
+    };
+  }
+
   /** Get a client id from the server if there is none (Y3). */
   async register(): Promise<string | null> {
     const r = await this.ensureClient();
     return r.ok ? r.clientId : null;
+  }
+
+  /** The server does not know the client id (WRONG_CLIENT from the event
+   * stream: expired, pruned, or another person's): forget it and register
+   * again. */
+  async reregister(): Promise<string | null> {
+    this.clientIdValue = null;
+    return this.register();
   }
 
   state(): ClientState {
@@ -470,15 +550,35 @@ export class SyncClient {
   /** Bring one log's replica up to date: a snapshot the first time and after
    * a resync, a pull otherwise. `tier` applies to the snapshot (R1, R2). */
   sync(log: LogId, tier?: Tier): Promise<SyncOutcome> {
-    return this.serial(log, () => this.syncNow(log, tier));
+    const drops = this.dropsOf(log);
+    return this.serial(log, () =>
+      this.dropsOf(log) === drops ? this.syncNow(log, tier) : Promise.resolve("dropped" as const),
+    );
+  }
+
+  private dropsOf(log: LogId): number {
+    return this.drops.get(log) ?? 0;
+  }
+
+  /** How many pulls and snapshots have moved a log's cursor (`receive`). */
+  cursorReadsOf(log: LogId): number {
+    return this.cursorReads.get(log) ?? 0;
+  }
+
+  private movedCursor(log: LogId) {
+    this.cursorReads.set(log, this.cursorReadsOf(log) + 1);
   }
 
   private async syncNow(log: LogId, tier?: Tier): Promise<SyncOutcome> {
+    const drops = this.dropsOf(log);
     const r = this.replica.state(log);
     if (r) {
       const res = await this.transport.pull(log, r.cursor, this.readOptions());
       this.heard(res.serverTime);
+      // dropped while the pull was in flight: its answer is not applied
+      if (this.dropsOf(log) !== drops) return "dropped";
       if (!("resync" in res)) {
+        this.movedCursor(log);
         const changed = this.replica.applyPull(log, res.changes, res.cursor, res.lastSeq);
         this.learn(res.lastSeq);
         this.confirmed(changed, false);
@@ -486,8 +586,13 @@ export class SyncClient {
       }
     }
     const before = r ? new Map(r.records) : null;
-    const snap = await this.transport.snapshot(log, this.readOptions(tier));
+    // a resync reads with the tier the log was read with
+    const read = tier ?? (r ? this.tiers.get(log) : undefined);
+    const snap = await this.transport.snapshot(log, this.readOptions(read));
     this.heard(snap.serverTime);
+    if (this.dropsOf(log) !== drops) return "dropped";
+    this.tiers.set(log, read);
+    this.movedCursor(log);
     const after = new Map(snap.records.map((x) => [x.key, x.record]));
     if (before) this.lost(log, before, after);
     const frozen = this.frozenCopies.get(log);
@@ -525,40 +630,110 @@ export class SyncClient {
   /** Open a thread (R3): a summary thread's full records are fetched with a
    * `threads` snapshot, in turn with the log's other reads, and kept for the
    * life of the tab. `unavailable` when the fetch fails (offline): the
-   * summary is shown, "Available when online". `missing` when the replica
-   * holds no such thread. With `log`, the space log a thread's address names
-   * (`/c/<name>?t=<id>`, `02` §2.1): a thread the replica does not hold
-   * (older than the window) is fetched from that log the same way when the
-   * replica holds the log, and is `missing` when the server serves the
-   * reader no such thread. */
-  async open(thread: string, log?: LogId): Promise<"full" | "unavailable" | "missing"> {
-    this.opened.delete(thread);
-    this.opened.add(thread);
+   * summary is shown, "Available when online". With `log`, the space log a
+   * thread's address names (`/c/<name>?t=<id>`, `02` §2.1): a thread the
+   * replica does not hold (older than the window) is fetched from that log
+   * the same way when the replica holds the log. Without one, such a thread
+   * is asked of every space log the replica holds (the protocol has no
+   * lookup of a thread's log). `missing` when none of them serves it. */
+  async open(thread: string, log?: LogId): Promise<OpenOutcome> {
+    const held = this.replica.logOfThread(thread);
+    const from = held
+      ? [held]
+      : log
+        ? [log]
+        : this.replica.logs().filter((l) => l.startsWith("space:"));
+    if (from.length === 0) {
+      this.remember([thread]);
+      return "missing";
+    }
+    const answers = await Promise.all(from.map((l) => this.openMany(l, [thread])));
+    const outcomes = answers.map((a) => a.outcomes.get(thread));
+    if (outcomes.includes("full")) return "full";
+    if (outcomes.includes("unavailable")) return "unavailable";
+    return "missing";
+  }
+
+  /** Keep threads opened in this tab, served in full by a `window`
+   * snapshot (R2), newest last. */
+  private remember(threads: readonly string[]) {
+    for (const th of threads) {
+      this.opened.delete(th);
+      this.opened.add(th);
+    }
     for (const th of this.opened) {
       if (this.opened.size <= OPENED_MAX) break;
       this.opened.delete(th);
     }
-    const from =
-      this.replica.logOfThread(thread) ?? (log && this.replica.state(log) ? log : undefined);
-    if (!from) return "missing";
-    return this.serial(from, async () => {
-      const held = this.replica.logOfThread(thread);
-      if (held && this.replica.isFull(held, thread)) return "full";
-      if (!this.replica.state(from)) return "missing";
-      try {
-        const snap = await this.transport.snapshot(from, {
-          tier: "threads",
-          threads: [thread],
-          ...(this.clientIdValue !== null ? { clientId: this.clientIdValue } : {}),
+  }
+
+  /** Open several threads of one log (R3): one `threads` snapshot of the
+   * ones not held in full, in turn with the log's other reads, at most
+   * `MAX_THREADS_PER_READ` ids per read. A thread neither held nor served
+   * is `missing`. The answer is not applied when the log was dropped while
+   * the read was in flight (`unavailable`). */
+  async openMany(log: LogId, threads: readonly string[]): Promise<OpenMany> {
+    this.remember(threads);
+    const outcomes = new Map<string, OpenOutcome>();
+    const want: string[] = [];
+    for (const th of new Set(threads)) {
+      const held = this.replica.logOfThread(th);
+      if (held && this.replica.isFull(held, th)) outcomes.set(th, "full");
+      else want.push(th);
+    }
+    let error: unknown;
+    const chunks: string[][] = [];
+    for (let i = 0; i < want.length; i += MAX_THREADS_PER_READ)
+      chunks.push(want.slice(i, i + MAX_THREADS_PER_READ));
+    await Promise.all(
+      chunks.map((chunk) => {
+        const drops = this.dropsOf(log);
+        return this.serial(log, async () => {
+          const ask = chunk.filter((th) => {
+            const held = this.replica.logOfThread(th);
+            if (held && this.replica.isFull(held, th)) {
+              outcomes.set(th, "full");
+              return false;
+            }
+            return true;
+          });
+          if (ask.length === 0) return;
+          const gone = () => this.dropsOf(log) !== drops || !this.replica.state(log);
+          if (gone()) {
+            for (const th of ask) outcomes.set(th, "unavailable");
+            return;
+          }
+          let snap: Snapshot;
+          try {
+            snap = await this.transport.snapshot(log, {
+              tier: "threads",
+              threads: ask,
+              ...(this.clientIdValue !== null ? { clientId: this.clientIdValue } : {}),
+            });
+          } catch (e) {
+            error = e;
+            for (const th of ask) outcomes.set(th, "unavailable");
+            return;
+          }
+          this.heard(snap.serverTime);
+          if (gone()) {
+            for (const th of ask) outcomes.set(th, "unavailable");
+            return;
+          }
+          const served = new Set(
+            snap.records.flatMap((x) => (x.record.kind === "thread" ? [x.record.id] : [])),
+          );
+          const full: string[] = [];
+          for (const th of ask) {
+            const found = served.has(th) || this.replica.logOfThread(th) !== undefined;
+            outcomes.set(th, found ? "full" : "missing");
+            if (found) full.push(th);
+          }
+          this.confirmed(this.replica.addThreads(log, snap, full), true);
         });
-        this.heard(snap.serverTime);
-        if (!held && !snap.records.some((x) => x.key === `thread:${thread}`)) return "missing";
-        this.confirmed(this.replica.addThreads(from, snap, [thread]), true);
-        return "full";
-      } catch {
-        return "unavailable";
-      }
-    });
+      }),
+    );
+    return error === undefined ? { outcomes } : { outcomes, error };
   }
 
   /** Apply a batch of changes the server pushed for a log (the event stream,
@@ -567,9 +742,18 @@ export class SyncClient {
   receive(
     log: LogId,
     batch: { changes: Change[]; cursor: Cursor; lastSeq: LastSeq; serverTime?: number },
+    base?: number,
   ): Promise<boolean> {
+    const drops = this.dropsOf(log);
     return this.serial(log, () => {
-      if (!this.replica.state(log)) return Promise.resolve(false);
+      if (!this.replica.state(log) || this.dropsOf(log) !== drops) return Promise.resolve(false);
+      // `base`: the log's `cursorReadsOf` when the stream that pushed the
+      // batch opened. A pull or snapshot since then may have read past the
+      // batch (cursors are sealed: the client cannot compare them), and
+      // applying the batch would move the cursor back and could bring back
+      // a deleted record. Such a batch is not applied (false); the caller
+      // reopens the stream from the newer cursor.
+      if (base !== undefined && this.cursorReadsOf(log) !== base) return Promise.resolve(false);
       this.heard(batch.serverTime);
       const changed = this.replica.applyPull(log, batch.changes, batch.cursor, batch.lastSeq);
       this.learn(batch.lastSeq);
@@ -578,8 +762,11 @@ export class SyncClient {
     });
   }
 
-  /** Forget a log (the person left a channel view, R5). */
+  /** Forget a log (the person left a channel view, R5). A read of it in
+   * flight is not applied when it answers. */
   dropLog(log: LogId): void {
+    this.drops.set(log, this.dropsOf(log) + 1);
+    this.tiers.delete(log);
     this.confirmed(this.replica.dropLog(log), true);
   }
 
@@ -847,6 +1034,8 @@ export class SyncClient {
     if (k < 0) return [];
     const [p] = this.unsentWrites.splice(k, 1);
     if (p) this.outbox.push(p);
+    // the write is in flight again: no longer "Not sent"
+    this.pendingChanged();
     return this.flush();
   }
 
@@ -1021,7 +1210,10 @@ export class SyncClient {
           const again = await this.ensureClient();
           if (!again.ok) {
             out.push(res);
-            if (this.policy === "in-flight") this.notSent(p, { ok: false, error: again.error });
+            // no id to send under (no answer, or the session is another
+            // person's): this write and the ones behind it are Not sent
+            if (this.policy === "in-flight")
+              for (const x of [...this.outbox]) this.notSent(x, { ok: false, error: again.error });
             break;
           }
           clientId = again.clientId;
@@ -1032,6 +1224,9 @@ export class SyncClient {
           out.push(res);
           p.sent = true;
           this.notSent(p, res);
+          // over the server's limit: the writes behind it would be refused
+          // the same way, and are not sent into it
+          if (code === "TOO_MANY_REQUESTS") for (const x of [...this.outbox]) this.notSent(x, res);
           skews = 0;
           gaps = 0;
           continue;
@@ -1047,7 +1242,13 @@ export class SyncClient {
             gaps = 0;
             continue;
           }
-          p.notBefore = now + Math.min(RETRY_MAX, RETRY_MIN * 2 ** (p.attempts - 1));
+          // the server's `Retry-After`, when longer than the backoff
+          p.notBefore =
+            now +
+            Math.min(
+              RETRY_MAX,
+              Math.max(RETRY_MIN * 2 ** (p.attempts - 1), res.error.retryAfterMs ?? 0),
+            );
           break;
         }
         if (UNRECORDED.has(code)) {

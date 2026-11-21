@@ -50,11 +50,26 @@ test("open(thread, log) fetches a thread outside the window from the log its add
   const log = `space:${open}` as const;
   await mona.sync(log, "window");
   t.is(mona.get(threadKey(old)), undefined);
-  t.is(await mona.open(old), "missing", "without the log, nothing to fetch from");
   t.is(await mona.open(old, log), "full");
   t.is(mona.get(threadKey(old))?.kind, "thread");
   t.true(mona.keysIn("thread", { sp: open }).includes(threadKey(old)));
   t.is(await mona.open(w.id(), log), "missing", "a thread the server does not serve");
+});
+
+test("open(thread) without a log asks every space log the replica holds", async (t) => {
+  const w = new World({ window: { days: 1, threads: 1, cap: 1 } });
+  const { open } = cast(t, w);
+  const old = post(t, w, "olga", open, "Old");
+  w.clock.advance(800 * DAY);
+  post(t, w, "olga", open, "New");
+  t.is(await client(w, "mona").open(old), "missing", "no space log held: nothing to ask");
+  const mona = client(w, "mona");
+  await mona.sync(`space:${open}`, "window");
+  await mona.sync("user:mona");
+  t.is(mona.get(threadKey(old)), undefined);
+  t.is(await mona.open(old), "full");
+  t.is(mona.get(threadKey(old))?.kind, "thread");
+  t.is(await mona.open(w.id()), "missing", "no held log serves it");
 });
 
 test("keysIn reads an index with the pending writes' predictions", async (t) => {
