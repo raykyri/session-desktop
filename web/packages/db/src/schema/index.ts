@@ -6,6 +6,7 @@
 // `0000_initial.sql` generated from this schema (`01` D5); nothing reads or
 // writes them.
 
+export * from "./apiKeys.js";
 export * from "./backfills.js";
 export * from "./preferences.js";
 export * from "./sessions.js";

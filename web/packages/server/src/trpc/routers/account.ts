@@ -10,6 +10,9 @@ import { endSession } from "../../auth/session.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../base.js";
 import { repo, required } from "../errors.js";
 
+import { usageProcedures } from "./keys.js";
+import { adminModelsRouter } from "./models.js";
+
 export interface StoredSettings extends UserSettings {
   researchLaunchInstruction: string | null;
   defaultModel: string;
@@ -67,6 +70,7 @@ export const settingsRouter = router({
 });
 
 export const usageRouter = router({
+  ...usageProcedures,
   summary: protectedProcedure.input(z.undefined()).query(({ ctx }) =>
     repo(() =>
       usage.summary(ctx.db, ctx.user.id, {
@@ -101,6 +105,8 @@ export interface AdminUser extends User {
 }
 
 export const adminRouter = router({
+  /** The Site Admin settings: default model and default effort (`03` K15). */
+  models: adminModelsRouter,
   listUsers: adminProcedure.query(({ ctx }): AdminUser[] =>
     repo(() =>
       users.listUsers(ctx.db).map((user) => ({

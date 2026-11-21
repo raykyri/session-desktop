@@ -35,6 +35,7 @@ test("applies every migration to an empty database", (t) => {
     t.deepEqual(
       tables.map((row) => row.name),
       [
+        "api_keys",
         "backfills",
         "collapsed_groups",
         "collapsed_places",
@@ -59,6 +60,7 @@ test("applies every migration to an empty database", (t) => {
         "run_turns",
         "sessions",
         "signup_attempts",
+        "site_settings",
         "tree_folder_membership",
         "tree_invites",
         "tree_member_removals",
@@ -67,6 +69,7 @@ test("applies every migration to an empty database", (t) => {
         "tree_views",
         "trees",
         "tweet_cache",
+        "usage_billing",
         "usage_events",
         "user_limits",
         "user_preferences",
@@ -83,19 +86,21 @@ test("applies every migration to an empty database", (t) => {
   }
 });
 
-test("the history is a single initial migration", (t) => {
-  // The database has never been deployed with this schema; the history stays
-  // flat until it is (runbooks/reset-database.md).
+test("the history is the initial migration and the API keys migration", (t) => {
+  // The database has never been deployed with this schema; M8a squashes the
+  // history into one initial migration (runbooks/reset-database.md, plan
+  // `01` D5). `0003_api_keys` is numbered apart from the migrations other
+  // milestones add beside it.
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
   t.deepEqual(
     journal.entries.map((entry) => entry.tag),
-    ["0000_initial"],
+    ["0000_initial", "0003_api_keys"],
   );
   t.deepEqual(
     readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql")),
-    ["0000_initial.sql"],
+    ["0000_initial.sql", "0003_api_keys.sql"],
   );
 });
 

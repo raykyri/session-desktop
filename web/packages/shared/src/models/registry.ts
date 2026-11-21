@@ -15,6 +15,20 @@ export type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium";
 
+/** Who may pay for a run on a model (`03-agents-and-research.md` K8, K11):
+ * the member's included tokens, or one of the member's own keys. */
+export type ModelPayer = "included" | "key:anthropic" | "key:openai";
+
+/** The efforts a site admin may choose as the default effort (`03` K15): the
+ * composer steps it down for a model that does not accept it (K12). */
+export const SITE_EFFORTS = ["low", "medium", "high", "max"] as const;
+
+export type SiteEffort = (typeof SITE_EFFORTS)[number];
+
+export function isSiteEffort(value: unknown): value is SiteEffort {
+  return (SITE_EFFORTS as readonly unknown[]).includes(value);
+}
+
 /** Price per 1,000,000 tokens, in US dollars. */
 export interface ModelPricing {
   input: number;
@@ -44,10 +58,16 @@ export interface ModelEntry {
   efforts: readonly ReasoningEffort[];
   /** The effort a run uses when the node names none. */
   defaultEffort: ReasoningEffort;
+  /** Who may pay for a run on this model (`03` K11). A model without
+   * `included` runs only on the member's own key and cannot be the site's
+   * default model (K15). */
+  payers: readonly ModelPayer[];
   pricing: ModelPricing;
 }
 
 const STANDARD_EFFORTS: readonly ReasoningEffort[] = ["low", "medium", "high"];
+
+const INCLUDED: readonly ModelPayer[] = ["included"];
 
 export const MODEL_REGISTRY: readonly ModelEntry[] = [
   {
@@ -62,6 +82,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     nativeSearch: true,
     efforts: STANDARD_EFFORTS,
     defaultEffort: "medium",
+    payers: INCLUDED,
     pricing: { input: 0.75, output: 3.75 },
   },
   {
@@ -77,6 +98,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     nativeSearch: false,
     efforts: STANDARD_EFFORTS,
     defaultEffort: "medium",
+    payers: INCLUDED,
     pricing: { input: 0.15, output: 0.6 },
   },
   {
@@ -92,6 +114,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     nativeSearch: false,
     efforts: STANDARD_EFFORTS,
     defaultEffort: "medium",
+    payers: INCLUDED,
     pricing: { input: 0.2, output: 1.2 },
   },
   {
@@ -106,6 +129,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     nativeSearch: false,
     efforts: ["low", "medium", "high", "xhigh", "max"],
     defaultEffort: "medium",
+    payers: ["included", "key:anthropic"],
     pricing: { input: 10, output: 50 },
   },
 ];
@@ -128,6 +152,12 @@ const LEGACY_MODEL_IDS: Readonly<Record<string, string>> = {
 
 export function findModel(id: string): ModelEntry | null {
   return BY_ID.get(LEGACY_MODEL_IDS[id] ?? id) ?? null;
+}
+
+/** Whether a run on `model` may be paid with included tokens: the condition
+ * for being the site's default model (`03` K15). */
+export function payableWithIncluded(model: Pick<ModelEntry, "payers">): boolean {
+  return model.payers.includes("included");
 }
 
 /** Whether `user` may launch on `modelId`. An unknown id is never usable, so

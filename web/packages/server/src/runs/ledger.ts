@@ -91,6 +91,19 @@ export interface LedgerRow extends LedgerCall {
   ending: CallEnding | null;
 }
 
+/** One run's rows in one week, summed (`03` K5). */
+export interface LedgerRunTotal {
+  runId: string;
+  /** Counted tokens of every row, every payer and attempt. */
+  counted: number;
+  /** Counted tokens paid with included tokens. */
+  includedCounted: number;
+  /** The payers of the run's rows. */
+  payers: ReadonlySet<Payer>;
+  /** The earliest `openedAt` of the run's rows (epoch ms). */
+  startedAt: number;
+}
+
 export interface Ledger {
   /** Inserts an `open` row and returns its id. */
   open(call: LedgerCall): string;
@@ -108,6 +121,10 @@ export interface Ledger {
   /** The counted tokens of a run, every payer: of one attempt, or of every
    * attempt when `attempt` is absent. The run record's `tok` is the latter. */
   runTokens(runId: string, attempt?: number): number;
+  /** The member's runs with rows in `week`, open rows counted, newest
+   * `startedAt` first (ties by run id, descending): the Usage page's recent
+   * runs (`03` K5). */
+  runsOf(userId: string, week: string): LedgerRunTotal[];
 }
 
 /** The ledger checkpoint bound of `03` K1: at most this much of a call's

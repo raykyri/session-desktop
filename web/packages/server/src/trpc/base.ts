@@ -3,7 +3,8 @@
 // `06-auth-and-users.md` §4, §8).
 
 import type { SessionDatabase } from "@session/db";
-import type { User } from "@session/shared";
+import type { ModelEntry, User } from "@session/shared";
+import { MODEL_REGISTRY } from "@session/shared";
 import { TRPCError, initTRPC } from "@trpc/server";
 
 import type { Config } from "../config.js";
@@ -11,6 +12,12 @@ import type { ServerDeps } from "../deps.js";
 import type { Logger } from "../logger.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { RATE_LIMITS } from "../middleware/rateLimit.js";
+import type { Ledger } from "../runs/ledger.js";
+import { MemoryLedger } from "../runs/memoryLedger.js";
+import type { RunTexts } from "../runs/runTexts.js";
+import { UNAVAILABLE_RUN_TEXTS } from "../runs/runTexts.js";
+import type { SecretBox } from "../secretBox.js";
+import { createSecretBox } from "../secretBox.js";
 
 export interface AppContext {
   config: Config;
@@ -23,6 +30,13 @@ export interface AppContext {
   /** The cookie this request arrived with, so `auth.logout` can end this
    * session and leave the account's other browsers signed in. */
   sessionToken: string | null;
+  ledger: Ledger;
+  runTexts: RunTexts;
+  models: readonly ModelEntry[];
+  /** Seals and opens stored API keys under `SESSION_SECRET_KEY`. */
+  box: SecretBox;
+  keyCheckTimeoutMs: number | undefined;
+  now: () => number;
 }
 
 export interface ContextInput {
@@ -46,6 +60,12 @@ export function createAppContext(
     user: input.user,
     clientIp: input.clientIp ?? "unknown",
     sessionToken: input.sessionToken ?? null,
+    ledger: deps.ledger ?? new MemoryLedger(),
+    runTexts: deps.runTexts ?? UNAVAILABLE_RUN_TEXTS,
+    models: deps.models ?? MODEL_REGISTRY,
+    box: createSecretBox(deps.config.secretKey),
+    keyCheckTimeoutMs: deps.keyCheckTimeoutMs,
+    now: deps.now ?? Date.now,
   };
 }
 
