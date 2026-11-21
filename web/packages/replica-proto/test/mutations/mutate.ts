@@ -712,7 +712,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1a-13b removing a node leaves its run queued",
     file: "../mutators/src/rules.ts",
-    from: '      for (const x of tx.list("run", th).filter((y) => under.has(y.node))) drop(`run:${x.id}`);\n',
+    from: "      for (const x of runs) drop(`run:${x.id}`);\n",
     to: "",
   },
   {
@@ -871,7 +871,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-22 a deleted node's run records stay",
     file: "../mutators/src/nodes.ts",
-    from: '        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);\n',
+    from: "        for (const x of runs) tx.del(`run:${x.id}`);\n",
     to: "",
   },
   {

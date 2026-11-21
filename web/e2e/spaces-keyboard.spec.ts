@@ -3,20 +3,20 @@
 // focus goes when a composer closes, a keyboard selection's actions, the
 // composer's menus, the padded scroll, and reduced motion.
 //
-// The viewer's channel holds hal's post with replies, written through the
-// sync routes before the specs run (`world.ts`). The steps on an ask's
-// answer and branches wait for the run loop (05 M5a).
+// The viewer's channel holds hal's post with replies and hal's answered ask
+// with its branches, written through the sync routes, and the ask answered
+// by the run loop with fixture providers, before the specs run
+// (`world.ts`).
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { FIRST_ASK } from "./fixtureWorld.js";
-import { NO_RUNS, compose, row, scrollSettled, signInAndOpen, toast } from "./spaces.js";
-import { channelName, person, ulid } from "./world.js";
+import { compose, row, scrollSettled, signInAndOpen, toast } from "./spaces.js";
+import { branchedAsk, channelName, person, ulid } from "./world.js";
 
 const LOGIN = "e2e-keyboard";
 const POST = "Is anyone else seeing the follow-up count lag";
 
-const w = { own: "", hal: "", post: "" };
+const w = { own: "", hal: "", post: "", ask: "" };
 
 test.beforeAll(async ({ browser }) => {
   const me = await person(browser, LOGIN);
@@ -41,10 +41,12 @@ test.beforeAll(async ({ browser }) => {
   await me.reply(w.post, "Same here.");
   await hal.reply(w.post, "Thanks, noted.");
   await hal.all(fillers(7));
+  // the newest thread: at the top of the feed
+  w.ask = (await branchedAsk(hal, motion, own)).thread;
 });
 
-const side = (page: Page) => page.locator(`[data-side="${FIRST_ASK}"]`);
-const answer = (page: Page) => page.locator(`#pr-${FIRST_ASK}`);
+const side = (page: Page) => page.locator(`[data-side="${w.ask}"]`);
+const answer = (page: Page) => page.locator(`#pr-${w.ask}`);
 
 /** Selects the whole of a passage of the first ask's answer. */
 async function selectPassage(page: Page, passage: number) {
@@ -68,14 +70,12 @@ async function toTop(page: Page) {
 }
 
 test.describe("focus and Escape on an ask", () => {
-  test.skip(true, NO_RUNS);
-
   test.beforeEach(async ({ page }) => {
     await signInAndOpen(page, LOGIN);
   });
 
   test("a card's controls in order, and each tree is one tab stop", async ({ page }) => {
-    const card = page.locator(`#card-${FIRST_ASK}`);
+    const card = page.locator(`#card-${w.ask}`);
     // Each tree has exactly one row in the tab order.
     const stops = await side(page)
       .getByRole("tree")
@@ -104,13 +104,13 @@ test.describe("focus and Escape on an ask", () => {
     // Citations and count buttons in reading order, then the footer, then
     // the side column's trees.
     expect(names.slice(0, 3)).toEqual([
-      "Source 5",
-      "1 branch on this passage. Open the first",
+      "Source 1",
+      "3 branches on this passage. Open the first",
       "Source 1",
     ]);
-    const footer = names.indexOf("Ask a follow-up, 6 branches");
+    const footer = names.indexOf("Ask a follow-up, 4 branches");
     expect(footer).toBeGreaterThan(2);
-    expect(names[footer + 1]).toBe("Save, saved by 26");
+    expect(names[footer + 1]).toMatch(/^Save/);
     const first = visited.findIndex((v) => v.tree >= 0);
     expect(first).toBeGreaterThan(footer);
     // The stop after a tree's row is outside that tree.
@@ -119,7 +119,7 @@ test.describe("focus and Escape on an ask", () => {
 
   test("Escape closes a menu, then the selection actions, then the composer", async ({ page }) => {
     await page
-      .locator(`#card-${FIRST_ASK}`)
+      .locator(`#card-${w.ask}`)
       .getByRole("button", { name: /^Ask a follow-up/ })
       .click();
     const field = side(page).getByRole("textbox", { name: "Ask about the answer" });
@@ -181,7 +181,9 @@ test.describe("focus and Escape on an ask", () => {
     await field.fill("a branch to delete");
     await field.press("Control+Enter");
     const added = side(page).getByRole("treeitem", { name: /a branch to delete/ });
-    await expect(side(page).getByText(/^Mock answer\. In the app/)).toBeVisible();
+    await expect(side(page).locator(".preview")).toContainText("Bloom filters answer set", {
+      timeout: 30_000,
+    });
     await side(page).locator(".preview").getByRole("button", { name: "More" }).click();
     await page.getByRole("menuitem", { name: "Delete branch" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
@@ -209,7 +211,7 @@ test.describe("focus and Escape on an ask", () => {
     await page.keyboard.press("Escape");
     await expect(field).toHaveCount(0);
     await expect(
-      page.locator(`#card-${FIRST_ASK}`).getByRole("button", { name: /^Ask a follow-up/ }),
+      page.locator(`#card-${w.ask}`).getByRole("button", { name: /^Ask a follow-up/ }),
     ).toBeFocused();
   });
 
@@ -217,7 +219,7 @@ test.describe("focus and Escape on an ask", () => {
     await toTop(page);
     // Focus in the card, and the passage's first character selected; then
     // the keyboard extends the selection.
-    await page.locator(`#card-${FIRST_ASK}`).focus();
+    await page.locator(`#card-${w.ask}`).focus();
     await answer(page)
       .locator('[data-passage="2"]')
       .evaluate((el) => {
@@ -378,7 +380,8 @@ test.describe("reduced motion", () => {
     await expect(toast(page)).toBeVisible();
     expect(await toast(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
 
-    await compose(page, "a question that runs");
+    // a run paced over seconds, so its status is on screen to read
+    await compose(page, "fixture:paced-answer a question that runs");
     const status = page.locator(".tcard").first().locator(".status");
     await expect(status).toBeVisible();
     await expect

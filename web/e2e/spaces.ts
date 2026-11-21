@@ -6,10 +6,6 @@ import { expect, type Page } from "@playwright/test";
 
 import { signIn } from "./helpers.js";
 
-/** Why a step is not run against this server: an ask is queued and answered
- * by the run loop, which arrives with M5a. */
-export const NO_RUNS = "Asks are answered by the run loop (05 M5a); this server queues them.";
-
 export async function openFeed(page: Page, path = "/") {
   await page.goto(path);
   await expect(page.locator(".tcard").first()).toBeVisible();
