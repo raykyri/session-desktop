@@ -59,6 +59,9 @@ export interface HarnessOptions {
   /** The rate limiter's clock; a test of a budget pins it so the bucket does
    * not refill while the test runs. */
   limiterNow?: () => number;
+  /** The ledger, run texts, registry, key check timeout and clock the
+   * procedures read (`deps.ts`). */
+  deps?: Pick<ServerDeps, "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now">;
 }
 
 let githubIdCounter = 5000;
@@ -99,6 +102,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     db,
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
+    ...options.deps,
   };
   const deps: ServerDeps = { ...base, runs: options.createRuns?.(base) ?? runs };
   const app = createApp({
