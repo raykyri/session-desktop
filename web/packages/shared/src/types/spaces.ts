@@ -25,6 +25,7 @@ import type {
   prefsRecordSchema,
   replyRecordSchema,
   runBillSchema,
+  runPayerSchema,
   runFailureSchema,
   runRecordSchema,
   runStatusSchema,
@@ -60,6 +61,7 @@ export type Effort = z.infer<typeof spaceEffortSchema>;
 export type RunStatus = z.infer<typeof runStatusSchema>;
 export type RunFailure = z.infer<typeof runFailureSchema>;
 export type RunBill = z.infer<typeof runBillSchema>;
+export type RunPayer = z.infer<typeof runPayerSchema>;
 export type CitedPage = z.infer<typeof citedPageSchema>;
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export type MutatorWho = z.infer<typeof mutatorWhoSchema>;

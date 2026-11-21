@@ -121,6 +121,7 @@ const run: RunRec = {
   u: "mona",
   model: "gemini-flash",
   effort: "medium",
+  pay: "included",
   status: "running",
   attempt: 1,
   step: 3,

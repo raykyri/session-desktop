@@ -547,6 +547,7 @@ export function convertFixtures(F: SessionFixtures, doc: Document): FixtureWorld
         u,
         model,
         effort,
+        pay: "included",
         status: "complete",
         attempt: 1,
         step: 3,

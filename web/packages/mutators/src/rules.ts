@@ -29,7 +29,7 @@ import {
   type ThreadRec,
   type TurnRec,
 } from "./records.js";
-import type { PreCtx, PreLimit, ServerValues, Tx } from "./tx.js";
+import type { PayerFacts, PreCtx, PreLimit, ServerValues, Tx } from "./tx.js";
 
 /** The contract's mutators: names, inputs, `who` and `online`. */
 export const M = spaces.spaceMutators;
@@ -404,12 +404,93 @@ export function within(ctx: PreCtx, limit: PreLimit): void {
   if (left !== true) throw refuse("TOO_MANY_REQUESTS", left);
 }
 
-/** The pre-check of a write that queues a run: room in the person's queue
- * (server only; the model is checked in `can`). */
-export const preRun = (ctx: PreCtx): ServerValues => {
+/** Who pays for a run (`03` K8), or why nothing can: `out_of_tokens` for a
+ * model included tokens may pay for, `no_key` for a model only the
+ * person's own key pays for (K11). */
+export type PayerDecision = RunRec["pay"] | "out_of_tokens" | "no_key";
+
+/** The key a payer names: `key:anthropic` is the Anthropic key. */
+const keyProviderOf = (payer: RunRec["pay"]) =>
+  payer === "key:openai" ? "openai" : payer === "key:anthropic" ? "anthropic" : null;
+
+/**
+ * The payer of a run on a model whose registry payers are `payers` (`03` K8,
+ * K11), for a person with `facts`:
+ * - a model without `included` runs only on the person's key: its key payer
+ *   when that key is valid, else `no_key`;
+ * - otherwise `included` while included tokens are left (open ledger rows
+ *   counted); once they are spent, `key:anthropic` when billing is `key`,
+ *   the model may be paid with the Anthropic key and that key is valid;
+ *   else `out_of_tokens`.
+ *
+ * The same rule decides in `pre` and again when the dispatcher claims the
+ * run (K10).
+ */
+export function payerFor(payers: readonly RunRec["pay"][], facts: PayerFacts): PayerDecision {
+  if (!payers.includes("included")) {
+    for (const payer of payers) {
+      const key = keyProviderOf(payer);
+      if (key !== null && facts.keys.includes(key)) return payer;
+    }
+    return "no_key";
+  }
+  if (facts.includedLeft) return "included";
+  if (
+    facts.billing === "key" &&
+    payers.includes("key:anthropic") &&
+    facts.keys.includes("anthropic")
+  )
+    return "key:anthropic";
+  return "out_of_tokens";
+}
+
+/** The payer a run is written with where no payer was decided: a client's
+ * prediction, and a server without a ledger. The model's first payer. */
+export function firstPayer(model: string): RunRec["pay"] {
+  const entry = MODEL_REGISTRY.find((m) => m.id === model);
+  return entry?.payers[0] ?? "included";
+}
+
+/** The refusal of a run nothing can pay for (`03` K8): recorded, with the
+ * reason the client acts on (it restores the composer's text). */
+export function payerRefusal(decision: "out_of_tokens" | "no_key"): Refusal {
+  return decision === "out_of_tokens"
+    ? new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT, undefined, "out_of_tokens")
+    : new Refusal("PRECONDITION_FAILED", NO_KEY_TEXT);
+}
+
+/** The refusal of a run on a key-only model without its key (`03` K11). */
+export const NO_KEY_TEXT = "This model runs on your own API key. Add the key in Usage.";
+
+/** The payer of a run on `model` the actor queues (`03` K8): decided from
+ * the facts the server reads, or the model's first payer without them.
+ * Refuses when nothing can pay. */
+export function prePayer(ctx: PreCtx, model: string): RunRec["pay"] {
+  const facts = ctx.payerFacts?.();
+  if (!facts) return firstPayer(model);
+  const entry = MODEL_REGISTRY.find((m) => m.id === model);
+  if (!entry) throw bad("model", "a model of the registry");
+  const decision = payerFor(entry.payers, facts);
+  if (decision === "out_of_tokens" || decision === "no_key") throw payerRefusal(decision);
+  return decision;
+}
+
+/** The pre-check of a write that queues a run on `model`: room in the
+ * person's queue and a payer (server only; the model is checked in `can`).
+ * The payer goes to `run` as the server value `pay`. */
+export const preRun = (ctx: PreCtx, model: string): ServerValues => {
   checkQueue(ctx);
-  return {};
+  return { pay: prePayer(ctx, model) };
 };
+
+/** The payer `pre` decided, or the model's first payer in a prediction,
+ * which the server's record replaces. */
+export function payOf(values: ServerValues, model: string): RunRec["pay"] {
+  const pay = values["pay"];
+  return pay === "included" || pay === "key:anthropic" || pay === "key:openai"
+    ? pay
+    : firstPayer(model);
+}
 
 /** A new run of an ask, queued: the run record is the queue (`03` E2). */
 export function queueRun(
@@ -419,6 +500,7 @@ export function queueRun(
   node: string,
   model: string,
   effort: RunRec["effort"],
+  pay: RunRec["pay"],
 ): void {
   tx.create({
     kind: "run",
@@ -429,6 +511,7 @@ export function queueRun(
     u: tx.me,
     model,
     effort,
+    pay,
     status: "queued",
     attempt: 1,
     step: 0,

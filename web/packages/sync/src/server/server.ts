@@ -73,6 +73,7 @@ import {
   type AnyMutator,
   type Audience,
   type LogId,
+  type PayerFacts,
   type PreCtx,
   type PreLimit,
   type RunRec,
@@ -253,6 +254,8 @@ export class SyncServer implements ServerHalf {
   private lastAt: number;
   /** Counts the `pre`-stage limits of `04` Z1 (`setPreLimits`). */
   private preLimits: PreLimits | null = null;
+  /** Reads what a run's payer is decided from (`setPayerFacts`). */
+  private payerFacts: ((u: string) => PayerFacts) | null = null;
 
   /** Sets what counts the `pre`-stage limits (channels made, channel invite
    * links made and joins, per person; `04` Z1): `check` answers whether the
@@ -263,6 +266,16 @@ export class SyncServer implements ServerHalf {
    * rules. The web server sets its in-memory logs here at boot. */
   setPreLimits(limits: PreLimits | null): void {
     this.preLimits = limits;
+  }
+
+  /** Sets what the `pre` stage of a write that queues a run reads to decide
+   * who pays for it (`03` K8): the person's included tokens left (the
+   * ledger, open rows counted), their billing setting and their valid keys.
+   * Null (the default) decides nothing: each run is paid by its model's
+   * first payer (the prototype's suite, and a server with no run loop). The
+   * web server's run runtime sets it at boot. */
+  setPayerFacts(facts: ((u: string) => PayerFacts) | null): void {
+    this.payerFacts = facts;
   }
 
   constructor(options: SyncServerOptions) {
@@ -631,6 +644,8 @@ export class SyncServer implements ServerHalf {
           if (left === true) uses.push(limit);
           return left;
         };
+      const payer = this.payerFacts;
+      if (payer) pre.payerFacts = () => payer(u);
       const values = def.pre?.(pre, input) ?? {};
       const ran = def.run(tx, input, values);
       const told = def.notify?.(tx, input, ran, { isAccount: (h) => this.store.isAccount(h) });

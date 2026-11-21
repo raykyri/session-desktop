@@ -25,6 +25,7 @@ import {
   type ErrorCode,
   type Index,
   type Kind,
+  type PayerFacts,
   type PreCtx,
   type PreLimit,
   type Prediction,
@@ -110,6 +111,11 @@ export class World {
   /** The `pre`-stage limits a test sets (`04` Z1): uses left per person and
    * limit. None set: no limits, as in the prototype's suite. */
   limits: Partial<Record<PreLimit, number>> | null = null;
+  /** What `pre` decides a person's run's payer from (`03` K8), as a test
+   * sets it. Null: no payer facts, as in the prototype's suite, and each
+   * run is paid by its model's first payer. A person a test did not name
+   * has included tokens left. */
+  payers: Record<string, PayerFacts> | null = null;
   private readonly used = new Map<string, number>();
 
   constructor(seed = 1) {
@@ -176,6 +182,9 @@ export class World {
       inviteCodeTaken: (code) => this.store.uniqueKey("invite.code", code) !== undefined,
       queuedRuns: () => this.all("run").filter((r) => r.u === me && r.status === "queued").length,
     };
+    const payers = this.payers;
+    if (payers)
+      ctx.payerFacts = () => payers[me] ?? { includedLeft: true, billing: "pause", keys: [] };
     const limits = this.limits;
     if (limits)
       ctx.allow = (limit) => {

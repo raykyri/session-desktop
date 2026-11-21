@@ -52,7 +52,12 @@ export type FixtureScenario =
   | "widget-answer"
   /** A read page and an answer of several passages citing it as `[^1]`:
    * what the end-to-end branch and selection specs select from. */
-  | "cited-answer";
+  | "cited-answer"
+  /** A long answer streamed over seconds, which a member near the weekly
+   * allowance cannot finish on included tokens: the billing end-to-end
+   * spec's run that crosses the allowance and stops at the overdraft limit
+   * (`03` K9). */
+  | "spending-answer";
 
 export const DEFAULT_FIXTURE_SCENARIO: FixtureScenario = "success-with-tools";
 

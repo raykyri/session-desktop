@@ -7,6 +7,8 @@
 // checkpoint (`loop.ts`); the dispatcher checks before an attempt starts
 // (`dispatcher.ts`).
 
+import type { PayerDecision, PayerFacts } from "@session/mutators";
+import { payerFor } from "@session/mutators";
 import type { ModelEntry } from "@session/shared";
 
 import type { Config } from "../config.js";
@@ -86,46 +88,51 @@ export function includedUsed(deps: BudgetDeps, userId: string): number {
 }
 
 /** Whether billing lets the asker's Anthropic key pay for `entry`: billing
- * is `key` and the model is an Anthropic model (`03` K8, K9). */
-function keyBillingFor(deps: BudgetDeps, userId: string, entry: Pick<ModelEntry, "provider">) {
-  return entry.provider === "anthropic" && deps.allowances.billing(userId) === "key";
+ * is `key` and the model may be paid with the Anthropic key (its registry
+ * payers, `03` K8, K9, K11). */
+function keyBillingFor(deps: BudgetDeps, userId: string, entry: Pick<ModelEntry, "payers">) {
+  return entry.payers.includes("key:anthropic") && deps.allowances.billing(userId) === "key";
 }
 
 /** The asker's Anthropic key, opened, when it may pay for `entry` now:
- * billing is `key`, the model is an Anthropic model and a valid key is
- * stored (`03` K8, K9). */
+ * billing is `key`, the model may be paid with the Anthropic key and a
+ * valid key is stored (`03` K8, K9). */
 export function anthropicKeyFor(
   deps: BudgetDeps,
   userId: string,
-  entry: Pick<ModelEntry, "provider">,
+  entry: Pick<ModelEntry, "payers">,
 ): MemberKey | null {
   return keyBillingFor(deps, userId, entry) ? deps.allowances.anthropicKey(userId) : null;
 }
 
+const KEY_PROVIDERS: readonly KeyProvider[] = ["anthropic", "openai"];
+
+/** What the payer of a run is decided from (`03` K8): the member's
+ * included tokens left this week, open ledger rows counted (K1), their
+ * billing setting (K7) and the providers they hold a `valid` key for (K4).
+ * Decrypts nothing. `pre` reads it when a write queues a run, and the
+ * dispatcher again when it claims one (K10). */
+export function payerFacts(deps: BudgetDeps, userId: string): PayerFacts {
+  return {
+    includedLeft: includedUsed(deps, userId) < deps.allowances.weekly(userId),
+    billing: deps.allowances.billing(userId),
+    keys: KEY_PROVIDERS.filter((provider) => deps.allowances.validKey(userId, provider) !== null),
+  };
+}
+
 /**
- * The payer of an attempt about to start (`03` K8, K10): `key:openai` stays
- * as it is; otherwise `included` while included tokens are left,
- * `key:anthropic` when they are spent and the asker's key may pay, `none`
- * otherwise. A run with `none` ends `failed { why: "tokens" }` without a
- * provider call.
+ * The payer of an attempt about to start (`03` K8, K10): the rule `pre`
+ * applied when the run was queued (`payerFor`), over the facts as they are
+ * now. A run whose payer is now `out_of_tokens` ends `failed { why:
+ * "tokens" }`, and one on a key-only model without its key `failed { why:
+ * "key" }`, both without a provider call.
  */
 export function payerAtStart(
   deps: BudgetDeps,
   userId: string,
-  entry: Pick<ModelEntry, "provider">,
-  requested: Payer,
-): Payer | "none" {
-  if (requested === "key:openai") {
-    return requested;
-  }
-  if (includedUsed(deps, userId) < deps.allowances.weekly(userId)) {
-    return "included";
-  }
-  // A status check: the key is opened only when the attempt calls with it.
-  return keyBillingFor(deps, userId, entry) &&
-    deps.allowances.validKey(userId, "anthropic") !== null
-    ? "key:anthropic"
-    : "none";
+  entry: Pick<ModelEntry, "payers">,
+): PayerDecision {
+  return payerFor(entry.payers, payerFacts(deps, userId));
 }
 
 /** The limits one attempt checks while it runs. */
@@ -150,7 +157,7 @@ export class RunBudget {
   /** The asker's Anthropic key when the next step of an `included` run on
    * `entry` should move to it (`03` K9); null to stay on included tokens,
    * on overdraft once the allowance is spent. */
-  keyForNextStep(entry: Pick<ModelEntry, "provider">): MemberKey | null {
+  keyForNextStep(entry: Pick<ModelEntry, "payers">): MemberKey | null {
     if (!this.allowanceSpent()) {
       return null;
     }

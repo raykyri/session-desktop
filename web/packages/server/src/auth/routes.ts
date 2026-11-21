@@ -28,6 +28,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, ServerDeps } from "../deps.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { abuseBuckets, rateLimitByIp } from "../middleware/rateLimit.js";
+import { ZERO_COUNTS, weekOf } from "../runs/ledger.js";
 
 import { fixtureOAuthFetch, fixtureOAuthRoutes } from "./fixtureOAuth.js";
 import {
@@ -296,13 +297,16 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
     // production (`03-api-and-events.md` §5). Signs in an active account
     // with a handle derived from the login, or with `waiting: true` a new
     // waiting account, as the OAuth callback makes for an identity with no
-    // invite.
+    // invite. `spent` records that many included tokens as already spent
+    // this week, one closed ledger row, so a spec can start a member near
+    // the weekly allowance (`03` K3, K9; `e2e/spaces-billing.spec.ts`).
     app.post("/auth/test-login", async (c) => {
       const body = (await c.req.json().catch(() => ({}))) as {
         login?: unknown;
         isAdmin?: unknown;
         provider?: unknown;
         waiting?: unknown;
+        spent?: unknown;
       };
       const login = typeof body.login === "string" && body.login !== "" ? body.login : "tester";
       const provider = body.provider === "x" ? "x" : "github";
@@ -323,6 +327,8 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
       if (body.isAdmin === true && !user.isAdmin && user.handle !== null) {
         user = users.setAdminByHandle(deps.db, user.handle, true);
       }
+      if (typeof body.spent === "number" && Number.isSafeInteger(body.spent) && body.spent > 0)
+        recordSpent(deps, user.id, body.spent);
       const session = auth.createSession(deps.db, user.id);
       setSessionCookie(c, config, session.token);
       return c.json(users.findById(deps.db, user.id));
@@ -330,6 +336,30 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
   }
 
   return app;
+}
+
+/** A closed `included` ledger row of `tokens` input tokens for `userId`,
+ * opened now: what `test-login`'s `spent` records. Nothing without a
+ * ledger. */
+function recordSpent(deps: ServerDeps, userId: string, tokens: number): void {
+  const ledger = deps.ledger;
+  if (!ledger) return;
+  const at = (deps.now ?? Date.now)();
+  const counts = { ...ZERO_COUNTS, inputTokens: tokens };
+  const id = ledger.open({
+    runId: `test-login-${userId}-${at}`,
+    attempt: 1,
+    userId,
+    payer: "included",
+    week: weekOf(at),
+    kind: "research",
+    provider: "vertex",
+    model: "gemini-flash",
+    cachedInputRatio: 1,
+    counts,
+    openedAt: at,
+  });
+  ledger.close(id, counts, "finish", at);
 }
 
 /** `testHandle(login)`, or with a numeric suffix when another account holds
