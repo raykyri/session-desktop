@@ -464,3 +464,26 @@ test.serial("a frozen channel is left out of the composer's channel picker", asy
   t.truthy(await screen.findByRole("menuitemradio", { name: /#sci-fi/ }));
   t.is(screen.queryByRole("menuitemradio", { name: /#public/ }), null);
 });
+
+// ------------------------------------------------- refusals at apply time
+
+/** The server's refusals of 04 §9, rendered by the client: a post refused
+ * for a ban, or because the channel froze while it was on its way, shows the
+ * server's message and leaves the text in the composer. */
+for (const [why, message] of [
+  ["a ban", "You are banned from #public."],
+  ["a frozen channel", "#public is frozen because its owner’s account is not active."],
+] as const)
+  test.serial(`a post refused for ${why} shows the message and keeps the text`, async (t) => {
+    await renderApp("/c/public");
+    const field = await screen.findByRole("textbox", { name: "Ask or post" });
+    recordWrites(replicaOf(), (name) =>
+      name === "threads.create" ? { ok: false, error: { code: "FORBIDDEN", message } } : null,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ask or post" }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Post/ }));
+    fireEvent.change(field, { target: { value: "Still posting here" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+    await waitUntil(t, () => currentToast() === message, "the refusal's toast");
+    t.is((field as HTMLTextAreaElement).value, "Still posting here");
+  });
