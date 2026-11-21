@@ -1597,20 +1597,20 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-36 S1a: a kept thread keeps its author",
     file: "../db/src/repos/accountSpaces.ts",
-    from: "        tx.put({ ...r, u: null, sum: null });",
-    to: "        tx.put({ ...r, sum: null });",
+    from: '      if (r.kind === "thread") tx.put({ ...r, u: null, sum: null });',
+    to: '      if (r.kind === "thread") tx.put({ ...r, sum: null });',
   },
   {
-    name: "M6-37 S1b: a kept branch keeps its answer",
+    name: "M6-37 S1b: kept branches and threads keep their answers",
     file: "../db/src/repos/accountSpaces.ts",
-    from: '      if (r.kind === "node") {\n        tx.del(answerKey(r.id));\n',
-    to: '      if (r.kind === "node") {\n',
+    from: '  for (const a of tx.list("answer", { u })) tx.del(keyOf(a));\n',
+    to: "",
   },
   {
     name: "M6-38 S1c: a kept reply or comment keeps its author",
     file: "../db/src/repos/accountSpaces.ts",
-    from: "      } else tx.put({ ...r, u: null });",
-    to: "      } else tx.put({ ...r });",
+    from: "      else tx.put({ ...r, u: null });",
+    to: "      else tx.put({ ...r });",
   },
   {
     name: "M6-39 S1d: notifications keep the person as their actor",
@@ -1701,6 +1701,12 @@ const MUTATIONS: Mutation[] = [
     file: "src/middleware/rateLimit.ts",
     from: "      return left.allowed ? true : preLimitMessage(limit, spec, left.retryAfter);",
     to: '      return left.allowed ? true : "Too many requests from your account. Try again in a minute.";',
+  },
+  {
+    name: "M6-54 S1f: kept branches keep their runs and turns",
+    file: "../db/src/repos/accountSpaces.ts",
+    from: '  for (const r of tx.list("run", { u })) dropRuns(tx, r.th, [r]);\n',
+    to: "",
   },
 ];
 
@@ -2070,6 +2076,7 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M6-51": { tests: ["a pull that answers resync fails its check"] },
   "M6-52": { tests: ["text in Litestream's local state beside the database fails its check"] },
   "M6-53": { tests: ["limit: the pre-stage limits hold for their whole window"] },
+  "M6-54": { tests: ["P2: no stored record and no served snapshot names the deleted person"] },
 };
 
 /** What one suite said about a mutation. */

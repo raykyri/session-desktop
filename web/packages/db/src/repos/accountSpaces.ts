@@ -14,7 +14,6 @@
 
 import {
   MUTATORS,
-  answerKey,
   countSaves,
   keyOf,
   refreshSpace,
@@ -110,30 +109,17 @@ export function eraseFromSpaces(tx: Tx, u: string, named: readonly string[] = []
     }
   }
   // what is left of the person's items: shells kept for other people's
-  // content, and gone threads
+  // content, and gone threads; they keep no author
   for (const kind of ["comment", "reply", "node", "thread"] as const)
     for (const r of tx.list(kind, { u })) {
       if (!r.del) throw new Error(`${keyOf(r)} was not deleted`);
-      if (r.kind === "node") {
-        tx.del(answerKey(r.id));
-        dropRuns(
-          tx,
-          r.th,
-          tx.list("run", { th: r.th }).filter((x) => x.node === r.id),
-        );
-        tx.put({ ...r, u: null });
-      } else if (r.kind === "thread") {
-        tx.del(answerKey(r.id));
-        dropRuns(
-          tx,
-          r.id,
-          tx.list("run", { th: r.id }).filter((x) => x.node === "r"),
-        );
-        tx.put({ ...r, u: null, sum: null });
-      } else tx.put({ ...r, u: null });
+      if (r.kind === "thread") tx.put({ ...r, u: null, sum: null });
+      else tx.put({ ...r, u: null });
       out.rewritten += 1;
     }
-  // anything else the person's runs wrote
+  // what the person's runs wrote and the delete paths kept: the runs, turns
+  // and answers of kept branches, and a kept thread's root answer (each
+  // answer's `u` is its asker, the person)
   for (const r of tx.list("run", { u })) dropRuns(tx, r.th, [r]);
   for (const a of tx.list("answer", { u })) tx.del(keyOf(a));
   for (const kind of OWN_KINDS)
