@@ -1,36 +1,60 @@
-// Signed-out reading (02 §9.5, §12.2 `spaces-signed-out`): the open
-// channels' threads, their branches and replies, nothing of a private
-// channel, and every write control leading to sign-in.
+// Signed-out reading (02 §9.5, §12.2 `spaces-signed-out`; 04 I5): the open
+// channels' threads and replies through the same replica as a member's,
+// nothing of a private channel but its landing, and every write control
+// leading to sign-in.
+//
+// olga's open channel holds hal's post with two replies; her private channel
+// is only reached by its address. They are written through the sync routes
+// before the specs run (`world.ts`).
 
 import { expect, test } from "@playwright/test";
 
-import { FIRST_ASK, REPLY_POST_TEXT, openFeed, row } from "./spaces.js";
+import { NO_RUNS, openFeed, row } from "./spaces.js";
+import { channelName, person, type Writer } from "./world.js";
 
-test.beforeEach(async ({ page }) => {
-  await openFeed(page);
+const POST = "Where do the reading notes for this week live?";
+
+const w = { olga: null as Writer | null, open: "", lab: "", post: "" };
+
+test.beforeAll(async ({ browser }) => {
+  const olga = await person(browser, "e2e-out-olga");
+  const hal = await person(browser, "e2e-out-hal");
+  const sol = await person(browser, "e2e-out-sol");
+  w.olga = olga;
+  w.open = channelName("out");
+  const open = await olga.channel(w.open);
+  w.lab = channelName("out-lab");
+  const lab = await olga.channel(w.lab, { vis: "private" });
+  await olga.post(lab, "Not for readers outside the channel");
+  for (const p of [hal, sol]) await p.join(open);
+  w.post = await hal.post(open, POST);
+  await sol.reply(w.post, "In the pinned doc, under week three.");
+  await olga.reply(w.post, "Same here, the pinned doc has them all.");
 });
 
-test("a thread, its branches and its replies read signed out", async ({ page }) => {
-  const side = page.locator(`[data-side="${FIRST_ASK}"]`);
-  await side.getByRole("treeitem", { name: /how does the darknet/ }).click();
-  await expect(side.locator(".preview")).toContainText("Tasks are posted to the darknet");
-  // No write actions on the card.
-  await expect(side.getByRole("button", { name: "Continue" })).toHaveCount(0);
-  await expect(side.getByRole("button", { name: "Comment" })).toHaveCount(0);
+// The channel's feed: Home reads every open channel, other specs' too.
+test.beforeEach(async ({ page }) => {
+  await openFeed(page, `/c/${w.open}`);
+});
 
-  const post = row(page, REPLY_POST_TEXT);
+test("a thread and its replies read signed out", async ({ page }) => {
+  const post = row(page, POST);
   await post.getByRole("treeitem", { name: /Same here/ }).click();
-  await expect(post.locator(".preview")).toContainText(
-    "The count seems to include direct follow-ups",
-  );
+  await expect(post.locator(".preview")).toContainText("the pinned doc has them all");
   await expect(post.getByRole("button", { name: "Sign in to reply" })).toBeVisible();
 });
 
-test("private channels are not read", async ({ page }) => {
-  await expect(page.locator(".ttm", { hasText: "#grant-review" })).toHaveCount(0);
-  await expect(page.locator(".fmeta", { hasText: "#grant-review" })).toHaveCount(0);
-  await page.goto("/c/grant-review");
-  await expect(page.getByText("This channel is private. Ask @sol to add you.")).toBeVisible();
+test("an ask's branches read signed out", () => {
+  test.skip(true, NO_RUNS);
+});
+
+test("private channels are not read; their address shows the landing", async ({ page }) => {
+  await expect(page.locator(".ttm", { hasText: `#${w.lab}` })).toHaveCount(0);
+  await expect(page.getByText("Not for readers outside the channel")).toHaveCount(0);
+  await page.goto(`/c/${w.lab}`);
+  await expect(
+    page.getByText(`This channel is private. Ask @${w.olga?.handle ?? ""} to add you.`),
+  ).toBeVisible();
 });
 
 test("write controls open the auth dialog", async ({ page }) => {
@@ -40,7 +64,7 @@ test("write controls open the auth dialog", async ({ page }) => {
     await expect(dialog.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
     await dialog.getByRole("button", { name: "Close" }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(new RegExp(`/c/${w.open}$`));
   };
   const cover = page.getByRole("button", { name: "Sign in to ask or post" });
   await expect(page.locator(`textarea[aria-label="Ask or post"]`)).toHaveAttribute(
@@ -50,12 +74,10 @@ test("write controls open the auth dialog", async ({ page }) => {
   await cover.click();
   await close();
 
-  await page.locator(`#card-${FIRST_ASK}`).getByRole("button", { name: /^Save/ }).click();
+  const card = page.locator(`#card-${w.post}`);
+  await card.getByRole("button", { name: /^Save/ }).click();
   await close();
 
-  await page
-    .locator(`#card-${FIRST_ASK}`)
-    .getByRole("button", { name: /^Ask a follow-up/ })
-    .click();
+  await card.getByRole("button", { name: /^Reply/ }).click();
   await close();
 });

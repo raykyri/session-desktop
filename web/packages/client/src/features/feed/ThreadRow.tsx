@@ -10,11 +10,11 @@
 // its text to its author and the owner under "Hidden by the channel owner".
 
 import { useNavigate } from "@tanstack/react-router";
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { prefersReducedMotion } from "../../lib/motion.js";
-import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import { askTreeOf, repliesOf, threadOf, type ThreadView } from "../../replica/queries.js";
 import { UNKNOWN } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
@@ -28,6 +28,7 @@ import { RemoveDialog } from "../channels/RemoveDialog.js";
 import { focusSoon } from "../composer/InlineComposer.js";
 import { ReplyTree } from "../replies/ReplyTree.js";
 import { FeedRow } from "../shell/Frames.js";
+import { NotSentLine } from "../shell/NotSent.js";
 import { showToast } from "../shell/Toast.js";
 
 import { AnswerProse, type PassageGroup } from "./AnswerProse.js";
@@ -134,8 +135,19 @@ function RemovedCard({ view }: { view: ThreadView }) {
   );
 }
 
+/** A row whose thread's own records are not loaded (a summary thread, 01
+ * R3) asks for them once it renders. */
+function useOpenUnloaded(thread: string, value: unknown): void {
+  const source = useReplica();
+  const unloaded = value === UNKNOWN;
+  useEffect(() => {
+    if (unloaded) source.open?.(thread);
+  }, [source, thread, unloaded]);
+}
+
 function PostRow({ view, now }: { view: ThreadView; now: number }) {
   const replies = useReplicaQuery((source) => repliesOf(source, view.thread.id), [view.thread.id]);
+  useOpenUnloaded(view.thread.id, replies);
   return (
     <FeedRow
       rowId={view.thread.id}
@@ -159,6 +171,7 @@ function PostRow({ view, now }: { view: ThreadView; now: number }) {
 function AskRow({ view, now }: { view: ThreadView; now: number }) {
   const { thread } = view;
   const tree = useReplicaQuery((source) => askTreeOf(source, thread.id), [thread.id]);
+  useOpenUnloaded(thread.id, tree);
   const proseRef = useRef<HTMLDivElement>(null);
   const [passages, setPassages] = useState(0);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -481,6 +494,7 @@ function ThreadCard({
           {showSaves ? <span>{saves}</span> : null}
         </button>
       </div>
+      <NotSentLine item={thread.id} />
       <ConfirmDelete
         open={deleting}
         onOpenChange={setDeleting}

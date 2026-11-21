@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
 import type { ChannelView } from "../../replica/queries.js";
+import type { DraftRef } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import {
   composerKey,
@@ -115,10 +116,11 @@ export function BranchCard({
     else open(thread, { kind: "comment", node: node.id, parent });
   };
 
-  const submitAsk = async (c: Composer & { kind: "ask" }, text: string) => {
+  const submitAsk = async (c: Composer & { kind: "ask" }, text: string, draft: DraftRef) => {
     // Branch on a top-level branch asks at the answer, on the same passage.
     const b = c.parent === "r" && node.b !== null ? node.b : undefined;
     const id = await writes.fork({
+      draft,
       thread,
       parent: c.parent,
       q: text,
@@ -222,7 +224,7 @@ export function BranchCard({
           draftKey={composerKey(thread, askHere)}
           placeholder={askHere.parent === node.id ? "Continue ask" : "Ask beside this"}
           submitLabel="Ask"
-          onSubmit={(text) => submitAsk(askHere, text)}
+          onSubmit={(text, draft) => submitAsk(askHere, text, draft)}
           onClose={() => close(thread)}
           returnFocus={selectedRowOr(thread, `#card-${thread} .rcount`)}
         />
@@ -232,8 +234,8 @@ export function BranchCard({
           draftKey={composerKey(thread, { kind: "comment", node: node.id, parent: null })}
           placeholder="Comment here"
           submitLabel="Comment"
-          onSubmit={async (text) => {
-            const ok = (await writes.comment(thread, node.id, text)) !== null;
+          onSubmit={async (text, draft) => {
+            const ok = (await writes.comment(thread, node.id, text, undefined, draft)) !== null;
             if (ok) close(thread);
             return ok;
           }}
@@ -346,8 +348,8 @@ function BranchComments({
                 draftKey={composerKey(thread, { kind: "comment", node, parent: c.id })}
                 placeholder="Reply"
                 submitLabel="Reply"
-                onSubmit={async (text) => {
-                  const ok = (await writes.comment(thread, node, text, parent)) !== null;
+                onSubmit={async (text, draft) => {
+                  const ok = (await writes.comment(thread, node, text, parent, draft)) !== null;
                   if (ok) close(thread);
                   return ok;
                 }}

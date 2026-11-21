@@ -12,6 +12,7 @@ import { adminRouter, authRouter, settingsRouter, usageRouter } from "./routers/
 import { apiKeysRouter } from "./routers/keys.js";
 import { accountInvitesRouter, accountRouter, membersRouter } from "./routers/membership.js";
 import { modelsRouter } from "./routers/models.js";
+import { spacesRouter } from "./routers/spaces.js";
 import { systemRouter } from "./routers/system.js";
 
 export const appRouter = router({
@@ -25,6 +26,7 @@ export const appRouter = router({
   account: accountRouter,
   accountInvites: accountInvitesRouter,
   members: membersRouter,
+  spaces: spacesRouter,
 });
 
 export type AppRouter = typeof appRouter;

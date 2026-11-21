@@ -108,9 +108,17 @@ export default defineConfig({
       // so a fixture that calls it fails the call locally instead of reaching
       // a vendor from CI (`04-agent-runtime.md` §11).
       SESSION_ENFORCE_LIMITS: "0",
-      // The client reads the fixture replica (02 §9.6) until the sync
-      // library and the server half land (05 M2, M3).
-      VITE_SESSION_FIXTURES: "1",
+      // The specs write their channels and threads through the sync routes,
+      // many in a few seconds, and sign in several people from one address
+      // (`e2e/world.ts`): the abuse limits of `04` Z1 are raised.
+      SESSION_LIMIT_WRITES_PER_MINUTE: "100000",
+      SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "100000",
+      SESSION_LIMIT_REGISTER_PER_MINUTE: "1000",
+      SESSION_LIMIT_AUTH_PER_MINUTE: "1000",
+      SESSION_LIMIT_STREAMS_PER_USER: "50",
+      // A channel past 100 threads keeps its oldest out of the window, for
+      // the thread address of a thread outside it (`spaces-feed`, 01 R1).
+      SESSION_WEB_WINDOW_CAP: "100",
     },
   },
 });

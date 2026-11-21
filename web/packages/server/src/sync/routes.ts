@@ -4,6 +4,8 @@
 //   POST /apply      { envelopes: Envelope[] }          answers in order
 //   POST /snapshot   { log, tier?, threads?, clientId? } records now, scope-filtered
 //   GET  /pull       ?log&cursor&clientId               changes since a cursor
+//   POST /read       { reads: [{ log, cursor? | tier?, threads? }], clientId? }
+//                                                       snapshots and pulls of several logs
 //   GET  /events     ?clientId                          the event stream (SSE read with fetch)
 //
 // Before these, in `app.ts`: the request id, the protocol check
@@ -71,6 +73,9 @@ class BadJson extends Error {}
 
 /** Small request bodies: register, snapshot (500 thread ids). */
 const SMALL_BODY = 64 * 1024;
+/** `POST /read`: at most this many reads, in at most this many bytes. */
+export const MAX_READS = 100;
+const READ_BODY = 512 * 1024;
 
 export interface SyncRoutesOptions {
   sync: SyncService;
@@ -215,6 +220,52 @@ export function syncRoutes(options: SyncRoutesOptions): Hono<AppEnv> {
       ...(clientId ? { clientId } : {}),
     });
     return c.json(p, 200);
+  });
+
+  // ---- several snapshots and pulls in one request (R5) ----
+  // A reader of many channels (a signed-out Home reads every open one) asks
+  // for their logs in one request, counted once against the snapshot limit
+  // (`app.ts`). Each read runs as its own `snapshot` or `pull` under the
+  // caller's scope: a read with a `cursor` is a pull, one without is a
+  // snapshot. A read the server half refuses answers its error in its place.
+  app.post("/read", async (c) => {
+    const body = (await jsonBody(c, READ_BODY)) as { reads?: unknown; clientId?: unknown };
+    const reads = body.reads;
+    if (!Array.isArray(reads) || reads.length === 0 || reads.length > MAX_READS)
+      return refusal(
+        c,
+        400,
+        "BAD_REQUEST",
+        `Expected { reads } with 1 to ${MAX_READS} reads.`,
+        now(),
+      );
+    const reader = readerOf(callerOf(c));
+    const clientId = typeof body.clientId === "string" ? body.clientId : undefined;
+    const answers = reads.map((read: unknown) => {
+      const r = (read ?? {}) as {
+        log?: unknown;
+        cursor?: unknown;
+        tier?: unknown;
+        threads?: unknown;
+      };
+      if (typeof r.log !== "string")
+        return { error: { code: "BAD_REQUEST", message: "Expected { log }." } };
+      try {
+        if (typeof r.cursor === "string")
+          return sync.server.pull(reader, r.log as LogId, r.cursor, {
+            ...(clientId ? { clientId } : {}),
+          });
+        return sync.server.snapshot(reader, r.log as LogId, {
+          ...(r.tier !== undefined ? { tier: r.tier as Tier } : {}),
+          ...(r.threads !== undefined ? { threads: r.threads as string[] } : {}),
+          ...(clientId ? { clientId } : {}),
+        });
+      } catch (e) {
+        if (e instanceof Refusal && e.code === "BAD_REQUEST") return { error: e.toError() };
+        throw e;
+      }
+    });
+    return c.json({ answers, serverTime: now() }, 200);
   });
 
   // ---- the event stream (Y7) ----

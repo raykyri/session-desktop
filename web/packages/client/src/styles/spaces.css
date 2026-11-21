@@ -2269,6 +2269,34 @@
   animation: feed-fadein 0.2s ease;
 }
 
+/* ---- the outbox: writes whose request failed (02 §9.2) ---- */
+
+.notsent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.outbox-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* above the transient toast, which keeps the bottom slot */
+  bottom: 62px;
+}
+
+.outbox-toast button {
+  color: inherit;
+  font-weight: 600;
+}
+
+.outbox-toast button:hover {
+  text-decoration: underline;
+}
+
 /* ---- narrow widths ---- */
 
 @media (max-width: 860px) {

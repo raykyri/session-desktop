@@ -19,6 +19,7 @@ import { ConfirmDelete } from "../feed/FeedDialog.js";
 import { ModerationNote, rowText } from "../feed/Moderated.js";
 import { MoreMenu } from "../feed/MoreMenu.js";
 import { plainReply, relTime } from "../feed/format.js";
+import { NotSentLine } from "../shell/NotSent.js";
 
 import { ReplyText } from "./ReplyText.js";
 
@@ -73,10 +74,10 @@ export function ReplyTree({
         draftKey={composerKey(thread.id, { kind: "reply", parent })}
         placeholder={`Reply to @${to}`}
         submitLabel="Reply"
-        onSubmit={async (text) => {
+        onSubmit={async (text, draft) => {
           const top =
             parent === null ? undefined : (replies.find((r) => r.id === parent)?.parent ?? parent);
-          const id = await writes.reply(thread.id, text, top);
+          const id = await writes.reply(thread.id, text, top, draft);
           if (id) select(thread.id, id);
           return id !== null;
         }}
@@ -243,6 +244,7 @@ function ReplyCard({
           </button>
         ) : null}
       </div>
+      <NotSentLine item={reply.id} />
       {composer}
       <ConfirmDelete
         open={deleting}

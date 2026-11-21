@@ -12,6 +12,7 @@ import type { Ledger } from "./runs/ledger.js";
 import type { RunLive } from "./runs/recordStore.js";
 import type { RunTexts } from "./runs/runTexts.js";
 import type { RunsService } from "./runs/service.js";
+import type { SpaceDirectory } from "./spaces/directory.js";
 import type { SyncService } from "./sync/service.js";
 
 export interface ServerDeps {
@@ -47,6 +48,8 @@ export interface ServerDeps {
   runLive?: (runId: string, reader: string | null) => RunLive | null;
   /** The clock of the usage week; `Date.now` when absent. */
   now?: () => number;
+  /** Where `spaces.directory` reads the open channels; none when absent. */
+  directory?: SpaceDirectory;
 }
 
 /** Per-request state the middlewares publish and the handlers read. */

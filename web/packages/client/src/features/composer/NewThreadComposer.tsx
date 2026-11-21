@@ -369,8 +369,8 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
     try {
       const id =
         mode === "ask" && model
-          ? await writes.ask(target.id, q, model.id, effort)
-          : await writes.post(target.id, q);
+          ? await writes.ask(target.id, q, model.id, effort, { key: NEW_THREAD_DRAFT, text: sent })
+          : await writes.post(target.id, q, { key: NEW_THREAD_DRAFT, text: sent });
       if (id) {
         // Text typed while the write was in flight stays in the field.
         const current = useDraftsStore.getState().byKey[NEW_THREAD_DRAFT]?.text ?? "";

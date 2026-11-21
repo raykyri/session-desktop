@@ -16,6 +16,8 @@ import {
   type TRPCClient,
 } from "@trpc/client";
 
+import { upgradeRequired } from "../replica/upgrade.js";
+
 /** Where `createApp` mounts the procedure endpoint (`server/src/app.ts`). */
 export const TRPC_ENDPOINT = "/api/trpc";
 
@@ -62,7 +64,12 @@ export function createSessionTrpcClient(options: TrpcClientOptions = {}): Sessio
           url,
           headers: () => REQUESTED_WITH_HEADERS,
           // Explicit credentials so auth cookies still ride along when `url` points at another origin (tests, preview deploys).
-          fetch: (input, init) => doFetch(input, { ...init, credentials: "include" }),
+          // A 426 reloads the tab once (`replica/upgrade.ts`, 02 §9.2).
+          fetch: async (input, init) => {
+            const res = await doFetch(input, { ...init, credentials: "include" });
+            if (res.status === 426) upgradeRequired();
+            return res;
+          },
         }),
       }),
     ],

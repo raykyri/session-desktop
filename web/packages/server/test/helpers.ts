@@ -70,7 +70,7 @@ export interface HarnessOptions {
    * procedures read (`deps.ts`). */
   deps?: Pick<
     ServerDeps,
-    "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now" | "runLive"
+    "ledger" | "runTexts" | "models" | "keyCheckTimeoutMs" | "now" | "runLive" | "directory"
   >;
   /** The sync core's options besides the database and config: its clock and
    * mutators (`sync/service.ts`). */

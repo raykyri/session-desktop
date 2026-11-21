@@ -11,7 +11,7 @@ import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useSt
 
 import { RouteNotFoundPanel } from "../../app/RouteBoundary.js";
 import { prefersReducedMotion } from "../../lib/motion.js";
-import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import {
   channelByName,
   channelsOf,
@@ -140,14 +140,20 @@ function ThreadList({
   useImperativeHandle(handle, () => ({
     reach: (id, onRendered) => {
       const at = ids.indexOf(id);
-      if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
-      // The row renders on the next frames; wait until it is in the DOM.
+      // The row renders on the next frames; wait until it is in the DOM. A
+      // list that has just mounted has no scroll element in the first frame,
+      // so the scroll is asked for again on each frame until the row is in.
       let tries = 0;
-      const wait = () => {
-        if (document.getElementById(`card-${id}`) || tries++ > 30) onRendered();
-        else requestAnimationFrame(wait);
+      const step = () => {
+        if (document.getElementById(`card-${id}`) || tries++ > 60) {
+          onRendered();
+          return;
+        }
+        if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
+        requestAnimationFrame(step);
       };
-      requestAnimationFrame(wait);
+      if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
+      requestAnimationFrame(step);
     },
   }));
   if (!virtual)
@@ -198,7 +204,9 @@ function useReveal(
   t: string | undefined,
   sel: string | undefined,
   handle: React.RefObject<ListHandle | null>,
+  space: string | undefined,
 ) {
+  const source = useReplica();
   const select = useThreadUiStore((state) => state.select);
   const request = useRevealStore((state) => state.reveal);
   const done = useRevealStore((state) => state.done);
@@ -213,6 +221,13 @@ function useReveal(
     (source) => (target ? (threadOf(source, target.thread) ? "found" : "absent") : "none"),
     [target?.thread],
   );
+  // A thread outside the window is fetched from its channel's log (02 §2.1,
+  // 01 R3); one the replica holds in full needs nothing.
+  const wanted = target?.thread;
+  const waitsForChannel = ids === null;
+  useEffect(() => {
+    if (wanted && !waitsForChannel) source.open?.(wanted, space);
+  }, [source, wanted, space, waitsForChannel]);
   useEffect(() => {
     if (!target || !key || !ids || handled.current === key) return;
     if (status === UNKNOWN) return;
@@ -258,7 +273,11 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
       : { kind };
   const ids = useReplicaQuery((source) => (feed ? feedOf(source, feed) : []), [feed]);
   const handle = useRef<ListHandle | null>(null);
-  useReveal(ids === UNKNOWN ? null : ids, t, sel, handle);
+  const channelId = channel && channel !== UNKNOWN ? channel.id : undefined;
+  useReveal(ids === UNKNOWN ? null : ids, t, sel, handle, channelId);
+  // A channel's log is read while its view is open (01 R5).
+  const source = useReplica();
+  useEffect(() => (channelId ? source.watch?.(channelId) : undefined), [source, channelId]);
 
   if (ids === UNKNOWN || channel === UNKNOWN || joined === UNKNOWN)
     return (

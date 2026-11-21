@@ -1,5 +1,5 @@
-// Branches end to end on the fixture replica (02 §12.2 `spaces-branches`;
-// the runs are the mock's until M5a): a passage's count button, the
+// Branches end to end (02 §12.2 `spaces-branches`; skipped until M5a's run
+// loop answers asks): a passage's count button, the
 // selected branch's card, Continue, Branch, the footer's follow-up, Comment,
 // Branch here and Look up over a selection, Open as its own thread, the
 // card's fade on a newly shown item only, and the rail's dots on their rows'
@@ -7,7 +7,13 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { FIRST_ASK, flushRuns, holdRuns, scrollSettled, signInAndOpen, toast } from "./spaces.js";
+import { FIRST_ASK, flushRuns, holdRuns } from "./fixtureWorld.js";
+import { NO_RUNS, scrollSettled, signInAndOpen, toast } from "./spaces.js";
+
+// The branches of an ask need its answer, and runs are answered from M5a:
+// until then this spec reads the fixture replica's asks, which the suite's
+// build does not load.
+test.skip(true, NO_RUNS);
 
 const side = (page: Page) => page.locator(`[data-side="${FIRST_ASK}"]`);
 const answer = (page: Page) => page.locator(`#pr-${FIRST_ASK}`);

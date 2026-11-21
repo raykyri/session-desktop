@@ -2,9 +2,12 @@
 // makes its ids, hands the write to the replica (which predicts it, keeps the
 // prediction and sends it) and reports the answer: a refusal shows its
 // message as an alert toast and resolves `false`, so the caller keeps typed
-// text in its composer.
+// text in its composer. A write whose request failed is "Not sent": an item
+// it created stays (the caller clears its composer, and `draft` names the
+// composer its text returns to on Discard), and a write with no item shows
+// the outbox toast (`NotSent.tsx`) instead of its confirmation.
 
-import { QUEUED_RUNS_MAX } from "@session/mutators";
+import { QUEUED_RUNS_MAX, type ApiError } from "@session/mutators";
 import type { Spaces } from "@session/shared";
 import { useMemo } from "react";
 
@@ -13,7 +16,7 @@ import { showToast } from "../features/shell/Toast.js";
 import { useReplica } from "./ReplicaProvider.js";
 import type { Effort } from "./online.js";
 import { queuedRunsOf } from "./queries.js";
-import type { ReplicaSource, WriteOutcome } from "./source.js";
+import type { DraftRef, ReplicaSource, WriteOutcome } from "./source.js";
 import { newUlid } from "./ulid.js";
 
 type SpaceMutatorName = Spaces.SpaceMutatorName;
@@ -37,11 +40,23 @@ export function mentionToast(result: unknown): string | null {
   return parts.length ? parts.join(" ") : null;
 }
 
+/** The text of a refused write's toast (02 §9.2): the queue toast for
+ * `queue_full`, else the refusal's message. */
+export function refusalText(error: ApiError): string {
+  return error.reason === "queue_full" ? QUEUE_FULL_MESSAGE : error.message;
+}
+
 export interface Writes {
   /** Any write; resolves the outcome after showing a refusal. */
-  send(name: SpaceMutatorName, input: unknown): Promise<WriteOutcome>;
-  ask(space: string, q: string, model: string, effort: Effort): Promise<string | null>;
-  post(space: string, q: string): Promise<string | null>;
+  send(name: SpaceMutatorName, input: unknown, draft?: DraftRef): Promise<WriteOutcome>;
+  ask(
+    space: string,
+    q: string,
+    model: string,
+    effort: Effort,
+    draft?: DraftRef,
+  ): Promise<string | null>;
+  post(space: string, q: string, draft?: DraftRef): Promise<string | null>;
   save(thread: string, on: boolean): Promise<boolean>;
   deleteThread(thread: string): Promise<boolean>;
   fork(input: {
@@ -52,6 +67,7 @@ export interface Writes {
     b?: number | undefined;
     model: string;
     effort: Effort;
+    draft?: DraftRef | undefined;
   }): Promise<string | null>;
   lookUp(input: {
     thread: string;
@@ -60,12 +76,19 @@ export interface Writes {
     b?: number | undefined;
     model: string;
     effort: Effort;
+    draft?: DraftRef | undefined;
   }): Promise<string | null>;
   deleteNode(thread: string, node: string): Promise<boolean>;
   promote(thread: string, node: string): Promise<string | null>;
-  reply(thread: string, t: string, parent?: string): Promise<string | null>;
+  reply(thread: string, t: string, parent?: string, draft?: DraftRef): Promise<string | null>;
   deleteReply(id: string): Promise<boolean>;
-  comment(thread: string, node: string, t: string, parent?: string): Promise<string | null>;
+  comment(
+    thread: string,
+    node: string,
+    t: string,
+    parent?: string,
+    draft?: DraftRef,
+  ): Promise<string | null>;
   join(space: string): Promise<boolean>;
   leave(space: string): Promise<boolean>;
   updateAbout(space: string, desc: string): Promise<boolean>;
@@ -79,85 +102,101 @@ export interface Writes {
 
 export function makeWrites(source: ReplicaSource): Writes {
   const id = () => newUlid(source.now());
-  const send = async (name: SpaceMutatorName, input: unknown) => {
-    const outcome = await source.mutate(name, input);
-    if (!outcome.ok)
-      showToast(
-        outcome.error.reason === "queue_full" ? QUEUE_FULL_MESSAGE : outcome.error.message,
-        { alert: true },
-      );
+  const send = async (name: SpaceMutatorName, input: unknown, draft?: DraftRef) => {
+    const outcome = await source.mutate(name, input, draft ? { draft } : {});
+    if (!outcome.ok) showToast(refusalText(outcome.error), { alert: true });
     return outcome;
   };
   /** A write that starts a run: refused here, before it is sent, while 20
    * of the viewer's runs wait to start (02 §5, 03 L1); the server's
    * `queue_full` refusal gets the same toast. The caller keeps the text. */
-  const run = async (name: SpaceMutatorName, input: { id: string } & Record<string, unknown>) => {
+  const run = async (
+    name: SpaceMutatorName,
+    input: { id: string } & Record<string, unknown>,
+    draft?: DraftRef,
+  ) => {
     if (queuedRunsOf(source) >= QUEUED_RUNS_MAX) {
       showToast(QUEUE_FULL_MESSAGE, { alert: true });
       return null;
     }
-    return made(name, input);
+    return made(name, input, false, draft);
   };
   const made = async (
     name: SpaceMutatorName,
     input: { id: string } & Record<string, unknown>,
     mentions = false,
+    draft?: DraftRef,
   ) => {
-    const outcome = await send(name, input);
+    const outcome = await send(name, input, draft);
     if (!outcome.ok) return null;
-    if (mentions) {
+    if (mentions && !outcome.unsent) {
       const text = mentionToast(outcome.result);
       if (text) showToast(text);
     }
     return input.id;
   };
-  const done = async (name: SpaceMutatorName, input: unknown) => (await send(name, input)).ok;
+  /** Confirmed: not refused and not "Not sent" (its toast says so). */
+  const done = async (name: SpaceMutatorName, input: unknown) => {
+    const outcome = await send(name, input);
+    return outcome.ok && !outcome.unsent;
+  };
   return {
     send,
-    ask: (space, q, model, effort) =>
-      run("threads.create", { id: id(), space, kind: "ask", q, model, effort }),
-    post: (space, q) => made("threads.create", { id: id(), space, kind: "post", q }, true),
+    ask: (space, q, model, effort, draft) =>
+      run("threads.create", { id: id(), space, kind: "ask", q, model, effort }, draft),
+    post: (space, q, draft) =>
+      made("threads.create", { id: id(), space, kind: "post", q }, true, draft),
     save: async (thread, on) => {
       const ok = await done("saved.set", { kind: "thread", id: thread, on });
       if (ok) showToast(on ? "Saved." : "Removed from saved.");
       return ok;
     },
     deleteThread: (thread) => done("threads.delete", { id: thread }),
-    fork: ({ quote, b, ...rest }) =>
-      run("research.forkNode", {
-        id: id(),
-        ...rest,
-        kind: "ask",
-        ...(quote !== undefined ? { quote } : {}),
-        ...(b !== undefined ? { b } : {}),
-      }),
-    lookUp: ({ quote, b, ...rest }) =>
-      run("research.forkNode", {
-        id: id(),
-        ...rest,
-        parent: "r",
-        kind: "lookup",
-        ...(quote !== undefined ? { quote } : {}),
-        ...(b !== undefined ? { b } : {}),
-      }),
+    fork: ({ quote, b, draft, ...rest }) =>
+      run(
+        "research.forkNode",
+        {
+          id: id(),
+          ...rest,
+          kind: "ask",
+          ...(quote !== undefined ? { quote } : {}),
+          ...(b !== undefined ? { b } : {}),
+        },
+        draft,
+      ),
+    lookUp: ({ quote, b, draft, ...rest }) =>
+      run(
+        "research.forkNode",
+        {
+          id: id(),
+          ...rest,
+          parent: "r",
+          kind: "lookup",
+          ...(quote !== undefined ? { quote } : {}),
+          ...(b !== undefined ? { b } : {}),
+        },
+        draft,
+      ),
     deleteNode: (thread, node) => done("followups.delete", { thread, node }),
     promote: async (thread, node) => {
       const made_ = await made("threads.create", { id: id(), from: { th: thread, node } });
       if (made_) showToast("Opened as its own thread.");
       return made_;
     },
-    reply: (thread, t, parent) =>
+    reply: (thread, t, parent, draft) =>
       made(
         "research.createPostFollowUp",
         { id: id(), thread, t, ...(parent !== undefined ? { parent } : {}) },
         true,
+        draft,
       ),
     deleteReply: (reply) => done("replies.delete", { id: reply }),
-    comment: (thread, node, t, parent) =>
+    comment: (thread, node, t, parent, draft) =>
       made(
         "comments.create",
         { id: id(), thread, node, t, ...(parent !== undefined ? { parent } : {}) },
         true,
+        draft,
       ),
     join: (space) => done("spaces.join", { space }),
     leave: (space) => done("spaces.leave", { space }),

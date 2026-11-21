@@ -2,18 +2,46 @@
 // and out of the feed's layers, the Escape order of stacked layers, where
 // focus goes when a composer closes, a keyboard selection's actions, the
 // composer's menus, the padded scroll, and reduced motion.
+//
+// The viewer's channel holds hal's post with replies, written through the
+// sync routes before the specs run (`world.ts`). The steps on an ask's
+// answer and branches wait for the run loop (05 M5a).
 
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  FIRST_ASK,
-  REPLY_POST_TEXT,
-  compose,
-  row,
-  scrollSettled,
-  signInAndOpen,
-  toast,
-} from "./spaces.js";
+import { FIRST_ASK } from "./fixtureWorld.js";
+import { NO_RUNS, compose, row, scrollSettled, signInAndOpen, toast } from "./spaces.js";
+import { channelName, person, ulid } from "./world.js";
+
+const LOGIN = "e2e-keyboard";
+const POST = "Is anyone else seeing the follow-up count lag";
+
+const w = { own: "", hal: "", post: "" };
+
+test.beforeAll(async ({ browser }) => {
+  const me = await person(browser, LOGIN);
+  const motion = await person(browser, "e2e-motion");
+  const hal = await person(browser, "e2e-keyboard-hal");
+  w.hal = hal.handle;
+  w.own = channelName("keys");
+  const own = await me.channel(w.own);
+  for (const p of [hal, motion]) await p.join(own);
+  // the post with rows above and below it, so the feed scrolls past it
+  const fillers = (from: number) =>
+    Array.from(
+      { length: 6 },
+      (_, i) =>
+        [
+          "threads.create",
+          { id: ulid(), space: own, kind: "post", q: `Filler post ${from + i}` },
+        ] as const,
+    );
+  await hal.all(fillers(1));
+  w.post = await hal.post(own, `${POST} after a branch is deleted?`);
+  await me.reply(w.post, "Same here.");
+  await hal.reply(w.post, "Thanks, noted.");
+  await hal.all(fillers(7));
+});
 
 const side = (page: Page) => page.locator(`[data-side="${FIRST_ASK}"]`);
 const answer = (page: Page) => page.locator(`#pr-${FIRST_ASK}`);
@@ -39,9 +67,11 @@ async function toTop(page: Page) {
   expect(await page.locator("[data-shell-scroll]").evaluate((el) => el.scrollTop)).toBe(0);
 }
 
-test.describe("focus and Escape", () => {
+test.describe("focus and Escape on an ask", () => {
+  test.skip(true, NO_RUNS);
+
   test.beforeEach(async ({ page }) => {
-    await signInAndOpen(page, "e2e-keyboard");
+    await signInAndOpen(page, LOGIN);
   });
 
   test("a card's controls in order, and each tree is one tab stop", async ({ page }) => {
@@ -85,30 +115,6 @@ test.describe("focus and Escape", () => {
     expect(first).toBeGreaterThan(footer);
     // The stop after a tree's row is outside that tree.
     expect(visited[first + 1]?.tree).not.toBe(visited[first]?.tree);
-  });
-
-  test("Escape closes the About editor, then the info dialog", async ({ page }) => {
-    await page.goto("/c/sci-fi");
-    await page.getByRole("button", { name: "About this channel" }).click();
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByRole("dialog", { name: "Edit #sci-fi" })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog", { name: "Edit #sci-fi" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Edit" })).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog", { name: "#sci-fi" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "About this channel" })).toBeFocused();
-  });
-
-  test("the delete confirmation starts on Cancel and returns to More", async ({ page }) => {
-    await compose(page, "To be deleted.", "Post");
-    const more = page.locator(".tcard").first().getByRole("button", { name: "More" });
-    await more.click();
-    await page.getByRole("menuitem", { name: "Delete post" }).click();
-    await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("alertdialog")).toHaveCount(0);
-    await expect(more).toBeFocused();
   });
 
   test("Escape closes a menu, then the selection actions, then the composer", async ({ page }) => {
@@ -237,6 +243,36 @@ test.describe("focus and Escape", () => {
     await page.keyboard.press("Enter");
     await expect(side(page).getByRole("textbox", { name: "Ask about this passage" })).toBeFocused();
   });
+});
+
+test.describe("focus and Escape", () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAndOpen(page, LOGIN);
+  });
+
+  test("Escape closes the About editor, then the info dialog", async ({ page }) => {
+    await page.goto(`/c/${w.own}`);
+    await page.getByRole("button", { name: "About this channel" }).click();
+    await page.getByRole("button", { name: "Edit" }).click();
+    await expect(page.getByRole("dialog", { name: `Edit #${w.own}` })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: `Edit #${w.own}` })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: `#${w.own}` })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "About this channel" })).toBeFocused();
+  });
+
+  test("the delete confirmation starts on Cancel and returns to More", async ({ page }) => {
+    await compose(page, "To be deleted.", "Post");
+    const more = page.locator(".tcard").first().getByRole("button", { name: "More" });
+    await more.click();
+    await page.getByRole("menuitem", { name: "Delete post" }).click();
+    await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(more).toBeFocused();
+  });
 
   test("the model menu steps the effort down; menus return focus to the field", async ({
     page,
@@ -275,7 +311,7 @@ test.describe("focus and Escape", () => {
   });
 
   test("a composer opened near the bottom is scrolled in with 24 px below it", async ({ page }) => {
-    const post = row(page, REPLY_POST_TEXT);
+    const post = row(page, POST);
     const replyAtRoot = post.getByRole("button", { name: "Reply at root" });
     // "Reply at root" 10 px above the scroll container's bottom: the
     // composer opens under it, out of view.
@@ -291,7 +327,7 @@ test.describe("focus and Escape", () => {
     await scrollSettled(page);
     // A click without Playwright's own scroll into view.
     await replyAtRoot.evaluate((el: HTMLElement) => el.click());
-    const field = post.getByRole("textbox", { name: "Reply to @hal_b" });
+    const field = post.getByRole("textbox", { name: `Reply to @${w.hal}` });
     await expect(field).toBeFocused();
     await scrollSettled(page);
     const below = await field.evaluate((el) => {
@@ -330,16 +366,15 @@ test.describe("reduced motion", () => {
 
     const behaviours = () =>
       page.evaluate(() => (window as unknown as { scrollBehaviours: string[] }).scrollBehaviours);
-    // A passage's count button: the card fades in without animation.
-    await answer(page)
-      .getByRole("button", { name: "3 branches on this passage. Open the first" })
-      .click();
-    const preview = side(page).locator(".preview.fadein");
+    // A reply's card fades in without animation.
+    const post = row(page, POST);
+    await post.getByRole("treeitem", { name: /Thanks, noted/ }).click();
+    const preview = post.locator(".preview.fadein");
     await expect(preview).toBeVisible();
     expect(await preview.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
     expect((await behaviours()).filter((b) => b === "smooth")).toEqual([]);
 
-    await page.locator(`#card-${FIRST_ASK}`).getByRole("button", { name: /^Save/ }).click();
+    await page.locator(`#card-${w.post}`).getByRole("button", { name: /^Save/ }).click();
     await expect(toast(page)).toBeVisible();
     expect(await toast(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
 
@@ -351,8 +386,8 @@ test.describe("reduced motion", () => {
       .toBe("none");
 
     // A thread address scrolls to its thread at once.
-    await page.goto(`/c/markets?t=01M7HGRPJ0E7RGZ45D4KENBQ6P`);
-    await expect(page.locator("#card-01M7HGRPJ0E7RGZ45D4KENBQ6P")).toBeInViewport();
+    await page.goto(`/c/${w.own}?t=${w.post}`);
+    await expect(page.locator(`#card-${w.post}`)).toBeInViewport();
     await expect.poll(async () => (await behaviours()).length).toBeGreaterThan(0);
     expect((await behaviours()).filter((b) => b === "smooth")).toEqual([]);
   });
