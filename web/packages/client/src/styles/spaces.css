@@ -1645,6 +1645,10 @@
 
 .mlist {
   display: grid;
+  /* one column no wider than the list: an auto column grows to the rows'
+     min-content width, which for a row with a long unbreakable text (an
+     invite link) is wider than the dialog */
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   margin: 0;
   padding: 0;

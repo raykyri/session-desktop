@@ -128,10 +128,15 @@ export function InviteLinksDialog({
               const state = linkState(l, now);
               // each row's buttons name their link: its place and expiry
               const which = `link ${i + 1}, expires ${expiryDate(l)}`;
+              const link = channelInviteLink(channel.name, l.code);
               return (
                 <li key={l.id} data-link={l.id} data-state={state}>
                   <span className="mltext">
-                    <code className="ilink">{channelInviteLink(channel.name, l.code)}</code>
+                    {/* cut off with an ellipsis when longer than the row; the
+                        title shows all of it, and Copy copies all of it */}
+                    <code className="ilink" title={link}>
+                      {link}
+                    </code>
                     <small>
                       {state === "used"
                         ? `Used by @${l.usedBy ?? ""}`

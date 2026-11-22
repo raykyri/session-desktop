@@ -7,7 +7,7 @@
 // a notification and the moderation log lists; the owner bans a member of
 // an open channel, the log lists the ban, and the member's writes there are
 // refused with the ban message. At 400 px wide, the member list's avatars
-// keep their size.
+// keep their size and an invite link's row stays inside its dialog.
 //
 // The viewer owns one open channel; olga owns two open channels the viewer
 // has not joined, two private ones the viewer joined by invite links, and a
@@ -261,6 +261,20 @@ test("B4: a private channel's link admits one person; the same link is refused t
   await late.close();
 });
 
+/** Whether box `inner` lies inside box `outer`, to the pixel. */
+function inside(
+  inner: { x: number; y: number; width: number; height: number } | null,
+  outer: { x: number; y: number; width: number; height: number } | null,
+): boolean {
+  if (!inner || !outer) return false;
+  return (
+    inner.x >= outer.x - 0.5 &&
+    inner.x + inner.width <= outer.x + outer.width + 0.5 &&
+    inner.y >= outer.y - 0.5 &&
+    inner.y + inner.height <= outer.y + outer.height + 0.5
+  );
+}
+
 test("at 400px wide the member list's avatars keep their 20 px circle", async ({ page }) => {
   await page.setViewportSize({ width: 400, height: 800 });
   // the owner and two members
@@ -279,6 +293,43 @@ test("at 400px wide the member list's avatars keep their 20 px circle", async ({
   // the Owner chip keeps its width too: it is not stretched across the row
   const chip = members.locator(".mlist li .chip");
   expect((await chip.boundingBox())?.width ?? 0).toBeLessThan(80);
+});
+
+test("at 400px wide an invite link is cut off inside its row and Copy and Revoke stay in the dialog", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 400, height: 800 });
+  await page.goto(`/c/${m.priv}`);
+  await page.getByRole("button", { name: "About this channel" }).click();
+  await page
+    .getByRole("dialog", { name: new RegExp(`^#${m.priv}`) })
+    .getByRole("button", { name: `Invite to #${m.priv}` })
+    .click();
+  const links = page.getByRole("dialog", { name: `Invite to #${m.priv}` });
+  await links.getByRole("button", { name: "Create an invite link" }).click();
+  await expect(toast(page)).toHaveText("Invite link created.");
+  const row = links.locator(".ilist li").first();
+  const dialog = await links.boundingBox();
+  expect(dialog?.width).toBeLessThanOrEqual(400);
+  const copy = row.getByRole("button", { name: /^Copy link 1/ });
+  const revoke = row.getByRole("button", { name: /^Revoke link 1/ });
+  expect(inside(await row.boundingBox(), dialog)).toBe(true);
+  expect(inside(await copy.boundingBox(), dialog)).toBe(true);
+  expect(inside(await revoke.boundingBox(), dialog)).toBe(true);
+  const code = row.locator(".ilink");
+  const link = (await code.textContent()) ?? "";
+  expect(link).toMatch(new RegExp(`/c/${m.priv}#[0-9a-z]{26}$`));
+  const codeBox = await code.boundingBox();
+  const copyBox = await copy.boundingBox();
+  expect((codeBox?.x ?? 0) + (codeBox?.width ?? Infinity)).toBeLessThanOrEqual(copyBox?.x ?? 0);
+  expect(await code.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  // the full link is its title, and Copy copies all of it
+  await expect(code).toHaveAttribute("title", link);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await copy.click();
+  await expect(toast(page)).toHaveText("Link copied.");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(link);
 });
 
 test("§6.6: a removal with a reason reaches the member, their notifications and the log", async ({
