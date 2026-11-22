@@ -250,6 +250,32 @@ test.serial(
   },
 );
 
+test.serial(
+  "a row whose thread is gone stays on the page and says the thread is not available",
+  async (t) => {
+    // a reply notification on a thread that was erased since: the channel's
+    // log is loaded and holds no record of it
+    const gone = "01M7HWGZJGT7JTFFVSYPX0GN01";
+    let n: NotifRec | undefined;
+    prepare = (replica) => {
+      const reply = replica.rawAll("notif").find((x) => x.type === "reply");
+      if (!reply) throw new Error("no reply notification in the fixtures");
+      n = { ...reply, th: gone, item: null, read: false };
+      replica.write([n]);
+    };
+    const app = await renderApp("/notifications");
+    await waitUntil(t, () => rowsOf("reply").some((x) => x.includes("a deleted thread")), "row");
+    const calls = recordWrites(replicaOf());
+    const rowEl = [...document.querySelectorAll<HTMLElement>('.nrow[data-notif="reply"]')].find(
+      (r) => r.textContent?.includes("a deleted thread"),
+    );
+    fireEvent.click(rowEl as HTMLElement);
+    t.deepEqual(calls[0], ["notifications.markRead", { id: n?.id }]);
+    await waitUntil(t, () => currentToast() === "This thread is not available.", "the toast");
+    t.is(app.router.state.location.pathname, "/notifications");
+  },
+);
+
 test.serial("a coalesced reply reads “@x and others”, a single one names only @x", async (t) => {
   prepare = (replica) => {
     const reply = replica.rawAll("notif").find((x) => x.type === "reply");
