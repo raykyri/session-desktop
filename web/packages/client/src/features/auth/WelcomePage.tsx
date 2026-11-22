@@ -25,6 +25,14 @@ export function WelcomePage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  // The route's guard sends a member Home only on entry. An account that
+  // becomes a member while this page shows (Create account in the profile
+  // step the shell opens, or a redeem in another tab) leaves it here.
+  const member = me?.status === "active";
+  useEffect(() => {
+    if (member) void navigate({ to: "/", replace: true });
+  }, [member, navigate]);
+
   // Arriving from a sign-in that made a waiting account: the "No Session
   // account" step, once; the marker leaves the address.
   useEffect(() => {

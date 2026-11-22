@@ -194,6 +194,42 @@ test.serial("a waiting account holding an invite gets the profile step", async (
   });
 });
 
+test.serial(
+  "Create account in the profile step the shell opens on Invite required goes Home",
+  async (t) => {
+    let me: object = {
+      ...waitingTestUser({ login: "rheaok" }),
+      pendingInvite: INES,
+    };
+    const app = await renderApp("/welcome", {
+      user: me as never,
+      responses: {
+        "auth.me": () => me,
+        "account.checkHandle": { valid: true, available: true },
+        "account.create": (input: unknown) => {
+          const { handle } = input as { handle: string };
+          me = { ...testUser({ login: "rheaok" }), handle };
+          return { me, inviter: INES };
+        },
+      },
+    });
+    // under the modal dialog the page is inert, hence `hidden`
+    t.truthy(await screen.findByRole("heading", { name: "Invite required", hidden: true }));
+    t.truthy(await screen.findByRole("heading", { name: "Create your account" }));
+    fireEvent.change(within(dialog()).getByRole("textbox", { name: /Handle on Session/ }), {
+      target: { value: "rhea" },
+    });
+    fireEvent.click(within(dialog()).getByRole("button", { name: "Create account" }));
+    await waitUntil(
+      t,
+      () => currentToast() === "Account created. Ines Vidal invited you.",
+      "toast",
+    );
+    await waitUntil(t, () => app.router.state.location.pathname === "/", "goes Home");
+    t.is(screen.queryByRole("heading", { name: "Invite required", hidden: true }), null);
+  },
+);
+
 test.serial("a new waiting account sees No Session account, then Invite required", async (t) => {
   const app = await renderApp("/welcome?new=1", {
     user: waitingTestUser({ login: "rheaok" }),
