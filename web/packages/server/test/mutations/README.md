@@ -55,6 +55,13 @@ otherwise. It exits with 1 when a mutation survives.
   heartbeat, an unreadable or absent database, symlinks, the dry run's
   `-wal`, the boot's one-line refusal, a heartbeat ahead of the clock, the
   bundle's `#!` line, the pinned hash of `0000_initial.sql`).
+- INV-1 on: the lifetime invite grant (`04` I2): a used link spends an
+  invite, an open one holds one and a revoked one gives it back; the
+  setting and the extra invites make the total; a link is refused at 0 left
+  with the member's total in the message; site admins are not counted;
+  `admin.invites.*` checks for a site admin, shares the `admin.models.*`
+  bucket, takes a count from 1 to 100, finds only live accounts and logs ids
+  and the count only; `db:admin -- --grant-invites` checks its count.
 - Not applicable (`--list` prints the reasons): the client half's faults
   (X28, X31, N26-N28, R2-6, R2-8, R2-10 to R2-14, R2-23) and the prototype's
   join requests (X16, X22, N23, R2-2); X25 (a tombstone keeping the whole

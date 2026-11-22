@@ -464,9 +464,10 @@ Exit criteria:
   (`04` §3.1: hash lookup, concurrent redemption, handle uniqueness, a
   deleted account's identity signing in again as a new waiting account,
   `db:admin -- <handle>` and root invites, the 90-day waiting-account
-  sweep), and the server tests of `04` §3.2 (3 open
-  links, a 4th refused, revoke and use freeing a slot, concurrent creates,
-  the admin exemption).
+  sweep), and the server tests of `04` §3.2 (3 invites per member in all, a
+  used link spending one, an open one holding one and a revoked one giving
+  it back, the refusal at 0 left, concurrent creates, site admins
+  unlimited, `admin.invites.*`).
 - The X and GitHub callback tests of `04` Z2 and Z5 (new account, existing
   account, the other provider's identity staying a separate account) pass
   against fixture OAuth endpoints.
@@ -718,9 +719,11 @@ machine. Staging is reset after the M8a squash.
   (200,000 per member per week), `SESSION_RUN_MAX_TOKENS`,
   `SESSION_QUEUED_PER_USER`, the web window (`SESSION_WEB_WINDOW_DAYS`,
   `SESSION_WEB_WINDOW_THREADS`, `SESSION_WEB_WINDOW_CAP`),
-  `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET` and the abuse limits of
-  `04` Z1. The abuse mailbox is not a setting: it is `abuse@` followed by
-  the hostname of `SESSION_PUBLIC_ORIGIN` (Q10), and the app does not link it. `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
+  `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET`,
+  `SESSION_INVITES_PER_MEMBER` (account invites per member in all, default
+  3; `04` I2) and the abuse limits of `04` Z1. The abuse mailbox is not a
+  setting: it is `abuse@` followed by the hostname of
+  `SESSION_PUBLIC_ORIGIN` (Q10), and the app does not link it. `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
   `SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
   The default model and the default effort are set by a site admin at
   runtime, not by configuration (`03` K15). All are validated at boot and
@@ -756,10 +759,11 @@ and is active with no inviter. The operator then runs `npm run db:admin --
 from `<github login>` to `<handle>` and gains `--invite`). Root invites are
 not account invites of any member and do not count for the rollback
 cut-off (§3.6 step 8). Admins are the roots of the invite
-tree and are exempt from the 3-open-links limit (`04` I2); they set the
-default model and the default effort (`03` K15) before inviting anyone,
-then invite the named first group of the launch runbook, who then have 3
-invites each (Q11).
+tree and have no invite limit (`04` I2); they set the default model and
+the default effort (`03` K15) before inviting anyone, then invite the
+named first group of the launch runbook, who then have 3 invites each in
+all (`SESSION_INVITES_PER_MEMBER`, Q11); a site admin gives a member more
+on Site Admin or with `db:admin -- --grant-invites <handle> <n>`.
 
 The wipe needs no announcement: the current web app is not in use, so there
 is no banner, launch date or notice period (decided, Q11). Nothing is

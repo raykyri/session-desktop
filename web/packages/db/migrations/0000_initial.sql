@@ -232,6 +232,7 @@ CREATE INDEX `signup_attempts_ip_idx` ON `signup_attempts` (`ip_hash`,`attempted
 CREATE TABLE `user_limits` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`weekly_tokens` integer,
+	`extra_invites` integer DEFAULT 0 NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );

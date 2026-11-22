@@ -784,22 +784,25 @@ restored text, the removed-member toast and the frozen-channel banner.
 **W7.1 Invites page** (`membersPage`, 04 §3.2-3.3). Two columns (one at
 860 px and below). "Invite tree" (`treeSection`, `treeA`): the line "Session
 is invite-only. Each user starts with 3 invites which they can use to add
-other members." (copy only: the rule stays three open links at a time, a
-slot freeing when a link is used or revoked), then rows from
+other members." (the number is `SESSION_INVITES_PER_MEMBER`), then rows from
 `members.tree` (online-only, TanStack Query) depth-first from the roots with
 children by join date, 18 px per level, 20 px avatar, handle, " · Admin" for
 site admins, and name, the viewer highlighted, drawn with `TreeRail`. The
 mock's " · Mod" tag is dropped (05 §6 P3). "Invite someone" (`invSection`, a
-box): "N of 3 left", one row per open link (`…/i#<code>`, the fragment
-departure) with Copy and a revoke × (label "Revoke this link", title
-"Revoke"), "Create an invite link" (no open link) / "Create a new link" while
-a slot is free (otherwise "You have 3 open invites. One frees when it is used
-or revoked."; a waiting account sees "You can invite once your account is
+box): "<left> of <total> left" for members ("<n> open" for site admins, who
+have no limit; 04 I2: a used link spends an invite, an open one holds one,
+and the total includes the invites a site admin gave), one row per open link
+(`…/i#<code>`, the fragment departure) with Copy and a revoke × (label
+"Revoke this link", title "Revoke"), "Create an invite link" (no open link)
+/ "Create a new link" while an invite is left (at 0 left the button is
+replaced by "You have used your <total> invites. An admin can give you
+more."; a waiting account sees "You can invite once your account is
 active."), then "You invited" with "Joined Nov 14" per person. Codes come
 from the server. Toasts: "Invite SESS-XXXX-XX created. Send the link to one
-person.", "Invite revoked.", "Link copied.". Acceptance: tree order and depth
-for the 12-account fixture (04 §3.3); no create button at 3 open links; Copy
-through `lib/clipboard.ts`; the three toasts.
+person.", "Invite revoked.", "Link copied."; a refused create shows the
+server's message. Acceptance: tree order and depth for the 12-account
+fixture (04 §3.3); the header count, extras included; no create button and
+the limit line at 0 left; Copy through `lib/clipboard.ts`; the three toasts.
 
 **W7.2 Auth dialog** (`authScreen`, `authDialog`): modal (label "Sign in to
 Session", Close button) with a focus trap, opened from Sign in, Join with
@@ -918,7 +921,7 @@ finish.
 
 **W8.2 Site Admin settings** (`/admin`, `adminPage`, site admins only;
 decision P11, 03 K15). Heading "Site Admin", the line "Settings for everyone
-on Session.", and exactly two boxes:
+on Session.", and exactly three boxes:
 - "Default model": a radio group of the registry models payable with
   included tokens (03 K11 `payers`), each row the model's name with its
   provider in small text (`admin.models.setDefault`). Key-only models are
@@ -926,16 +929,25 @@ on Session.", and exactly two boxes:
 - "Default effort": a radio group of Low, Medium, High and Max, none
   disabled (`admin.models.setDefaultEffort`). Toast "Default effort set to
   <Effort>." (capitalised, "High").
+- "Invites" (04 I2): a "Handle" field and a "Look up" button
+  (`admin.invites.lookup`); after a lookup, the line "@mira_k: 2 of 3
+  invites left (1 used)", whose total includes the invites admins gave, then
+  a "Number of invites" field (1 to 100) and a "Give invites" button
+  (`admin.invites.grant`). Toast "Gave @mira_k 2 more invites." A count
+  outside 1 to 100 shows "Enter a whole number from 1 to 100." without a
+  request; an unknown or deleted handle shows the server's "No account with
+  that handle.", and any other refusal the server's message, under its form.
 
 Members' composers then start on both (§5; a model that does not accept the
 default effort steps down as in §5). The page shows no prices, no model
-descriptions, no availability switches and no per-member overrides (every
-registry model stays available to every member; 05 §6 Q9). All online-only
-through TanStack Query; a failed write shows an inline error under its group
-and restores the previous choice. Acceptance: component tests that a
-key-only model is not listed, that all four efforts are enabled, the two
-toasts, that a non-admin reaching `/admin` gets the not-found page, and that
-a change refetches `models.list`.
+descriptions, no availability switches and no per-member model overrides
+(every registry model stays available to every member; 05 §6 Q9). All
+online-only through TanStack Query; a failed write shows an inline error
+under its group and restores the previous choice. Acceptance: component
+tests that a key-only model is not listed, that all four efforts are
+enabled, the two toasts, that a non-admin reaching `/admin` gets the
+not-found page, that a change refetches `models.list`, and the Invites box's
+lookup line, grant toast and errors.
 
 ## 9. Client state
 
@@ -1221,7 +1233,7 @@ in the four theme × appearance combinations.
 
 **W11.2 Contrast.** A unit test resolves token values from `tokens.css` for
 each of the four theme × appearance combinations and checks: body, title,
-footer meta, site footer, tree-row and chip text against `--workspace-bg`, `--content-card-bg`
+footer meta, tree-row and chip text against `--workspace-bg`, `--content-card-bg`
 and `--popover-bg`, and against `--passage-mark` and the `qsel` tint
 composited over the workspace background, at least 4.5:1;
 tree rail, dots, the hollow title node, the ring arc and track, the Saved pill
@@ -1259,7 +1271,7 @@ delivers them.
 | `spaces-branches.spec.ts` | M5a | follow-up, Continue, Branch, Branch here, Look up, Comment, dot alignment |
 | `spaces-runs.spec.ts` | M5a | run states and run notes, Stop and Run again (05 M5a) |
 | `spaces-usage.spec.ts` | M5b | usage page, keys with the check during the request (Checking…, Valid, both refusals), billing setting, out-of-tokens refusal |
-| `spaces-membership.spec.ts` | M6 | account invite links and codes, waiting accounts, the invite tree (04 I4) |
+| `spaces-membership.spec.ts` | M6 | account invite links and codes, waiting accounts, the invite tree (04 I4); a site admin gives invites to a member at 0 left, who then makes a link (04 I2) |
 
 `visual.spec.ts` is rewritten for Home in `centred` and `wide` at 1440 and
 1100 px, a channel at 800 px, an open branch card, the stacked dialogs, Usage,

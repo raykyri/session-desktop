@@ -15,6 +15,12 @@
 //                                              the next boot, after a restore
 //                                              that kept the file's identity
 //                                              (`runbooks/restore.md`)
+//   npm run db:admin -- --grant-invites <handle> <n>
+//                                              give the member n (1 to 100)
+//                                              more account invites, as Site
+//                                              Admin's Invites section does;
+//                                              reads SESSION_INVITES_PER_MEMBER
+//                                              for the total it prints
 //
 // Root invites have no creator: each person who runs Session redeems one,
 // chooses a handle at the profile step, and is then promoted by handle.
@@ -31,7 +37,12 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { accountInviteLink } from "@session/shared";
+import {
+  INVITE_GRANT_MAX,
+  accountInviteLink,
+  inviteAllowanceLine,
+  inviteGrantToast,
+} from "@session/shared";
 
 import {
   accountInvites,
@@ -47,15 +58,46 @@ const USAGE =
   "usage: npm run db:admin -- <handle> [--revoke]\n" +
   "       npm run db:admin -- --invite\n" +
   "       npm run db:admin -- --delete <handle>\n" +
-  "       npm run db:admin -- --new-history\n";
+  "       npm run db:admin -- --new-history\n" +
+  "       npm run db:admin -- --grant-invites <handle> <n>\n";
 
 const args = process.argv.slice(2);
 const flags = new Set(args.filter((argument) => argument.startsWith("--")));
-const handle = args.find((argument) => !argument.startsWith("--"))?.replace(/^@/, "");
+const positional = args.filter((argument) => !argument.startsWith("--"));
+const handle = positional[0]?.replace(/^@/, "");
 
 if (!flags.has("--invite") && !flags.has("--new-history") && handle === undefined) {
   process.stderr.write(USAGE);
   process.exit(1);
+}
+
+/** A whole number written in decimal digits, or null. */
+const wholeNumber = (text: string | undefined): number | null =>
+  text !== undefined && /^\d{1,9}$/.test(text.trim()) ? Number(text.trim()) : null;
+
+// `--grant-invites`: the count, and the deployment's invites per member for
+// the total it prints (the server's setting, read the same way).
+let grantCount = 0;
+let perMember = accountInvites.DEFAULT_INVITES_PER_MEMBER;
+if (flags.has("--grant-invites")) {
+  const count = wholeNumber(positional[1]);
+  if (count === null || count < 1 || count > INVITE_GRANT_MAX) {
+    process.stderr.write(
+      `The number of invites is a whole number from 1 to ${INVITE_GRANT_MAX}.\n`,
+    );
+    process.stderr.write(USAGE);
+    process.exit(1);
+  }
+  grantCount = count;
+  const setting = process.env["SESSION_INVITES_PER_MEMBER"];
+  if (setting !== undefined && setting.trim() !== "") {
+    const value = wholeNumber(setting);
+    if (value === null || value < 1) {
+      process.stderr.write("SESSION_INVITES_PER_MEMBER must be a whole number of at least 1.\n");
+      process.exit(1);
+    }
+    perMember = value;
+  }
 }
 
 const dataDir = process.env["SESSION_DATA_DIR"];
@@ -84,6 +126,16 @@ try {
     const origin = process.env["SESSION_PUBLIC_ORIGIN"];
     process.stdout.write(
       origin ? `${code}\n${accountInviteLink(origin.replace(/\/$/, ""), code)}\n` : `${code}\n`,
+    );
+  } else if (flags.has("--grant-invites")) {
+    const account = users.findActiveByHandle(db, handle ?? "");
+    if (account === null) {
+      throw new Error(`No active account has the handle @${handle ?? ""}.`);
+    }
+    const after = accountInvites.grant(db, account.id, grantCount, perMember);
+    const name = account.handle ?? "";
+    process.stdout.write(
+      `${inviteGrantToast(name, grantCount)} ${inviteAllowanceLine({ handle: name, ...after })}\n`,
     );
   } else if (flags.has("--delete")) {
     const account = users.findByHandle(db, handle ?? "");

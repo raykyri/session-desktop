@@ -123,7 +123,12 @@ The database keeps `users`, `sessions`, `oauth_states`, `invites`,
 dropped with them. At launch the production database is replaced by an
 empty one: every row, accounts included, is wiped (`05-delivery.md` §3.5,
 decision P19), so no migration has to carry data from the current schema.
-`users` changes for sign-in with GitHub or X (04 I1).
+`users` changes for sign-in with GitHub or X (04 I1). `user_limits` holds
+per-member overrides of the deployment's limits, at most one row per member,
+read by one function (`usage.memberLimits`): `weekly_tokens` (null means
+`SESSION_WEEKLY_TOKENS`, `03` K3) and `extra_invites` (integer, not null,
+default 0: the account invites site admins gave the member on top of
+`SESSION_INVITES_PER_MEMBER`, 04 I2).
 
 ### 2.1 Record storage: one table, typed at the boundary
 
@@ -892,8 +897,10 @@ records, and their feeds use R5. `threads.feed`'s `all` scope maps to this;
 
 **C8. Session invites and the invite tree.** The mockup's invite tree
 (`treeA`, `invSection`) is Session-wide: Session is invite-only, each active
-member may hold at most 3 open links, a link admits one person, and a slot
-frees when a link is used or revoked. Members without an invite can read open
+member gets 3 invites in all (`SESSION_INVITES_PER_MEMBER`, plus any a site
+admin gives them), a link admits one person, a used link spends an invite,
+an open link holds one, and revoking an unused link gives it back (04 I2).
+Members without an invite can read open
 channels and cannot write (`canWrite()`). The schema's invites are per space
 (`threadInviteSchema` has `sp`). Change: keep space invite links for private
 channels, and add account invites, built on the existing `invites` table and
@@ -903,7 +910,9 @@ as `code_enc` (AES-256-GCM under `SESSION_SECRET_KEY`, readable only by the
 link's creator, nulled when the link is used or revoked), `revoked_at` is
 added, `created_by` is nullable (null for the root invites printed by
 `npm run db:admin -- --invite`, 04 I1), and `users.invites_remaining` is
-dropped in favour of the 3-open-links rule, checked inside the `accountInvites.create` transaction.
+dropped: the member's used and open links are counted against their total
+(the setting plus `user_limits.extra_invites`) inside the
+`accountInvites.create` transaction.
 `auth.checkInvite` answers `open` or one `unusable` answer for used, revoked
 and unknown codes. `users` gains `status: "waiting" | "active"`, `handle`
 and `display_name` (rules in `04-membership-moderation-security.md` §3.1);

@@ -12,7 +12,14 @@ import { clearToast, currentToast } from "../src/features/shell/Toast.js";
 import { COPY_FAILED } from "../src/lib/clipboard.js";
 import { clearPendingInvite } from "../src/lib/pendingInvite.js";
 
-import { renderApp, resetDocumentRoot, testUser, waitUntil, waitingTestUser } from "./helpers.js";
+import {
+  renderApp,
+  resetDocumentRoot,
+  testUser,
+  trpcRefusal,
+  waitUntil,
+  waitingTestUser,
+} from "./helpers.js";
 
 const INES = { name: "Ines Vidal", handle: "ines.v" };
 
@@ -356,7 +363,16 @@ test("the tree is depth-first from the roots with children by join date", (t) =>
   );
 });
 
-const invitesView = (open: number) => ({
+/** The Invites page's `accountInvites.list` with `open` open links and, by
+ * default, the 3 invites each member starts with, none used. */
+const invitesView = (
+  open: number,
+  allowance: { total: number; used: number; left: number } | null = {
+    total: 3,
+    used: 0,
+    left: 3 - open,
+  },
+) => ({
   links: Array.from({ length: open }, (_, index) => ({
     id: `L${index}`,
     state: "open",
@@ -375,10 +391,11 @@ const invitesView = (open: number) => ({
     },
   ],
   openCount: open,
-  openLimit: 3,
+  allowance,
+  perMember: 3,
 });
 
-test.serial("Invites: the tree, the open links, and no create button at 3 open", async (t) => {
+test.serial("Invites: the tree, the open links, and no create button at 0 left", async (t) => {
   const nodes = treeNodes();
   nodes[1] = { ...nodes[1]!, displayName: '<img src=x onerror="alert(1)">' };
   await renderApp("/invites", {
@@ -399,9 +416,69 @@ test.serial("Invites: the tree, the open links, and no create button at 3 open",
     "Session is invite-only. Each user starts with 3 invites which they can use to add other members.",
   );
   t.is(screen.queryByRole("button", { name: /Create/ }), null);
-  t.truthy(screen.getByText("You have 3 open invites. One frees when it is used or revoked."));
+  t.truthy(screen.getByText("You have used your 3 invites. An admin can give you more."));
   t.is(screen.getAllByRole("button", { name: "Revoke this link" }).length, 3);
   t.truthy(screen.getByText("Joined Nov 14"));
+});
+
+test.serial(
+  "Invites: the header counts left of the total, extra invites included; used links count",
+  async (t) => {
+    // 3 + 2 extra = 5; 1 used and 1 open leave 3.
+    await renderApp("/invites", {
+      user: testUser({ login: "ines.v" }),
+      responses: {
+        "members.tree": treeNodes(),
+        "accountInvites.list": invitesView(1, { total: 5, used: 1, left: 3 }),
+      },
+    });
+    t.truthy(await screen.findByText("3 of 5 left"));
+    t.truthy(screen.getByRole("button", { name: "Create a new link" }));
+    t.is(screen.queryByText(/You have used your/), null);
+  },
+);
+
+test.serial(
+  "Invites: at 0 left with no open link the button is gone and the line names the total",
+  async (t) => {
+    // Every invite used: no open link holds one, and none is left.
+    await renderApp("/invites", {
+      user: testUser({ login: "ines.v" }),
+      responses: {
+        "members.tree": treeNodes(),
+        "accountInvites.list": invitesView(0, { total: 4, used: 4, left: 0 }),
+      },
+    });
+    t.truthy(await screen.findByText("0 of 4 left"));
+    t.is(screen.queryByRole("button", { name: /Create/ }), null);
+    t.truthy(screen.getByText("You have used your 4 invites. An admin can give you more."));
+  },
+);
+
+test.serial("Invites: a site admin sees the open count and can always create", async (t) => {
+  await renderApp("/invites", {
+    user: testUser({ login: "chief", isAdmin: true }),
+    responses: { "members.tree": treeNodes(), "accountInvites.list": invitesView(6, null) },
+  });
+  t.truthy(await screen.findByText("6 open"));
+  t.truthy(screen.getByRole("button", { name: "Create a new link" }));
+  t.is(screen.queryByText(/ left$/), null);
+});
+
+test.serial("Invites: a create refused at the limit shows the server's message", async (t) => {
+  const refusal = "You have used your 3 invites. An admin can give you more.";
+  await renderApp("/invites", {
+    user: testUser({ login: "ines.v" }),
+    responses: {
+      "members.tree": treeNodes(),
+      "accountInvites.list": invitesView(2),
+      "accountInvites.create": () => {
+        throw trpcRefusal(refusal, "PRECONDITION_FAILED");
+      },
+    },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Create a new link" }));
+  await waitUntil(t, () => currentToast() === refusal, "the refusal");
 });
 
 test.serial(

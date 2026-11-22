@@ -291,7 +291,7 @@ test("M3-M14: 0000_initial.sql is what drizzle-kit generates from the schema, pl
 });
 
 /** The sha256 of `0000_initial.sql` as databases record it. */
-const INITIAL_SHA256 = "3cb541f571022fe462590aebeb92b63386055e4a8ad83475a3c6ffc4c1486243";
+const INITIAL_SHA256 = "6954bb7e18f06cff5ce42509ada1dd2b964d7dbcd073c3a7126cfa337ccda822";
 
 test("R10: 0000_initial.sql is the file deployed databases recorded", (t) => {
   const hash = createHash("sha256")

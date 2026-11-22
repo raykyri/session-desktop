@@ -1,6 +1,6 @@
 // A feed (02 §3.1; the mock's `renderNetwork`): the no-invite banner, the
-// channel header, the composer, the empty state, one row per thread, and the
-// site footer (`FeedFrame`). Home lists the threads of the viewer's channels
+// channel header, the composer, the empty state, and one row per thread
+// (`FeedFrame`; no site footer). Home lists the threads of the viewer's channels
 // (signed out: the open ones), a channel its own, Saved the saved ones,
 // newest first. A thread's address (`?t=&sel=`, decision P9) scrolls its row
 // 12 px below the top of the feed, selects the item and flashes the card.

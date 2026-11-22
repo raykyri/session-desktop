@@ -10,6 +10,7 @@ import { endSession } from "../../auth/session.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../base.js";
 import { repo } from "../errors.js";
 
+import { adminInvitesRouter } from "./adminInvites.js";
 import { usageProcedures } from "./keys.js";
 import { checkInviteProcedure, meOf } from "./membership.js";
 import { adminModelsRouter } from "./models.js";
@@ -79,9 +80,11 @@ export const usageRouter = router({
 export const adminRouter = router({
   /** The Site Admin settings: default model and default effort (`03` K15). */
   models: adminModelsRouter,
-  /** Account invites made by a site admin, who is exempt from the open-links
-   * limit (04 I2); they are the admin's own links and appear on their
-   * Invites page. */
+  /** The Site Admin Invites section: a member's invites by handle, and
+   * giving them more (04 I2). */
+  invites: adminInvitesRouter,
+  /** Account invites made by a site admin, who has no invite limit (04 I2);
+   * they are the admin's own links and appear on their Invites page. */
   createInvites: adminProcedure
     .input(z.object({ count: z.number().int().min(1).max(100) }))
     .mutation(({ ctx, input }) => {

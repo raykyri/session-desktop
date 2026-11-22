@@ -150,21 +150,55 @@ test("code_enc is null after use and after revoke; revoked and used codes are un
   t.true(links.every((link) => link.codeEnc === null));
 });
 
-test("a member holds at most 3 open links; use and revoke free a slot; admins are exempt", (t) => {
+test("I2: a member has 3 invites in all; a used link spends one, an open one holds one, a revoked one gives it back", (t) => {
   const { db, userId } = createFixture(t);
+  const refused = { ok: false, reason: "limit" };
+  t.deepEqual(accountInvites.allowance(db, userId), {
+    total: 3,
+    used: 0,
+    open: 0,
+    left: 3,
+    extra: 0,
+  });
   const links = [invite(db, userId), invite(db, userId), invite(db, userId)];
+  t.like(accountInvites.allowance(db, userId), { used: 0, open: 3, left: 0 });
+  t.deepEqual(accountInvites.create(db, { createdBy: userId, encrypt }), refused);
+  // Revoking an unused link gives its invite back.
+  t.true(accountInvites.revoke(db, userId, links[0]?.id ?? ""));
+  t.like(accountInvites.allowance(db, userId), { used: 0, open: 2, left: 1 });
+  const fourth = invite(db, userId);
+  // A used link stays spent: no invite comes back when it is used.
+  t.true(redeem(db, links[1]?.code ?? "", "slot.user").ok);
+  t.like(accountInvites.allowance(db, userId), { total: 3, used: 1, open: 2, left: 0 });
+  t.deepEqual(accountInvites.create(db, { createdBy: userId, encrypt }), refused);
+  // A used link cannot be revoked, so its invite never comes back.
+  t.false(accountInvites.revoke(db, userId, links[1]?.id ?? ""));
+  t.true(accountInvites.revoke(db, userId, fourth.id));
+  t.like(accountInvites.allowance(db, userId), { used: 1, open: 1, left: 1 });
+  t.true(accountInvites.create(db, { createdBy: userId, encrypt }).ok);
+  t.like(accountInvites.allowance(db, userId), { used: 1, open: 2, left: 0 });
+  // The setting is the total each member starts with.
+  t.like(accountInvites.allowance(db, userId, 5), { total: 5, left: 2 });
+  t.true(accountInvites.create(db, { createdBy: userId, perMember: 5, encrypt }).ok);
+  // Site admins are not counted.
+  for (let index = 0; index < 5; index += 1) {
+    t.true(accountInvites.create(db, { createdBy: userId, exempt: true, encrypt }).ok);
+  }
+});
+
+test("I2: extra invites a site admin gives raise the total; nothing else changes it", (t) => {
+  const { db, userId } = createFixture(t);
+  const other = addActiveUser(db, "other.one");
+  for (let index = 0; index < 3; index += 1) invite(db, userId);
+  t.like(accountInvites.allowance(db, userId), { total: 3, left: 0 });
+  t.like(accountInvites.grant(db, userId, 2), { total: 5, used: 0, open: 3, left: 2, extra: 2 });
+  t.like(accountInvites.grant(db, userId, 1), { total: 6, left: 3, extra: 3 });
+  t.like(accountInvites.allowance(db, other.id), { total: 3, extra: 0 });
+  for (let index = 0; index < 3; index += 1) invite(db, userId);
   t.deepEqual(accountInvites.create(db, { createdBy: userId, encrypt }), {
     ok: false,
     reason: "limit",
   });
-  t.true(accountInvites.revoke(db, userId, links[0]?.id ?? ""));
-  t.true(accountInvites.create(db, { createdBy: userId, encrypt }).ok);
-  t.true(redeem(db, links[1]?.code ?? "", "slot.user").ok);
-  t.true(accountInvites.create(db, { createdBy: userId, encrypt }).ok);
-  t.is(accountInvites.openCount(db, userId), 3);
-  for (let index = 0; index < 5; index += 1) {
-    t.true(accountInvites.create(db, { createdBy: userId, exempt: true, encrypt }).ok);
-  }
 });
 
 /** Runs `parties` workers against the database at `path`, released at once. */
@@ -241,7 +275,7 @@ test("two concurrent redemptions of one code: one succeeds and one conflicts", a
   t.is(rows[0]?.by, userId);
 });
 
-test("two concurrent creates at 2 open links leave 3, not 4", async (t) => {
+test("two concurrent creates with one invite left make one link, not two", async (t) => {
   const { db, directory, userId } = createFixture(t);
   invite(db, userId);
   invite(db, userId);
@@ -393,17 +427,58 @@ test("the tree lists active accounts with their inviters and site admins as staf
   );
 });
 
+/** How `execFile` rejects when the command exits non-zero. */
+type Failure = Error & { code?: number; stderr?: string };
+
 /** `npm run db:admin -- …` against a database in `directory`. */
-async function dbAdmin(directory: string, args: string[]) {
+async function dbAdmin(directory: string, args: string[], env: Record<string, string> = {}) {
+  // the setting only from `env`, never from the shell that runs the tests
+  const inherited = { ...process.env };
+  delete inherited["SESSION_INVITES_PER_MEMBER"];
   return run(process.execPath, ["--import=tsx", "bin/admin.ts", ...args], {
     cwd: join(import.meta.dirname, ".."),
     env: {
-      ...process.env,
+      ...inherited,
       SESSION_DATA_DIR: directory,
       SESSION_PUBLIC_ORIGIN: "https://session.dev",
+      ...env,
     },
   });
 }
+
+test("I2: db:admin --grant-invites gives a member more invites; a bad count or handle exits 1", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-grant-"));
+  t.teardown(() => rmSync(directory, { recursive: true, force: true }));
+  const db = openDatabase(join(directory, "session.db"));
+  t.teardown(() => closeDatabase(db));
+  const member = addActiveUser(db, "mira_k");
+  invite(db, member.id);
+
+  const granted = await dbAdmin(directory, ["--grant-invites", "@mira_k", "2"]);
+  t.is(granted.stdout, "Gave @mira_k 2 more invites. @mira_k: 4 of 5 invites left (0 used)\n");
+  t.like(accountInvites.allowance(db, member.id), { total: 5, extra: 2, left: 4 });
+  // The total it prints follows SESSION_INVITES_PER_MEMBER, as the server's does.
+  const again = await dbAdmin(directory, ["--grant-invites", "mira_k", "1"], {
+    SESSION_INVITES_PER_MEMBER: "10",
+  });
+  t.is(again.stdout, "Gave @mira_k 1 more invite. @mira_k: 12 of 13 invites left (0 used)\n");
+
+  for (const count of ["0", "101", "1.5", "two"]) {
+    const failed = await t.throwsAsync<Failure>(
+      dbAdmin(directory, ["--grant-invites", "mira_k", count]),
+    );
+    t.is(failed?.code, 1, count);
+    t.regex(failed?.stderr ?? "", /whole number from 1 to 100/, count);
+  }
+  const missing = await t.throwsAsync<Failure>(dbAdmin(directory, ["--grant-invites", "mira_k"]));
+  t.regex(missing?.stderr ?? "", /whole number from 1 to 100/);
+  const unknown = await t.throwsAsync<Failure>(
+    dbAdmin(directory, ["--grant-invites", "nobody.here", "2"]),
+  );
+  t.is(unknown?.code, 1);
+  t.regex(unknown?.stderr ?? "", /No active account has the handle @nobody\.here\./);
+  t.is(accountInvites.allowance(db, member.id).extra, 3);
+});
 
 test("db:admin prints a root invite and promotes by handle", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "session-admin-"));
@@ -431,7 +506,7 @@ test("db:admin prints a root invite and promotes by handle", async (t) => {
   const promoted = await dbAdmin(directory, ["first.admin"]);
   t.regex(promoted.stdout, /@first\.admin is now a site admin/);
   t.is(users.findByHandle(db, "first.admin")?.isAdmin, true);
-  // An admin is exempt from the open-links limit.
+  // An admin is not counted against an invite total.
   const admin = users.findByHandle(db, "first.admin");
   t.is(admin?.isAdmin, true);
 

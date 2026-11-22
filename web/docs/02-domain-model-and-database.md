@@ -130,7 +130,9 @@ threads is preserved upon account deletion.
 
 - `user_id` PK FK, `weekly_tokens` integer null (the member's weekly
   allowance of included tokens; null = the deployment's
-  `SESSION_WEEKLY_TOKENS`, 2,000,000; plan `03` K3), `updated_at`. There
+  `SESSION_WEEKLY_TOKENS`, 2,000,000; plan `03` K3), `extra_invites`
+  integer not null default 0 (account invites site admins gave the member
+  on top of `SESSION_INVITES_PER_MEMBER`; plan `04` I2), `updated_at`. There
   are no daily token or run columns.
 
 `sessions`

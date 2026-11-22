@@ -137,7 +137,9 @@ const envSchema = z.object({
   SESSION_LIMIT_AUTH_PER_MINUTE: positiveInteger(20, 1),
   SESSION_LIMIT_FAILED_CHECKS_PER_HOUR: positiveInteger(10, 1),
   SESSION_LIMIT_WAITING_PER_IP_PER_DAY: positiveInteger(5, 1),
-  SESSION_LIMIT_OPEN_INVITES: positiveInteger(3, 1),
+  // Account invites each member gets in all, before any a site admin gives
+  // (`04` I2).
+  SESSION_INVITES_PER_MEMBER: positiveInteger(3, 1),
   SESSION_LIMIT_INVITES_PER_DAY: positiveInteger(10, 1),
   SESSION_LIMIT_INVITE_READS_PER_MINUTE: positiveInteger(60, 1),
   SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE: positiveInteger(30, 1),
@@ -255,7 +257,9 @@ export interface AbuseLimits {
   authPerMinute: number;
   failedChecksPerHour: number;
   waitingPerIpPerDay: number;
-  openInvites: number;
+  /** Account invites each member gets in all (`SESSION_INVITES_PER_MEMBER`,
+   * `04` I2); site admins give more per member (`user_limits.extra_invites`). */
+  invitesPerMember: number;
   invitesPerDay: number;
   inviteReadsPerMinute: number;
   handleChecksPerMinute: number;
@@ -267,7 +271,7 @@ export interface AbuseLimits {
   joinsPerHour: number;
   /** `spaces.directory` and `spaces.byName` per user, or per IP signed out. */
   directoryPerMinute: number;
-  /** `admin.models.*` per site admin. */
+  /** `admin.models.*` and `admin.invites.*` per site admin. */
   adminPerMinute: number;
   /** `POST /api/sync/register` per user (`01` A3). */
   registerPerMinute: number;
@@ -571,7 +575,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       authPerMinute: value.SESSION_LIMIT_AUTH_PER_MINUTE,
       failedChecksPerHour: value.SESSION_LIMIT_FAILED_CHECKS_PER_HOUR,
       waitingPerIpPerDay: value.SESSION_LIMIT_WAITING_PER_IP_PER_DAY,
-      openInvites: value.SESSION_LIMIT_OPEN_INVITES,
+      invitesPerMember: value.SESSION_INVITES_PER_MEMBER,
       invitesPerDay: value.SESSION_LIMIT_INVITES_PER_DAY,
       inviteReadsPerMinute: value.SESSION_LIMIT_INVITE_READS_PER_MINUTE,
       handleChecksPerMinute: value.SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE,

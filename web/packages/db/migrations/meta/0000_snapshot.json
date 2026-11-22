@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3bc1e2d8-4eb1-4afd-a99b-00cd8a566a80",
+  "id": "60eeeb24-de25-433d-9d7f-222b8fe73d7f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "api_keys": {
@@ -1443,6 +1443,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "extra_invites": {
+          "name": "extra_invites",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "updated_at": {
           "name": "updated_at",

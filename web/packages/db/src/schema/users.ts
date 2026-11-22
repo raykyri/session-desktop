@@ -108,11 +108,14 @@ export const signupAttempts = sqliteTable(
 /** Per-member overrides of the deployment's limits. `weekly_tokens`: the
  * member's weekly allowance of included tokens in place of
  * `SESSION_WEEKLY_TOKENS` (plan `03` K3: a larger allowance is a row here,
- * not a role exemption); null means the deployment's. */
+ * not a role exemption); null means the deployment's. `extra_invites`:
+ * account invites site admins gave the member on top of
+ * `SESSION_INVITES_PER_MEMBER` (plan `04` I2); it only grows. */
 export const userLimits = sqliteTable("user_limits", {
   userId: text("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
   weeklyTokens: integer("weekly_tokens"),
+  extraInvites: integer("extra_invites").notNull().default(0),
   updatedAt: integer("updated_at").notNull(),
 });

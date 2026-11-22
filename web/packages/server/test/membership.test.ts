@@ -18,10 +18,14 @@ async function pendingWith(harness: Harness, code: string, login: string) {
   return waiting;
 }
 
-test("3 open links, a 4th refused; revoke and use each free a slot", async (t) => {
+const AT_LIMIT = "You have used your 3 invites. An admin can give you more.";
+
+test("I2: 3 invites in all; a used link spends one, an open one holds one, a revoked one gives it back", async (t) => {
   const harness = createHarness(t);
   const member = harness.addUser("ines.v");
   const caller = harness.caller(member);
+  const allowance = async () => (await caller.accountInvites.list()).allowance;
+  t.deepEqual(await allowance(), { total: 3, used: 0, left: 3 });
   const links = [
     await caller.accountInvites.create(),
     await caller.accountInvites.create(),
@@ -29,26 +33,30 @@ test("3 open links, a 4th refused; revoke and use each free a slot", async (t) =
   ];
   t.regex(links[0]?.code ?? "", /^SESS-[A-Z2-9]{4}-[A-Z2-9]{2}$/);
   t.is(links[0]?.link, `${PUBLIC_ORIGIN}/i#${links[0]?.code ?? ""}`);
+  // Three open links hold all three invites.
+  t.deepEqual(await allowance(), { total: 3, used: 0, left: 0 });
   await t.throwsAsync(caller.accountInvites.create(), {
-    message: "You have 3 open invites. One frees when it is used or revoked.",
-  });
+    code: "PRECONDITION_FAILED",
+    message: AT_LIMIT,
+  } as never);
+  // Revoking an unused link gives its invite back.
   await caller.accountInvites.revoke({ id: links[0]?.id ?? "" });
+  t.deepEqual(await allowance(), { total: 3, used: 0, left: 1 });
   await t.notThrowsAsync(caller.accountInvites.create());
-  await t.throwsAsync(caller.accountInvites.create());
+  await t.throwsAsync(caller.accountInvites.create(), { message: AT_LIMIT });
+  // A used link spends its invite: using it gives nothing back.
   const joiner = await pendingWith(harness, links[1]?.code ?? "", "joiner");
   await harness.caller(joiner).account.create({ name: "Joiner", handle: "joiner" });
-  await t.notThrowsAsync(caller.accountInvites.create());
+  t.deepEqual(await allowance(), { total: 3, used: 1, left: 0 });
+  await t.throwsAsync(caller.accountInvites.create(), { message: AT_LIMIT });
+  await t.throwsAsync(caller.accountInvites.revoke({ id: links[1]?.id ?? "" }), {
+    code: "NOT_FOUND",
+  } as never);
 
   const view = await caller.accountInvites.list();
-  t.is(view.openCount, 3);
-  t.is(view.openLimit, 3);
-  t.deepEqual(view.links.map((link) => link.state).sort(), [
-    "open",
-    "open",
-    "open",
-    "revoked",
-    "used",
-  ]);
+  t.is(view.openCount, 2);
+  t.is(view.perMember, 3);
+  t.deepEqual(view.links.map((link) => link.state).sort(), ["open", "open", "revoked", "used"]);
   // Open links carry their code for the creator; used and revoked ones none.
   for (const link of view.links) {
     t.is(link.code === null, link.state !== "open", link.state);
@@ -63,7 +71,41 @@ test("3 open links, a 4th refused; revoke and use each free a slot", async (t) =
   );
 });
 
-test("two concurrent creates at 2 open links leave 3", async (t) => {
+test("I2: the refusal at 0 left names the member's total, extra invites included", async (t) => {
+  const harness = createHarness(t);
+  const member = harness.addUser("mira_k");
+  const caller = harness.caller(member);
+  accountInvites.grant(harness.db, member.id, 2);
+  for (let index = 0; index < 5; index += 1) await caller.accountInvites.create();
+  await t.throwsAsync(caller.accountInvites.create(), {
+    code: "PRECONDITION_FAILED",
+    message: "You have used your 5 invites. An admin can give you more.",
+  } as never);
+  t.deepEqual((await caller.accountInvites.list()).allowance, { total: 5, used: 0, left: 0 });
+  // Each create refused at the limit made nothing.
+  t.is(accountInvites.listForCreator(harness.db, member.id).length, 5);
+});
+
+test("I2: SESSION_INVITES_PER_MEMBER is each member's total; it is validated at boot", async (t) => {
+  const harness = createHarness(t, { env: { SESSION_INVITES_PER_MEMBER: "1" } });
+  t.is(harness.config.abuse.invitesPerMember, 1);
+  const caller = harness.caller(harness.addUser("solo"));
+  await caller.accountInvites.create();
+  await t.throwsAsync(caller.accountInvites.create(), {
+    message: "You have used your 1 invite. An admin can give you more.",
+  });
+  const view = await caller.accountInvites.list();
+  t.deepEqual(view.allowance, { total: 1, used: 0, left: 0 });
+  t.is(view.perMember, 1);
+  t.is(createHarness(t).config.abuse.invitesPerMember, 3);
+  for (const value of ["0", "-1", "2.5", "three"]) {
+    t.throws(() => createHarness(t, { env: { SESSION_INVITES_PER_MEMBER: value } }), {
+      message: /SESSION_INVITES_PER_MEMBER/,
+    });
+  }
+});
+
+test("two concurrent creates with one invite left make one link", async (t) => {
   const harness = createHarness(t);
   const caller = harness.caller(harness.addUser("racer"));
   await caller.accountInvites.create();
@@ -76,13 +118,16 @@ test("two concurrent creates at 2 open links leave 3", async (t) => {
   t.is((await caller.accountInvites.list()).openCount, 3);
 });
 
-test("site admins are exempt from the open-links limit", async (t) => {
+test("I2: site admins have no invite limit", async (t) => {
   const harness = createHarness(t);
-  const caller = harness.caller(harness.addUser("chief", { isAdmin: true }));
+  const chief = harness.addUser("chief", { isAdmin: true });
+  const caller = harness.caller(chief);
   for (let index = 0; index < 6; index += 1) await caller.accountInvites.create();
   const view = await caller.accountInvites.list();
   t.is(view.openCount, 6);
-  t.is(view.openLimit, null);
+  t.is(view.allowance, null);
+  // Each link still counts, should the account stop being a site admin.
+  t.like(accountInvites.allowance(harness.db, chief.id), { open: 6, left: 0 });
 });
 
 test("another account's list never contains the caller's codes", async (t) => {

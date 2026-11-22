@@ -93,7 +93,7 @@ export function abuseBuckets(limits: AbuseLimits) {
     joins: { limit: limits.joinsPerHour, windowMs: HOUR },
     /** `spaces.directory` and `spaces.byName`, per user or per IP. */
     directory: { limit: limits.directoryPerMinute, windowMs: MINUTE },
-    /** `admin.models.*`, per site admin. */
+    /** `admin.models.*` and `admin.invites.*`, per site admin. */
     adminModels: { limit: limits.adminPerMinute, windowMs: MINUTE },
   } as const satisfies Record<string, BucketSpec>;
 }
