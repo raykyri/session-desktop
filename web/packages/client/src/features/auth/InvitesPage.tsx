@@ -216,8 +216,8 @@ export function InvitesPage() {
           <section aria-labelledby="tree-h">
             <h3 id="tree-h">Invite tree</h3>
             <p className="tcopy">
-              Session is invite-only. You can have 3 open invite links at a time. Each link works
-              for one person. A slot frees when a link is used or revoked.
+              Session is invite-only. Each user starts with 3 invites which they can use to add
+              other members.
             </p>
             <InviteTree meId={me?.id ?? null} />
           </section>

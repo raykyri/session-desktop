@@ -783,8 +783,9 @@ restored text, the removed-member toast and the frozen-channel banner.
 
 **W7.1 Invites page** (`membersPage`, 04 §3.2-3.3). Two columns (one at
 860 px and below). "Invite tree" (`treeSection`, `treeA`): the line "Session
-is invite-only. You can have 3 open invite links at a time. Each link works
-for one person. A slot frees when a link is used or revoked.", then rows from
+is invite-only. Each user starts with 3 invites which they can use to add
+other members." (copy only: the rule stays three open links at a time, a
+slot freeing when a link is used or revoked), then rows from
 `members.tree` (online-only, TanStack Query) depth-first from the roots with
 children by join date, 18 px per level, 20 px avatar, handle, " · Admin" for
 site admins, and name, the viewer highlighted, drawn with `TreeRail`. The

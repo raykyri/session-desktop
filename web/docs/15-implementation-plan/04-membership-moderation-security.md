@@ -165,9 +165,8 @@ new link" when one is open), and "You invited" with "Joined <date>" per
 person. At 3 open links the button becomes "You have 3 open invites. One
 frees when it is used or revoked."; a waiting account sees "You can invite
 once your account is active." The tree section is headed "Invite tree"
-with the mockup's line "Session is invite-only. You can have 3 open invite
-links at a time. Each link works for one person. A slot frees when a link
-is used or revoked." Links are shown in the fragment form above, not the
+with the line "Session is invite-only. Each user starts with 3 invites
+which they can use to add other members." (the rule above is unchanged) Links are shown in the fragment form above, not the
 mockup's `session.app/i/<code>`.
 
 Acceptance: server tests for 3 open and a 4th refused, revoke and use each
