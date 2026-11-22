@@ -61,9 +61,13 @@ test.serial("a route that throws is contained by the error boundary", async (t) 
     () =>
       screen
         .queryAllByRole("alert")
-        .some((node) => node.textContent?.includes("Unable to load this page")),
+        .some((node) => node.textContent?.includes("Couldn't load this page")),
     "the error panel is shown",
   );
-  t.truthy(screen.queryByRole("button", { name: "Reload the page" }), "and it offers a way out");
+  t.truthy(screen.queryByRole("button", { name: "Reload" }), "and it offers a way out");
+  t.false(
+    screen.getByRole("alert").textContent?.includes("redirect") ?? true,
+    "the exception's own message is not shown",
+  );
   app.unmount();
 });

@@ -191,7 +191,7 @@ export function SelectionActions({
       className="selwrap"
       data-selection-actions=""
       role="group"
-      aria-label="Selection"
+      aria-label="Selected text"
     >
       {shown.look !== null ? (
         <button

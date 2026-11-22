@@ -132,7 +132,7 @@ test("nothing is added to a gone thread: replies, nodes, comments and saves (M1b
   t.like(w.get(`thread:${a}`), { gone: true });
   const gone = (u: string, name: string, input: unknown) =>
     t.like(refused(t, w.apply(u, name, input), "PRECONDITION_FAILED"), {
-      message: "This thread was deleted.",
+      message: "This thread is no longer available.",
     });
   gone("otto", "research.createPostFollowUp", { id: w.id(), thread: p, t: "late" });
   gone("otto", "saved.set", { kind: "thread", id: p, on: true });

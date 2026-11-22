@@ -23,7 +23,7 @@ import { InlineComposer, focusSoon, selectedRowOr } from "../composer/InlineComp
 import { AnswerProse } from "../feed/AnswerProse.js";
 import { useFeedViewer, useRunChoice } from "../feed/FeedContext.js";
 import { ConfirmDelete } from "../feed/FeedDialog.js";
-import { ModerationNote } from "../feed/Moderated.js";
+import { DELETED_BY_AUTHOR, ModerationNote } from "../feed/Moderated.js";
 import { MoreMenu, type MoreAction } from "../feed/MoreMenu.js";
 import { authorName, clip, noun, relTime } from "../feed/format.js";
 import { BranchIcon, BubbleIcon, ContinueIcon, SearchIcon } from "../feed/icons.js";
@@ -156,7 +156,7 @@ export function BranchCard({
       ) : node.quote ? (
         <blockquote className="bq">{clip(node.quote, 180)}</blockquote>
       ) : null}
-      {node.del ? <p className="modln">[deleted]</p> : <ModerationNote mod={node.mod} />}
+      {node.del ? <p className="modln">{DELETED_BY_AUTHOR}</p> : <ModerationNote mod={node.mod} />}
       {pending || (isStoppedRun(run) && !answer) ? (
         <RunProgress
           thread={thread}
@@ -353,7 +353,7 @@ function BranchComments({
               ) : null}
             </div>
             {c.del ? (
-              <p className="modln">[deleted]</p>
+              <p className="modln">{DELETED_BY_AUTHOR}</p>
             ) : (
               <>
                 <ModerationNote mod={c.mod} />

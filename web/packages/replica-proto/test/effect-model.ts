@@ -338,8 +338,9 @@ export function predictEffects(
       const id = str("id");
       const from = input["from"] as { th: string; node: string } | undefined;
       if (from) {
-        // a node opened as its own thread (`03` G5): its question, author,
-        // model and effort, a copy of its answer; no run
+        // a node opened as its own thread (`03` G5): its question (a
+        // look-up's phrase, `Look up "<phrase>"`), author, model and effort,
+        // a copy of its answer; no run
         const n = get(`node:${from.node}`) as Extract<StoredRecord, { kind: "node" }>;
         const a = get(`answer:${n.id}`) as Extract<StoredRecord, { kind: "answer" }>;
         keys.set(`thread:${id}`, {
@@ -347,7 +348,7 @@ export function predictEffects(
           s: n.s,
           u: n.u,
           k: "ask",
-          q: n.q,
+          q: n.k === "lookup" && n.look !== null ? `Look up "${n.look}"` : n.q,
           t: null,
           sum: null,
           tok: a.tok,

@@ -80,7 +80,7 @@ export interface UnsentWrite {
 
 /** The text of a summary row whose records could not be fetched (02 §9.1,
  * 01 R3). */
-export const UNAVAILABLE_TEXT = "Available when online.";
+export const UNAVAILABLE_TEXT = "Couldn't load the rest of this thread.";
 
 /** What a read answers when the replica has not loaded it. */
 export const UNKNOWN: unique symbol = Symbol("unknown");
@@ -125,7 +125,7 @@ export interface ReplicaSource {
    * of a thread address outside the window (`space` names its channel). */
   open?(thread: string, space?: string): void;
   /** Whether `open` could not fetch a thread's records (offline, a refused
-   * read): its row shows "Available when online." while it is retried. */
+   * read): its row shows "Couldn't load the rest of this thread." while it is retried. */
   unavailable?(thread: string): boolean;
   /** Read a channel's records while its view is open (01 R5); the returned
    * function ends the view. */

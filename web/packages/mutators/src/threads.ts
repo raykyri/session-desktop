@@ -31,12 +31,14 @@ import {
   removed,
   stale,
   text,
+  threadDeleted,
   turnsOf,
   ulidFields,
   ulidS,
   userLogRecords,
 } from "./rules.js";
 import { define, type Tx } from "./tx.js";
+import { lookUpTitle } from "./validate.js";
 
 /** Write a new thread, its counts and its space's activity. */
 function newThread(
@@ -121,7 +123,7 @@ export const THREADS = {
     run: (tx, i) => {
       const p = readableThread(tx, i.id);
       if (p.mod === "removed") throw removed();
-      if (p.del || p.gone) throw refuse("PRECONDITION_FAILED", "This thread was deleted.");
+      if (p.del || p.gone) throw threadDeleted();
       if (p.rev !== i.base.rev) throw stale();
       const q = text(i.q, "q");
       const changed = q !== p.q;
@@ -207,7 +209,9 @@ function promote(tx: Tx, id: string, th: string, nodeId: string) {
     id,
     u: n.u,
     k: "ask",
-    q: n.q,
+    // a look-up's prompt is an instruction to the model; the thread is
+    // titled with its phrase
+    q: n.k === "lookup" && n.look !== null ? lookUpTitle(n.look) : n.q,
     tok: a.tok,
     src: a.pages.length,
     model: n.model,

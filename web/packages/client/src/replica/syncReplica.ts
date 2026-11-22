@@ -18,7 +18,7 @@
 // A summary thread's own records are fetched when its row renders (`open`,
 // 01 R3): the rows that render within 400 ms are fetched with one `threads`
 // read per log (`openMany`), which the transport sends in requests of their
-// own (`http.ts`). A fetch that fails is shown as "Available when online."
+// own (`http.ts`). A fetch that fails is shown as "Couldn't load the rest of this thread."
 // and tried again after a backoff and when the stream reconnects. The
 // transport sends the other reads of one turn as one request, so a reader of
 // a few hundred channels stays under the server's snapshot limit.
@@ -355,7 +355,10 @@ export class SyncReplica implements ReplicaSource {
       this.sessionChanged();
       return {
         ok: false,
-        error: { code: "UNAUTHORIZED", message: "This tab is now signed in as another person." },
+        error: {
+          code: "UNAUTHORIZED",
+          message: "This tab is now signed in to another account. Reload to continue.",
+        },
       };
     }
     return r;
@@ -758,7 +761,10 @@ export class SyncReplica implements ReplicaSource {
         if (draft) this.options.restoreDraft?.(draft);
         this.settle(local, {
           ok: false,
-          error: { code: "EXPIRED", message: "This change waited too long to be sent." },
+          error: {
+            code: "EXPIRED",
+            message: "This change waited too long to be sent and wasn't saved.",
+          },
         });
         break;
       }
@@ -1129,7 +1135,13 @@ export class SyncReplica implements ReplicaSource {
     if (!this.writer)
       return { ok: false, error: { code: "UNAUTHORIZED", message: "Sign in to do this." } };
     if (!client)
-      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "Not connected yet." } };
+      return {
+        ok: false,
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "Couldn't reach Session. Check your connection and try again.",
+        },
+      };
     const def = Object.hasOwn(MUTATORS, name) ? MUTATORS[name] : undefined;
     if (!def) return { ok: false, error: { code: "BAD_REQUEST", message: `No mutator ${name}.` } };
     if (def.online) return outcomeOf(await client.send(name, input));
@@ -1188,7 +1200,7 @@ export class SyncReplica implements ReplicaSource {
   }
 
   /** Whether a thread's records could not be fetched (offline, a refused
-   * read): its row says "Available when online." until a retry fetches
+   * read): its row says "Couldn't load the rest of this thread." until a retry fetches
    * them. */
   unavailable(thread: string): boolean {
     return this.opens.get(thread) === "unavailable";

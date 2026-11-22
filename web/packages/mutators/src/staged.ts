@@ -60,7 +60,7 @@ function sameRecord(a: StoredRecord, b: Draft | StoredRecord): boolean {
 
 /** The answer to a write of a new record whose id or key exists: one message,
  * whether or not the caller may read the record that holds it. */
-export const ID_TAKEN = "An item with this id exists.";
+export const ID_TAKEN = "Something went wrong. Try again.";
 
 export class StagedTx implements Tx {
   /** key → the record after the mutation, or null: deleted. */

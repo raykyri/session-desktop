@@ -60,6 +60,7 @@ import {
   audience,
   authorize,
   createdOf,
+  inputMessage,
   isHandle,
   isUlid,
   logsOf,
@@ -606,7 +607,7 @@ export class SyncServer implements ServerHalf {
       return final(
         refuse(
           "BAD_REQUEST",
-          undefined,
+          inputMessage(parsed.error.issues),
           parsed.error.issues.map(
             (x) => `input${x.path.map((p) => `.${String(p)}`).join("")}: ${x.code}`,
           ),

@@ -13,7 +13,7 @@ import { ControlButton } from "./Button.js";
 export interface QueryStateProps {
   /** The request is in flight and nothing has arrived yet. */
   loading?: boolean;
-  /** Shown with a spinner while loading; defaults to "Loading…". */
+  /** Shown with a spinner while loading; defaults to "Loading". */
   loadingLabel?: string;
   /** The terminal failure to report; a Retry sits beside it when `onRetry` is given. */
   error?: ReactNode;
@@ -25,7 +25,7 @@ export interface QueryStateProps {
 
 export function QueryState({
   loading = false,
-  loadingLabel = "Loading…",
+  loadingLabel = "Loading",
   error,
   onRetry,
   empty,

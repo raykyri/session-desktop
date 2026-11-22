@@ -22,8 +22,8 @@ export function memberActionText(
   if (action === "remove")
     return `@${user} stops being a member of #${channel.name} and can no longer read it. A new invite link lets them join again.`;
   return channel.private
-    ? `@${user} stops being a member of #${channel.name} and can no longer read it, write in it or join it with a link. You can unban them in the member list.`
-    : `@${user} stops being a member of #${channel.name} and can no longer write in it or join it. An open channel stays readable by anyone. You can unban them in the member list.`;
+    ? `@${user} is removed from #${channel.name} and can't read it, write in it or join it again with a link. You can unban them in the member list.`
+    : `@${user} can no longer write in #${channel.name} or join it. Anyone can still read an open channel. You can unban them in the member list.`;
 }
 
 export function ConfirmMemberAction({

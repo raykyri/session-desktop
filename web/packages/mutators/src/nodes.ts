@@ -252,10 +252,10 @@ export const NODES = {
       if (n.mod === "removed") throw removed();
       if (n.del) throw deleted();
       const run = runOf(tx, n);
-      if (!run) throw refuse("PRECONDITION_FAILED", "This ask has no run.");
+      if (!run) throw refuse("PRECONDITION_FAILED", "This ask can't run again.");
       if (run.attempt !== i.base.attempt) throw stale();
       if (run.status !== "failed" && run.status !== "cancelled" && run.status !== "interrupted")
-        throw refuse("PRECONDITION_FAILED", "Only a run that stopped can run again.");
+        throw refuse("PRECONDITION_FAILED", "This ask is running or already has an answer.");
       const pay = payOf(values, i.model);
       tx.put({
         ...run,

@@ -34,7 +34,7 @@ import type { z } from "zod";
 
 import type { Reader } from "./access.js";
 import { bannedFrom, isClosed, isOwnerOf, roleIn, spaceRec, view } from "./access.js";
-import { Refusal, refuse, type ApiError } from "./errors.js";
+import { Refusal, inputMessage, refuse, type ApiError } from "./errors.js";
 import type {
   Draft,
   Index,
@@ -248,7 +248,11 @@ export type Prediction =
 export function predict(tx: Tx, def: AnyMutator, input: unknown): Prediction {
   if (tx.server) throw new Error("predict runs on a client transaction");
   const parsed = def.input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: refuse("BAD_REQUEST").toError() };
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: refuse("BAD_REQUEST", inputMessage(parsed.error.issues)).toError(),
+    };
   try {
     authorize(tx, def, parsed.data);
     return { ok: true, result: def.run(tx, parsed.data, {}) };

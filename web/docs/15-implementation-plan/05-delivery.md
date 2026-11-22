@@ -420,7 +420,7 @@ Exit criteria:
   overdraft test (two concurrent fixture runs of one member together never
   exceed allowance plus `SESSION_OVERDRAFT_TOKENS` by more than one
   checkpoint interval of output, and both end `complete` with "Stopped:
-  this week's included tokens ran out."), the K1 ledger test for the
+  out of tokens."), the K1 ledger test for the
   overdraft stop (a closed row matching what the fixture streamed), the K4
   key-check tests (a rejected key and an unreachable provider refused and
   not saved), and the K15 server tests (non-admin refused, key-only default
@@ -926,8 +926,9 @@ for reference from this file.
   account is deleted (`04` B6). `04` §15 q6.
 - **P4. Admission to private channels.** Decided: channel invite links
   only, no join requests (`01` C9, C10; `04` B4). `01` §9 q6.
-- **P5. The removal placeholder.** Decided: the author shows as "[deleted]"
-  (`04` §6.2), and the placeholder stays until the author deletes it. The
+- **P5. The removal placeholder.** Decided: the author is withheld; the
+  placeholder reads "Removed by the channel owner" and "Ask in #name" (`04`
+  §6.2), and the placeholder stays until the author deletes it. The
   reason is owner-written text and is shown (`01` C12). `02` §14 q4, `04`
   §15 q1, q2.
 - **P6. Report and remove follow-ups and replies individually at launch.**

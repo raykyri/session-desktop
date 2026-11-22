@@ -196,7 +196,7 @@ test("R2, R3: pulls drop the content of summary threads; opening one fetches it 
   await mona.sync(`space:${open}`);
   t.like(mona.get(`counts:${older}`), { r: 1 });
   t.false([...mona.records(`space:${open}`).values()].some((r) => r.kind === "reply"));
-  // offline: the summary stays, "Available when online"
+  // offline: the summary stays, "Couldn't load the rest of this thread."
   const { transport } = flaky(w, "mona");
   const off = new SyncClient(
     { ...transport, snapshot: () => Promise.reject(new Error("offline")) },

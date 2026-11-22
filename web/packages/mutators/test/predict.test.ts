@@ -12,6 +12,7 @@ import test, { type ExecutionContext } from "ava";
 import {
   MUTATORS,
   StagedTx,
+  TEXT_MAX,
   UnknownRead,
   inIndex,
   msToIso,
@@ -172,6 +173,22 @@ test("saves, removals and deletes over other people's records predict the server
     q: "More?",
     ...MODEL,
   });
+  report(t, out);
+});
+
+test("a text over its bound is refused with the bound, in the prediction and by the server", (t) => {
+  const { w, open } = cast(t);
+  const out: string[] = [];
+  const q = "x".repeat(TEXT_MAX.text + 1);
+  const input = { id: w.id(), space: open, kind: "ask", q, ...MODEL };
+  const tx = new StagedTx(replicaOf(w, "mel"), "mel", msToIso(w.ms), w.id(), "client");
+  const def = MUTATORS["threads.create"];
+  if (!def) throw new Error("threads.create");
+  const p = predict(tx, def, input);
+  const message = "This text is too long. Keep it to 8,000 characters or fewer.";
+  t.like(p, { ok: false, error: { code: "BAD_REQUEST", message } });
+  const a = check(w, out, "mel", "threads.create", input);
+  t.like(a, { ok: false, error: { code: "BAD_REQUEST", message } });
   report(t, out);
 });
 

@@ -217,7 +217,7 @@ test.serial("the channel header per relation", async (t) => {
   cleanup();
   await renderApp("/c/northwind-eng");
   t.truthy(await screen.findByText("Members only"));
-  t.truthy(screen.getByText("This channel is private. Ask @hal_b to add you."));
+  t.truthy(screen.getByText("This channel is private. You need an invite link to join."));
 });
 
 test.serial("the About editor opens over the info dialog; a non-owner has no Edit", async (t) => {

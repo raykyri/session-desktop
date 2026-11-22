@@ -195,7 +195,7 @@ function ThreadList({
 
 /** Brings the thread of an address (`?t=&sel=`) or of a request
  * (`revealThread`) into place once its row can be: waits while the thread
- * is not loaded, and says "This thread is not available." when it is known
+ * is not loaded, and says "This thread is no longer available." when it is known
  * to be absent (02 §2.1): no record, or a thread deleted before anyone
  * replied (`gone`, which no list shows). */
 function useReveal(
@@ -303,7 +303,7 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
 
   let empty = null;
   if (locked)
-    empty = <p className="feed-empty">This channel is private. Ask @{ch.owner} to add you.</p>;
+    empty = <p className="feed-empty">This channel is private. You need an invite link to join.</p>;
   else if (ids.length === 0) {
     if (kind === "saved") empty = <SavedEmpty />;
     else if (kind === "home")
@@ -315,7 +315,13 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
           </Link>
         </p>
       );
-    else empty = <p className="feed-empty">No threads here yet. Ask the first question.</p>;
+    // a frozen channel takes no asks, so its empty state does not invite one
+    else
+      empty = (
+        <p className="feed-empty">
+          {ch?.frozen ? "No threads here yet." : "No threads here yet. Ask the first question."}
+        </p>
+      );
   }
 
   return (

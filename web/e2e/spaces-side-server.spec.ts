@@ -77,13 +77,13 @@ test("a thread address outside the window arrives through a threads read and is 
   const thread = page.locator(`#card-${w.first}`);
   await expect(thread.locator(".tt-title")).toHaveText("The first thread of the channel");
   await expect(thread).toBeInViewport();
-  await expect(page.getByText("This thread is not available.")).toHaveCount(0);
+  await expect(page.getByText("This thread is no longer available.")).toHaveCount(0);
 });
 
 test("04 B5: a link to a frozen channel shows the expired-link message", async ({ page }) => {
   await page.goto(`/c/${w.frozen.name}#${w.frozen.code}`);
   await expect(toast(page, "alert")).toHaveText(
-    "This invite link has expired or was already used.",
+    "This invite link no longer works. Ask the channel owner for a new one.",
   );
   expect(page.url()).not.toContain(w.frozen.code);
 });

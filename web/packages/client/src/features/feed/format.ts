@@ -28,6 +28,10 @@ export const noun = (n: number, one: string, many: string) => `${n} ${n === 1 ? 
  * left for other people's content carry `u: null`. */
 export const DELETED_ACCOUNT = "Deleted account";
 
+/** What stands in place of a frozen channel's owner (04 B6): the Browse
+ * byline and the info dialog's "Channel by". */
+export const CHANNEL_UNAVAILABLE = "Unavailable";
+
 /** The name an author is shown by: the handle, or "Deleted account". */
 export const authorName = (u: string | null): string => u ?? DELETED_ACCOUNT;
 

@@ -273,9 +273,9 @@ test("a removed thread shows its placeholder and no text", async ({ page }) => {
   await page.goto(`/c/${w.own.name}`);
   const removed = page.locator(".tcard.removed").first();
   await removed.scrollIntoViewIfNeeded();
-  await expect(removed).toContainText(`Removed by @${w.me?.handle ?? ""}`);
+  await expect(removed).toContainText("Removed by the channel owner");
   await expect(removed).toContainText("Reason: “Duplicate of the earlier thread.”");
-  await expect(removed).toContainText(`Post by [deleted] in #${w.own.name}`);
+  await expect(removed).toContainText(`Post in #${w.own.name}`);
   await expect(removed).not.toContainText("A duplicate of another thread");
   await expect(removed.locator(".card-f")).toHaveCount(0);
 });
@@ -309,7 +309,7 @@ test("a thread address outside the window fetches the thread and shows it in its
 
 test("a thread address the viewer cannot read shows a toast", async ({ page }) => {
   await page.goto(`/?t=01M7AAAAAAAAAAAAAAAAAAAAAA`);
-  await expect(toast(page)).toHaveText("This thread is not available.");
+  await expect(toast(page)).toHaveText("This thread is no longer available.");
 });
 
 test("the owner's Remove… dialog starts in the reason; Escape returns to More", async ({

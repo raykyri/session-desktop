@@ -13,6 +13,9 @@ export function moderationLine(mod: ModState | null): string | null {
   return null;
 }
 
+/** In place of the text of an item its author deleted. */
+export const DELETED_BY_AUTHOR = "Deleted by its author";
+
 /** The line over (or in place of) a moderated item's text. */
 export function ModerationNote({
   mod,
@@ -26,9 +29,9 @@ export function ModerationNote({
 }
 
 /** A tree row's text: the moderation line in place of a text the reader
- * does not get, "[deleted]" for an author's deleted item. */
+ * does not get, "Deleted by its author" for an author's deleted item. */
 export function rowText(item: { mod: ModState | null; del: boolean }, text: string): string {
-  if (item.del) return "[deleted]";
+  if (item.del) return DELETED_BY_AUTHOR;
   if (item.mod !== null && text === "") return moderationLine(item.mod) ?? "";
   return text;
 }

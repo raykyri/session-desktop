@@ -2,8 +2,8 @@
 // editor stacked over it (W6.3, `chEditDlg`). The info dialog: glyph,
 // `#name`, the lock, Edit (owner) and Close; the frozen-channel banner (W6.10);
 // the description, or for an owner without one "No description yet." with
-// "Add one"; the facts "Channel by" ("Deleted account" for a frozen
-// channel, whose owner's account was deleted), "Members" (a button opening
+// "Add one"; the facts "Channel by" ("Unavailable" for a frozen
+// channel, whose owner's account was deactivated), "Members" (a button opening
 // the member list, W6.8), "Visibility"; for the owner, "Moderation log" (W6.4)
 // and, in a private channel, "Invite to #name" (W6.9). The editor: "About" with a live "N / 300" counter,
 // Cancel and Save (`spaces.update`), the toast "Channel updated." and focus
@@ -20,7 +20,7 @@ import { useWrites } from "../../replica/writes.js";
 import { Avatar, ChannelGlyph } from "../../ui/Avatar.js";
 import { useFeedViewer } from "../feed/FeedContext.js";
 import { FeedDialog } from "../feed/FeedDialog.js";
-import { relTime } from "../feed/format.js";
+import { CHANNEL_UNAVAILABLE, relTime } from "../feed/format.js";
 import { CloseIcon, LockIcon } from "../feed/icons.js";
 import { showToast } from "../shell/Toast.js";
 
@@ -29,7 +29,7 @@ import { MembersDialog } from "./MembersDialog.js";
 
 /** The banner of a frozen channel (04 B6, 02 W6.10). */
 export function frozenBanner(name: string): string {
-  return `#${name} is unavailable because its owner's account is deactivated. You can read it and delete your own posts.`;
+  return `#${name} is unavailable because its owner's account is deactivated.`;
 }
 
 export function FrozenBanner({ name }: { name: string }) {
@@ -108,7 +108,7 @@ export function ChannelInfoDialog({
         <dt>Channel by</dt>
         <dd>
           {channel.frozen ? (
-            "Deleted account"
+            CHANNEL_UNAVAILABLE
           ) : (
             <>
               <Avatar handle={channel.owner} size="xs" />@{channel.owner}
