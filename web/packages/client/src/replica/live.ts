@@ -12,7 +12,7 @@ import { showToast } from "../features/shell/Toast.js";
 import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
 import { useConnectionStore } from "../stores/connection.js";
 import { useDraftsStore } from "../stores/drafts.js";
-import { replyComposerOfKey, useThreadUiStore } from "../stores/threadUi.js";
+import { composerOfKey, useThreadUiStore } from "../stores/threadUi.js";
 
 import type { ReplicaConfig } from "./ReplicaProvider.js";
 import { HttpSyncTransport } from "./http.js";
@@ -22,15 +22,15 @@ import { keepTabClientId, tabClientId } from "./tabClient.js";
 import { beforeUpgradeReload, upgradeRequired } from "./upgrade.js";
 
 /** Put a write's text back in its composer unless the person has typed
- * something else there since. On Discard a reply's or comment's composer
- * also opens again under its row, which focuses it (02 §9.2: Discard
- * "returns typed text to its composer"); the new-thread composer is always
- * open. */
+ * something else there since. On Discard an inline composer (an ask, a
+ * reply, a comment) also opens again at the row it was opened from, which
+ * focuses it (02 §9.2: Discard "returns typed text to its composer"); the
+ * new-thread composer is always open. */
 export function restoreDraft(draft: DraftRef, how?: { discarded: boolean }): void {
   const drafts = useDraftsStore.getState();
   if (!drafts.get(draft.key)?.text.trim()) drafts.setDraft(draft.key, draft.text);
   if (!how?.discarded) return;
-  const target = replyComposerOfKey(draft.key);
+  const target = composerOfKey(draft.key);
   if (target) useThreadUiStore.getState().open(target.thread, target.composer, target.selected);
 }
 

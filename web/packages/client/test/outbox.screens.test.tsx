@@ -17,7 +17,7 @@ import { restoreDraft } from "../src/replica/live.js";
 import type { DraftRef } from "../src/replica/source.js";
 import { SyncReplica } from "../src/replica/syncReplica.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
-import { composerKey, replyComposerOfKey } from "../src/stores/threadUi.js";
+import { composerKey, composerOfKey } from "../src/stores/threadUi.js";
 
 import { renderApp, testUser, waitUntil } from "./helpers.js";
 import { FakeLocks, FakeStorage, FakeSync } from "./syncFake.js";
@@ -175,17 +175,25 @@ test.serial(
   },
 );
 
-test("a reply's and a comment's draft key name their composer and row; an ask's does not", (t) => {
+test("an inline composer's draft key names the composer and the row it was opened from", (t) => {
   const th = "T";
   for (const [composer, selected] of [
     [{ kind: "reply", parent: null }, null],
     [{ kind: "reply", parent: "R" }, "R"],
     [{ kind: "comment", node: "N", parent: null }, "N"],
     [{ kind: "comment", node: "N", parent: "C" }, "N"],
+    // the footer's follow-up; Continue on N; Branch on N, beside it under P
+    [{ kind: "ask", parent: "r", from: null }, null],
+    [{ kind: "ask", parent: "N", from: "N" }, "N"],
+    [{ kind: "ask", parent: "P", from: "N" }, "N"],
   ] as const)
-    t.deepEqual(replyComposerOfKey(composerKey(th, composer)), { thread: th, composer, selected });
-  t.is(replyComposerOfKey(composerKey(th, { kind: "ask", parent: "r" })), null);
-  t.is(replyComposerOfKey("thread:space"), null);
+    t.deepEqual(composerOfKey(composerKey(th, composer)), { thread: th, composer, selected });
+  t.not(
+    composerKey(th, { kind: "ask", parent: "P", from: "N" }),
+    composerKey(th, { kind: "ask", parent: "P", from: "P" }),
+    "Branch on N and Continue on P are different composers",
+  );
+  t.is(composerOfKey("thread:space"), null);
 });
 
 test.serial(

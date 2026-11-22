@@ -16,8 +16,11 @@ export interface Quote {
 
 export type InlineComposer =
   /** An ask under `parent` ("r" or a node): the footer's follow-up, Branch
-   * here (with `quote`), Continue and Branch. */
-  | { kind: "ask"; parent: string; quote?: Quote | undefined }
+   * here (with `quote`), Continue and Branch. `from` is the row it was
+   * opened from, which stays selected while it is open: null for the
+   * footer's follow-up and Branch here, the branch itself for Continue and
+   * Branch. */
+  | { kind: "ask"; parent: string; from: string | null; quote?: Quote | undefined }
   /** A comment on `node`, at its top or under the comment `parent`. */
   | { kind: "comment"; node: string; parent: string | null }
   /** A reply to a post, at its root or to the reply `parent`. */
@@ -75,15 +78,19 @@ export function useThreadUi(thread: string): ThreadUiEntry {
   return useThreadUiStore((state) => state.byThread[thread] ?? EMPTY);
 }
 
-/** The key of a composer, for its draft (02 §9.4 `drafts`). */
-/** The reply or comment composer a draft key names (`composerKey`), with the
- * row it shows under; null for any other key (an ask's composer depends on
- * the row it was opened from, which its key does not name). */
-export function replyComposerOfKey(
+/** The inline composer a draft key names (`composerKey`), with the row it
+ * shows under; null for any other key (the new-thread composer's). An ask's
+ * quote is not in its key: Branch here comes back as the follow-up composer
+ * at the answer. */
+export function composerOfKey(
   key: string,
 ): { thread: string; composer: InlineComposer; selected: string | null } | null {
-  const [kind, thread, a, b] = key.split(":");
-  if (!thread) return null;
+  const [kind, thread, a, b, extra] = key.split(":");
+  if (!thread || extra !== undefined) return null;
+  if (kind === "ask" && a && b) {
+    const from = b === "top" ? null : b;
+    return { thread, composer: { kind: "ask", parent: a, from }, selected: from };
+  }
   if (kind === "reply" && a && b === undefined) {
     const parent = a === "top" ? null : a;
     return { thread, composer: { kind: "reply", parent }, selected: parent };
@@ -97,10 +104,13 @@ export function replyComposerOfKey(
   return null;
 }
 
+/** The key of a composer, for its draft (02 §9.4 `drafts`). It names where
+ * the composer shows, so Discard can open it there again
+ * (`composerOfKey`). */
 export function composerKey(thread: string, c: InlineComposer): string {
   switch (c.kind) {
     case "ask":
-      return `ask:${thread}:${c.parent}`;
+      return `ask:${thread}:${c.parent}:${c.from ?? "top"}`;
     case "comment":
       return `comment:${thread}:${c.node}:${c.parent ?? "top"}`;
     case "reply":

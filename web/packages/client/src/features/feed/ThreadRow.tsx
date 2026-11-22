@@ -375,7 +375,7 @@ function ThreadCard({
         else field.focus();
         return;
       }
-      open(thread.id, { kind: "ask", parent: "r" }, null);
+      open(thread.id, { kind: "ask", parent: "r", from: null }, null);
     } else {
       if (!composerOpen) open(thread.id, { kind: "reply", parent: null });
       else
@@ -478,7 +478,7 @@ function ThreadCard({
                 onBranch={({ text, b }) =>
                   open(
                     thread.id,
-                    { kind: "ask", parent: "r", quote: { text, b, open: false } },
+                    { kind: "ask", parent: "r", from: null, quote: { text, b, open: false } },
                     null,
                   )
                 }

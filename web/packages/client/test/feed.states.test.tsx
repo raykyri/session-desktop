@@ -22,10 +22,11 @@ import {
 } from "../src/replica/fixtureReplica.js";
 import { channelByName } from "../src/replica/queries.js";
 import type { WriteOutcome } from "../src/replica/source.js";
+import { restoreDraft } from "../src/replica/live.js";
 import { QUEUE_FULL_MESSAGE, makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { claimLocalAccountState, clearLocalAccountState } from "../src/stores/localAccount.js";
-import { useThreadUiStore } from "../src/stores/threadUi.js";
+import { composerKey, useThreadUiStore, type InlineComposer } from "../src/stores/threadUi.js";
 
 import { renderApp, renderInRouter, testUser, waitUntil } from "./helpers.js";
 
@@ -213,7 +214,7 @@ test.serial("the server's queue_full refusal shows the same toast", async (t) =>
 test.serial("thread selections and composers are cleared per account", (t) => {
   const ui = useThreadUiStore.getState();
   claimLocalAccountState("a");
-  ui.open(FIRST, { kind: "ask", parent: "r" } as never, "r");
+  ui.open(FIRST, { kind: "ask", parent: "r", from: null }, "r");
   claimLocalAccountState("a");
   t.truthy(useThreadUiStore.getState().byThread[FIRST]);
   claimLocalAccountState("b");
@@ -521,5 +522,35 @@ test.serial(
         side().contains(document.activeElement),
       "focus on a row of the tree",
     );
+  },
+);
+
+test.serial(
+  "Discard on an ask that was not sent opens its composer again at its row, with the text",
+  async (t) => {
+    await renderApp("/");
+    const side = () => document.querySelector<HTMLElement>(`[data-side="${FIRST}"]`) as HTMLElement;
+    await waitUntil(t, () => side() !== null, "the side column renders");
+    const replica = replicaOf();
+    const nodes = replica.rawAll("node").filter((x) => x.th === FIRST && x.par !== "r");
+    const node = nodes[0];
+    if (!node) throw new Error("no nested branch");
+    const cases: [InlineComposer, string, string | null][] = [
+      // Continue on the branch, Branch beside it, the footer's follow-up
+      [{ kind: "ask", parent: node.id, from: node.id }, "Continue ask", node.id],
+      [{ kind: "ask", parent: node.par, from: node.id }, "Ask beside this", node.id],
+      [{ kind: "ask", parent: "r", from: null }, "Ask about the answer", null],
+    ];
+    for (const [composer, name, selected] of cases) {
+      useThreadUiStore.getState().reset();
+      useDraftsStore.setState({ byKey: {}, hidden: false });
+      const text = `kept for ${name}`;
+      // what the sync replica calls on Discard (`SyncReplica.discard`)
+      restoreDraft({ key: composerKey(FIRST, composer), text }, { discarded: true });
+      const field = await within(side()).findByRole("textbox", { name });
+      t.is((field as HTMLTextAreaElement).value, text, name);
+      t.is(useThreadUiStore.getState().byThread[FIRST]?.selected ?? null, selected, name);
+      await waitUntil(t, () => document.activeElement === field, `${name}: focused`);
+    }
   },
 );

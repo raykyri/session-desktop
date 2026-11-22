@@ -110,7 +110,7 @@ export function BranchCard({
     writer && composer?.kind === "comment" && composer.node === node.id && composer.parent === null;
 
   const openAsk = (parent: string) => {
-    open(thread, { kind: "ask", parent }, node.id);
+    open(thread, { kind: "ask", parent, from: node.id }, node.id);
   };
   const toggleComment = (parent: string | null) => {
     const current = ui.composer;
