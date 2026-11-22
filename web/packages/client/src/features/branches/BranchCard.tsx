@@ -275,11 +275,11 @@ export function BranchCard({
             thread,
             index.dfs(node.id).map((x) => x.node.id),
           );
-          void writes.deleteNode(thread, node.id).then((ok) => {
-            if (!ok) return;
-            onSelect(null);
-            focusSoon(next);
-          });
+          // The prediction removes the rows at once, whether or not the
+          // write is sent.
+          void writes.deleteNode(thread, node.id);
+          onSelect(null);
+          focusSoon(next);
         }}
       />
     </div>
@@ -401,9 +401,9 @@ function BranchComments({
           // The comment and its "…" button are gone: focus goes to the
           // selected row of the tree, the branch the comment was on (the
           // mock's `deleteItem`).
-          void writes.deleteComment(deleting).then((ok) => {
-            if (ok) focusSoon(selectedRowOr(thread, `#card-${thread} .rcount`));
-          });
+          // at once, whether or not the write is sent
+          void writes.deleteComment(deleting);
+          focusSoon(selectedRowOr(thread, `#card-${thread} .rcount`));
         }}
       />
     </div>

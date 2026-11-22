@@ -131,8 +131,11 @@ function RemovedCard({ view }: { view: ThreadView }) {
         onOpenChange={setDeleting}
         title="Delete this thread?"
         onConfirm={() => {
+          // The prediction removes the card at once, whether or not the
+          // write is sent: focus goes to the next card now (02 §10.1).
           const next = nextCardAfter(thread.id);
-          void writes.deleteThread(thread.id).then((ok) => ok && focusSoon(next));
+          void writes.deleteThread(thread.id);
+          focusSoon(next);
         }}
       />
     </article>
@@ -536,8 +539,11 @@ function ThreadCard({
         onOpenChange={setDeleting}
         title="Delete this thread?"
         onConfirm={() => {
+          // The prediction removes the card at once, whether or not the
+          // write is sent: focus goes to the next card now (02 §10.1).
           const next = nextCardAfter(thread.id);
-          void writes.deleteThread(thread.id).then((ok) => ok && focusSoon(next));
+          void writes.deleteThread(thread.id);
+          focusSoon(next);
         }}
       />
       {space?.owned ? (

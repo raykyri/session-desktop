@@ -420,3 +420,88 @@ test.serial("a write to one thread re-renders that row only (W9.1)", async (t) =
   t.is(commits[SECOND], before[SECOND]);
   replica.dispose();
 });
+
+/** Every write applies its prediction and then answers "Not sent", as a
+ * request that failed does. */
+function answerNotSent(replica: FixtureReplica) {
+  const mutate = replica.mutate.bind(replica);
+  replica.mutate = async (name, input) => {
+    const outcome = await mutate(name, input);
+    return outcome.ok ? { ...outcome, unsent: true } : outcome;
+  };
+}
+
+test.serial(
+  "a branch or comment delete that is not sent moves focus at once, as a confirmed one does",
+  async (t) => {
+    const comment = "01M7HWGZJGT7JTFFVSYPX0CM09";
+    let branch = "";
+    prepare = (replica) => {
+      // a branch with nothing under it and no comments, made the viewer's
+      const nodes = replica.rawAll("node").filter((x) => x.th === FIRST);
+      const comments = replica.rawAll("comment");
+      const n = nodes.find(
+        (x) =>
+          x.par !== "r" &&
+          !nodes.some((y) => y.par === x.id) &&
+          !comments.some((c) => c.node === x.id),
+      );
+      if (!n) throw new Error("no branch");
+      branch = n.id;
+      rewrite(replica, n, { u: "ines.v" });
+      replica.write([
+        {
+          kind: "comment",
+          id: comment,
+          th: FIRST,
+          s: n.s,
+          node: n.id,
+          parent: null,
+          u: "ines.v",
+          t: "My comment to delete",
+          edited: false,
+          del: false,
+          mod: null,
+          createdAt: "2026-11-16T09:40:00Z",
+        },
+      ]);
+    };
+    await renderApp("/");
+    const side = () => document.querySelector<HTMLElement>(`[data-side="${FIRST}"]`) as HTMLElement;
+    await waitUntil(t, () => side() !== null, "the side column renders");
+    answerNotSent(replicaOf());
+    const branchRow = () => side().querySelector<HTMLElement>(`[role="treeitem"][data-row="${branch}"]`);
+    fireEvent.click(branchRow() as HTMLElement);
+    const text = await within(side()).findByText("My comment to delete");
+
+    // the comment: focus goes to the selected row, the branch
+    fireEvent.click(within(text.closest(".brr") as HTMLElement).getByRole("button", { name: "More" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitUntil(
+      t,
+      () => within(side()).queryByText("My comment to delete") === null,
+      "the comment is gone",
+    );
+    await waitUntil(t, () => document.activeElement === branchRow(), "focus on the branch row");
+
+    // the branch: focus goes to the next row of the tree
+    const card = side().querySelector<HTMLElement>(".preview .who") as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "More" }));
+    const del = await screen.findByRole("menuitem", { name: /^Delete branch/ });
+    fireEvent.click(del);
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitUntil(t, () => branchRow() === null, "the branch is gone");
+    await waitUntil(
+      t,
+      () =>
+        document.activeElement?.getAttribute("role") === "treeitem" &&
+        side().contains(document.activeElement),
+      "focus on a row of the tree",
+    );
+  },
+);

@@ -377,3 +377,49 @@ test.serial("an offline save shows no Saved. toast", async (t) => {
   fireEvent.click(within(outboxToast() as HTMLElement).getByRole("button", { name: "Retry" }));
   await waitUntil(t, () => currentToast() === null || outboxToast() === null, "sent");
 });
+
+/** Opens an item's "…" menu, chooses `item` and confirms with Delete. */
+async function confirmDelete(scope: HTMLElement, item: RegExp | string) {
+  fireEvent.click(within(scope).getByRole("button", { name: "More" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: item }));
+  const confirm = await screen.findByRole("alertdialog");
+  fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+}
+
+test.serial("an offline delete of a thread moves focus to the next card at once", async (t) => {
+  const { f, post, lounge } = serve();
+  const mine = f.id();
+  f.ok(ME, "threads.create", { id: mine, space: lounge, kind: "post", q: "Mine to delete" });
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null && card(mine) !== null, "both render");
+  f.offline = true;
+  await confirmDelete(card(mine) as HTMLElement, /^Delete post/);
+  await waitUntil(t, () => card(mine) === null, "the card is gone");
+  await waitUntil(t, () => document.activeElement === card(post), "focus on the next card");
+  await waitUntil(t, () => outboxToast() !== null, "Not sent");
+});
+
+test.serial("an offline delete of a reply moves focus to the next row at once", async (t) => {
+  const { f, post } = serve();
+  const mine = f.id();
+  f.ok(ME, "research.createPostFollowUp", { id: mine, thread: post, t: "Mine to delete" });
+  const after = f.id();
+  f.ok("olga", "research.createPostFollowUp", { id: after, thread: post, t: "Olga's reply" });
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null, "the post renders");
+  const side = () => document.querySelector<HTMLElement>(`[data-side="${post}"]`) as HTMLElement;
+  fireEvent.click(within(side()).getByRole("treeitem", { name: /Mine to delete/ }));
+  await waitUntil(t, () => side().querySelector(".preview") !== null, "the reply's card");
+  f.offline = true;
+  await confirmDelete(side().querySelector(".preview") as HTMLElement, "Delete reply");
+  await waitUntil(
+    t,
+    () => within(side()).queryByRole("treeitem", { name: /Mine to delete/ }) === null,
+    "the reply is gone",
+  );
+  await waitUntil(
+    t,
+    () => document.activeElement === within(side()).queryByRole("treeitem", { name: /Olga's reply/ }),
+    "focus on the next row",
+  );
+});
