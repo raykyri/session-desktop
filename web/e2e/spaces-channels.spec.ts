@@ -6,7 +6,8 @@
 // member's post with a reason, which the member sees as the placeholder and
 // a notification and the moderation log lists; the owner bans a member of
 // an open channel, the log lists the ban, and the member's writes there are
-// refused with the ban message.
+// refused with the ban message. At 400 px wide, the member list's avatars
+// keep their size.
 //
 // The viewer owns one open channel; olga owns two open channels the viewer
 // has not joined, two private ones the viewer joined by invite links, and a
@@ -258,6 +259,26 @@ test("B4: a private channel's link admits one person; the same link is refused t
   await expect(links).toContainText(`Used by @${handle}`);
   await guest.close();
   await late.close();
+});
+
+test("at 400px wide the member list's avatars keep their 20 px circle", async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 800 });
+  // the owner and two members
+  await page.goto(`/c/${w.own}`);
+  await page.getByRole("button", { name: "About this channel" }).click();
+  const info = page.getByRole("dialog", { name: `#${w.own}` });
+  await info.getByRole("button", { name: /^Members, \d+$/ }).click();
+  const members = page.getByRole("dialog", { name: `Members of #${w.own}` });
+  const avatars = members.locator('.mlist li > span[aria-hidden="true"]');
+  await expect(avatars).toHaveCount(3);
+  for (const avatar of await avatars.all()) {
+    const box = await avatar.boundingBox();
+    expect(box?.width).toBeCloseTo(20, 0);
+    expect(box?.height).toBeCloseTo(20, 0);
+  }
+  // the Owner chip keeps its width too: it is not stretched across the row
+  const chip = members.locator(".mlist li .chip");
+  expect((await chip.boundingBox())?.width ?? 0).toBeLessThan(80);
 });
 
 test("§6.6: a removal with a reason reaches the member, their notifications and the log", async ({

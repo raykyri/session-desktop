@@ -130,7 +130,7 @@ export function InviteLinksDialog({
               const which = `link ${i + 1}, expires ${expiryDate(l)}`;
               return (
                 <li key={l.id} data-link={l.id} data-state={state}>
-                  <span>
+                  <span className="mltext">
                     <code className="ilink">{channelInviteLink(channel.name, l.code)}</code>
                     <small>
                       {state === "used"

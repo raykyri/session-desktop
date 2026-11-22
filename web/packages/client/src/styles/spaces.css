@@ -1662,7 +1662,10 @@
   line-height: 1.4;
 }
 
-.mlist li > span:not(.mlkind) {
+/* the row's text takes the free width; the avatar, the chips and the
+   buttons keep their own size (a row's avatar is a span too, and a
+   selector by element would stretch it into a pill) */
+.mlist li > .mltext {
   flex: 1;
   min-width: 0;
 }

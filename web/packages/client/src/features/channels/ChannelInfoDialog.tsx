@@ -248,7 +248,7 @@ export function ModerationLogDialog({
                   <span className={ban ? "mlkind ban" : "mlkind rm"}>
                     {m.act === "remove" ? "Removed" : m.act === "ban" ? "Banned" : "Unbanned"}
                   </span>
-                  <span>
+                  <span className="mltext">
                     {m.act === "remove"
                       ? `@${m.by} removed @${m.author}'s ${what}`
                       : m.act === "ban"
