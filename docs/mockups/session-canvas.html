@@ -109,16 +109,22 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .fq .old { color: var(--warn); }
 .cmeta { padding: 0 12px 10px; font-size: 11.5px; color: var(--t-faint); }
 
-.part { position: relative; padding: 10px 12px 10px; }
+.part { position: relative; padding: 10px 12px 10px 11px; display: flex; gap: 9px; align-items: flex-start; }
+.part > .gut { flex: none; width: 22px; display: flex; justify-content: center; position: relative; }
+.part > .gut .av { width: 20px; height: 20px; font-size: 8px; margin-top: 1px; }
+.part > .gut .mk { width: 21px; height: 21px; border-radius: 6px; }
+.part > .gut .mk svg { width: 13px; height: 13px; }
+.part > .gut .dot { position: absolute; left: -5px; top: 2px; }
+.part > .pb { flex: 1; min-width: 0; }
 .part + .part, .seam + .part, .part + .seam { }
 .part.m { background: var(--card-m); }
 .part.ctx { box-shadow: inset 3px 0 0 var(--ctx); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
-.ph { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t-faint); margin-bottom: 4px; min-height: 20px; flex-wrap: wrap; }
+.ph { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t-faint); margin-top: 4px; flex-wrap: wrap; }
 .ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; }
 .ph .late { color: var(--warn); }
-.ph .acts { margin-left: auto; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
-.part:hover > .ph .acts, .part:focus-within > .ph .acts, .stack.sel .part > .ph .acts { opacity: 1; }
-@media (pointer: coarse) { .ph .acts { opacity: 1; } }
+.part > .acts { position: absolute; top: 5px; right: 6px; z-index: 2; display: flex; gap: 2px; padding: 1px; border-radius: 7px; background: var(--card); box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.part:hover > .acts, .part:focus-within > .acts { opacity: 1; pointer-events: auto; }
+@media (pointer: coarse) { .stack.sel .part > .acts { opacity: 1; pointer-events: auto; } }
 .ab { font-size: 11.5px; font-weight: 500; color: var(--t-secondary); padding: 2px 6px; border-radius: 5px; }
 .ab:hover { background: var(--control); color: var(--t-heading); }
 .chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: inline-flex; gap: 4px; align-items: center; }
@@ -168,7 +174,11 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* inline forks: a stack drawn inside its parent, at its anchor */
 .stack.coll .ifork { display: none; }
 .ifork { margin: 6px 0 8px 8px; border-left: 2px solid var(--link); padding-left: 8px; }
-.ifork .part { padding: 6px 4px 6px 6px; background: transparent; }
+.ifork .part { padding: 6px 4px 6px 5px; gap: 7px; background: transparent; }
+.ifork .part > .gut { width: 18px; }
+.ifork .part > .gut .av { width: 16px; height: 16px; font-size: 7px; }
+.ifork .part > .gut .mk { width: 17px; height: 17px; border-radius: 5px; }
+.ifork .part > .gut .mk svg { width: 11px; height: 11px; }
 .ifork .part.m { background: var(--inset); border-radius: 6px; }
 .ifork .ifh { font-size: 11px; color: var(--t-faint); display: flex; gap: 8px; align-items: center; }
 .ifork .ifh button { color: var(--accent); font-weight: 500; }
@@ -218,7 +228,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .far .sh .ov.off { display: block; position: absolute; left: 0; bottom: 100%; margin-bottom: 4px; font-size: calc(11px / var(--z, 1)); font-weight: 600; color: var(--t-secondary); white-space: nowrap; line-height: 1.2; }
 .far .sh .ov b { color: var(--new); }
 .far .sh { position: relative; }
-.far .prose, .far .ph, .far .cmeta, .far .fq, .far .ifork, .far .addend, .far .more, .far .seam .sp, .far .bseam { visibility: hidden; }
+.far .prose, .far .ph, .far .part > .gut, .far .part > .acts, .far .cmeta, .far .fq, .far .ifork, .far .addend, .far .more, .far .seam .sp, .far .bseam { visibility: hidden; }
 .part .hl { display: none; }
 .far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
@@ -325,15 +335,21 @@ const roots = () => Object.values(S).filter(s => !s.fork || s.x != null);
 
 /* ---- rendering ---- */
 const stacksEl = $('#stacks'), world = $('#world'), vp = $('#vp'), links = $('#links');
+/* a part: the author's avatar (or the model mark) to the left of the text; no name or time. A short meta line under
+   the text only when there is something to say: inserted, asked by someone else, or what an answer read. */
 function head(p, s) {
-  const late = insertedLater(p) ? '<span class="late" title="Written after the parts below it">· inserted</span>' : '';
   const nw = isNew(p) ? '<span class="dot" title="New"></span>' : '';
   const acts = `<span class="acts"><button class="ab" data-a="fork" data-id="${p.id}" title="Start a stack beside this part that sees everything up to here">Fork</button></span>`;
-  if (!isModel(p)) return `<div class="ph">${nw}${av(p.by.u)}<b>${esc(NAMES[p.by.u] || p.by.u)}</b><span>${rel(p.at)}</span>${late}${acts}</div>`;
+  const late = insertedLater(p) ? '<span class="late" title="Written after the parts below it">Inserted</span>' : '';
+  if (!isModel(p)) {
+    const who = esc(NAMES[p.by.u] || p.by.u);
+    return { gut: `<div class="gut" title="${who}">${nw}${av(p.by.u)}</div>`, meta: late ? `<div class="ph">${late}</div>` : '', acts };
+  }
   const r = p.run, n = r.status === 'complete' ? r.ctx.length : ctxOf(p).length;
   const lead = partsOf(s.id).find(q => !isModel(q))?.by.u;
-  return `<div class="ph">${nw}${MARK}<span title="${esc(r.model)}">Answer</span>${r.by !== lead ? `<span>for ${esc(NAMES[r.by] || r.by)}</span>` : ''}
-    ${V.sel === rootLane(s).id || V.pop === p.id ? `<button class="chip" data-a="pop" data-id="${p.id}" title="The parts this answer read">read ${n}</button>` : ''}${acts}</div>`;
+  const forWho = r.by !== lead ? `<span>Asked by ${esc(NAMES[r.by] || r.by)}</span>` : '';
+  const chip = V.sel === rootLane(s).id || V.pop === p.id ? `<button class="chip" data-a="pop" data-id="${p.id}" title="The parts this answer read">read ${n}</button>` : '';
+  return { gut: `<div class="gut" title="${esc(r.model)}">${nw}${MARK}</div>`, meta: forWho || chip ? `<div class="ph">${forWho}${chip}</div>` : '', acts };
 }
 function proseHTML(p, s, selected) {
   if (isModel(p) && p.run.status !== 'complete') {
@@ -365,9 +381,10 @@ function proseHTML(p, s, selected) {
 function partHTML(p, s, selected, first = false) {
   const ctx = V.pop && V.popCtx?.has(p.id) ? ' ctx' : '';
   const isRoot = !s.fork || s.x != null, n = first && isRoot ? unitNew(s) : 0;
+  const hd = head(p, s);
   const pre = first ? `<small>${isRoot ? `#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}` : 'fork'}</small>` : '';
   return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${ctx}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}">
-    <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${head(p, s)}${proseHTML(p, s, selected)}</div>`;
+    <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${hd.gut}<div class="pb">${proseHTML(p, s, selected)}${hd.meta}</div>${hd.acts}</div>`;
 }
 /* a question and the answer it prompted are read as one: no seam between them (Fork here covers that position) */
 const pairedWith = (p, next) => !isModel(p) && next && isModel(next) && next.run.by === p.by.u;
@@ -760,12 +777,12 @@ function showBfork(blockEl) {
 const hideBforkSoon = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { $('#bfork')?.remove(); document.querySelectorAll('.bhov').forEach(x => x.classList.remove('bhov')); }, 250); };
 document.addEventListener('mouseover', e => {
   if (matchMedia('(pointer: coarse)').matches) return;
-  const blk = e.target.closest?.('.part.m > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || blk.classList.contains('ifork')) { if (!e.target.closest?.('#bfork')) hideBforkSoon(); return; }
+  const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || blk.classList.contains('ifork')) { if (!e.target.closest?.('#bfork')) hideBforkSoon(); return; }
   clearTimeout(bTimer); showBfork(blk);
 });
 document.addEventListener('click', e => {
   if (!matchMedia('(pointer: coarse)').matches) return;
-  const blk = e.target.closest?.('.part.m > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || !blk.closest('.stack.sel')) return;
+  const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || !blk.closest('.stack.sel')) return;
   setTimeout(() => showBfork(blk), 0);
 });
 vp.addEventListener('wheel', () => $('#bfork')?.remove(), { passive: true });
