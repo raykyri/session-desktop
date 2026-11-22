@@ -80,6 +80,27 @@ test.serial("a route change to a page focuses its heading without scrolling", as
   await waitUntil(t, () => document.activeElement === welcome, "/welcome: heading focused");
 });
 
+test.serial("leaving a page from the bar keeps focus on the control used", async (t) => {
+  // The outgoing page re-renders with the new path before it unmounts; it
+  // must not take focus then, or focus falls to <body> with it.
+  for (const from of ["/usage", "/browse"]) {
+    const app = await renderApp("/", { user: testUser() });
+    await act(() => app.router.navigate({ to: from }));
+    const page = await screen.findByRole("heading", { level: 2 });
+    await waitUntil(t, () => document.activeElement === page, `${from}: heading focused`);
+    const home = screen.getByRole("link", { name: "Session home" });
+    home.focus();
+    await act(async () => {
+      home.click();
+      await app.router.load();
+    });
+    await waitUntil(t, () => app.router.state.location.pathname === "/", `${from}: at Home`);
+    await waitUntil(t, () => !document.body.contains(page), `${from}: page unmounted`);
+    t.is(document.activeElement, home, `${from}: focus stays on Session home`);
+    app.unmount();
+  }
+});
+
 test.serial("the page the app loads on leaves focus at the start", async (t) => {
   const app = await renderApp("/browse", { user: testUser() });
   const page = await heading("Browse channels");

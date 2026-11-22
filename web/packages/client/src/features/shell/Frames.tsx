@@ -5,7 +5,7 @@
 
 import { useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 import { useNavigationStore } from "../../stores/navigation.js";
 
@@ -110,10 +110,15 @@ export function PageFrame({
   const focusHeading = useContext(PageHeadingFocusContext);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const heading = useRef<HTMLHeadingElement>(null);
+  // The path this page opened on. A route change re-renders the outgoing
+  // page with the new path before it unmounts; only the page being opened
+  // takes focus, or focus would land on a heading about to be removed and
+  // fall to `<body>`.
+  const [openedOn] = useState(pathname);
 
   useEffect(() => {
-    if (focusHeading) heading.current?.focus({ preventScroll: true });
-  }, [focusHeading, pathname]);
+    if (focusHeading && pathname === openedOn) heading.current?.focus({ preventScroll: true });
+  }, [focusHeading, pathname, openedOn]);
 
   const h2 = (
     <h2
