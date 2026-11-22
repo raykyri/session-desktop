@@ -1450,21 +1450,21 @@ const qText = n => n.q;
 const isActiveRun = r => !!r && (r.status === 'queued' || r.status === 'running');
 const isStoppedRun = r => !!r && (r.status === 'failed' || r.status === 'cancelled' || r.status === 'interrupted');
 const hasAnswer = r => !r || r.status === 'complete';
-const OVERDRAFT_NOTE = "Stopped: this week's included tokens ran out.";
-const RUN_ERR = { auth: 'Provider authentication failed for this model. Please contact an administrator.', content_filter: 'The model declined to answer this question. Rephrase the question or select another model.', context_too_long: 'Context window limit exceeded. Please start a new thread for this question.', provider_unavailable: 'No zero-retention provider is available for this model. Try again or select another model.', network: 'The connection to the model provider was interrupted before the answer finished.', timeout: 'The run exceeded the maximum duration allowed by this Session instance and was stopped.', unknown: 'The model provider returned an error.' };
+const OVERDRAFT_NOTE = "Stopped: Out of tokens.";
+const RUN_ERR = { auth: 'Provider authentication failed for this model. Please contact an administrator.', content_filter: "The model's content filter blocked this answer. Rephrase the question or choose another model.", context_too_long: 'Context window limit exceeded. Please start a new thread for this question.', provider_unavailable: "This model isn't available right now. Try again in a few minutes, or choose another model.", network: 'The connection to the model provider was interrupted before the answer finished.', timeout: 'Stopped: Exceeded maximum duration.', unknown: 'The model provider returned an error.' };
 /* the reason a failed run shows, worded for its asker or for any other reader */
 function failText(r) {
   const f = r.fail || { why: 'error', cls: 'unknown' }, asker = mine(r.u), name = r.pay === 'key:openai' ? 'OpenAI' : r.pay ? 'Anthropic' : null;
   if (f.why === 'tokens') return !asker ? 'This ask did not run: its author had no included tokens left.' : outOfTokens(r.model) ? outMsg() : 'This ask did not run: included tokens had run out. Run again to start it.';
-  if (f.why === 'key') return !asker ? "This run stopped: its author's API key could not be used." : ({
+  if (f.why === 'key') return !asker ? "Stopped: Author's API key could not be used." : ({
     key_only: 'This model runs on your own API key. Add the key in Usage.',
     key_unset: `No valid ${name || 'API'} key was set when this run started. Add a key in Usage.`,
-    key_changed: `${name ? `Your ${name} key` : 'Your API key'} was removed, replaced or marked invalid, or billing stopped using it, during this run. Check your keys in Usage.`,
-    key_rejected: `${name || 'The provider'} rejected your API key, and it is now marked Invalid. Add a working key in Usage.`,
-    key_forbidden: `${name || 'The provider'} refused your API key permission for this request. The key is still valid; check its permissions in your ${name || 'provider'} account.`,
+    key_changed: `${name ? `Your ${name} key` : 'Your API key'} was removed, replaced or marked invalid during this run. See Usage for more details.`,
+    key_rejected: `${name || 'The provider'} rejected your API key. Add a new key in Usage.`,
+    key_forbidden: `${name || 'The provider'} rejected this request with a permission error.`,
   }[f.detail] || 'The API key for this run was rejected or removed. Check your keys in Usage.');
   if (f.why === 'access') return asker ? 'You can no longer read this channel, so the ask did not run.' : 'This ask did not run: its author could no longer read this channel.';
-  if (f.why === 'rate') return asker ? 'The model provider is rate limiting this deployment. Try again in a minute.' : 'The model provider is rate limiting this deployment.';
+  if (f.why === 'rate') return asker ? 'The model provider is rate limiting this deployment. Try again in a minute.' : 'Stopped: Rate limited by model provider.';
   return RUN_ERR[f.cls] || RUN_ERR.unknown;
 }
 const runStatusText = r => r.status === 'queued' ? 'Queued' : r.status === 'running' ? `Researching · Step ${r.step + 1} of 4` : r.status === 'cancelled' ? 'Stopped' : r.status === 'interrupted' ? 'Interrupted' : failText(r);
@@ -1475,8 +1475,8 @@ function runLine(pid, node, r, pending = '') {
 const runNote = r => r?.status === 'complete' && r.note ? `<p class="runnote">${esc(r.note)}</p>` : '';
 /* moderated and deleted branches, replies and comments: the words that stand for text this reader does not get */
 const modBlind = (x, s) => x.mod === 'removed' || (x.mod === 'hidden' && !mine(x.u) && ownerOf(s) !== me());
-const rowText = (x, s, text) => x.del ? '[deleted]' : x.mod && modBlind(x, s) ? (x.mod === 'hidden' ? 'Hidden by the channel owner' : 'Removed by the channel owner') : text;
-const modLine = x => x.del ? '<p class="modln">[deleted]</p>' : x.mod ? `<p class="modln">${x.mod === 'hidden' ? 'Hidden' : 'Removed'} by the channel owner</p>` : '';
+const rowText = (x, s, text) => x.del ? 'Deleted by its author' : x.mod && modBlind(x, s) ? (x.mod === 'hidden' ? 'Hidden by the channel owner' : 'Removed by the channel owner') : text;
+const modLine = x => x.del ? '<p class="modln">Deleted by its author</p>' : x.mod ? `<p class="modln">${x.mod === 'hidden' ? 'Hidden' : 'Removed'} by the channel owner</p>` : '';
 const noText = (x, s) => x.del || (x.mod && modBlind(x, s));
 
 let seq = 0;
@@ -1496,7 +1496,7 @@ const PV_SHOWN = {};
 const pvFade = (pid, k) => { const fresh = PV_SHOWN[pid] !== k; PV_SHOWN[pid] = k; return fresh ? ' fadein' : ''; };
 /* Look up: a branch from 1-4 selected words that describes the phrase as the answer uses it. The prompt
    sent to the agent is kept on the node but not shown; rows and cards show only the phrase. */
-const lookPrompt = phrase => `Look up "${phrase}" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.`;
+const lookPrompt = phrase => `Look up "${phrase}"`;
 /* A branch runs on the model the composer shows now. `b` is the passage it belongs to (-1: the answer's last). */
 function addBranch(p, par, q, quote, b, look) {
   const id = 'xn' + (++seq), model = curModel();
@@ -1607,8 +1607,8 @@ const ARROW_SEND = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path 
 const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11"/><path d="M3.5 7.5h5.5a4 4 0 0 1 4 4v1"/></svg>';
 function card(p) {
   const mode = V[st.v].av || 'header', fz = isFrozen(p.s), active = isActiveRun(p.run);
-  /* removed: the placeholder reads "[deleted]" for the author for every reader; the author keeps Delete */
-  if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}" tabindex="-1"><div class="rmnote">${RM_IC}<span style="flex:1">Removed by @${esc(r.by)}${r.note ? `<small>Reason: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} by [deleted] in ${esc(spName(p.s))}</small></span>${mine(p.u) ? moreMenu('t:' + p.id, true, p.k === 'ask' ? 'ask' : 'post') : ''}</div></article>`; }
+  /* removed: the placeholder names neither the author nor the remover, for every reader; the author keeps Delete */
+  if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}" tabindex="-1"><div class="rmnote">${RM_IC}<span style="flex:1">Removed by the channel owner${r.note ? `<small>Reason: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} in ${esc(spName(p.s))}</small></span>${mine(p.u) ? moreMenu('t:' + p.id, true, p.k === 'ask' ? 'ask' : 'post') : ''}</div></article>`; }
   /* hidden: its author and the channel's owner read it under a line saying so; anyone else reads only that line */
   const hid = p.hidden && !mine(p.u) && ownerOf(p.s) !== me();
   const modItems = !fz && !p.del && !mine(p.u) && !gone(p.u) && SPACE_META[p.s] && isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button><button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="ban" data-id="${esc(p.u)}" data-sp="${p.s}"><span>Ban from ${esc(spName(p.s))}</span></button>` : '';
@@ -1617,7 +1617,7 @@ function card(p) {
      weight, the author's avatar on the right (name and time in its tooltip). An ask's source count, token
      count and channel sit on the left of the footer; a plain post's channel sits there too. */
   const ttAv = `<span class="ttav" title="${esc(authorName(p.u))} · ${rel(p.createdAt)}">${av(p.u, 'sm')}</span>`;
-  const titleRow = (cls, text) => `${p.hidden && !hid ? '<p class="hiddenln">Hidden by the channel owner</p>' : ''}<div class="tt"><span class="ttn" aria-hidden="true"></span><h3 class="${cls}" id="title-${p.id}">${p.del ? '[deleted]' : hid ? 'Hidden by the channel owner' : text}</h3>${ttAv}${more}</div>`;
+  const titleRow = (cls, text) => `${p.hidden && !hid ? '<p class="hiddenln">Hidden by the channel owner</p>' : ''}<div class="tt"><span class="ttn" aria-hidden="true"></span><h3 class="${cls}" id="title-${p.id}">${p.del ? 'Deleted by its author' : hid ? 'Hidden by the channel owner' : text}</h3>${ttAv}${more}</div>`;
   const head = '', lead = '';
   const count = c => `<span class="notes">${c}</span>`;
   const tail = '';
@@ -1638,9 +1638,9 @@ function card(p) {
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   /* a summary thread: its thread and counts records are held, so the card keeps its title and footer; only the
-     answer area waits while the rest loads, and reads "Available when online." while it cannot be fetched */
+     answer area waits while the rest loads, and reads "Couldn't load the rest of this thread." while it cannot be fetched */
   const body = p.summary && st.loadingSummaries ? '<div class="prose" role="status" aria-label="Loading" aria-busy="true"></div>'
-    : st.offline && p.summary ? '<div class="prose empty" role="status">Available when online.</div>'
+    : st.offline && p.summary ? `<div class="prose empty" role="status">Couldn't load the rest of this thread.</div>`
     : `${p.run && !hasAnswer(p.run) ? runLine(p.id, 'r', p.run) : ''}<div class="prose" id="pr-${p.id}">${hasAnswer(p.run) && !hid && !p.del ? T.nodes.r.html : ''}</div>${runNote(p.run)}`;
   return `${art}${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
     ${body}
@@ -1799,8 +1799,8 @@ function replyLines(p) {
   const row = ({ r, d, id, hid }) => { const b = `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" role="treeitem" aria-level="${d + 1}" aria-selected="${id === sel}"${(r.kids || []).length ? ` aria-expanded="${!hid}"` : ''} tabindex="${id === tab ? 0 : -1}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(authorName(r.u))}">${av(r.u, 'xs')}</span><span class="sr-only">${esc(authorName(r.u))}: </span><span class="gt">${esc(rowText(r, p.s, plainReply(r.t)))}</span></span></button>`;
     return hid ? `<div class="grow-w">${b}<button type="button" class="rhid-btn" tabindex="-1" data-a="rcol" data-id="${p.id}" data-node="${id}" aria-label="Show ${noun(hid, 'more reply', 'more replies')}">+${hid}</button></div>` : b; };
   return `<div class="grp"><div class="graph" role="tree" aria-label="Replies" data-draw><svg aria-hidden="true"></svg>${rows.map(row).join('')}</div>
-    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(authorName(cur.r.u))}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) && !cur.r.del ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div>${modLine(cur.r)}${noText(cur.r, p.s) ? '' : `<div class="rtext">${fmtReply(cur.r.t, p.s)}</div>`}<div class="pf">${wr ? replyLink(p, cur.id) : ''}</div>${cur.r.unsent ? notSentLine(cur.r.unsent) : ''}${replyBox(p, cur.id, replyTo(cur.r.u))}</div>` : ''}
-    <div class="rfoot">${wr ? replyLink(p, 'top', 'Reply at root') : isFrozen(p.s) ? '' : st.auth === 'out' ? '<button class="tlink" data-ma="openauth">Sign in to reply</button>' : '<span class="rnote">Replying opens once you have an invite</span>'}</div>${replyBox(p, 'top', replyTo(p.u))}</div>`;
+    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(authorName(cur.r.u))}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) && !cur.r.del ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div>${cur.r.del ? '<div class="rtext">Deleted by its author</div>' : `${modLine(cur.r)}${noText(cur.r, p.s) ? '' : `<div class="rtext">${fmtReply(cur.r.t, p.s)}</div>`}`}<div class="pf">${wr ? replyLink(p, cur.id) : ''}</div>${cur.r.unsent ? notSentLine(cur.r.unsent) : ''}${replyBox(p, cur.id, replyTo(cur.r.u))}</div>` : ''}
+    ${wr ? `<div class="rfoot">${replyLink(p, 'top', 'Reply at root')}</div>` : !isFrozen(p.s) && st.auth === 'out' ? '<div class="rfoot"><button class="tlink" data-ma="openauth">Sign in to reply</button></div>' : ''}${replyBox(p, 'top', replyTo(p.u))}</div>`;
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
@@ -1843,6 +1843,8 @@ const modeSeg = () => `<span class="modes" role="group" aria-label="Ask or post"
 const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}${st.draft !== '' ? ' open' : ''}`;
 /* Custom model menu: models first, then Effort at the bottom as a submenu (opens on hover or focus). */
 const cap1 = x => x[0].toUpperCase() + x.slice(1);
+/* effort names as shown: "xhigh" reads "Extra" */
+const effortLabel = e => e === 'xhigh' ? 'Extra' : cap1(e);
 const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
 const modelMenu = () => {
   const open = st.menu === 'model';
@@ -1850,8 +1852,8 @@ const modelMenu = () => {
   const M = curModel(), E = curEffort(), kp = m => MODELS[m].payers[0] === 'key:openai' ? 'OpenAI' : 'Anthropic';
   return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="model" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(SHORT[M] || M)}</span>${I.down}</button>
     ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => keyOnly(m) && !payable(m) ? `<button type="button" class="mi" role="menuitem" data-ma="go" data-to="usage"><span>${esc(m)}<span class="src">Add a key</span></span></button>` : item('setmodel', m, keyOnly(m) ? `${esc(m)}<span class="src">your ${kp(m)} key</span>` : esc(m), m === M)).join('')}<div class="msep"></div>
-      <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="0"><span>Effort</span><span class="mi-v">${cap1(E)}</span>${I.right}
-        <div class="menu submenu" role="menu" aria-label="Effort">${MODELS[M].efforts.map(e => item('seteffort', e, cap1(e), e === E)).join('')}</div></div></div>` : ''}</span>`;
+      <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="0"><span>Effort</span><span class="mi-v">${effortLabel(E)}</span>${I.right}
+        <div class="menu submenu" role="menu" aria-label="Effort">${MODELS[M].efforts.map(e => item('seteffort', e, effortLabel(e), e === E)).join('')}</div></div></div>` : ''}</span>`;
 };
 const isAsk = () => st.newMode === 'ask';
 const ph = () => st.auth === 'out' ? 'Sign in to ask or post' : isAsk() ? 'Ask anything' : 'Write a post';
@@ -1933,7 +1935,7 @@ const memberCount = id => (MEMBERSHIP[id] || []).length;
 /* a frozen channel (its owner's account is not active) can be read; its members can only delete their own posts */
 const isFrozen = id => !!metaOf(id).frozen;
 const canWriteIn = s => canWrite() && !isFrozen(s);
-const frozenBanner = id => `<p class="frozen-banner" role="note">${esc(spName(id))} is unavailable because its owner's account is deactivated. You can read it and delete your own posts.</p>`;
+const frozenBanner = id => `<p class="frozen-banner" role="note">${esc(spName(id))} is unavailable because its owner's account is deactivated.</p>`;
 const unread = id => isJoined(id) && !SEEN[(st.user || '') + ':' + id] && st.space !== id ? hashN(id + 'u', 6) : 0;
 const navSpaces = () => st.auth === 'out' ? spaceList().filter(x => !isPrivate(x.id)) : spaceList().filter(x => isJoined(x.id));
 const postable = () => navSpaces().filter(x => !isFrozen(x.id));  /* the composer's channel picker leaves out frozen channels */
@@ -2011,7 +2013,7 @@ function navRail() {
 function navSidebar() {
   const v = st.ui.sv, q = st.sideq || '';
   const f = x => !q || x.name.includes(q.toLowerCase());
-  const row = x => `<button class="si${st.space === x.id ? ' on' : ''}" data-a="space" data-id="${x.id}" aria-current="${st.space === x.id}">${glyph(x)}<span class="sn"><span>${esc(x.name)}${isPrivate(x.id) ? LOCK : ''}</span>${v === '2' ? `<small>${noun(memberCount(x.id), 'member', 'members')} · by ${isFrozen(x.id) ? 'Deleted account' : '@' + esc(ownerOf(x.id))}</small>` : ''}</span>${unread(x.id) ? `<span class="sc">${unread(x.id)}</span>` : ''}${v === '3' && canWrite() ? `<span class="sstar${starred().includes(x.id) ? ' on' : ''}" data-a="star" data-id="${x.id}" title="${starred().includes(x.id) ? 'Unstar' : 'Star'}">${STAR(starred().includes(x.id))}</span>` : ''}</button>`;
+  const row = x => `<button class="si${st.space === x.id ? ' on' : ''}" data-a="space" data-id="${x.id}" aria-current="${st.space === x.id}">${glyph(x)}<span class="sn"><span>${esc(x.name)}${isPrivate(x.id) ? LOCK : ''}</span>${v === '2' ? `<small>${noun(memberCount(x.id), 'member', 'members')} · ${isFrozen(x.id) ? 'Unavailable' : 'by @' + esc(ownerOf(x.id))}</small>` : ''}</span>${unread(x.id) ? `<span class="sc">${unread(x.id)}</span>` : ''}${v === '3' && canWrite() ? `<span class="sstar${starred().includes(x.id) ? ' on' : ''}" data-a="star" data-id="${x.id}" title="${starred().includes(x.id) ? 'Unstar' : 'Star'}">${STAR(starred().includes(x.id))}</span>` : ''}</button>`;
   const sec = (key, t, list) => { if (!list.length) return ''; const shut = v === '2' && st.secCol?.[key]; return `<div class="ssec">${v === '2' ? `<button class="sh" data-a="seccol" data-k="${key}" aria-expanded="${!shut}">${I.down}<span>${t}</span><small>${list.length}</small></button>` : `<div class="sh"><span>${t}</span></div>`}${shut ? '' : list.map(row).join('')}</div>`; };
   const top = `<button class="si${st.space === 'home' ? ' on' : ''}" data-a="space" data-id="home" aria-current="${st.space === 'home'}"><span class="glyph sgh">${HOME}</span><span class="sn"><span>Home</span></span></button>${isActive() ? `<button class="si${st.space === 'saved' ? ' on' : ''}" data-a="space" data-id="saved" aria-current="${st.space === 'saved'}"><span class="glyph sgh">${I.save}</span><span class="sn"><span>Saved</span></span></button>` : ''}`;
   const star = v === '3' ? sec('star', 'Starred', navSpaces().filter(x => starred().includes(x.id)).filter(f)) : '';
@@ -2035,7 +2037,7 @@ function browsePage() {
   const q = (st.browseq || '').toLowerCase(), list = spaceList().filter(x => (!isPrivate(x.id) || isJoined(x.id)) && (!q || x.name.includes(q) || (x.desc || '').toLowerCase().includes(q)));
   return `<div class="page"><div class="page-in narrow"><div class="shead"><h2>Browse channels</h2>${canWrite() ? '<button class="btn1 sm" id="browse-newch" data-a="newspace">New channel</button>' : ''}</div>
     <label class="sfind big">${SEARCH}<input id="in-browseq" value="${esc(st.browseq || '')}" placeholder="Search channels" aria-label="Search channels" autocomplete="off"></label>
-    ${st.reads === 'loading' ? '<p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p>' : `<div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by ${isFrozen(x.id) ? 'Deleted account' : '@' + esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isFrozen(x.id) ? '' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No channels match.</p>'}</div>`}</div></div>`;
+    ${st.reads === 'loading' ? '<p class="page-empty" role="status" aria-label="Loading channels" aria-busy="true"></p>' : `<div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>${isFrozen(x.id) ? 'Unavailable' : 'by @' + esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isFrozen(x.id) ? '' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No channels match.</p>'}</div>`}</div></div>`;
 }
 /* New space dialog */
 /* ---- channel info and moderation ----
@@ -2051,7 +2053,7 @@ function chInfoDlg() {
     <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3>${own ? '<button class="btn2 sm" data-a="chedit">Edit</button>' : ''}<button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x}</button></div>
     ${fz ? frozenBanner(x.id) : ''}
     ${x.desc ? `<p>${esc(x.desc)}</p>` : own ? '<p class="chnone">No description yet. <button class="tlink inl" data-a="chedit">Add one</button></p>' : ''}
-    <dl class="chfacts"><dt>Channel by</dt><dd>${fz ? 'Deleted account' : `${av(o, 'xs')}@${esc(o)}`}</dd><dt>Members</dt><dd>${isPrivate(x.id) && !isJoined(x.id) ? n : `<button class="tlink inl" data-a="members" aria-label="Members, ${n}">${n}</button>`}</dd><dt>Visibility</dt><dd>${isPrivate(x.id) ? 'Private: only members can read or post' : 'Open: anyone can read and join'}</dd></dl>
+    <dl class="chfacts"><dt>Channel by</dt><dd>${fz ? 'Unavailable' : `${av(o, 'xs')}@${esc(o)}`}</dd><dt>Members</dt><dd>${isPrivate(x.id) && !isJoined(x.id) ? n : `<button class="tlink inl" data-a="members" aria-label="Members, ${n}">${n}</button>`}</dd><dt>Visibility</dt><dd>${isPrivate(x.id) ? 'Private: only members can read or post' : 'Open: anyone can read and join'}</dd></dl>
     ${own ? `<div class="chfoot"><button class="tlink" data-a="modlog">Moderation log</button>${isPrivate(x.id) ? `<button class="tlink" data-a="chlinks">Invite to ${esc(spName(x.id))}</button>` : ''}</div>` : ''}</div>`
     + (st.chEdit ? chEditDlg(x) : '') + (st.modlog ? modLogDlg(x) : '') + (st.members ? membersDlg(x) : '') + (st.chLinks ? chLinksDlg(x) : '');
 }
@@ -2064,7 +2066,7 @@ function membersDlg(x) {
   /* the badges ("You", "Owner") sit at the row's end, before the "…" menu; a row without a menu keeps its place
      empty when other rows have one, so every row's badges end at the same edge */
   const badges = m => m.u === me() || m.role === 'owner' ? `<span class="mlbadges">${m.u === me() ? '<span class="chip">You</span>' : ''}${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}</span>` : '';
-  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}</span>${badges(m)}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : own ? '<span class="mlmore" aria-hidden="true"></span>' : ''}</li>`;
+  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}</span>${badges(m)}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, `Remove from ${nm}`) : ''), false) : own ? '<span class="mlmore" aria-hidden="true"></span>' : ''}</li>`;
   const bans = (BANS[x.id] || []).slice().sort((a, b) => b.at - a.at);
   return `<div class="scrim ce-scrim" data-a="membersclose"></div><div class="dialog chdlg cedlg mbdlg" role="dialog" aria-modal="true" aria-labelledby="mb-h" tabindex="-1">
     <div class="chdlg-h">${glyph(x)}<h3 id="mb-h">Members of ${nm}</h3><button class="iconbtn" data-a="membersclose" aria-label="Close">${I.x}</button></div>
@@ -2076,8 +2078,8 @@ function memberActDlg() {
   const m = st.memberAct; if (!m) return '';
   const nm = esc(spName(m.sp)), who = '@' + esc(m.u), ban = m.k === 'ban';
   const text = !ban ? `${who} stops being a member of ${nm} and can no longer read it. A new invite link lets them join again.`
-    : isPrivate(m.sp) ? `${who} stops being a member of ${nm} and can no longer read it, write in it or join it with a link. You can unban them in the member list.`
-    : `${who} stops being a member of ${nm} and can no longer write in it or join it. An open channel stays readable by anyone. You can unban them in the member list.`;
+    : isPrivate(m.sp) ? `${who} is removed from ${nm} and can't read it, write in it or join it again with a link. You can unban them in the member list.`
+    : `${who} can no longer write in ${nm} or join it. Anyone can still read an open channel. You can unban them in the member list.`;
   return `<div class="scrim" style="z-index:46" data-a="memno"></div><div class="dialog" style="z-index:47" role="alertdialog" aria-modal="true" aria-labelledby="mact-h" aria-describedby="mact-p"><h3 id="mact-h">${ban ? 'Ban' : 'Remove'} ${who} from ${nm}?</h3><p id="mact-p">${text}</p><div class="dacts"><button class="btn2" data-a="memno">Cancel</button><button class="btn1 danger" data-a="memyes">${ban ? 'Ban' : 'Remove'}</button></div></div>`;
 }
 /* closing the confirm puts focus on the "..." button that opened its menu; when that row is gone, on the info
@@ -2100,22 +2102,22 @@ function banMember(sp, u) {
 const admissionOf = (sp, u) => (MEMBERSHIP[sp] || []).find(m => m.u === u)?.adm || 0;
 function removeMember(sp, u, adm) {
   if (!isMemberOf(sp, u)) { toast(`@${u} had already left ${spName(sp)}.`); return; }
-  if (adm != null && admissionOf(sp, u) !== adm) { toast('This item changed after you saw it. Look at it again.', { alert: true }); return; }
+  if (adm != null && admissionOf(sp, u) !== adm) { toast('This changed after you opened it. Check it and try again.', { alert: true }); return; }
   dropMember(sp, u); (PENDING[u] ||= []).push({ text: `You are no longer a member of ${spName(sp)}.`, sp });
   toast(`Removed @${u} from ${spName(sp)}.`);
 }
 /* Invite links of a private channel, stacked over the info dialog. An open link past its expiry is left out; a
-   revoked one stays as "Revoked", with Undo only while it has not expired (it could not work again after that). */
+   revoked one stays as "Revoked", with Restore only while it has not expired (it could not work again after that). */
 function chLinksDlg(x) {
   const nm = esc(spName(x.id));
   const list = CH_LINKS.filter(l => l.sp === x.id && !(l.state === 'open' && Date.parse(l.expires) <= NOW)).sort((a, b) => a.created < b.created ? 1 : -1);
   const row = (l, i) => { const ex = 'Expires ' + day(l.expires), name = `link ${i + 1}, expires ${day(l.expires)}`;
     const btns = l.state === 'open' ? `<button type="button" class="btn2 sm" data-a="chlinkcopy" data-id="${l.id}" aria-label="Copy ${name}">Copy</button><button type="button" class="btn2 sm" data-a="chlinkrevoke" data-id="${l.id}" aria-label="Revoke ${name}">Revoke</button>`
-      : l.state === 'revoked' && Date.parse(l.expires) > NOW ? `<button type="button" class="btn2 sm" data-a="chlinkundo" data-id="${l.id}" aria-label="Undo revoking ${name}">Undo</button>` : '';
-    return `<li><span><code class="ilink">${esc(chLinkUrl(x.name, l.code))}</code><small>${l.state === 'used' ? `Used by @${esc(l.usedBy)}` : l.state === 'revoked' ? 'Revoked' : ex}</small></span>${btns ? `<span class="acts">${btns}</span>` : ''}</li>`; };
+      : l.state === 'revoked' && Date.parse(l.expires) > NOW ? `<button type="button" class="btn2 sm" data-a="chlinkundo" data-id="${l.id}" aria-label="Restore ${name}">Restore</button>` : '';
+    return `<li><span><code class="ilink">${esc(chLinkUrl(x.name, l.code))}</code><small>${l.state === 'used' ? 'Used' : l.state === 'revoked' ? 'Revoked' : ex}</small></span>${btns ? `<span class="acts">${btns}</span>` : ''}</li>`; };
   return `<div class="scrim ce-scrim" data-a="chlinksclose"></div><div class="dialog chdlg cedlg ildlg" role="dialog" aria-modal="true" aria-labelledby="il-h">
     <div class="chdlg-h">${glyph(x)}<h3 id="il-h">Invite to ${nm}</h3><button class="iconbtn" data-a="chlinksclose" aria-label="Close">${I.x}</button></div>
-    <div class="cebody"><p class="cefine">A private channel admits people only by invite link. Each link works for one person and expires after 7 days.</p>
+    <div class="cebody"><p class="cefine">People join a private channel only with an invite link. Each link works for one person and expires after 7 days.</p>
     ${list.length ? `<ul class="mlist ilist" aria-label="Invite links">${list.map(row).join('')}</ul>` : ''}<div><button type="button" class="btn1 sm" data-a="chlinknew">Create an invite link</button></div></div></div>`;
 }
 /* Owner's editor: the About text, in a dialog above the info dialog */
@@ -2170,7 +2172,7 @@ function newSpaceDlg() {
   return `<div class="scrim" data-a="newspaceclose"></div><div class="dialog nsdlg" role="dialog" aria-modal="true" aria-labelledby="ns-h"><h3 id="ns-h">New channel</h3>
     <form class="pform" data-form="newspace:x"><label>Name<span class="hwrap"><span>#</span><input id="ns-name" value="${esc(c.name)}" placeholder="reading-group" autocomplete="off" spellcheck="false"${c.err ? ' aria-invalid="true" aria-describedby="ns-err"' : ''}></span><small>Lowercase letters, numbers and dashes.</small></label>
     <label>What is it for?<textarea id="ns-desc" rows="2" placeholder="One or two sentences shown at the top of the channel">${esc(c.desc)}</textarea></label>
-    <div class="nsvis" role="radiogroup" aria-label="Visibility">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people you add can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
+    <div class="nsvis" role="radiogroup" aria-label="Visibility">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people invited with a link can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
     ${c.err ? `<p class="ferr" id="ns-err" role="alert">${esc(c.err)}</p>` : ''}${st.offline ? '<p class="ferr" role="status">Creating a channel needs a connection.</p>' : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1"${st.offline ? ' disabled' : ''}>Create channel</button></div></form></div>`;
 }
 function createSpace() {
@@ -2194,15 +2196,15 @@ function renderNetwork() {
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
   /* while the feed's read is pending (Reads: Loading): one placeholder card in place of the threads and the empty line */
   const loading = st.reads === 'loading' && !locked;
-  const empty = loading ? '' : locked ? `<div class="row"><p class="empty saved-empty">This channel is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
+  const empty = loading ? '' : locked ? `<div class="row"><p class="empty saved-empty">This channel is private. You need an invite link to join.</p><div></div></div>`
     : st.space === 'saved' && !posts.length ? `<div class="row">${savedEmpty()}<div></div></div>`
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <a class="tlink inl" href="#browse" data-a="browse">Browse channels</a></p><div></div></div>'
-    : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
+    : SP[st.space] && !posts.length ? `<div class="row"><p class="empty saved-empty">No threads here yet.${isFrozen(st.space) ? '' : ' Ask the first question.'}</p><div></div></div>` : '';
   /* no composer in a locked, frozen or not-joined channel, or on Home and Saved with no channel to post to */
   const noComposer = locked || (SP[st.space] && ((!isJoined(st.space) && st.auth === 'in') || isFrozen(st.space))) || ((st.space === 'home' || st.space === 'saved') && !postable().length);
   $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${SP[st.space] && isFrozen(st.space) ? `<div class="row new-row">${frozenBanner(st.space)}<div></div></div>` : ''}${noComposer ? '' : composerOrLock(v)}
-    ${empty}${loading ? '<div class="row"><div class="card skel" id="k-feedload" role="status" aria-label="Loading" aria-busy="true"><span></span><span></span><span></span></div><div></div></div>' : ''}${(loading ? [] : posts).map(p => `<div class="row">${card(p)}<aside class="mgn">${p.summary && st.loadingSummaries ? '' : p.summary && st.offline && p.k === 'post' ? '<div class="stick" role="status"><p class="empty">Available when online.</p></div>' : p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
+    ${empty}${loading ? '<div class="row"><div class="card skel" id="k-feedload" role="status" aria-label="Loading threads" aria-busy="true"><span></span><span></span><span></span></div><div></div></div>' : ''}${(loading ? [] : posts).map(p => `<div class="row">${card(p)}<aside class="mgn">${p.summary && st.loadingSummaries ? '' : p.summary && st.offline && p.k === 'post' ? `<div class="stick" role="status"><p class="empty">Couldn't load the rest of this thread.</p></div>` : p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
@@ -2267,7 +2269,7 @@ app.addEventListener('click', e => {
   if (a === 'chlinkcopy') { const l = CH_LINKS.find(x => x.id === d.id), t = chLinkUrl(SP[l.sp].name, l.code), fail = () => { toast('The link could not be copied. Select it and copy it by hand.', { alert: true }); render(); };
     try { navigator.clipboard.writeText(t).then(() => { toast('Link copied.'); render(); }, fail); } catch { fail(); } return; }
   if (a === 'chlinkrevoke') { CH_LINKS.find(x => x.id === d.id).state = 'revoked'; toast('Link revoked.'); render(); return; }
-  if (a === 'chlinkundo') { CH_LINKS.find(x => x.id === d.id).state = 'open'; toast('Link restored.'); render(); return; }
+  if (a === 'chlinkundo') { CH_LINKS.find(x => x.id === d.id).state = 'open'; toast('Invite link restored.'); render(); return; }
   if (a === 'rmopen') { st.menu = null; st.rm = { pid: d.id, note: '' }; render(); $('#rm-note')?.focus(); return; }
   if (a === 'rmclose') { closeRm(); return; }
   if (a === 'chinfo') { st.chInfo = d.id; render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
@@ -2374,7 +2376,7 @@ function lookPhrase(range, text) {
   return n >= 1 && n <= 4 ? t : null;
 }
 /* select text in an answer to branch from it: a mouse selection, or a keyboard one (selectionchange, 120 ms). Look up
-   and Branch here sit in one group, "Selection". */
+   and Branch here sit in one group, "Selected text". */
 const selClear = () => $('#selwrap')?.remove();
 function showSelActions(keep) {
     const sel = getSelection(), t = sel && sel.toString().replace(/\s+/g, ' ').trim();
@@ -2391,7 +2393,7 @@ function showSelActions(keep) {
     const tops = new Set([...sel.getRangeAt(0).getClientRects()].filter(x => x.width > 1).map(x => Math.round(x.top / 4)));
     const look = lookPhrase(sel.getRangeAt(0), st.selText), y = r.bottom - A.top + 8;
     if (look) st.lookText = look;
-    app.insertAdjacentHTML('beforeend', `<div id="selwrap" role="group" aria-label="Selection">${look ? `<button id="sellook" data-a="sellook" data-id="${pid}" style="top:${y}px">${SEARCH}Look up</button>` : ''}<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${y + (look ? 34 : 0)}px">${ARROW_REPLY}Branch here</button></div>`);
+    app.insertAdjacentHTML('beforeend', `<div id="selwrap" role="group" aria-label="Selected text">${look ? `<button id="sellook" data-a="sellook" data-id="${pid}" style="top:${y}px">${SEARCH}Look up</button>` : ''}<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${y + (look ? 34 : 0)}px">${ARROW_REPLY}Branch here</button></div>`);
     const sb = $('#selbranch'), lk = $('#sellook'), w = Math.max(sb.offsetWidth, lk?.offsetWidth || 0), x = tops.size > 1 ? r.left - A.left : r.right - A.left - w;
     for (const el of [sb, lk]) if (el) { el.style.minWidth = w + 'px'; el.style.left = Math.max(8, Math.min(x, A.width - w - 8)) + 'px'; }
 }
@@ -2617,17 +2619,17 @@ D.posts.push({ id: 'seedfrz1', s: 'history', u: 'ines.v', k: 'post', createdAt: 
    another member, an ask that stopped at @ines.v's overdraft limit, and a fixture answer cut at the run's limit */
 const SEED_FAIL = { id: 'seedfail1', s: 'ml', u: 'ines.v', k: 'ask', createdAt: '2026-11-16T08:40:00Z', q: 'list the main long-context retrieval benchmarks and what each one measures', sum: '', tok: 0, likesBase: 0, model: 'Gemini 3.8 Flash', run: { status: 'failed', step: 0, attempt: 1, u: 'ines.v', model: 'Gemini 3.8 Flash', text: '', fail: { why: 'tokens' } } };
 const SEED_FAIL2 = { id: 'seedfail2', s: 'ml', u: 'jun.park', k: 'ask', createdAt: '2026-11-16T06:10:00Z', q: 'which open models report results on the ruler benchmark, and at what context lengths', sum: '', tok: 0, likesBase: 0, model: 'Claude Fable 5.1', run: { status: 'failed', step: 0, attempt: 1, u: 'jun.park', model: 'Claude Fable 5.1', text: '', fail: { why: 'key', detail: 'key_unset' }, pay: 'key:anthropic' } };
-const SEED_NOTE = { id: 'seednote1', s: 'ml', u: 'ines.v', k: 'ask', createdAt: '2026-11-15T12:20:00Z', q: 'summarize what the 2026 sparse attention papers claim about memory use at 1m tokens', sum: '', tok: 64000, likesBase: 0, model: 'Claude Fable 5.1', run: { status: 'complete', step: 3, attempt: 1, u: 'ines.v', model: 'Claude Fable 5.1', text: '', note: "Stopped: this week's included tokens ran out." } };
+const SEED_NOTE = { id: 'seednote1', s: 'ml', u: 'ines.v', k: 'ask', createdAt: '2026-11-15T12:20:00Z', q: 'summarize what the 2026 sparse attention papers claim about memory use at 1m tokens', sum: '', tok: 64000, likesBase: 0, model: 'Claude Fable 5.1', run: { status: 'complete', step: 3, attempt: 1, u: 'ines.v', model: 'Claude Fable 5.1', text: '', note: OVERDRAFT_NOTE } };
 D.posts.push(SEED_FAIL, SEED_FAIL2, SEED_NOTE); D.rich[SEED_FAIL.id] = ''; D.rich[SEED_FAIL2.id] = '';
 D.rich[SEED_NOTE.id] = '<p>Three papers report memory use at one million tokens. Two keep a fixed budget of attended blocks per query, which holds memory roughly flat as context grows.</p><p>The third compares against dense attention only up to 256k tokens and extrapolates';
-{ const p = byId('01M7HM6J60Z1FFM56RSRTHFM2Y'); if (p) p.run = { status: 'complete', step: 3, attempt: 1, u: p.u, model: modelOf(p), text: '', note: "Stopped at the run's token limit." }; }
+{ const p = byId('01M7HM6J60Z1FFM56RSRTHFM2Y'); if (p) p.run = { status: 'complete', step: 3, attempt: 1, u: p.u, model: modelOf(p), text: '', note: 'Stopped: Reached token limit for a single run.' }; }
 /* summary threads: outside the replication window; offline their records cannot be fetched */
 ['01M7GB06P0P8ZXPB0DEXY3G3RT', '01M7HQMDT05MJQ0F8KR8KKWF5G'].forEach(id => { const p = byId(id); if (p) p.summary = true; });
 /* moderated and deleted items: a hidden reply and a deleted reply with someone else's reply under it (#sci-fi), a
    removed comment on a branch of @ines.v's ask in #sci-fi */
 { const r = (D.rp['01M7HM6J60BNFNCYM0WE5BCMK1'] || [])[1]; if (r) r.mod = 'hidden';
   (D.rp['01M7HM6J60BNFNCYM0WE5BCMK1'] ||= []).push({ u: 'oduya', createdAt: '2026-11-15T19:00:00Z', t: '', del: true, kids: [{ u: 'mira_k', createdAt: '2026-11-15T19:40:00Z', t: 'The Sprawl trilogy has an early version of this too, in the matrix deals.' }] }); }
-/* a post its author deleted after someone replied: the "[deleted]" shell keeps the replies */
+/* a post its author deleted after someone replied: the "Deleted by its author" shell keeps the replies */
 D.posts.push({ id: 'seeddel1', s: 'scifi', u: 'hal_b', k: 'post', del: true, q: '', createdAt: '2026-11-15T10:00:00Z', tok: 0, likesBase: 0 });
 D.rp.seeddel1 = [{ u: 'mira_k', createdAt: '2026-11-15T11:00:00Z', t: 'Accelerando has the same idea in its first chapter, with agents that trade on behalf of their owners.' }];
 /* a plain post by @ines.v in #ml, so "replied to your post" and a mention in a reply have something to point at */
@@ -2656,7 +2658,7 @@ const NOTIFS = {
     { id: 'n8', k: 'branch', by: 'jun.park', pid: '01M7H6F3P02JFX3X2X804X3986', at: '2026-11-14T22:00:00Z', read: true },
     /* a removal of a thread whose record is not held: "removed your thread" */
     { id: 'n12', k: 'removed', by: 'hal_b', pid: 'unloaded-thread', s: 'markets', note: 'Off topic for this channel.', at: '2026-11-12T16:00:00Z', read: true },
-    /* a mention on a summary thread: offline, its title reads “a thread” */
+    /* a mention on a summary thread: offline, its title reads "a thread", without quotation marks */
     { id: 'n13', k: 'mention', where: 'reply', by: 'dmitri_k', pid: '01M7HQMDT05MJQ0F8KR8KKWF5G', at: '2026-11-12T14:00:00Z', read: true },
   ],
   /* an invite used by an account that was later deleted */
@@ -2751,7 +2753,7 @@ function saveThread(id) {
 /* refusals before or at send: a ban in the channel stops every write there; the mock bar's Writes: Refuse refuses */
 function refused(space) {
   if (space && st.auth === 'in' && isBanned(space, st.user)) { toast(`You are banned from ${spName(space)}.`, { alert: true }); return true; }
-  if (st.mw === 'refuse') { toast('You don’t have permission to do this.', { alert: true }); return true; }
+  if (st.mw === 'refuse') { toast("You don't have permission to do this.", { alert: true }); return true; }
   return false;
 }
 /* run-starting writes: not sent when nothing can pay for the model, or with 20 of the member's runs queued */
@@ -2768,7 +2770,7 @@ function runBlocked(model) {
    on screen, such as a branch that is not the selected row) is counted in one shared toast. */
 const OUTBOX = [];
 let obSeq = 0;
-const RATE_MSG = 'Too many requests from your account. Try again in a minute.';
+const RATE_MSG = 'Too many requests from your account. Try again in a few minutes.';
 const LIMIT_MSG = { join: 'You can join 60 channels an hour. Try again in 12 minutes.', chlink: 'You can make 20 channel invite links a day. Try again in 3 hours.' };
 /* why a write would not be sent now: null, or { limit } (a null limit: no connection) */
 const heldNow = kind => st.offline ? { limit: null } : st.ml === 'reached' && LIMIT_MSG[kind] ? { limit: LIMIT_MSG[kind] } : st.mw === 'rate' ? { limit: RATE_MSG } : null;
@@ -2791,7 +2793,7 @@ function restoreText(form, text) {
   st.restore = { id: 'in-' + form, text };
 }
 const dropNode = (pid, n) => { const l = EXTRA[pid] || [], i = l.indexOf(n); if (i >= 0) l.splice(i, 1); if (st.sel[pid] === n.id) st.sel[pid] = null; };
-const notSentLine = id => { const e = OUTBOX.find(x => x.id === id); return e ? `<div class="notsent" data-ob="${e.id}"><span>${e.limit ? `Not sent: ${esc(e.limit)}` : 'Not sent'}</span><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsretry" data-id="${e.id}">Retry</button><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsdiscard" data-id="${e.id}">Discard</button></div>` : ''; };
+const notSentLine = id => { const e = OUTBOX.find(x => x.id === id); return e ? `<div class="notsent" data-ob="${e.id}"><span>${e.limit ? `Not sent. ${esc(e.limit)}` : 'Not sent'}</span><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsretry" data-id="${e.id}">Retry</button><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsdiscard" data-id="${e.id}">Discard</button></div>` : ''; };
 /* runs after the page renders, so it can tell which items show their own line */
 const offScreen = () => OUTBOX.filter(e => !e.item || !app.querySelector(`.notsent [data-id="${e.id}"]`));
 /* the outbox toast and the upgrade notice are added once and then only their text changes while they show */
@@ -2895,7 +2897,7 @@ const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth"
 /* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
 const CODE_COPY = { h: 'Join with invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
 const BAD_CODE = "This invite code doesn't work. Ask the person who invited you for a new one.";
-const ATTEMPTS_MSG = 'Too many attempts. Wait a while and try again.';
+const ATTEMPTS_MSG = 'Too many attempts. Try again in a few minutes.';
 /* a pasted link or a typed code: cut at the last '#' or '/', drop spaces and dashes, add a missing SESS prefix */
 const parseCode = s => { let t = s.trim().replace(/\/+$/, ''); t = t.slice(Math.max(t.lastIndexOf('#'), t.lastIndexOf('/')) + 1);
   let c = t.toUpperCase().replace(/[\s-]+/g, ''); if (c.startsWith('SESS')) c = c.slice(4);
@@ -2929,8 +2931,8 @@ function authScreen() {
       ${inv && !st.codeErr && !st.redeemMode ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     const P = PROVIDER();
-    body = `<div class="auth-c">${back(st.fromLink || st.intent !== 'signup' ? 'landing' : 'code')}<h2>Sign in with ${P}</h2><p>Session uses your name, handle and profile picture from ${P} for your profile. It cannot post or read your messages.</p>
-      <p>Use the same account each time you sign in.</p>
+    body = `<div class="auth-c">${back(st.fromLink || st.intent !== 'signup' ? 'landing' : 'code')}<h2>Sign in with ${P}</h2><p>Session uses your name, handle and profile picture from ${P} for your profile. It can't post or change anything on ${P}.</p>
+      <p>Use the same ${P} account each time. Signing in with a different one starts a new Session account.</p>
       <div class="auth-acts"><button class="xbtn" id="x-go" data-ma="xgo">${pMark(st.provider)}Continue to ${P}</button></div>${st.xErr ? `<p class="ferr" role="alert">${esc(st.xErr)}</p>` : ''}</div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
@@ -2989,7 +2991,7 @@ function treeSection() {
 }
 function invSection() {
   /* every open link with Copy and a revoke x, a button for a new one, then the people you invited */
-  /* a site admin has no cap: "N open", and the create button always shows */
+  /* a site admin has no cap: the create button always shows */
   /* while the invites load, or after their read failed, the box holds only that line */
   if (st.reads === 'loading') return '<section class="box invc">Loading…</section>';
   if (st.reads === 'invites') return '<section class="box invc"><p class="ferr">Your invites could not be loaded.</p></section>';
@@ -2999,7 +3001,7 @@ function invSection() {
   /* deleted accounts are left out here; they stay in the invite tree as "Deleted account" */
   const ppl = MEMBERS.filter(m => m.inviter === st.user && !gone(m.u)).sort((a, b) => a.joined < b.joined ? 1 : -1);
   const revokeBtn = x => `<button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button>`;
-  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${invitesLeft(st.user)} of ${total} left`}</small></div>
+  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${invitesLeft(st.user)} of ${total} left</small></div>
     ${open.map(x => x.unreadable ? `<div class="ilink"><code>Code unavailable</code>${revokeBtn(x)}</div>` : `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button>${revokeBtn(x)}</div>`).join('')}
     ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
     ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
@@ -3019,7 +3021,7 @@ const CHECK_CIRCLE = '<svg class="i kcc" viewBox="0 0 16 16" aria-hidden="true">
 const kStatus = k => k.status === 'working' ? `<span class="chip kchip ok">${CHECK_CIRCLE}Valid</span>` : k.status === 'invalid' ? '<span class="chip kchip bad">Invalid</span>' : '<span class="chip kchip">Checking…</span>';
 const kErr = id => st.keyErr && st.keyForm === id ? `<p class="ferr" role="alert">${esc(st.keyErr)}</p>` : '';
 const kInput = (id, P, cancel = true) => `<form class="kform" data-mform="key:${id}"><input id="in-key-${id}" type="password" placeholder="Paste key (${P.ph})" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save</button>${cancel ? `<button type="button" class="btn2 sm" data-ma="keycancel">Cancel</button>` : ''}</form>`;
-const kConfirm = (id, P) => `<div class="kconfirm"><span>Remove the ${P.name} key? Asks billed to it will stop.</span><span class="grow"></span><button class="btn2 sm" data-ma="keykeep">Keep</button><button class="btn1 sm danger" data-ma="keyremove" data-k="${id}">Remove</button></div>`;
+const kConfirm = (id, P) => `<div class="kconfirm"><span>Remove the ${P.name} key?${id === 'openai' ? '' : ' Asks billed to it will stop.'}</span><span class="grow"></span><button class="btn2 sm" data-ma="keykeep">Keep</button><button class="btn1 sm danger" data-ma="keyremove" data-k="${id}">Remove</button></div>`;
 const kRemove = id => `<button class="btn2 sm" data-ma="keyask" data-k="${id}">Remove</button>`;
 const kAdd = (id, cls = 'btn2 sm') => `<button class="${cls}" data-ma="keyadd" data-k="${id}">Add key</button>`;
 function keysSection() {
@@ -3076,10 +3078,10 @@ const AT_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx=
 const PERSON_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>';
 const N_KIND = { mention: AT_IC, reply: ARROW_REPLY, branch: BRANCH_IC, comment: BUBBLE, removed: RM_IC, invite_used: PERSON_IC };
 /* a thread with no text (deleted or removed) is quoted as “a deleted thread”; one whose record is not loaded yet (a
-   summary thread while offline) as “a thread” */
+   summary thread while offline) as a thread, without quotation marks */
 const titleOf = (p, loading) => loading ? 'a thread' : !p || p.removed || p.del ? 'a deleted thread' : clip(p.k === 'ask' ? tree(p).nodes.r.q : p.q, 64);
 function notifText(n) {
-  const p = n.pid ? byId(n.pid) : null, loading = !!p?.summary && st.offline, t = `<span class="nt">“${esc(titleOf(p, loading))}”</span>`, who = `<b>${gone(n.by) ? 'Deleted account' : '@' + esc(n.by)}${n.n > 1 ? ' and others' : ''}</b>`;
+  const p = n.pid ? byId(n.pid) : null, loading = !!p?.summary && st.offline, t = `<span class="nt">${loading ? 'a thread' : `“${esc(titleOf(p, loading))}”`}</span>`, who = `<b>${gone(n.by) ? 'Deleted account' : '@' + esc(n.by)}${n.n > 1 ? ' and others' : ''}</b>`;
   if (n.k === 'mention') return `${who} mentioned you in a ${n.where || 'post'} on ${t}`;
   if (n.k === 'reply') return `${who} replied to your post ${t}`;
   if (n.k === 'branch') return `${who} branched from your ask ${t}`;
@@ -3112,7 +3114,7 @@ function openNotif(id) {
   if (!n.read) { n.read = true; sendOrHold({ kind: 'read', undo: () => { n.read = false; } }); }
   st.menu = null;
   if (n.k === 'invite_used') { st.screen = 'members'; render(); return; }
-  const p = byId(n.pid); if (!p) { toast('This thread is not available.'); render(); return; }
+  const p = byId(n.pid); if (!p) { toast('This thread is no longer available.'); render(); return; }
   let sel = n.rsel ?? (n.node && tree(p).nodes[n.node] ? n.node : undefined);
   goThread(p.id, sel);
 }
@@ -3121,7 +3123,7 @@ function openNotif(id) {
    leave the address as it is (Open as its own thread). */
 function goThread(pid, sel, { keepUrl = false } = {}) {
   const p = byId(pid);
-  if (!p || !SPACE_META[p.s] || (isPrivate(p.s) && !isJoined(p.s))) { toast('This thread is not available.'); render(); return; }
+  if (!p || !SPACE_META[p.s] || (isPrivate(p.s) && !isJoined(p.s))) { toast('This thread is no longer available.'); render(); return; }
   st.screen = 'network'; st.space = p.s; st.asking = null; st.menu = null;
   if (sel != null) { if (p.k === 'ask') st.sel[pid] = sel; else st.rsel[pid] = sel; }
   render();
@@ -3134,7 +3136,7 @@ function goThread(pid, sel, { keepUrl = false } = {}) {
 /* ---- admin page (site admins only): the default model and the default effort for members' asks ---- */
 /* a default change reaches only composers with no choice of their own (curModel, curEffort) */
 /* a refused save (mock bar: Writes, Refuse) puts the previous choice back and shows the server's message under its group */
-const admRefused = g => { if (st.mw !== 'refuse') return false; st.admErr = { [g]: 'You don’t have permission to do this.' }; render(); app.querySelector(`[data-adm="${g}"]:checked`)?.focus(); return true; };
+const admRefused = g => { if (st.mw !== 'refuse') return false; st.admErr = { [g]: 'Only site admins can change these settings.' }; render(); app.querySelector(`[data-adm="${g}"]:checked`)?.focus(); return true; };
 function setDefault(m) {
   if (!MODELS[m] || keyOnly(m) || admRefused('def')) return;
   ADMIN.def = m; st.admErr = null;
@@ -3143,9 +3145,9 @@ function setDefault(m) {
 function setDefaultEffort(e) {
   if (!EFFORT_OPTS.includes(e) || admRefused('eff')) return;
   ADMIN.effort = e; st.admErr = null;
-  toast(`Default effort set to ${cap1(e)}.`); render();
+  toast(`Default effort set to ${effortLabel(e)}.`); render();
 }
-const notFoundPage = () => `<div class="page"><div class="page-in narrow"><h2>Not found</h2><p class="lede">This page does not exist, or it was removed.</p><button class="ghost" data-ma="go" data-to="network">Go to Home</button></div></div>`;
+const notFoundPage = () => `<div class="page"><div class="page-in narrow"><h2>Not found</h2><p class="lede">This page doesn't exist, or you don't have access to it.</p><button class="ghost" data-ma="go" data-to="network">Go to Home</button></div></div>`;
 function adminPage() {
   const models = MODEL_OPTS.filter(m => MODELS[m].payers.includes('included'));
   const row = (name, val, label, sub, on) => `<label class="amrow${on ? ' on' : ''}"><span class="radio"><input type="radio" name="${name}" value="${val}" data-adm="${name}"${on ? ' checked' : ''}> <span><b>${esc(label)}${sub ? ` <small>${esc(sub)}</small>` : ''}</b></span></span></label>`;
@@ -3155,14 +3157,14 @@ function adminPage() {
   if (st.reads === 'loading') return '<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p><p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p></div></div>';
   return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p>
     <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div>${err('def')}</section>
-    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section>
+    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, effortLabel(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section>
     ${adminInvites(err)}</div></div>`;
 }
 /* Invites on Site Admin: look a member up by handle, see what they have left, and give more (1-100). Giving raises the
    member's total, so their Invites page shows it. A deleted or unknown handle: "No account with that handle." */
 function adminInvites(err) {
   const a = st.admInv || { h: '', n: '1', found: null }, u = a.found;
-  const line = u ? `@${esc(u)}: ${invitesLeft(u)} of ${inviteTotal(u)} invites left (${invitesUsed(u)} used${invitesOpen(u) ? `, ${invitesOpen(u)} open` : ''})` : '';
+  const line = u ? `@${esc(u)}: ${invitesLeft(u)} of ${inviteTotal(u)} ${inviteTotal(u) === 1 ? 'invite' : 'invites'} left (${invitesUsed(u)} used)` : '';
   return `<section class="box adm"><h3>Invites</h3><p class="sub">Each member starts with ${SLOTS} invites. Give more to a member who has used theirs.</p>
     <form class="kform" data-mform="admlook"><span class="hwrap"><span aria-hidden="true">@</span><input id="adm-h" value="${esc(a.h)}" placeholder="handle" autocomplete="off" spellcheck="false" aria-label="Handle"></span><button type="submit" class="btn2 sm">Look up</button></form>
     ${line ? `<p class="admline" id="adm-line" role="status">${line}</p><form class="kform" data-mform="admgive" novalidate><input id="adm-n" class="admn" type="number" min="1" max="100" step="1" value="${esc(a.n)}" aria-label="Invites to give"><button type="submit" class="btn1 sm">Give invites</button></form>` : ''}${err('inv')}</section>`;
@@ -3509,7 +3511,7 @@ function useChLink(lid) {
   const l = CH_LINKS.find(x => x.id === lid), sp = l.sp; st.chLink = null; st.chLinkId = null; st.screen = 'network'; st.space = sp; st.authOpen = false;
   if (isJoined(sp)) { render(); return; }  /* already a member: the code is dropped */
   if (isBanned(sp, st.user)) toast(`You are banned from ${spName(sp)}.`, { alert: true });
-  else if (l.state !== 'open' || Date.parse(l.expires) <= NOW || isFrozen(sp)) toast('This invite link has expired or was already used.', { alert: true });
+  else if (l.state !== 'open' || Date.parse(l.expires) <= NOW || isFrozen(sp)) toast('This invite link no longer works. Ask the channel owner for a new one.', { alert: true });
   else { addMember(sp, st.user); l.state = 'used'; l.usedBy = st.user; toast(`Joined ${spName(sp)}.`); }
   render();
 }
@@ -3572,7 +3574,7 @@ app.addEventListener('click', e => {
   if (a === 'fill') { st.code = d.code; st.codeTyped = null; st.codeErr = ''; render(); return; }
   if (a === 'xpick' || a === 'xgo') {
     /* the server refuses to start the sign-in (mock bar: Writes, Refuse or Rate limited) */
-    if (a === 'xgo' && (st.mw === 'refuse' || st.mw === 'rate')) { st.xErr = st.mw === 'rate' ? 'Too many sign-in attempts. Try again in a minute.' : 'Sign-in is not available right now. Try again later.'; render(); return; }
+    if (a === 'xgo' && (st.mw === 'refuse' || st.mw === 'rate')) { st.xErr = st.mw === 'rate' ? 'Too many sign-in attempts. Try again in 1 minute.' : 'Sign-in is not available right now. Try again later.'; render(); return; }
     const x = a === 'xgo' ? st.mockX : d.x, m = MEMBERS.find(mm => mm.x === x);
     st.xacct = x; st.xErr = '';
     /* an existing identity signs in and the code is ignored: a waiting account lands on the feed under the banner */
@@ -3611,7 +3613,7 @@ app.addEventListener('change', e => {
   if (k === 'eff') setDefaultEffort(t.value);
 });
 /* a refused choice puts the stored one back and shows the server's message under the choices, until the next choice */
-app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { if (st.mw === 'refuse') { st.billErr = 'You don’t have permission to do this.'; render(); return; } st.billErr = ''; BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
+app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { if (st.mw === 'refuse') { st.billErr = "You don't have permission to do this."; render(); return; } st.billErr = ''; BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
 app.addEventListener('submit', e => {
   const f = e.target.closest('[data-mform]'); if (!f) return;
   e.preventDefault();
@@ -3660,7 +3662,7 @@ app.addEventListener('submit', e => {
   if (kind.startsWith('key:')) {
     const id = kind.slice(4), P = PROVIDERS[id], v = f.querySelector('input').value.trim(); st.keyForm = id;
     const wrong = id === 'openai' && v.startsWith('sk-ant-');
-    st.keyErr = !v ? 'Paste a key.' : wrong ? 'That looks like an Anthropic key. Add it under Anthropic.' : !v.startsWith(P.prefix) || v.length < 24 || v.length > 512 || /\s/.test(v) ? `${P.name} keys start with ${P.prefix} and are longer than this. Copy the whole key from your ${P.name} account.` : '';
+    st.keyErr = !v ? 'Paste a key.' : wrong ? 'That looks like an Anthropic key. Add it under Anthropic.' : !v.startsWith(P.prefix) || v.length < 24 || v.length > 512 || /\s/.test(v) ? `${P.name} keys start with ${P.prefix}. Copy the whole key from your ${P.name} account.` : '';
     if (st.keyErr) { render(); $(`#in-key-${id}`)?.focus(); return; }
     if (st.ml === 'reached') { st.keyErr = 'Too many key checks. Try again in a few minutes.'; st.keyDraft = v; render(); const i = $(`#in-key-${id}`); if (i) { i.value = v; i.focus(); } return; }
     keys()[id] = { last4: v.slice(-4), added: new Date(NOW).toISOString(), status: 'checking' };
