@@ -149,6 +149,11 @@ test("the text of each notification kind, and of a coalesced one", (t) => {
     notifText({ ...base, type: "removed", actor: "olga", what: "post" }),
     "@olga removed your post",
   );
+  // the thread's record is not held: the kind is not guessed
+  t.is(
+    notifText({ ...base, type: "removed", actor: "olga", what: null, reason: "Off topic" }),
+    "@olga removed your thread: “Off topic”",
+  );
   t.is(
     notifText({ ...base, type: "invite_used", actor: "priya.n" }),
     "@priya.n joined Session with your invite",
@@ -333,6 +338,33 @@ test("a comment notification whose comment is not loaded fetches its thread, the
   hidden.clear();
   t.like(rowOf(partial)?.target, { kind: "thread", thread: node.th, sel: node.id });
   t.false(unloadedThreads(partial).some((u) => u.thread === node.th));
+});
+
+test("a removal names its thread's kind from the record, and no kind while the replica holds none", (t) => {
+  const replica = createFixtureReplica(FIXTURE_MEMBER, { runMs: null });
+  t.teardown(() => replica.dispose());
+  const removed = replica.all("notif").find((x) => x.type === "removed");
+  if (!removed?.th) throw new Error("no removal in the fixtures");
+  const key = `thread:${removed.th}`;
+  const kind = (replica.raw(key) as { k: "ask" | "post" }).k;
+  // the replica's answer for the removed thread's record
+  let thread: "held" | "missing" | "unloaded" = "held";
+  const partial = {
+    me: replica.me,
+    get: (k: string) =>
+      k !== key || thread === "held" ? replica.get(k) : thread === "missing" ? undefined : UNKNOWN,
+    list: replica.list.bind(replica),
+  } as unknown as ReplicaSource;
+  const text = () => {
+    const row = notificationsOf(partial).find((x) => x.id === removed.id);
+    return row ? notifText(row) : "";
+  };
+  t.regex(text(), new RegExp(` removed your ${kind}: “`));
+  // not loaded, and not served (fetched and absent): neither ask nor post
+  for (const state of ["unloaded", "missing"] as const) {
+    thread = state;
+    t.regex(text(), / removed your thread: “/, state);
+  }
 });
 
 test.serial("a notification about a private channel the viewer left is not listed", async (t) => {

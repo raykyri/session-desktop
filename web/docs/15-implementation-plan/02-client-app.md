@@ -248,14 +248,19 @@ replica's, clipped at 64 characters, in quotes (`titleOf`):
 - `branch`: "@x branched from your ask “title”" (a look-up too);
 - `comment`: "@x commented on your ask “title”";
 - `removed`: "@x removed your ask: “reason”" (or "post"; without a reason,
-  "@x removed your ask"). The mock also prints the title; the client cannot,
-  because the removal erases the text and the notification carries none
+  "@x removed your ask"; "thread" while the replica holds no record of the
+  thread, so the kind is not guessed). The mock also prints the title; the
+  client cannot, because the removal erases the text and the notification
+  carries none
   (01 C16, 04 O2);
 - `invite_used`: "@x joined Session with your invite". The mock also
   prints the code; the record stores none (04 I1).
 
 A thread the replica has no text for is quoted as “a deleted thread”, and
-one it has not loaded as “a thread”. An actor whose account was deleted
+one it has not loaded as “a thread”. While the page is open it fetches the
+threads it has not loaded, reading the log of each such thread's channel
+the replica does not read (an open channel the viewer left or was banned
+from) as a channel view does. An actor whose account was deleted
 reads "Deleted account". Coalesced `reply`, `branch` and `comment` records
 (01 C16) read "@x and others …" (a plan addition; the mock has no
 coalescing): `n` counts writes, not people. Opening a row

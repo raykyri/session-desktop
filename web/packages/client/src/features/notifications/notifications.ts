@@ -3,11 +3,18 @@
 // A record carries ids and no item text; the thread's title is the
 // replica's, clipped at 64 characters, in quotes (the mock's `titleOf`):
 // “a deleted thread” when it has no text left, “a thread” while it is not
-// loaded. A removed thread has no text left, so a removal names no title.
+// loaded. A removed thread has no text left, so a removal names no title; it
+// names the thread's kind (ask or post) from the thread's record, and "your
+// thread" while the replica holds no record of it.
+//
+// A row's thread may be in a channel whose log the replica does not read: an
+// open channel the viewer is not a member of, or was banned from. The page
+// reads those channels while it is open (`fetchNotificationThreads`), as a
+// channel view does, so that their threads can be fetched.
 
 import { spaceKey, threadKey, type NotifRec } from "@session/mutators";
 
-import { NotLoaded, UNKNOWN, known, type ReplicaSource } from "../../replica/source.js";
+import { NotLoaded, UNKNOWN, known, runQuery, type ReplicaSource } from "../../replica/source.js";
 import { DELETED_ACCOUNT, clip } from "../feed/format.js";
 
 export type NotifKind = NotifRec["type"];
@@ -33,8 +40,9 @@ export interface NotifRow {
   title: string | null | undefined;
   /** Where a mention is: a reply, a comment or the post itself. */
   where: "reply" | "comment" | "post";
-  /** The removed thread's kind. */
-  what: "ask" | "post";
+  /** The thread's kind; null while the replica holds no record of the
+   * thread (not loaded, or not served). */
+  what: "ask" | "post" | null;
   /** The owner's reason for a removal. */
   reason: string | null;
   /** The channel's name; null for an invite. */
@@ -96,7 +104,7 @@ export function notificationsOf(source: ReplicaSource): NotifRow[] {
         : n.item?.startsWith("comment:")
           ? "comment"
           : "post",
-      what: thread?.k === "post" ? "post" : "ask",
+      what: thread ? thread.k : null,
       reason: n.type === "removed" ? n.note : null,
       channel: space?.name ?? null,
       target,
@@ -119,6 +127,34 @@ export function unloadedThreads(source: ReplicaSource): { thread: string; space:
         (source.get(threadKey(n.th)) === UNKNOWN || commentOf(source, n) === UNKNOWN),
     )
     .map((n) => ({ thread: n.th as string, space: n.sp as string }));
+}
+
+/** Fetch the threads of rows the replica has not loaded, while the page is
+ * open; the returned function ends it. A thread is fetched from its
+ * channel's log (`open`), and the replica fetches it only once it reads
+ * that log. It reads the logs of the viewer's channels, but not the log of
+ * an open channel the viewer is not a member of (never joined, left, or
+ * banned from, which ends the membership): that log is read here
+ * (`watch`), as a channel view reads it, until the page closes. A thread
+ * whose fetch failed is retried by the replica, not on every change here. */
+export function fetchNotificationThreads(source: ReplicaSource): () => void {
+  const watching = new Map<string, (() => void) | undefined>();
+  const update = () => {
+    if (!source.ready()) return;
+    const unloaded = runQuery(() => unloadedThreads(source));
+    if (unloaded === UNKNOWN) return;
+    for (const u of unloaded) {
+      if (!watching.has(u.space)) watching.set(u.space, source.watch?.(u.space));
+      if (!source.unavailable?.(u.thread)) source.open?.(u.thread, u.space);
+    }
+  };
+  const unsubscribe = source.subscribe(update);
+  update();
+  return () => {
+    unsubscribe();
+    for (const end of watching.values()) end?.();
+    watching.clear();
+  };
 }
 
 /** A row's text in parts: who (bold), what they did, and the quoted title
@@ -154,7 +190,9 @@ export function notifParts(row: NotifRow): NotifParts {
     case "removed":
       return {
         who,
-        text: ` removed your ${row.what}${row.reason ? ": " : ""}`,
+        // without the thread's record the kind is not known, and the row
+        // does not guess it
+        text: ` removed your ${row.what ?? "thread"}${row.reason ? ": " : ""}`,
         quote: row.reason,
         reason: true,
       };
