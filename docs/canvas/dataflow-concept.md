@@ -6,6 +6,11 @@ A channel's canvas is a reactive document, like a spreadsheet. Every object is a
 wrote or an expression computing text from other cells. A post is a series of text cells. An ask is a text cell
 followed by a cell whose expression is `answer(above)`. Nothing re-runs without a click.
 
+By default a column is one person's multi-turn exchange with the model: question, answer, follow-up, answer. Other
+people join by branching, or by replying to a post. The model is a workspace setting (the mock uses Gemini 3.8 Flash).
+Every model cell uses it, nothing chooses a model per cell or per turn, and the model is named once at the top left.
+Cards show a mark and the short name ("Gemini").
+
 faketalk was unreachable (GitHub 404; antimatter15.com blocked by the network policy). The design follows the stated
 principles instead: everything is a cell, cells relate only by reference, references bind when a run starts, and
 every cell is inspectable and editable in place.
@@ -15,7 +20,8 @@ every cell is inspectable and editable in place.
 **Cell** `{ id, author, at, prev?, body, out?, prevOut? }`
 - `body.text`: written by a person; `@id` (or `@id#n`, passage n) is a reference, drawn as a chip.
 - `body.expr`: computed (grammar below).
-- `out = { html, read: [{id, hash}], expr, by, at }`: the last result and what it read; `prevOut` is the one before.
+- `out = { html, read: [{id, hash}], expr, by, model, at }`: the last result, what it read and which workspace model
+  produced it; `prevOut` is the one before.
 - `prev`: the cell this one follows. A series is a `prev` chain.
 
 **Placement** `{ head, x, y | dx, dy }` positions a column head.
@@ -79,7 +85,7 @@ read ("Read its question and 2 parts above"); clicking marks those parts. A re-r
 |---|---|
 | Thread (post) | root text cell; a multi-part post is a chain of text cells |
 | Thread (ask) | root text cell + `answer(above)` |
-| Node, Continue | question + answer appended at the tail |
+| Node, Continue | question + answer appended at the tail, normally by the person who started the column |
 | Branch, Branch here, Branch (ask beside) | branch with a relative Placement |
 | Passage branch, Look up | branch whose question carries `@id#n` |
 | Reply on a post | text cell appended, or a branch from the part it replies to |
@@ -87,7 +93,7 @@ read ("Read its question and 2 parts above"); clicking marks those parts. A re-r
 | Open as its own thread | give the branch head an absolute Placement; nothing is copied |
 | Save | a per-user set of ids, outside the model |
 | Channel | the canvas; Placements are per canvas |
-| Run record | `out`, `prevOut`, and the in-flight run |
+| Run record; model and effort pickers | `out` (with `out.model`), `prevOut`, the in-flight run; the model is a workspace setting |
 | Follow-up counts | derived from `prev` and references |
 
 ## Open questions
@@ -95,6 +101,8 @@ read ("Read its question and 2 parts above"); clicking marks those parts. A re-r
 - **Cost.** Who may re-run another person's answer, and who pays for "Re-run 9" on a shared thread.
 - **Insert noise.** An insert near the top of a long thread stales every answer below. Whether later answers should
   read inserts at all needs testing.
+- **Model changes.** When the workspace model changes, existing answers keep `out.model`. Whether that makes them
+  stale is open; the mock does not.
 - **Post boundary.** Whether an author's part added after someone's reply still belongs to the post.
 - **Passage anchors.** `@ia#4` is an index, so after a re-run it points at the new passage 4. Matching the stored text
   is unsolved.
@@ -124,3 +132,8 @@ adds a part, Ctrl+Enter runs the primary button); outcome and preflight labels; 
 goes stale by the same rule); at most the previous answer; three or fewer primitives; show `summarize`, `compare` and
 `filter` to stay distinct from variant B. All adopted, reversing my round 2 asides and my round 1 cut of the model
 functions.
+
+**Second steer from the parent session (on the user's behalf).** Columns default to one person's multi-turn exchange
+with the model; the seed now gives ines.v five turns and mira_k three, with jun.park's branch as the only other asker
+in a thread. The model is one workspace setting, named once at the top left and as a short mark on each card;
+`out.model` records it.

@@ -6,12 +6,14 @@ A design mock. One self-contained file; the only external request is the Inter f
 falls back to the system font). Nothing calls a model: answers are canned and runs are timers.
 Concept: docs/canvas/dataflow-concept.md. Seed content: docs/mockups/session-handoff.html (branch claude/session-web).
 
-Data model (in memory; a reload starts over). Two primitives; references are syntax.
+Data model (in memory; a reload starts over). Two primitives; references are syntax. The model is a workspace
+setting (MODEL); every model cell uses it and out.model records it. A column is, by default, one person's exchange
+with the model: question, answer, follow-up, answer.
 - Cell { id, u, at, prev, body, out, prevOut }
   - body.text: a part written by a person. "@id" (or "@id#n", passage n) inside it is a reference, drawn as a chip.
   - body.expr: a computed part. Model functions: answer(above), summarize(@a, …), compare(@a, @b, "on what"),
     filter(@a, "criterion"). Free function: quote(@a#n), recomputed on every render and never run.
-  - out: { html, read: [{id, hash}], expr, by, at }, the last result and the hash of everything it read.
+  - out: { html, read: [{id, hash}], expr, by, model, at }, the last result and the hash of everything it read.
     prevOut: the result before it.
   - prev: the part this one follows. A series is a prev chain.
 - Placement { x, y, abs } or { dx, dy }: one per column head. Roots are absolute; a branch (a second child of some cell)
@@ -206,6 +208,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .mpick button:hover, .mpick button.on { background: var(--control); }
 .mpick small { color: var(--t-faint); font-family: var(--mono); margin-right: 6px; }
 
+.mk.sm { width: 14px; height: 14px; font-size: 8px; border-radius: 4px; vertical-align: -2px; }
+.bym { white-space: nowrap; }
 .fx { font-family: var(--mono); font-size: 11.5px; color: var(--accent); font-weight: 600; }
 .pref { font-size: var(--fs-xs); color: var(--t-faint); }
 .state.cause { background: var(--inset); box-shadow: inset 0 0 0 1px var(--divider); }
@@ -258,7 +262,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 @media (max-width: 640px) {
   #insp { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; height: 56vh; }
   #tl { left: 12px; top: 10px; }
-  #tl .where { display: none; }
+  #tl .where .wide { display: none; }
+  #tl .where { margin-left: 2px; }
 }
 .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 50; padding: 7px 14px; border-radius: 16px;
   background: var(--t-heading); color: var(--canvas); font-size: var(--fs-sm); box-shadow: var(--shadow-pop); }
@@ -269,7 +274,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 <div id="tl">
   <button id="addPost" type="button">+ Add post</button>
   <button id="addAsk" type="button">+ Add ask</button>
-  <span class="where">#public · canvas · you: ines.v</span>
+  <span class="where" id="where"><span class="wide">#public · canvas · </span>model: Gemini 3.8 Flash<span class="wide"> · you: ines.v</span></span>
 </div>
 <div id="vp"><div id="world"><svg id="edges" width="1" height="1"></svg><div id="cols"></div></div></div>
 <aside id="insp" hidden aria-label="Inspector"></aside>
@@ -284,6 +289,7 @@ const ME = 'ines.v';
 const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
 const NOW0 = Date.parse('2026-11-16T10:00:00Z'), T0 = Date.now();
 const now = () => NOW0 + (Date.now() - T0);
+const MODEL = 'Gemini 3.8 Flash', MODEL_SHORT = 'Gemini';   // a workspace setting; every model cell uses it
 const W = innerWidth < 640 ? 300 : 360, GAPX = 56;
 document.documentElement.style.setProperty('--w', W + 'px');
 
@@ -443,7 +449,7 @@ function pump() {
     i++; c.run.shown = i; updateRunning(id);
     if (i < blocks.length) return setTimeout(step, 1600 / blocks.length);
     c.prevOut = c.out; c.runs++;
-    c.out = { html, read, expr: c.body.expr, by: ME, at: now() };
+    c.out = { html, read, expr: c.body.expr, by: ME, model: MODEL, at: now() };
     c.showPrev = false; c.run = null; pump.busy = false; render(); pump();
   };
   setTimeout(step, 450);
@@ -466,19 +472,19 @@ function seed() {
   const A = (id, u, at, prev, text) => put({ id, u, at: t(at), prev, body: { text } });
   const M = (id, u, at, prev, expr, html, by) => {
     const c = put({ id, u, at: t(at), prev, body: { expr }, seedHtml: html });
-    if (html) { c.out = { html, read: [], expr, by, at: t(at) }; c.runs = 1; }
+    if (html) { c.out = { html, read: [], expr, by, model: MODEL, at: t(at) }; c.runs = 1; }
     return c;
   };
   const R = (id, at, prev, html, by) => M(id, 'model', at, prev, 'answer(above)', html, by);
-  // ines.v's ask in #public and the follow-ups under it
-  A('iq', 'ines.v', '09:55:30', null, TXT.intentionQ); R('ia', '09:55:40', 'iq', TXT.intentionAnswer, 'ines.v');
-  A('tq', 'hal_b', '09:56:30', 'ia', TXT.tradeQ); R('ta', '09:56:40', 'tq', TXT.trade, 'hal_b');
-  A('nq', 'jun.park', '09:57:30', 'ta', TXT.nonEnQ); R('na', '09:57:40', 'nq', TXT.nonEn, 'jun.park');
-  A('dq', 'ines.v', '09:58:30', 'na', TXT.decadeQ); R('da', '09:58:40', 'dq', TXT.decade, 'ines.v');
-  // branches from the middle of the thread: each reads the parts up to its fork, not below
-  A('gq', 'ines.v', '09:59:00', 'ta', TXT.daemonQ); R('ga', '09:59:10', 'gq', TXT.daemon, 'ines.v');
-  A('hq', 'hal_b', '09:59:30', 'ga', TXT.ledgerQ); R('ha', '09:59:40', 'hq', TXT.ledger, 'hal_b');
-  A('lq', 'lettie', '09:58:00', 'na', TXT.lemQ); R('la', '09:58:10', 'lq', TXT.lem, 'lettie');
+  // ines.v's exchange with the model in #public: one person, five turns
+  A('iq', 'ines.v', '09:41:00', null, TXT.intentionQ); R('ia', '09:41:10', 'iq', TXT.intentionAnswer, 'ines.v');
+  A('dq', 'ines.v', '09:44:00', 'ia', TXT.decadeQ); R('da', '09:44:10', 'dq', TXT.decade, 'ines.v');
+  A('tq', 'ines.v', '09:47:00', 'da', TXT.tradeQ.replace('which of these actually', 'which of these works actually')); R('ta', '09:47:10', 'tq', TXT.trade, 'ines.v');
+  A('gq', 'ines.v', '09:50:00', 'ta', TXT.daemonQ); R('ga', '09:50:10', 'gq', TXT.daemon, 'ines.v');
+  A('hq', 'ines.v', '09:53:00', 'ga', TXT.ledgerQ); R('ha', '09:53:10', 'hq', TXT.ledger, 'ines.v');
+  // jun.park branches from the middle of it: the branch reads the thread up to its fork, not below
+  A('nq', 'jun.park', '09:57:30', 'da', TXT.nonEnQ); R('na', '09:57:40', 'nq', TXT.nonEn, 'jun.park');
+  A('lq', 'jun.park', '09:58:30', 'na', TXT.lemQ); R('la', '09:58:40', 'lq', TXT.lem, 'jun.park');
   // tomasz's multi-part post: two text parts, a live quote, a filter, a reply, and an ask nobody has run yet
   A('r1', 'tomasz', '07:30:00', null, 'Reading group: Accelerando chapter 3 on Thursday. Put your notes in this thread.');
   A('r2', 'tomasz', '07:31:00', 'r1', 'For anyone new to the book, this is how the intention scan describes it:');
@@ -489,18 +495,16 @@ function seed() {
   M('r7', 'model', '09:40:05', 'r6', 'answer(above)');
   // a compare cell that reads two threads
   M('cc', 'ines.v', '09:50:00', null, 'compare(@ia, @aa, "who the agent or network works for")', CMP, 'ines.v');
-  // mira_k's ask in #sci-fi, a follow-up, and a branch
+  // mira_k's exchange in #sci-fi: three turns
   A('aq', 'mira_k', '09:19:30', null, TXT.agentsQ); R('aa', '09:19:40', 'aq', TXT.agents, 'mira_k');
-  A('bq', 'tomasz', '09:30:00', 'aa', TXT.backforthQ); R('ba', '09:30:10', 'bq', TXT.backforth, 'tomasz');
-  A('oq', 'oduya', '09:25:00', 'aa', TXT.liableQ); R('oa', '09:25:10', 'oq', TXT.liable, 'oduya');
+  A('bq', 'mira_k', '09:25:00', 'aa', TXT.backforthQ); R('ba', '09:25:10', 'bq', TXT.backforth, 'mira_k');
+  A('oq', 'mira_k', '09:30:00', 'ba', TXT.liableQ); R('oa', '09:30:10', 'oq', TXT.liable, 'mira_k');
   const x = (i) => 24 + i * (W + GAPX);
   places.iq = { x: x(0), y: 64, abs: true };
-  places.gq = { dx: 0, dy: 0 };
-  places.lq = { dx: 0, dy: 0 };
+  places.nq = { dx: 0, dy: 0 };
   places.r1 = { x: x(2), y: 64, abs: true };
   places.cc = { x: x(2), y: 900, abs: true };
   places.aq = { x: x(3), y: 64, abs: true };
-  places.oq = { dx: 0, dy: 0 };
   // record what each seeded output read, in creation order so upstream hashes are final
   for (const c of Object.values(cells).sort((a, b) => a.at - b.at)) if (c.out) c.out.read = resolve(c).map((id) => ({ id, hash: hashOf(id) }));
 }
@@ -602,8 +606,8 @@ function modelHtml(c, isHead) {
   }
   const mark = st === 'stale' && !c.showPrev ? '<span class="stale-mark"></span>' : '';
   const hd = ans
-    ? `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? id : ''}"><span class="mk">M</span><span>Model answer${c.out ? ' · ' + ago(c.out.at) + ' ago' : ''}</span><span class="rd"></span></div>`
-    : hdHtml(c, isHead) + `<div class="qsrc">${exprLine(c)}</div>`;
+    ? `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? id : ''}"><span class="mk">✦</span><span>${MODEL_SHORT}${c.out ? ' · ' + ago(c.out.at) + ' ago' : ''}</span><span class="rd"></span></div>`
+    : hdHtml(c, isHead) + `<div class="qsrc">${exprLine(c)} <span class="bym">· <span class="mk sm">✦</span> ${MODEL_SHORT}</span></div>`;
   return `<div class="sec ans" data-cell="${id}">${mark}${hd}${body}${badge}<div class="ftr">${ftr}</div></div>`;
 }
 function preflight() {
@@ -718,7 +722,7 @@ function renderInspector() {
   el.hidden = false;
   const p = places[c.id], fn = fnOf(c);
   let h = `<div class="ih"><h2>${esc(label(c.id, 60))}</h2><button data-act="close" aria-label="Close inspector">×</button></div><div class="ib">`;
-  h += `<h3>Object</h3><div class="kind"><code>@${esc(c.id)}</code> · ${c.body.text != null ? 'text, written by ' + esc(c.u) : fn === 'quote' ? 'computed without a model: recomputed whenever its source changes' : 'computed by a model: runs only when someone presses Run'}</div>`;
+  h += `<h3>Object</h3><div class="kind"><code>@${esc(c.id)}</code> · ${c.body.text != null ? 'text, written by ' + esc(c.u) : fn === 'quote' ? 'computed without a model: recomputed whenever its source changes' : 'computed by the workspace model (' + MODEL + '): runs only when someone presses Run'}</div>`;
   if (c.body.expr != null) h += `<h3>Expression</h3><div class="expr"><input id="exprIn" value="${esc(c.body.expr)}" spellcheck="false"><button data-act="expr-apply">Apply</button></div><div class="err" id="exprErr"></div>
     <p class="help"><code>answer(above)</code> reads the parts above, through any fork, and the cards they mention. <code>summarize(@a, …)</code>, <code>compare(@a, @b, "on what")</code> and <code>filter(@a, "criterion")</code> are also model runs. <code>quote(@a#n)</code> shows passage n of a card and needs no run. Apply changes the expression and marks the result out of date; it does not run.</p>`;
   else h += `<h3>Text</h3><div class="kind">${richText(c.body.text)}</div>`;
@@ -735,7 +739,7 @@ function renderInspector() {
   else if (!c.prev || p.abs) h += `column at x ${Math.round(layout[c.id] ? layout[c.id].x : p.x)}, y ${Math.round(layout[c.id] ? layout[c.id].y : p.y)}${c.prev ? ', branched from ' + chip(c.prev) : ''}`;
   else h += `branch beside ${chip(c.prev)}, placed relative to it`;
   h += '</div>';
-  const strip2 = (o) => o && { read: o.read, expr: o.expr, by: o.by, html: strip(o.html).slice(0, 60) + '…' };
+  const strip2 = (o) => o && { read: o.read, expr: o.expr, by: o.by, model: o.model, html: strip(o.html).slice(0, 60) + '…' };
   const rec = { id: c.id, u: c.u, at: new Date(c.at).toISOString(), prev: c.prev || null, body: c.body, out: strip2(c.out) || undefined, prevOut: strip2(c.prevOut) || undefined, placement: p || undefined };
   h += `<details><summary>Record</summary><pre>${esc(JSON.stringify(rec, null, 1))}</pre></details></div>`;
   el.innerHTML = h;
