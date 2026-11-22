@@ -80,7 +80,8 @@ ask(msg) {
 ```
 
 The canvas `context` adds the Glossary terms an ask mentions to every ask in #public. The Dagen H head's own handler
-takes precedence over it.
+takes precedence over it. The mock opens with Dagen H at the top left, with a hint: edit its `context`, then
+Continue, and the new answer lists different context while earlier answers keep theirs.
 
 **The inspector** shows each handler, where it resolved from and who wrote it. Its preview ("the next ask sent here
 would see …") updates as soon as a handler is edited at any level.
@@ -103,8 +104,9 @@ handler that throws is skipped, the next level runs, and the ask records the fai
 - **Collisions.** Heads are placed in creation order, each followed by its branches. Overlapping stacks move down; a
   branch pushed far from its anchor takes the next lane to the right.
 - **Connectors** appear only where position does not show the relation: branches, passage asks and selection asks.
-  Each ask also shows its receivers ("to d1 · Gemini reply") and what it saw ("saw 3 + 1 from elsewhere", or
-  "answered by code on g0 · no model").
+  Each ask also shows its receivers ("to d1 · Gemini reply") and what it saw ("saw 3 + 1 added by a context handler",
+  or "answered by code on g0 · no model"). These labels only report handler results; the canvas does nothing that is
+  not a handler shown in its inspector.
 
 ## Mapping from today's records
 
@@ -173,3 +175,9 @@ The advisor was a separate agent, run for three rounds.
   - code replies read "code on g0 · by lettie";
   - failures and handler authors are shown.
 - *Deferred:* edit permissions (open question 1).
+
+**Steer from the parent session (after round 3).**
+- *It said:* keep the handler surface small; behaviour such as the Glossary inclusion or "+N" should read as the
+  result of handlers. Make late binding the first thing a viewer can try.
+- *Changed:* the "+N" label now names a context handler. Dagen H moved to the top left, with a hint for the
+  edit-then-continue demo.

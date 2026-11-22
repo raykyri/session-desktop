@@ -147,6 +147,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .sawbtn { color: var(--saw); font-weight: 500; text-align: left; }
 .toln { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 10.5px; color: var(--t-faint); }
 .pf { flex-wrap: wrap; row-gap: 2px; }
+.hint { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--t-secondary); font-size: 11.5px; line-height: 1.45; }
+.hint b { color: var(--t-heading); font-weight: 600; } .hint code { font-family: var(--mono); font-size: 10.5px; }
 .fail { margin-top: 4px; font-size: 11px; color: var(--bad); }
 .mk.code { font: 600 9px var(--mono); }
 .ph { cursor: grab; }
@@ -386,14 +388,9 @@ function canned(a, msg) {
 /* ---- seed ---- */
 function seed() {
   const S = SEED;
-  /* a post with replies: replies are person parts placed inline under what they answer */
-  add({ id: 'h0', by: 'hal_b', text: S.hal.q, pos: { at: { x: 24, y: 64 } } });
-  add({ id: 'h1', by: S.hal.rp[0].u, text: S.hal.rp[0].t, prev: 'h0', pos: 'inline' });
-  add({ id: 'h2', by: S.hal.rp[1].u, text: S.hal.rp[1].t, prev: 'h0', pos: 'inline' });
-  add({ id: 'h3', by: S.hal.rp[1].kids[0].u, text: S.hal.rp[1].kids[0].t, prev: 'h2', pos: 'next' });
   /* Dagen H: an ask, its answer and two follow-ups continuing the series. The head's context handler keeps the
      other follow-up answers out of what each follow-up sees. */
-  add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 330 } }, codeBy: { context: 'jun.park' }, code: { context:
+  add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 64 } }, codeBy: { context: 'jun.park' }, code: { context:
 `context(msg) {
   // Follow-ups see the people's questions and the first
   // answer, not the answers to other follow-ups.
@@ -405,6 +402,11 @@ function seed() {
   add({ id: 'd3', model: MODEL, html: S.dagen.f[0].a, prev: 'd2', pos: 'next' });
   add({ id: 'd4', by: S.dagen.f[1].u, text: S.dagen.f[1].q, to: [], prev: 'd3', pos: 'next' });
   add({ id: 'd5', model: MODEL, html: S.dagen.f[1].a, prev: 'd4', pos: 'next' });
+  /* a post with replies: replies are person parts placed inline under what they answer */
+  add({ id: 'h0', by: 'hal_b', text: S.hal.q, pos: { at: { x: 24, y: 900 } } });
+  add({ id: 'h1', by: S.hal.rp[0].u, text: S.hal.rp[0].t, prev: 'h0', pos: 'inline' });
+  add({ id: 'h2', by: S.hal.rp[1].u, text: S.hal.rp[1].t, prev: 'h0', pos: 'inline' });
+  add({ id: 'h3', by: S.hal.rp[1].kids[0].u, text: S.hal.rp[1].kids[0].t, prev: 'h2', pos: 'next' });
   /* intention marketplaces: the series, and one branch beside the answer with its own follow-ups */
   add({ id: 'i0', by: 'ines.v', text: S.intent.q, to: [], pos: { at: { x: 338, y: 64 } } });
   add({ id: 'i1', model: MODEL, html: S.intent.a, prev: 'i0', pos: 'next' });
@@ -476,9 +478,10 @@ function partHtml(p) {
   else if (p.html != null) { const long = strip(p.html).length > 420, open = st.open[p.id]; body = `<div class="prose${long && !open ? ' clamp' : ''}">${p.html}</div>${long ? `<button class="more" data-a="more" data-id="${p.id}">${open ? 'Show less' : 'Show all'}</button>` : ''}`; }
   else body = `${p.quote ? `<div class="quote">${esc(clip(p.quote, 160))}</div>` : ''}<div class="ptext">${esc(p.text)}</div>`;
   const foot = ask ? `<div class="pf"><span class="toln">to ${receivers(p).map(r => esc(rcvLabel(r))).join(', ')}</span>${sawChip(p)}</div>${p.fail ? `<div class="fail">${esc(p.fail.join('; '))}; the next level was used</div>` : ''}` : '';
+  const hint = p.id === 'd0' && !st.tried ? `<div class="hint">Try late binding: open <b>{ }</b> here, edit <b>context</b> (for example return only <code>[this.id]</code>), Apply, then <b>+ Continue</b> at the end of this stack. The new answer lists different context; earlier answers keep theirs.</div>` : '';
   const cls = ['part', ask ? 'is-ask' : '', rep ? 'is-reply' : '', st.sel.has(p.id) ? 'sel' : '', st.insp === p.id ? 'insp' : '', p.fresh ? 'fadein' : ''].filter(Boolean).join(' ');
   p.fresh = false;
-  return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}</div>`;
+  return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}${hint}</div>`;
 }
 function draftHtml() {
   const d = st.draft, ask = d.mode === 'ask';
@@ -501,7 +504,7 @@ function sawChip(p) {
   if (!p.saw) return '';
   if (p.answeredBy) return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="A handler replied; no model ran">answered by code on ${esc(p.answeredBy)} · no model</button>`;
   const own = new Set(receivers(p).flatMap(r => r === 'canvas' ? [] : ancestorIds(base(r)))), extra = p.saw.filter(x => !own.has(x)).length;
-  return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="The objects this ask sent as context; click for the list">saw ${p.saw.length - extra}${extra ? ` + ${extra} from elsewhere` : ''}</button>`;
+  return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="The objects this ask sent as context; click for the list">saw ${p.saw.length - extra}${extra ? ` + ${extra} added by a context handler` : ''}</button>`;
 }
 const draftAt = (prev, pos) => st.draft && st.draft.prev === prev && (pos === 'any' || st.draft.pos === pos);
 /* one stack, from its head: each part, its interjections, then the part that continues it */
@@ -656,7 +659,7 @@ function applyHandler(key) {
   const [owner, sel] = key.split(':'), ta = document.getElementById('ed-' + key), src = ta.value;
   try { compile(src, sel); } catch (e) { ERR[owner + ':' + sel] = e.message; renderInsp(); return; }
   const target = owner === 'canvas' ? CANVAS.code : (P[owner].code ||= {});
-  target[sel] = src; (owner === 'canvas' ? CANVAS.codeBy : (P[owner].codeBy ||= {}))[sel] = ME; delete ERR[owner + ':' + sel]; delete INSP.edit[key];
+  st.tried = true; target[sel] = src; (owner === 'canvas' ? CANVAS.codeBy : (P[owner].codeBy ||= {}))[sel] = ME; delete ERR[owner + ':' + sel]; delete INSP.edit[key];
   toast(`${sel} handler saved on ${owner === 'canvas' ? 'the canvas' : owner}. The next ask uses it; earlier answers keep what they saw.`);
   render(); renderInsp();
 }
