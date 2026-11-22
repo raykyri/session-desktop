@@ -928,6 +928,54 @@ test.serial(
   },
 );
 
+test.serial(
+  "a channel link followed by a new identity's sign-in: the account redeems a code on /welcome, then joins the channel",
+  async (t) => {
+    const channel = unjoinedChannel();
+    let calls: [string, unknown][] = [];
+    prepare = (replica) => (calls = recordWrites(replica));
+    const inviter = { name: "Ines Vidal", handle: "ines.v" };
+    let me: object = waitingTestUser({ login: "rheaok" });
+    // the page load back from the provider restored the channel's code
+    savePendingInvite({ kind: "channel", channel: channel.name, code: "k3v8q2m9" });
+    const app = await renderApp("/welcome?new=1", {
+      user: me as never,
+      responses: {
+        "auth.me": () => me,
+        "accountInvites.redeem": { status: "open", inviter },
+        "account.checkHandle": { valid: true, available: true },
+        "account.create": (input: unknown) => {
+          const { handle } = input as { handle: string };
+          me = { ...waitingTestUser({ login: "rheaok" }), status: "active", handle };
+          return { me, inviter };
+        },
+      },
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Sign in to Session" });
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Enter an invite code" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Invite code" }), {
+      target: { value: "SESS-9TQ2-X8" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+    fireEvent.change(await within(dialog).findByRole("textbox", { name: /Handle on Session/ }), {
+      target: { value: "rhea" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create account" }));
+    await waitUntil(
+      t,
+      () => app.router.state.location.pathname === `/c/${channel.name}`,
+      "to the channel",
+    );
+    await waitUntil(t, () => calls.some(([n]) => n === "spaces.join"), "the join is sent");
+    t.deepEqual(
+      calls.filter(([n]) => n === "spaces.join"),
+      [["spaces.join", { space: channel.id, invite: "k3v8q2m9" }]],
+    );
+    await waitUntil(t, () => currentToast() === `Joined #${channel.name}.`, "the Joined toast");
+    t.is(readPendingInvite(), null);
+  },
+);
+
 test("a channel invite kept across a sign-in expires after 30 minutes", (t) => {
   const store = new Map<string, string>();
   const storage = {

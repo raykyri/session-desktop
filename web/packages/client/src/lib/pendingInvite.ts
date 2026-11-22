@@ -41,6 +41,14 @@ export function clearPendingInvite(): void {
   pending = null;
 }
 
+/** The channel a pending channel invite is for, or null. An account that
+ * becomes a member while one waits goes to that channel's page, which joins
+ * it (`useChannelInvite`). A new identity's sign-in returns to `/welcome`,
+ * not to the channel, so the channel page would otherwise never mount. */
+export function pendingInviteChannel(): string | null {
+  return pending?.kind === "channel" ? pending.channel : null;
+}
+
 type TabStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 function tabStorage(): TabStore | null {

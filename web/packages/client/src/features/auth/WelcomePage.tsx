@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useMe } from "../../api/account.js";
 import { redeemInvite } from "../../api/membership.js";
+import { pendingInviteChannel } from "../../lib/pendingInvite.js";
 import { trpcErrorCode } from "../../lib/toast.js";
 import { PageFrame } from "../shell/Frames.js";
 import { CheckIcon } from "../shell/icons.js";
@@ -28,10 +29,14 @@ export function WelcomePage() {
 
   // The route's guard sends a member Home only on entry. An account that
   // becomes a member while this page shows (Create account in the profile
-  // step the shell opens, or a redeem in another tab) leaves it here.
+  // step the shell opens, or a redeem in another tab) leaves it here: for
+  // the channel of a pending channel invite, else Home.
   const member = me?.status === "active";
   useEffect(() => {
-    if (member) void navigate({ to: "/", replace: true });
+    if (!member) return;
+    const channel = pendingInviteChannel();
+    if (channel) void navigate({ to: "/c/$name", params: { name: channel }, replace: true });
+    else void navigate({ to: "/", replace: true });
   }, [member, navigate]);
 
   // Arriving from a sign-in that made a waiting account: the "No Session

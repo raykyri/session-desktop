@@ -24,7 +24,7 @@ import {
   startSignIn,
   useCreateAccount,
 } from "../../api/membership.js";
-import { keepChannelInviteForSignIn } from "../../lib/pendingInvite.js";
+import { keepChannelInviteForSignIn, pendingInviteChannel } from "../../lib/pendingInvite.js";
 import { trpcErrorCode } from "../../lib/toast.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { GitHubMark } from "../../ui/GitHubMark.js";
@@ -481,7 +481,9 @@ function ProfileStep({ headingId }: { headingId: string }) {
           state.close();
           if (state.origin === "welcome") {
             showToast(`You're in. ${by} invited you.`);
-            void navigate({ to: "/" });
+            const channel = pendingInviteChannel();
+            if (channel) void navigate({ to: "/c/$name", params: { name: channel } });
+            else void navigate({ to: "/" });
           } else {
             showToast(`Account created. ${by} invited you.`);
           }
