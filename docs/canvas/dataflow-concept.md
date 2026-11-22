@@ -6,8 +6,8 @@ A channel's canvas is a reactive document, like a spreadsheet. Every object is a
 wrote or an expression computing text from other cells. A post is a series of text cells. An ask is a text cell
 followed by a cell whose expression is `answer(above)`. Nothing re-runs without a click.
 
-By default a column is one person's multi-turn exchange with the model; others join by branching or by replying to a
-post. The model is a workspace setting (Gemini 3.8 Flash in the mock), named once at the top left; every model cell
+A column is one person's multi-turn exchange with the model. Only the column's author continues it or inserts into
+it; everyone else branches (Branch, or "Ask about this" on a passage). The model is a workspace setting (Gemini 3.8 Flash in the mock), named once at the top left; every model cell
 uses it, and cards show a mark and "Gemini".
 
 faketalk was unreachable (GitHub 404; site blocked by the network policy), so the design follows the stated
@@ -41,7 +41,9 @@ quote(@a#n)                       free: passage n of @a, recomputed whenever @a 
 
 `above` is the `prev` chain to the root, through any branch, plus the cells those parts mention (one hop). An ask
 always reads the whole thread above it: `answer` must include `above`, and `@id` can add cards but nothing can leave
-a part out. A branch reads the thread up to its fork.
+a part out. A branch reads the cell it branches from and everything above it, through earlier forks; with "Ask about
+this", `@id#n` marks the passage in focus but the context is the same. `summarize`, `compare`, `filter` and `quote`
+read only what they name.
 
 **Compaction.** When the thread above exceeds the model's budget, the earliest parts are replaced by a compacted
 summary and the rest are sent in full. `out.read` records which parts the summary covered, with their hashes, so an
@@ -73,7 +75,7 @@ when it is selected. After a re-run, "Show previous" brings back the answer befo
 
 - **Columns** are `prev` chains from placed heads, laid out depth by depth. A column that would overlap a placed one
   moves down; nothing moves sideways. Answers clamp to eight lines, and a running answer reserves that height.
-- **Insert between two cards** ("+" in the gap): the new ask gets `prev` = the card above, and the card below is
+- **Insert between two cards** ("+" in the gap, column author only): the new ask gets `prev` = the card above, and the card below is
   relinked to follow it. It reads only the parts above. The column grows. Later answers read `above`, so they depend
   on it and turn stale; text parts never do. The insert composer says so in one faint line.
 - **Branch from mid-thread** (Branch on a card, or "Ask about this" on a selected passage) opens a column to the right
@@ -86,10 +88,10 @@ when it is selected. After a re-run, "Show previous" brings back the answer befo
 |---|---|
 | Thread (post) | root text cell; a multi-part post is a chain of text cells |
 | Thread (ask) | root text cell + `answer(above)` |
-| Node, Continue | question + answer appended at the tail, normally by the person who started the column |
+| Node, Continue | question + answer appended at the tail, by the column's author only |
 | Branch, Branch here, Branch (ask beside) | branch with a relative Placement |
 | Passage branch, Look up | branch whose question carries `@id#n` |
-| Reply on a post | text cell appended, or a branch from the part it replies to |
+| Reply on a post | text branch from the part it replies to (a column belongs to its author) |
 | Comment on a node | text branch from the answer; no run |
 | Open as its own thread | give the branch head an absolute Placement; nothing is copied |
 | Save | a per-user set of ids, outside the model |
@@ -104,7 +106,6 @@ when it is selected. After a re-run, "Show previous" brings back the answer befo
   read inserts at all needs testing.
 - **Model changes.** When the workspace model changes, existing answers keep `out.model`. Whether that makes them
   stale is open; the mock does not.
-- **Post boundary.** Whether an author's part added after someone's reply still belongs to the post.
 - **Passage anchors.** `@ia#4` is an index, so after a re-run it points at the new passage 4. Matching the stored text
   is unsolved.
 - **Scale.** Semantic zoom; shared layout under last-writer-wins; concurrent appends at the tail.
@@ -128,4 +129,5 @@ edit badged twenty answers; seven run verbs. Changed: selection popover, one com
 answer; at most three primitives; show `summarize`, `compare`, `filter`. This reversed my round 2 asides and round 1
 function cut. (2) A column is one person's exchange; one workspace model, recorded in `out.model`. (3) Circle-dot mark,
 no model timestamps, no answer footer; the composer is a field and Cancel, Post, Ask; a tail ask always reads the
-whole thread, with no exclusions, compacted when too long.
+whole thread, with no exclusions, compacted when too long. (4) A branch reads the full context up to its fork cell; only a column's author continues or
+inserts, so replies (lettie's) become branches.

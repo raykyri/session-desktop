@@ -7,8 +7,8 @@ falls back to the system font). Nothing calls a model: answers are canned and ru
 Concept: docs/canvas/dataflow-concept.md. Seed content: docs/mockups/session-handoff.html (branch claude/session-web).
 
 Data model (in memory; a reload starts over). Two primitives; references are syntax. The model is a workspace
-setting (MODEL); every model cell uses it and out.model records it. A column is, by default, one person's exchange
-with the model: question, answer, follow-up, answer.
+setting (MODEL); every model cell uses it and out.model records it. A column is one person's exchange with the
+model: only the column's author continues it or inserts into it; everyone else branches.
 - Cell { id, u, at, prev, body, out, prevOut }
   - body.text: a part written by a person. "@id" (or "@id#n", passage n) inside it is a reference, drawn as a chip.
   - body.expr: a computed part. Model functions: answer(above), summarize(@a, …), compare(@a, @b, "on what"),
@@ -494,8 +494,9 @@ function seed() {
   A('r2', 'tomasz', '07:31:00', 'r1', 'For anyone new to the book, this is how the intention scan describes it:');
   M('r3', 'tomasz', '07:31:30', 'r2', 'quote(@ia#4)');
   M('r4', 'tomasz', '07:32:00', 'r3', 'filter(@ia, "published before 1980")', FILTER, 'tomasz');
+  // other people branch from it: only a column's author continues the column
   A('r5', 'lettie', '09:19:30', 'r4', 'Linked this from the wiki.');
-  A('r6', 'ines.v', '09:40:00', 'r5', 'which other books in @aa have an agent that works for one person, like manfred’s?');
+  A('r6', 'ines.v', '09:40:00', 'r4', 'which other books in @aa have an agent that works for one person, like manfred’s?');
   M('r7', 'model', '09:40:05', 'r6', 'answer(above)');
   // a compare cell that reads two threads
   M('cc', 'ines.v', '09:50:00', null, 'compare(@ia, @aa, "who the agent or network works for")', CMP, 'ines.v');
@@ -508,7 +509,9 @@ function seed() {
   places.nq = { dx: 0, dy: 0 };
   places.r1 = { x: x(2), y: 64, abs: true };
   places.cc = { x: x(2), y: 900, abs: true };
-  places.aq = { x: x(3), y: 64, abs: true };
+  places.r5 = { dx: 0, dy: 0 };
+  places.r6 = { dx: 0, dy: 0 };
+  places.aq = { x: x(4), y: 64, abs: true };
   // record what each seeded output read, in creation order so upstream hashes are final
   for (const c of Object.values(cells).sort((a, b) => a.at - b.at)) if (c.out) c.out.read = resolve(c).map((id) => ({ id, hash: hashOf(id) }));
 }
@@ -531,7 +534,7 @@ function groupsOf(chain) {
   return g;
 }
 function renderChain(head) {
-  const groups = groupsOf(chainFrom(head));
+  const groups = groupsOf(chainFrom(head)), mine = cells[head].u === ME;   // only the column's author continues it
   if (places[head] && places[head].folded) {
     return `<div class="card fold" data-card="${groups[0][groups[0].length - 1]}"><div class="foldh hd grip" data-grip="${head}">${av(cells[head].u)}<b>${esc(cells[head].u)}</b><span>${groups.length} cards</span><button class="tlink" data-act="fold" data-id="${head}">Unfold</button></div>`
       + groups.map((g) => { const last = cells[g[g.length - 1]]; const st = isModel(last) ? state(last) : 'ok'; return `<div class="fl${st === 'stale' ? ' st' : ''}" data-cell="${g[0]}">${esc(label(g[0], 60))}</div>`; }).join('') + '</div>';
@@ -541,11 +544,12 @@ function renderChain(head) {
     const last = g[g.length - 1];
     h += renderCard(g, head);
     if (draft && draft.kind === 'insert' && draft.anchor === last) h += `<div class="gap"></div>${composerHtml()}<div class="gap"></div>`;
+    else if (gi < groups.length - 1 && !mine) h += '<div class="gap"></div>';
     else if (gi < groups.length - 1) h += `<div class="gap"><button class="ins" data-act="insert" data-id="${last}" title="Insert an ask here" aria-label="Insert an ask here">+</button></div>`;
   });
   const tail = chainFrom(head).pop();
   if (draft && draft.kind === 'append' && draft.anchor === tail) h += `<div class="gap"></div>${composerHtml()}`;
-  else h += `<div class="tail"><button data-act="append" data-id="${tail}">Continue…</button></div>`;
+  else if (mine) h += `<div class="tail"><button data-act="append" data-id="${tail}">Continue…</button></div>`;
   return h;
 }
 function renderCard(g, head) {
