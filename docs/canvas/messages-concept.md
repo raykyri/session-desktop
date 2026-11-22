@@ -57,6 +57,14 @@ When an ask is sent:
 
 Handlers run once per send and are never recomputed, so an old answer still says what it saw.
 
+**Continuations read the whole thread.** An ask added at the bottom of a thread (Continue, `pos: next`) always reads
+every part above it. Context handlers can only add to that: what `context` returns is unioned with the full thread.
+Interjections (Ask here), branches and asks to a selection or a passage take what the handlers return. By default
+that is the parts above their position.
+
+**Compaction.** When the thread above a continuation is longer than the model's budget, its earliest parts are replaced
+by a compacted summary, and `saw` records that a compaction was used. The mock does not implement this.
+
 **Lookup.** For part X the order is:
 
 1. X;
@@ -65,13 +73,13 @@ Handlers run once per send and are never recomputed, so an old answer still says
 4. the canvas;
 5. the default.
 
-**Late binding, seeded in the mock.** The Dagen H head defines `context`, and every follow-up in its stack resolves to
-it:
+**Late binding, seeded in the mock.** The Dagen H head defines `context`, and every ask in its stack resolves to it.
+The handler adds jun.park's Sources card:
 
 ```js
 context(msg) {
-  // Each follow-up sees the questions so far and the first answer, not the later answers.
-  return ancestors(this.id).filter(id => !part(id).by.model || part(id).prev === this.head);
+  // Every ask in this thread also reads my Sources card.
+  return [...ancestors(this.id), ...stack('src0')];
 }
 ```
 
@@ -88,8 +96,8 @@ ask(msg) {
 ```
 
 The canvas `context` adds the Glossary terms an ask mentions to every ask in #public. The Dagen H head's own handler
-takes precedence over it. The mock opens with Dagen H at the top left, with a hint: edit its `context`, then
-Continue, and the new answer lists different context while earlier answers keep theirs.
+takes precedence over it. The mock opens with Dagen H at the top left, with a hint. Delete the Sources card from
+the handler and Continue: the new answer no longer lists the sources, and earlier answers keep what they saw.
 
 **The inspector** shows each handler, where it resolved from and who wrote it. Its preview ("the next ask sent here
 would see …") updates as soon as a handler is edited at any level.
@@ -112,9 +120,9 @@ handler that throws is skipped, the next level runs, and the ask records the fai
 - **Collisions.** Heads are placed in creation order, each followed by its branches. Overlapping stacks move down; a
   branch pushed far from its anchor takes the next lane to the right.
 - **Connectors** appear only where position does not show the relation: branches, passage asks and selection asks.
-  Each ask also shows its receivers ("to d1 · Gemini reply") and what it saw ("saw 3 + 1 added by a context handler",
-  or "answered by code on g0 · no model"). These labels only report handler results; the canvas does nothing that is
-  not a handler shown in its inspector.
+  What an ask saw is one step away. Hovering or selecting the ask (or its reply) outlines those parts, and the
+  inspector lists them. Only a handler failure prints on the card. The canvas does nothing that is not a handler shown
+  in its inspector.
 
 ## Mapping from today's records
 
@@ -199,3 +207,16 @@ The advisor was a separate agent, run for three rounds.
     Banach–Tarski); hal_b's branch is the one other person's thread;
   - the model is named once in the toolbar and nowhere chosen;
   - the doc states that the model is a workspace setting, and open question 3 is now about effort only.
+
+**Third steer from the parent session, on the user's behalf.**
+- *It said:*
+  - Model parts carry no timestamp. The mock never showed one, so nothing changed.
+  - The draft card loses its hint text.
+  - The per-ask "to … / saw" line goes.
+  - A continuation always reads the whole thread, or a compacted version of it.
+- *Changed:*
+  - The draft is a text field and one right-aligned row (Cancel or Done, Post, Ask), with shortcuts in button titles.
+    A faint "to …" line appears only for selection and passage asks.
+  - The footer keeps only failures.
+  - Continuations union handler results with the full thread (option (a)). The Dagen H handler, which used to filter
+    answers out, now adds a Sources card, and the demo deletes it from the handler.

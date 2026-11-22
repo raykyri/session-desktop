@@ -146,8 +146,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .more { margin-top: 2px; color: var(--accent); font-size: 11.5px; font-weight: 500; }
 .more:hover { text-decoration: underline; }
 .pf { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--t-faint); }
-.sawbtn { color: var(--saw); font-weight: 500; text-align: left; }
-.toln { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 10.5px; color: var(--t-faint); }
 .pf { flex-wrap: wrap; row-gap: 2px; }
 .hint { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--t-secondary); font-size: 11.5px; line-height: 1.45; }
 .hint b { color: var(--t-heading); font-weight: 600; } .hint code { font-family: var(--mono); font-size: 10.5px; }
@@ -156,7 +154,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .ph { cursor: grab; }
 .stack.dragging { opacity: .85; z-index: 5; }
 .stack.dragging .ph { cursor: grabbing; }
-.sawbtn:hover { text-decoration: underline; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--warn); }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
@@ -181,8 +178,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .part.draft { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-pop); }
 .part.draft textarea { display: block; width: 100%; min-height: 40px; resize: none; border: 0; outline: none; background: none; padding: 2px 0; font-size: 14px; line-height: 1.45; color: var(--t-heading); }
 .part.draft textarea::placeholder { color: var(--placeholder); }
-.drow { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-.drow .hint { flex: 1; font-size: 11px; color: var(--t-faint); }
+.drow { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.dto { margin-top: 4px; font: 10.5px var(--mono); color: var(--t-faint); overflow-wrap: anywhere; }
 .b1, .b2 { height: 26px; padding: 0 11px; border-radius: 13px; font-size: 12px; font-weight: 600; }
 .b1 { background: var(--accent-strong); color: var(--on-accent); }
 .b1:disabled { opacity: .45; cursor: default; }
@@ -339,9 +336,13 @@ const validIds = v => Array.isArray(v) ? v.map(base).filter(x => P[x]) : [];
    1 context: sent to each receiver; the union is what the model sees (saw, stored on the ask).
    2 ask: offered to each receiver in order; the first that returns reply(...) answers; else one model call.
    3 place: sent to the ask part; the reply is placed there. */
+/* A continuation (an ask with pos 'next') always reads the whole thread above it; context handlers can only add to
+   that. Interjections, branches and asks to a selection or passage take what the handlers return. (In the app, a
+   thread longer than the model's budget is compacted: its earliest parts are replaced by a summary, recorded in saw.) */
+const isContinuation = a => a.pos === 'next' && !!a.prev;
 function resolve(a, extra = null) {
   const msg = { id: a.id, text: plain(a), to: receivers(a).slice() };
-  const saw = new Set();
+  const saw = new Set(isContinuation(a) ? ancestorIds(a.prev) : []);
   for (const r of msg.to) validIds(callOn(r, 'context', [msg]).value).forEach(x => saw.add(x));
   saw.delete(a.id); if (extra) for (const x of extra) saw.delete(x);
   msg.context = [...saw];
@@ -391,14 +392,12 @@ function canned(a, msg) {
 /* ---- seed ---- */
 function seed() {
   const S = SEED;
-  /* Dagen H: one person's ask, its answer and two follow-ups by the same person. The head's context handler keeps
-     the later answers out of what each follow-up sees. */
+  /* Dagen H: one person's ask, its answer and two follow-ups by the same person. The head's context handler adds
+     jun.park's Sources card to every ask in the thread. */
   add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 64 } }, codeBy: { context: 'jun.park' }, code: { context:
 `context(msg) {
-  // Each follow-up sees the questions so far and the
-  // first answer, not the later answers.
-  return ancestors(this.id).filter(id =>
-    !part(id).by.model || part(id).prev === this.head);
+  // Every ask in this thread also reads my Sources card.
+  return [...ancestors(this.id), ...stack('src0')];
 }` } });
   add({ id: 'd1', model: MODEL, html: S.dagen.a, prev: 'd0', pos: 'next' });
   add({ id: 'd2', by: 'jun.park', text: S.dagen.f[0].q, to: [], prev: 'd1', pos: 'next' });
@@ -410,6 +409,10 @@ function seed() {
   add({ id: 'h1', by: S.hal.rp[0].u, text: S.hal.rp[0].t, prev: 'h0', pos: 'inline' });
   add({ id: 'h2', by: S.hal.rp[1].u, text: S.hal.rp[1].t, prev: 'h0', pos: 'inline' });
   add({ id: 'h3', by: S.hal.rp[1].kids[0].u, text: S.hal.rp[1].kids[0].t, prev: 'h2', pos: 'next' });
+  /* jun.park's Sources card, read by every ask in the Dagen H thread */
+  add({ id: 'src0', by: 'jun.park', text: 'Sources I trust for Dagen H.', pos: { at: { x: 966, y: 64 } } });
+  add({ id: 'src1', by: 'jun.park', text: 'Trafikanalys long-run traffic safety series (trafa.se): police-reported accidents by year from 1950.', prev: 'src0', pos: 'next' });
+  add({ id: 'src2', by: 'jun.park', text: 'Riksarkivet: records of Statens högertrafikkommission, 1963–1969.', prev: 'src1', pos: 'next' });
   /* intention marketplaces: ines.v's series of follow-ups, and hal_b's branch beside the first answer */
   add({ id: 'i0', by: 'ines.v', text: S.intent.q, to: [], pos: { at: { x: 338, y: 64 } } });
   add({ id: 'i1', model: MODEL, html: S.intent.a, prev: 'i0', pos: 'next' });
@@ -482,34 +485,22 @@ function partHtml(p) {
   if (run) body = `<div class="status" role="status">${run.status === 'queued' ? 'Queued' : `Researching · step ${run.step + 1} of 4`}</div>`;
   else if (p.html != null) { const long = strip(p.html).length > 420, open = st.open[p.id]; body = `<div class="prose${long && !open ? ' clamp' : ''}">${p.html}</div>${long ? `<button class="more" data-a="more" data-id="${p.id}">${open ? 'Show less' : 'Show all'}</button>` : ''}`; }
   else body = `${p.quote ? `<div class="quote">${esc(clip(p.quote, 160))}</div>` : ''}<div class="ptext">${esc(p.text)}</div>`;
-  const foot = ask ? `<div class="pf"><span class="toln">to ${receivers(p).map(r => esc(rcvLabel(r))).join(', ')}</span>${sawChip(p)}</div>${p.fail ? `<div class="fail">${esc(p.fail.join('; '))}; the next level was used</div>` : ''}` : '';
-  const hint = p.id === 'd0' && !st.tried ? `<div class="hint">Try late binding: open <b>{ }</b> here, edit <b>context</b> (for example return only <code>[this.id]</code>), Apply, then <b>+ Continue</b> at the end of this stack. The new answer lists different context; earlier answers keep theirs.</div>` : '';
+  const foot = ask && p.fail ? `<div class="fail">${esc(p.fail.join('; '))}; the next level was used</div>` : '';
+  const hint = p.id === 'd0' && !st.tried ? `<div class="hint">Try late binding: open <b>{ }</b> here. Its <b>context</b> adds the Sources card to every ask in this thread. Delete <code>...stack('src0')</code>, Apply, then <b>+ Continue</b> at the end of this stack: the new answer no longer lists the sources. Earlier answers keep what they saw.</div>` : '';
   const cls = ['part', ask ? 'is-ask' : '', rep ? 'is-reply' : '', st.sel.has(p.id) ? 'sel' : '', st.insp === p.id ? 'insp' : '', p.fresh ? 'fadein' : ''].filter(Boolean).join(' ');
   p.fresh = false;
   return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}${hint}</div>`;
 }
 function draftHtml() {
   const d = st.draft, ask = d.mode === 'ask';
-  const ph = ask ? (d.quote ? 'Ask about this passage' : d.prev || d.to?.length ? 'Ask, with the parts above as context' : 'Ask anything') : d.prev ? 'Add another part, or press Done' : 'Write a post';
+  const ph = ask ? (d.quote ? 'Ask about this passage' : d.to?.length ? 'Ask the selected parts' : d.prev ? 'Ask a follow-up' : 'Ask anything') : d.prev ? 'Add another part' : 'Write a post';
+  const toLine = d.to?.length ? `<div class="dto">to ${esc(d.to.map(t => t.includes('#') ? 'a passage of ' + base(t) : t).join(', '))}</div>` : '';
+  const key = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
   return `<div class="part draft" data-part="__draft">${d.quote ? `<div class="quote">${esc(clip(d.quote, 160))}</div>` : ''}<textarea id="draft" rows="2" placeholder="${esc(ph)}" aria-label="${ask ? 'Ask' : 'Post'}">${esc(d.text || '')}</textarea>
-    <div class="drow"><span class="hint">${d.to?.length ? 'to ' + esc(d.to.map(t => t.includes('#') ? 'passage of ' + base(t) : t).join(', ')) : d.pos === 'inline' ? 'interjection' : d.pos?.beside ? 'branch' : ''}</span>
-    <button class="b3" data-a="dcancel">${d.cont ? 'Done' : 'Cancel'}</button>
-    <button class="${ask ? 'b2' : 'b1'}" data-a="dpost" ${d.text?.trim() ? '' : 'disabled'} title="Post: a part that sends nothing">Post</button>
-    <button class="${ask ? 'b1' : 'b2'}" data-a="dask" ${d.text?.trim() ? '' : 'disabled'} title="Ask: a part that sends ask to the part above (or the selection), and gets a reply">Ask</button></div></div>`;
-}
-/* "to d1 · Gemini reply": the receiver, by id and by what it is */
-function rcvLabel(r) {
-  if (r === 'canvas') return '#' + CANVAS.name;
-  const q = P[base(r)]; if (!q) return r;
-  const what = q.model ? q.model.split(' ')[0] + ' reply' : q.via ? 'code reply' : isAsk(q) ? q.by + "'s ask" : q.by + "'s post";
-  return (r.includes('#') ? 'a passage of ' : '') + base(r) + ' · ' + what;
-}
-/* saw: how many objects went to the model, and how many of them came from outside the receivers' own stacks */
-function sawChip(p) {
-  if (!p.saw) return '';
-  if (p.answeredBy) return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="A handler replied; no model ran">answered by code on ${esc(p.answeredBy)} · no model</button>`;
-  const own = new Set(receivers(p).flatMap(r => r === 'canvas' ? [] : ancestorIds(base(r)))), extra = p.saw.filter(x => !own.has(x)).length;
-  return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="The objects this ask sent as context; click for the list">saw ${p.saw.length - extra}${extra ? ` + ${extra} added by a context handler` : ''}</button>`;
+    ${toLine}<div class="drow">
+    <button class="b3" data-a="dcancel" title="${d.cont ? 'Done' : 'Cancel'} (Esc)">${d.cont ? 'Done' : 'Cancel'}</button>
+    <button class="${ask ? 'b2' : 'b1'}" data-a="dpost" ${d.text?.trim() ? '' : 'disabled'} title="Post a part that sends nothing${ask ? '' : ` (${key}+Enter)`}">Post</button>
+    <button class="${ask ? 'b1' : 'b2'}" data-a="dask" ${d.text?.trim() ? '' : 'disabled'} title="Ask: the model replies${ask ? ` (${key}+Enter)` : ''}">Ask</button></div></div>`;
 }
 const draftAt = (prev, pos) => st.draft && st.draft.prev === prev && (pos === 'any' || st.draft.pos === pos);
 /* one stack, from its head: each part, its interjections, then the part that continues it */
@@ -528,7 +519,7 @@ function chainHtml(p) {
 function render() {
   const ae = document.activeElement, keep = ae && ae.id === 'draft' ? [ae.selectionStart, ae.selectionEnd] : null;
   const roots = Object.values(P).filter(isHead).sort((a, b) => a.t - b.t);
-  const draftRoot = st.draft && (st.draft.pos?.at || st.draft.pos?.beside);
+  const draftRoot = st.draft && typeof st.draft.pos === 'object';   // a string pos ('next', 'inline') is drawn inside its stack
   stacksEl.innerHTML = roots.map(r => `<div class="stack" data-root="${r.id}">${chainHtml(r)}</div>`).join('') + (draftRoot ? `<div class="stack" data-root="__draft">${draftHtml()}</div>` : '');
   layout();
   renderTools();
@@ -596,12 +587,14 @@ function applyPan() { world.style.transform = `translate(${st.pan.x}px, ${st.pan
 function renderTools() {
   const n = st.sel.size;
   $('#tools').innerHTML = `<button class="tb" data-a="addpost">+ Add post</button><button class="tb" data-a="addask">+ Add ask</button>`
-    + (n ? `<span class="selnote">${n} selected · + Add ask sends to ${n === 1 ? 'it' : 'them'}<button data-a="selclear">Clear</button></span>` : `<span class="chan" title="The workspace model: every ask runs on ${esc(MODEL)}">#public · <span class="mfull">${esc(MODEL)}</span><span class="mshort">${esc(MODEL_SHORT)}</span><button data-a="inspect" data-id="canvas" title="Inspect the canvas and its handlers">{ }</button></span>`);
+    + (n ? `<span class="selnote">${n} selected · + Add ask sends to ${n === 1 ? 'it' : 'them'}<button data-a="selclear">Clear</button></span>` : `<span class="chan" title="The workspace model: every ask runs on ${esc(MODEL)}">#public&nbsp;·&nbsp;<span class="mfull">${esc(MODEL)}</span><span class="mshort">${esc(MODEL_SHORT)}</span><button data-a="inspect" data-id="canvas" title="Inspect the canvas and its handlers">{ }</button></span>`);
 }
 /* highlight: the context of an ask (hover "saw", or the inspector's preview) */
 function highlight() {
   stacksEl.querySelectorAll('.part.saw').forEach(e => e.classList.remove('saw'));
-  const ids = st.hl || []; ids.forEach(id => elOf(id)?.classList.add('saw'));
+  let ids = st.hl;
+  if (!ids) { const p = [...st.sel].map(id => P[id]).find(p => p && (isAsk(p) || ((p.model || p.via) && P[p.prev]))); if (p) ids = isAsk(p) ? p.saw : P[p.prev].saw; }
+  (ids || []).forEach(id => elOf(id)?.classList.add('saw'));
 }
 
 /* ---- the inspector ---- */
@@ -611,7 +604,7 @@ function previewFor(id) {
   /* a hypothetical ask sent to this part: what context resolves to, and where the reply would land */
   if (id === 'canvas') return null;
   const fake = { id: '__preview', to: [], prev: id, text: '' };
-  P.__preview = Object.assign(fake, { pos: 'inline', t: 1e9, k: 1e9 });
+  P.__preview = Object.assign(fake, { pos: nextOf(id) ? 'inline' : 'next', t: 1e9, k: 1e9 });
   try {
     const msg = resolve(fake, ['__preview']);
     const pl = call('__preview', 'place', [{ by: MODEL }, msg]);
@@ -655,7 +648,7 @@ function renderInsp() {
   const pv = previewFor(id);
   st.hl = pv ? pv.saw : null; highlight();
   const placeTxt = pv ? (pv.place === 'inline' ? 'inline, under the ask' : pv.place && pv.place.beside ? `beside the ask (dx ${pv.place.beside.dx}, dy ${pv.place.beside.dy})` : 'next, directly under the ask') : '';
-  const pvH = pv ? `<h3>Next ask sent to this part</h3><div class="pv">The model would see ${pv.saw.length} ${pv.saw.length === 1 ? 'object' : 'objects'} (dashed on the canvas):<ol>${pv.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol><p class="note">The reply would land ${placeTxt} (place from ${fromLabel(pv.placeFrom)}).</p></div>` : `<h3>Canvas</h3><p class="note">Handlers here apply to every part in #public that has none of its own and whose heads have none. Editing one changes the preview of every part at once.</p>`;
+  const pvH = pv ? `<h3>Next ask ${nextOf(id) ? 'inserted under' : 'continuing from'} this part</h3><div class="pv">The model would see ${pv.saw.length} ${pv.saw.length === 1 ? 'object' : 'objects'} (dashed on the canvas):<ol>${pv.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol>${!nextOf(id) ? '<p class="note">A continuation always reads the whole thread above it; context handlers can only add to it.</p>' : ''}<p class="note">The reply would land ${placeTxt} (place from ${fromLabel(pv.placeFrom)}).</p></div>` : `<h3>Canvas</h3><p class="note">Handlers here apply to every part in #public that has none of its own and whose heads have none. Editing one changes the preview of every part at once.</p>`;
   const title = isC ? `Canvas <small>#${CANVAS.name}</small>` : `${isAsk(p) ? 'Ask' : p.model || p.via ? 'Reply' : 'Post part'} <small>${p.id}</small>`;
   el.innerHTML = `<header><h2>${title}</h2><button class="x" data-a="iclose" aria-label="Close inspector" title="Close (Esc)">${XI}</button></header><div class="ib"><h3>Fields</h3>${fields}${msgs}${pvH}<h3>Handlers</h3>${hs}<p class="note">In the app only a part's author can change its handlers, and only the channel owner can change the canvas's; the mock lets anyone edit. Lookup: this part, its head, the head of the part that head hangs from, the canvas, the default. Handlers run once when an ask is sent; the result is stored as <code>saw</code> and is not recomputed.</p></div>`;
 }
