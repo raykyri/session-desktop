@@ -1266,6 +1266,37 @@ test.serial("after deleting one's comment, focus is on the selected branch row",
   t.is(document.activeElement, row);
 });
 
+test.serial("clicking a collapsed reply's +N expands it and keeps focus on its row", async (t) => {
+  const TOP = "01M7GGE530GDFVANPJE04YBAQN";
+  prepare = (replica) => {
+    const top = replica.raw(`reply:${TOP}`);
+    if (top?.kind !== "reply") throw new Error("no reply");
+    replica.write([
+      {
+        ...top,
+        id: "01M7HWGZJGT7JTFFVSYPX0RP09",
+        parent: TOP,
+        u: "jun.park",
+        t: "A reply under the first one",
+        createdAt: "2026-11-16T09:50:00Z",
+      },
+    ]);
+  };
+  useThreadUiStore.getState().toggleCollapsed(SEED_POST, TOP);
+  await renderApp("/c/ml-papers");
+  await waitUntil(t, () => side(SEED_POST) !== null, "the side column renders");
+  const more = await within(side(SEED_POST)).findByRole("button", { name: "Show 1 more reply" });
+  more.focus();
+  fireEvent.click(more);
+  await waitUntil(
+    t,
+    () => within(side(SEED_POST)).queryByText("A reply under the first one") !== null,
+    "the reply under it shows",
+  );
+  const row = side(SEED_POST).querySelector<HTMLElement>(`[data-row="${TOP}"]`);
+  await waitUntil(t, () => document.activeElement === row, "focus on the reply's row");
+});
+
 test.serial("another person's comment has no Delete", async (t) => {
   prepare = (replica) => {
     const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
