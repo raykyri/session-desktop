@@ -213,10 +213,3 @@ export function notifText(row: NotifRow): string {
   const p = notifParts(row);
   return `${p.who}${p.text}${p.quote === null ? "" : `“${p.quote}”`}`;
 }
-
-/** The summary line under the heading (W2.6). */
-export function unreadLine(unread: number): string {
-  return unread === 0
-    ? "All caught up."
-    : `${unread} unread ${unread === 1 ? "notification" : "notifications"}.`;
-}

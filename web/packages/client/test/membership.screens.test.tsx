@@ -20,7 +20,6 @@ import {
   notifText,
   notificationsOf,
   unloadedThreads,
-  unreadLine,
   type NotifRow,
 } from "../src/features/notifications/notifications.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
@@ -178,17 +177,11 @@ test("the text of each notification kind, and of a coalesced one", (t) => {
   );
 });
 
-test("the summary line for 0, 1 and 3 unread", (t) => {
-  t.is(unreadLine(0), "All caught up.");
-  t.is(unreadLine(1), "1 unread notification.");
-  t.is(unreadLine(3), "3 unread notifications.");
-});
-
-test.serial("the page lists every kind, newest first, with the summary line", async (t) => {
+test.serial("the page lists every kind, newest first, with no summary line", async (t) => {
   await renderApp("/notifications");
   await screen.findByRole("heading", { name: "Notifications" });
   await waitUntil(t, () => row("mention") !== null, "the rows render");
-  t.truthy(screen.getByText(/^3 unread notifications\. Mentions, replies to your posts/));
+  t.is(screen.queryByText(/unread notification|All caught up|Mentions, replies/), null);
   t.regex(rowsOf("mention")[0] ?? "", /^@jun\.park mentioned you in a reply on “.+”#ml-papers · /);
   t.regex(rowsOf("branch")[0] ?? "", /^@hal_b branched from your ask “.+”#public · /);
   t.regex(
@@ -223,7 +216,8 @@ test.serial(
     );
     await waitUntil(t, () => document.querySelector("[data-unread-dot]") === null, "no dot");
     t.truthy(screen.getByRole("button", { name: "Account" }));
-    t.truthy(screen.getByText(/^All caught up\./));
+    t.is(screen.queryByText(/All caught up|unread notification/), null, "no summary line");
+    t.is(screen.queryAllByRole("img", { name: "Unread" }).length, 0, "no unread dots");
     t.true(screen.getByRole("button", { name: "Mark all as read" }).hasAttribute("disabled"));
   },
 );

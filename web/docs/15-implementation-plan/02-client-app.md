@@ -249,10 +249,9 @@ and that the open Effort submenu lies inside the viewport.
 
 **W2.6 Notifications page** (`/notifications`, `notifPage`, reached from the
 account menu; decision P10). Heading "Notifications" with "Mark all as read"
-(disabled while nothing is unread). Under it, while the list is not empty, the
-summary line "N unread notifications." (or "1 unread notification.", or "All
-caught up.") followed by "Mentions, replies to your posts, branches and
-comments on your asks, removals, and invites people used." The list is the
+(disabled while nothing is unread). There is no summary line under the
+heading: unread rows carry their dot, and the account button its count. The
+list is the
 notification records of the user log (01 C16), newest first, in a box; each
 row shows the actor's avatar with a kind badge (`N_KIND`), the text, and a
 sub-line "#channel · 3h" ("Invites · 3h" for an invite), and unread rows are

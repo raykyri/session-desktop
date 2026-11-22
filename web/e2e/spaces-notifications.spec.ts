@@ -88,7 +88,9 @@ test("every kind reaches the viewer; the dot stays; a row opens its thread; Mark
   await page.goto("/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", level: 2 })).toBeVisible();
   await expect(rows(page)).toHaveCount(6);
-  await expect(page.getByText(/^6 unread notifications\. Mentions, replies/)).toBeVisible();
+  // no summary line; the six unread rows carry their dots
+  await expect(page.getByText(/unread notification|Mentions, replies/)).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Unread" })).toHaveCount(6);
   const ann = `@${w.ann}`;
   await expect(rowOf(page, "mention")).toContainText(
     `${ann} mentioned you in a reply on “Ann's own post”`,
@@ -170,10 +172,10 @@ test("every kind reaches the viewer; the dot stays; a row opens its thread; Mark
   // read on the server: still read after a reload
   await page.goto("/notifications");
   await expect(rowOf(page, "mention").getByRole("img", { name: "Unread" })).toHaveCount(0);
-  await expect(page.getByText(/^5 unread notifications\./)).toBeVisible();
+  await expect(page.getByText(/unread notification|All caught up/)).toHaveCount(0);
   await page.getByRole("button", { name: "Mark all as read" }).click();
   await expect(toast(page)).toHaveText("All notifications marked as read.");
-  await expect(page.getByText(/^All caught up\./)).toBeVisible();
+  await expect(page.getByRole("img", { name: "Unread" })).toHaveCount(0);
   await expect(page.locator("[data-unread-dot]")).toHaveCount(0);
   await expect(account(page)).toHaveAccessibleName("Account");
   await expect(page.getByRole("button", { name: "Mark all as read" })).toBeDisabled();

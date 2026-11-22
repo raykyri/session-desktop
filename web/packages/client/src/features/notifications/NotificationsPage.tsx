@@ -34,7 +34,6 @@ import {
   fetchNotificationThreads,
   notifParts,
   notificationsOf,
-  unreadLine,
   type NotifKind,
   type NotifRow,
 } from "./notifications.js";
@@ -84,19 +83,13 @@ export function NotificationsPage() {
       ) : list.length === 0 ? (
         <NotificationsEmpty />
       ) : (
-        <>
-          <p className="nsub">
-            {unreadLine(unread)} Mentions, replies to your posts, branches and comments on your
-            asks, removals, and invites people used.
-          </p>
-          <ul className="nlist box">
-            {list.map((row) => (
-              <li key={row.id}>
-                <NotificationRow row={row} />
-              </li>
-            ))}
-          </ul>
-        </>
+        <ul className="nlist box">
+          {list.map((row) => (
+            <li key={row.id}>
+              <NotificationRow row={row} />
+            </li>
+          ))}
+        </ul>
       )}
     </PageFrame>
   );

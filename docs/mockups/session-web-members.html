@@ -3087,7 +3087,6 @@ function notifPage() {
     return `<li><button class="nrow${n.read ? '' : ' unread'}" data-a="notif" data-id="${n.id}"><span class="nav-av">${av(n.by)}<span class="nk nk-${n.k}" aria-hidden="true">${N_KIND[n.k]}</span></span>
       <span class="ntx">${notifText(n)}<small>${n.k === 'invite_used' ? 'Invites · ' : p || n.s ? esc(spName(p ? p.s : n.s)) + ' · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" role="img" aria-label="Unread"></span>'}</button></li>`; };
   return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall"${un ? '' : ' disabled'}>Mark all as read</button></div>
-    ${!list.length ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
     ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : notifEmpty()}</div></div>`;
 }
 /* opening a row marks it read; an invite_used row goes to Invites; a row whose thread is gone marks it read and says
