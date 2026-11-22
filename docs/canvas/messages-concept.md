@@ -108,25 +108,33 @@ handler that throws is skipped, the next level runs, and the ask records the fai
 
 ## Layout
 
-- **Positions.** Only heads (`at`, `beside`) store coordinates; `next` and `inline` parts are drawn inside their
-  stack. A `beside` offset is relative to the anchor part. Dragging a header moves the stack and rewrites `at` or the
-  offset. Stacks are a convention, not a record.
-- **Order.** A part, then its `inline` children by `k`, then its single `next` child. A second Continue becomes a
-  branch.
-- **Who may add where.** Only the person who started a thread (its head's author) can Continue it or Ask here
-  inside it. Everyone else branches, with Branch or Ask about this. The mock has a small "as" switch in the toolbar
-  to show both cases. It starts as jun.park, who owns Dagen H and does not own ines.v's thread.
-- **Growth.** "Ask here" between B and C creates `prev = B, pos = inline`, drawn indented with a rule. C keeps
-  `prev = B`, so the parts below never see the interjection. The stack grows, and more than two interjections
-  collapse to "N more".
-- **Branching mid-thread.** "Branch" on B creates `prev = B, pos = beside`, with context B and everything above it.
-  Selecting text and choosing "Ask about this" does the same with `to: ["B#s-e"]`, quoting the passage.
-- **Collisions.** Heads are placed in creation order, each followed by its branches. Overlapping stacks move down; a
-  branch pushed far from its anchor takes the next lane to the right.
-- **Connectors** appear only where position does not show the relation: branches, passage asks and selection asks.
-  What an ask saw is one step away. Hovering or selecting the ask (or its reply) outlines those parts, and the
-  inspector lists them. Only a handler failure prints on the card. The canvas does nothing that is not a handler shown
-  in its inspector.
+The visual layout follows variant B (stacks); the model underneath is this variant's.
+
+- **A thread is one card.** A head with `at` is a card. Its `next` chain is drawn as sections separated by hairlines.
+  A question and the answer it prompted read as one pair. Model answers have a slightly different background. The
+  header strip shows the channel, a collapse toggle, and works as the drag grip. Dragging rewrites `at`.
+- **Who may add where.** Only the person who started a thread can add to it or insert into it. On their own threads a
+  "+" appears in the left gutter of a hovered gap. Every gap shows one when the card is selected, or on touch. That
+  "+" is Ask here. "+ Add to this thread" at the bottom is Continue. Everyone else branches, with Branch or Ask about
+  this. A small "as" switch in the toolbar shows both cases. It starts as jun.park, who owns Dagen H but not ines.v's
+  thread.
+- **Interjections** (Ask here between B and C: `prev = B, pos = inline`) are drawn inside the card, indented with a
+  rule, and fold to one line. More than two collapse to "N more". C keeps `prev = B`, so the parts below never read
+  the interjection.
+- **Branches** (`pos = beside`, including passage asks that quote their focus) go in lanes to the right of the parent
+  card: one column width plus a gap, starting level with the anchor part. Sibling branches stack downward by the
+  extent of their whole subtree, so connectors do not cross. A stored `beside` offset is not used for drawing.
+- **Units.** A root card and its branch lanes form a unit, and only the root stores a position. Overlapping units are
+  pushed down in one sweep, without storing the offset. The unit being edited stays put. At first load, units are
+  packed into columns.
+- **Connectors** run from the anchor on the parent card's right edge to the top-left of the branch. Each is a faint
+  curve with a dot at the anchor, and turns accent within the active unit. Hovering a branch highlights its anchor.
+  Asks sent to a passage or a selection use the same curve, dashed.
+- **Zoom.** Controls sit at the bottom right (−, %, +, Fit). Below 50% each card shows one headline at a constant
+  screen size.
+- **What an ask read** shows as a tinted left bar on those parts when the ask or its reply is hovered or selected. The
+  inspector lists them, with each part's `{ }`. Only a handler failure prints on a card. The canvas does nothing that
+  is not a handler shown in its inspector.
 
 ## Mapping from today's records
 
@@ -236,3 +244,10 @@ The advisor was a separate agent, run for three rounds.
   - Continue and Ask here appear only for the thread's author, with an "as" persona switch in the toolbar.
   - hal_b's post now has its replies as branches beside it.
   - Open question 4 replaced (comments are no longer inline).
+
+**Fifth steer from the parent session, on the user's behalf.**
+- *It said:* adopt variant B's visual layout. That means one card per thread, interjections folded inside, branch
+  lanes, B's connectors, zoom controls and initial packing, while keeping this variant's model, handlers, inspector,
+  selection asks and persona switch.
+- *Changed:* the Layout section above. The mock's rendering and layout were rewritten on B's rules; the message
+  model is unchanged.

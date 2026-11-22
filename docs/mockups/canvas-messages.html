@@ -39,11 +39,12 @@ Model (all in memory; a reload starts over)
   --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --bad: #c0563f; --saw: #2f8a4d;
   --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
   --code-bg: #f6f4f1; --code-fg: #2b3133;
+  --card-m: #fbfaf8; --link: #a9b4bd; --ctx: rgba(10,111,184,.55);
   --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.06);
   --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --w: 290px;
+  --w: 320px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   color-scheme: dark;
@@ -55,6 +56,7 @@ Model (all in memory; a reload starts over)
   --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d; --saw: #81c784;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
   --code-bg: #1a1918; --code-fg: #d9ddd9;
+  --card-m: #1d1c1b; --link: #4a5156; --ctx: rgba(51,173,255,.6);
   --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 } }
 :root[data-theme="dark"] {
@@ -67,6 +69,7 @@ Model (all in memory; a reload starts over)
   --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d; --saw: #81c784;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
   --code-bg: #1a1918; --code-fg: #d9ddd9;
+  --card-m: #1d1c1b; --link: #4a5156; --ctx: rgba(51,173,255,.6);
   --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 }
 * { box-sizing: border-box; }
@@ -77,17 +80,19 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 [hidden] { display: none !important; }
 
-/* ---- the canvas: a dot grid that pans with the content ---- */
+/* ---- the canvas: a dot grid that pans and zooms with the content ---- */
 #view { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab;
   background-image: radial-gradient(var(--dot) 1px, transparent 1.2px); background-size: 22px 22px; }
 #view.panning { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; width: 1px; height: 1px; transform-origin: 0 0; }
+/* connectors: a faint curve from the anchor on the parent card's right edge to the branch's top-left, with a dot at
+   the anchor; accent inside the active unit; dashed for asks sent to a passage or a selection */
 #wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-#wires path { fill: none; stroke: color-mix(in srgb, var(--accent) 55%, transparent); stroke-width: 1.5; }
-#wires path.reply { stroke-dasharray: 4 3; }
-#wires circle { fill: var(--canvas); stroke: color-mix(in srgb, var(--accent) 70%, transparent); stroke-width: 1.5; }
-#wires .lbl rect { fill: var(--canvas); stroke: color-mix(in srgb, var(--accent) 40%, transparent); }
-#wires .lbl text { fill: var(--accent); font: 600 10px var(--mono); }
+#wires path { fill: none; stroke: var(--link); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .6; }
+#wires circle { fill: var(--link); }
+#wires path.det { stroke-dasharray: 4 4; }
+#wires path.hot { stroke: var(--accent); stroke-width: 1.75; opacity: 1; }
+#wires circle.hot { fill: var(--accent); }
 
 /* ---- the two buttons at the top left ---- */
 #tools { position: fixed; z-index: 20; top: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: none; }
@@ -105,90 +110,130 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .selnote button { height: 22px; padding: 0 8px; border-radius: 11px; font-weight: 600; }
 .selnote button:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 
-/* ---- stacks and parts ---- */
+/* ---- a thread is one card: a header strip, then its parts as sections ---- */
 .stack { position: absolute; width: var(--w); display: flex; flex-direction: column; }
-.part { position: relative; background: var(--card); border-radius: 10px; box-shadow: var(--shadow); padding: 9px 12px 10px; transition: box-shadow .15s; }
-.part.is-ask { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent), var(--shadow); }
-.part.is-reply { background: color-mix(in srgb, var(--card) 70%, var(--inset)); }
-.part.sel { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
-.part.is-ask.sel { box-shadow: inset 3px 0 0 var(--accent), 0 0 0 2px var(--accent); }
-.part.saw::after { content: ""; position: absolute; inset: -4px; border-radius: 13px; border: 1.5px dashed var(--saw); pointer-events: none; }
-.part.insp { box-shadow: 0 0 0 2px color-mix(in srgb, var(--t-heading) 60%, transparent), var(--shadow); }
+.sbody { background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
+.stack.sel > .sbody { box-shadow: 0 0 0 2px var(--accent), var(--shadow-pop); }
+.sh { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 12px; font-size: 11.5px; color: var(--t-faint);
+  border-bottom: 1px solid var(--divider); cursor: grab; user-select: none; touch-action: none; }
+.sh .chn { font-weight: 600; color: var(--t-secondary); }
+.sh .grow { flex: 1; }
+.sh .ib { width: 24px; height: 24px; border-radius: 6px; display: inline-grid; place-items: center; color: var(--t-faint); }
+.sh .ib:hover { background: var(--control); color: var(--t-heading); }
+.stack.dragging { z-index: 5; } .stack.dragging .sh { cursor: grabbing; }
+.fq { padding: 7px 12px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: 10px 10px 0 0; }
+.fq i { font-style: normal; color: var(--t-faint); }
+.sh + .fq { border-radius: 0; }
+.cmeta { padding: 0 12px 10px; font-size: 11.5px; color: var(--t-faint); }
+.part { position: relative; padding: 10px 12px; }
+.part.m { background: var(--card-m); }
+.sbody > .part:last-child, .sbody > .part.m:last-child { border-radius: 0 0 10px 10px; }
+.part.ctx { box-shadow: inset 3px 0 0 var(--ctx); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+.part.psel { box-shadow: inset 0 0 0 2px var(--accent); }
+.part.insp { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--t-heading) 55%, transparent); }
+.part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
 .ph { display: flex; align-items: center; gap: 6px; min-height: 20px; margin-bottom: 4px; font-size: 11.5px; color: var(--t-faint); }
-.ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; }
+.ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; white-space: nowrap; }
 .ph .to { color: var(--accent); font-family: var(--mono); font-size: 10.5px; }
 .ph .grow { flex: 1; }
 .ph > span:not(.acts):not(.grow):not(.av):not(.mk) { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ph > b { white-space: nowrap; }
-.acts { flex: none; }
 .av { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; color: var(--av-fg); font-size: 7.5px; font-weight: 600; }
 .mk { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent); }
 .mk svg { width: 11px; height: 11px; }
-.acts { display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
-.part:hover .acts, .part:focus-within .acts, .part.sel .acts, .part.insp .acts { opacity: 1; }
+.mk.code { font: 600 9px var(--mono); }
+.acts { flex: none; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.part:hover > .ph .acts, .part:focus-within > .ph .acts, .part.psel > .ph .acts, .part.insp > .ph .acts, .stack.sel .part > .ph .acts { opacity: 1; }
 @media (hover: none) { .acts { opacity: 1; } }
-.act { height: 20px; padding: 0 6px; border-radius: 5px; color: var(--t-muted); font-size: 11px; font-weight: 500; }
-.act:hover, .act[aria-pressed="true"] { background: var(--fill-hover); color: var(--t-heading); }
+.act { height: 20px; padding: 0 6px; border-radius: 5px; color: var(--t-secondary); font-size: 11px; font-weight: 500; }
+.act:hover, .act[aria-pressed="true"] { background: var(--control); color: var(--t-heading); }
 .act.code { font-family: var(--mono); }
 .act.code.has { color: var(--accent); }
-.ptext { color: var(--t-body); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.is-ask .ptext { color: var(--t-heading); font-size: 14px; }
+.ptext { color: var(--t-heading); font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .quote { margin: 2px 0 6px; padding: 4px 8px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--inset); border-radius: 0 5px 5px 0; color: var(--t-secondary); font-size: 11.5px; }
-.prose { color: var(--t-body); font-size: 12.5px; line-height: 1.55; overflow-wrap: anywhere; }
+.prose { color: var(--t-body); font-size: 13px; line-height: 1.58; overflow-wrap: anywhere; }
 .prose > :first-child { margin-top: 0; } .prose > :last-child { margin-bottom: 0; }
-.prose p { margin: 0 0 .6em; } .prose ul, .prose ol { margin: 0 0 .6em; padding-left: 1.2em; } .prose li { margin: .15em 0; }
-.prose h4 { margin: .9em 0 .3em; font-size: 12.5px; color: var(--t-heading); }
-.prose table { border-collapse: collapse; font-size: 11.5px; margin: 0 0 .6em; display: block; overflow-x: auto; }
+.prose p { margin: 0 0 .65em; } .prose ul, .prose ol { margin: 0 0 .65em; padding-left: 1.3em; } .prose li { margin: .15em 0; }
+.prose h4 { margin: .9em 0 .3em; font-size: 13px; color: var(--t-heading); }
+.prose table { border-collapse: collapse; font-size: 12px; margin: 0 0 .65em; display: block; overflow-x: auto; }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
 .prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; }
 .prose ul.saw-list { list-style: none; padding: 0; }
-.prose ul.saw-list li { padding-left: 0; }
 .prose code { font-family: var(--mono); font-size: 11px; }
-.clamp { max-height: 168px; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
-.more { margin-top: 2px; color: var(--accent); font-size: 11.5px; font-weight: 500; }
+.clamp { max-height: 236px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.more { margin-top: 2px; color: var(--accent); font-size: 12px; font-weight: 600; }
 .more:hover { text-decoration: underline; }
-.pf { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--t-faint); }
-.pf { flex-wrap: wrap; row-gap: 2px; }
 .hint { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--t-secondary); font-size: 11.5px; line-height: 1.45; }
 .hint b { color: var(--t-heading); font-weight: 600; } .hint code { font-family: var(--mono); font-size: 10.5px; }
 .fail { margin-top: 4px; font-size: 11px; color: var(--bad); }
-.mk.code { font: 600 9px var(--mono); }
-.ph { cursor: grab; }
-.stack.dragging { opacity: .85; z-index: 5; }
-.stack.dragging .ph { cursor: grabbing; }
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--warn); }
-.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
-@keyframes pulse { 50% { opacity: .3; } }
-.fadein { animation: fadein .25s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(3px); } }
-@media (prefers-reduced-motion: reduce) { .status::before, .fadein { animation: none; } }
+.pending { color: var(--t-faint); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
+.pending .bar { flex: 1; height: 3px; border-radius: 2px; background: var(--divider); overflow: hidden; }
+.pending .bar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+.fadein { animation: fadein .28s ease-out; } @keyframes fadein { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .fadein { animation: none; } .pending .bar i { transition: none; } }
 
-/* the gap between two parts: "Ask here" inserts an interjection (pos inline); at the end of a series, Continue */
-.gap { position: relative; height: 12px; display: flex; align-items: center; justify-content: center; }
-.gap button { position: relative; z-index: 2; height: 18px; padding: 0 8px; border-radius: 9px; font-size: 10.5px; font-weight: 600; color: var(--t-faint); background: var(--canvas); box-shadow: inset 0 0 0 1px var(--border-strong); opacity: 0; transition: opacity .12s; }
-.gap:hover button, .gap button:focus-visible, .stack:hover .gap.end button { opacity: 1; }
-.gap button:hover { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-@media (hover: none) { .gap button { opacity: .8; } }
-.gap.end { height: 22px; align-items: flex-end; justify-content: flex-start; padding-left: 4px; }
-/* an interjection is drawn indented, with a rule: the parts under it do not see it */
-.inl { margin: 6px 0 0 12px; padding-left: 8px; border-left: 2px solid var(--border-strong); display: flex; flex-direction: column; }
-.inl > .gap.end { display: none; }
-.inl:hover > .gap.end, .inl:focus-within > .gap.end { display: flex; }
-.inlmore { align-self: flex-start; margin: 6px 0 0 12px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--control); color: var(--t-muted); font-size: 11px; font-weight: 500; }
+/* the gap between two parts: a hairline. On your own threads a "+" in the left gutter of the hovered gap inserts an
+   ask there (Ask here); every gap shows its "+" when the card is selected, or on touch. A question and the answer it
+   prompted are one pair, with no gap between them. */
+.seam { position: relative; height: 1px; background: var(--divider); }
+.pairline { height: 1px; background: var(--divider); margin: 0 12px; }
+.seam .sp { position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
+  box-shadow: var(--shadow); font-weight: 700; font-size: 15px; line-height: 22px; text-align: center; opacity: 0; transition: opacity .1s, transform .1s; z-index: 3; }
+.seam .hz { position: absolute; left: -26px; right: 0; top: -7px; height: 14px; z-index: 2; }
+.seam:hover .sp, .seam .sp:focus-visible, .stack.sel .seam .sp { opacity: 1; }
+.seam:hover { background: var(--accent); }
+.seam .sp:hover { transform: scale(1.12); }
+@media (hover: none) { .seam .sp { opacity: 1; width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; } .seam .hz { display: none; } }
+.addend { display: block; width: 100%; text-align: left; padding: 6px 12px 7px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
+.addend:hover { color: var(--accent); background: var(--inset); }
+@media (hover: none) { .addend { padding: 11px 12px; } }
+
+/* an interjection (Ask here) is drawn inside its parent card, indented with a rule; it folds to one line */
+.ifork { margin: 6px 8px 8px 12px; border-left: 2px solid var(--link); padding-left: 8px; }
+.ifork .part { padding: 6px 4px 6px 6px; background: transparent; }
+.ifork .part.m { background: var(--inset); border-radius: 6px; }
+.ifork .pairline { margin: 0 4px; }
+.ifork .seam .sp { left: -24px; }
+.ifork .addend { border: 0; padding: 4px 6px; border-radius: 5px; }
+.ifh { font-size: 11px; color: var(--t-faint); display: flex; gap: 8px; align-items: center; padding: 2px 0 2px 6px; }
+.ifh button { color: var(--accent); font-weight: 500; }
+.ifork.folded { border-left-color: var(--border-strong); }
+.iffold { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; font-size: 12px; color: var(--t-secondary); padding: 3px 4px; border-radius: 5px; min-width: 0; }
+.iffold:hover { background: var(--control); }
+.iffold .ar { color: var(--t-faint); } .iffold b { color: var(--t-heading); font-weight: 600; white-space: nowrap; }
+.iffold .tx { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } .iffold .n { color: var(--t-faint); white-space: nowrap; }
+.inlmore { margin: 0 8px 8px 12px; height: 22px; padding: 0 8px; border-radius: 11px; background: var(--control); color: var(--t-secondary); font-size: 11.5px; font-weight: 500; }
 .inlmore:hover { color: var(--t-heading); }
 
-/* drafts: the part being written */
-.part.draft { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-pop); }
-.part.draft textarea { display: block; width: 100%; min-height: 40px; resize: none; border: 0; outline: none; background: none; padding: 2px 0; font-size: 14px; line-height: 1.45; color: var(--t-heading); }
-.part.draft textarea::placeholder { color: var(--placeholder); }
+/* drafts: the part being written, a dashed box at its position */
+.draft { position: relative; padding: 8px 10px 10px; margin: 6px 8px; background: var(--card); border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--border-strong)); border-radius: 8px; }
+.sbody > .draft:only-child { margin: 0; border-radius: 10px; }
+.draft textarea { display: block; width: 100%; min-height: 44px; resize: none; border: 0; outline: none; background: none; padding: 0; font-size: 14px; line-height: 1.5; color: var(--t-heading); overflow: hidden; }
+.draft textarea::placeholder { color: var(--placeholder); }
 .drow { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 .dto { margin-top: 4px; font: 10.5px var(--mono); color: var(--t-faint); overflow-wrap: anywhere; }
-.b1, .b2 { height: 26px; padding: 0 11px; border-radius: 13px; font-size: 12px; font-weight: 600; }
+.b1, .b2 { height: 28px; padding: 0 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; }
 .b1 { background: var(--accent-strong); color: var(--on-accent); }
 .b1:disabled { opacity: .45; cursor: default; }
 .b2 { background: var(--control); color: var(--t-heading); }
 .b2:hover { background: var(--control-hover); }
-.b3 { height: 26px; padding: 0 8px; border-radius: 13px; font-size: 12px; color: var(--t-muted); }
-.b3:hover { background: var(--fill-hover); color: var(--t-heading); }
+.b3 { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 12.5px; color: var(--t-secondary); }
+.b3:hover { background: var(--control); color: var(--t-heading); }
+@media (hover: none) { .b1, .b2, .b3 { height: 38px; } }
+
+/* zoomed out below 50%: each card shows one headline at a constant screen size */
+.part .hl { display: none; }
+.far .prose, .far .ptext, .far .ph, .far .quote, .far .cmeta, .far .fq, .far .ifork, .far .inlmore, .far .addend, .far .more, .far .hint, .far .seam .sp, .far .pending, .far .draft { visibility: hidden; }
+.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.far .sh .chn, .far .sh .ib { visibility: hidden; }
+
+/* zoom controls, bottom right */
+.br { position: fixed; z-index: 20; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 6px; }
+.br button { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06); font-size: 12.5px; font-weight: 600; color: var(--t-heading); }
+.br button:hover { background: var(--inset); }
+.br .zv { min-width: 52px; font-variant-numeric: tabular-nums; }
+@media (hover: none) { .br button { height: 40px; } }
+#insp:not([hidden]) ~ .br { display: none; }
 
 /* the floating "Ask about this" button on a text selection */
 #selask { position: absolute; z-index: 30; height: 26px; padding: 0 10px; border-radius: 13px; background: var(--t-heading); color: var(--canvas); font-size: 11.5px; font-weight: 600; box-shadow: var(--shadow-pop); }
@@ -239,6 +284,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 <div id="tools"></div>
 <div id="view"><div id="world"><svg id="wires" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></div></div>
 <aside id="insp" hidden aria-label="Inspector"></aside>
+<div class="br"><button id="zout" type="button" aria-label="Zoom out" title="Zoom out">−</button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in" title="Zoom in">+</button><button id="fit" type="button" title="Fit everything in view">Fit</button></div>
 <div id="toast" class="toast" role="status" hidden></div>
 
 <script>
@@ -271,6 +317,8 @@ let idSeq = 0; const newId = pre => pre + (++idSeq);
 
 /* ---- structure ---- */
 const isHead = p => typeof p.pos === 'object';
+/* pos.at of a head, or undefined ('next'.at is a string method, so test the type first) */
+const atOf = pos => pos && typeof pos === 'object' ? pos.at : undefined;
 const kids = id => Object.values(P).filter(c => c.prev === id);
 const nextOf = id => kids(id).find(c => c.pos === 'next');
 const inlineOf = id => kids(id).filter(c => c.pos === 'inline').sort((a, b) => a.k - b.k);
@@ -474,135 +522,199 @@ function seed() {
   for (const p of Object.values(P)) if (isAsk(p)) p.saw = resolve(p).context;
 }
 
-/* ---- view state ---- */
-const st = { zoom: 1, pan: { x: 0, y: 0 }, sel: new Set(), draft: null, insp: null, open: {}, inlOpen: {}, boxes: [], hl: null };
+/* ---- view state (per viewer, not content) ---- */
+const st = { zoom: 1, pan: { x: 0, y: 0 }, sel: new Set(), cur: null, hot: null, draft: null, insp: null, open: {}, inlOpen: {}, fold: {}, collapsed: new Set(), boxes: [], hl: null };
+const W = 320, GAP = 44, VGAP = 16;
 
 /* ---- render ---- */
 const $ = s => document.querySelector(s);
 const stacksEl = $('#stacks'), world = $('#world'), wires = $('#wires'), view_ = $('#view');
-function partHtml(p) {
-  const ask = isAsk(p), rep = !!p.model || !!p.via, run = p.run;
-  const authorHead = p.model ? `${MARK}<b>${esc(p.model.split(' ')[0])}</b><span>reply</span>` : p.via ? `<span class="mk code" aria-hidden="true">{}</span><b>code on ${esc(p.via)}</b><span>by ${esc(p.by)}</span>` : `${av(p.by)}<b>${esc(p.by)}</b>`;
+/* the person who started the thread a part is in: only they add to it or insert into it; others branch */
+const threadOwner = id => headOf(id)?.by;
+const draftAt = (prev, pos) => st.draft && st.draft.prev === prev && st.draft.pos === pos;
+/* a question and the answer it prompted are read as one pair: no gap between them */
+const paired = (p, n) => isAsk(p) && n && (n.model || n.via) && n.prev === p.id;
+function partHtml(p, first = false) {
+  const ask = isAsk(p), run = p.run;
+  const authorHead = p.model ? `${MARK}<b>${esc(MODEL_SHORT)}</b>` : p.via ? `<span class="mk code" aria-hidden="true">{}</span><b>code on ${esc(p.via)}</b><span>by ${esc(p.by)}</span>` : `${av(p.by)}<b>${esc(p.by)}</b>`;
   const kind = ask ? `<span class="to" title="An ask: a part that sends ask to ${esc(receivers(p).join(', '))}">ask</span>` : '';
   const hasCode = p.code && Object.keys(p.code).length;
-  const acts = `<span class="acts"><button class="act" data-a="branch" data-id="${p.id}" title="Ask a question beside this part, with this part and everything above it as context">Branch</button><button class="act" data-a="select" data-id="${p.id}" aria-pressed="${st.sel.has(p.id)}" title="Add to the selection (or Shift+click)">Select</button><button class="act code${hasCode ? ' has' : ''}" data-a="inspect" data-id="${p.id}" title="Inspect: fields, messages and handlers">{ }</button></span>`;
+  const acts = `<span class="acts"><button class="act" data-a="branch" data-id="${p.id}" title="Branch: ask beside this part, reading it and everything above it">Branch</button><button class="act" data-a="select" data-id="${p.id}" aria-pressed="${st.sel.has(p.id)}" title="Add to the selection (or Shift+click)">Select</button><button class="act code${hasCode ? ' has' : ''}" data-a="inspect" data-id="${p.id}" title="Inspect: fields, messages and handlers">{ }</button></span>`;
   let body;
-  if (run) body = `<div class="status" role="status">${run.status === 'queued' ? 'Queued' : `Researching · step ${run.step + 1} of 4`}</div>`;
-  else if (p.html != null) { const long = strip(p.html).length > 420, open = st.open[p.id]; body = `<div class="prose${long && !open ? ' clamp' : ''}">${p.html}</div>${long ? `<button class="more" data-a="more" data-id="${p.id}">${open ? 'Show less' : 'Show all'}</button>` : ''}`; }
+  if (run) body = `<div class="pending" role="status"><span>${run.status === 'queued' ? 'Queued' : `Step ${run.step + 1} of 4`}</span><span class="bar"><i style="width:${run.status === 'queued' ? 4 : (run.step + 1) * 25}%"></i></span></div>`;
+  else if (p.html != null) { const long = strip(p.html).length > 520, open = st.open[p.id]; body = `<div class="prose${long && !open ? ' clamp' : ''}">${p.html}</div>${long ? `<button class="more" data-a="more" data-id="${p.id}">${open ? 'Show less' : 'Show the whole answer'}</button>` : ''}`; }
   else body = `${p.quote ? `<div class="quote">${esc(clip(p.quote, 160))}</div>` : ''}<div class="ptext">${esc(p.text)}</div>`;
   const foot = ask && p.fail ? `<div class="fail">${esc(p.fail.join('; '))}; the next level was used</div>` : '';
-  const hint = p.id === 'd0' && !st.tried ? `<div class="hint">Try late binding (as jun.park): open <b>{ }</b> here. Its <b>context</b> adds the Sources card to every ask in this thread. Delete <code>...stack('src0')</code>, Apply, then <b>+ Continue</b> at the end of this stack: the new answer no longer lists the sources. Earlier answers keep what they saw.</div>` : '';
-  const cls = ['part', ask ? 'is-ask' : '', rep ? 'is-reply' : '', st.sel.has(p.id) ? 'sel' : '', st.insp === p.id ? 'insp' : '', p.fresh ? 'fadein' : ''].filter(Boolean).join(' ');
+  const hint = p.id === 'd0' && !st.tried ? `<div class="hint">Try late binding (as jun.park): open <b>{ }</b> here. Its <b>context</b> adds the Sources card to every ask in this thread. Delete <code>...stack('src0')</code>, Apply, then <b>+ Add to this thread</b> at the bottom of this card: the new answer no longer lists the sources. Earlier answers keep what they saw.</div>` : '';
+  const cls = ['part', first ? 'first' : '', p.model || p.via ? 'm' : '', st.sel.has(p.id) ? 'psel' : '', st.insp === p.id ? 'insp' : '', p.fresh ? 'fadein' : ''].filter(Boolean).join(' ');
   p.fresh = false;
-  return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}${hint}</div>`;
+  return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><span class="hl" aria-hidden="true">${esc(clip(plain(p), 90))}</span><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}${hint}</div>`;
 }
 function draftHtml() {
   const d = st.draft, ask = d.mode === 'ask';
-  const ph = ask ? (d.quote ? 'Ask about this passage' : d.to?.length ? 'Ask the selected parts' : d.prev ? 'Ask a follow-up' : 'Ask anything') : d.prev ? 'Add another part' : 'Write a post';
-  const toLine = d.to?.length ? `<div class="dto">to ${esc(d.to.map(t => t.includes('#') ? 'a passage of ' + base(t) : t).join(', '))}</div>` : '';
+  const ph = ask ? (d.quote ? 'Ask about this passage' : d.to?.length && !d.prev ? 'Ask the selected parts' : d.prev ? 'Ask a follow-up' : 'Ask anything') : d.prev ? 'Add another part' : 'Write a post';
+  const toLine = d.to?.length && !d.prev ? `<div class="dto">to ${esc(d.to.join(', '))}</div>` : '';
   const key = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
-  return `<div class="part draft" data-part="__draft">${d.quote ? `<div class="quote">${esc(clip(d.quote, 160))}</div>` : ''}<textarea id="draft" rows="2" placeholder="${esc(ph)}" aria-label="${ask ? 'Ask' : 'Post'}">${esc(d.text || '')}</textarea>
+  return `<div class="draft" data-part="__draft">${d.quote ? `<div class="quote">${esc(clip(d.quote, 160))}</div>` : ''}<textarea id="draft" rows="2" placeholder="${esc(ph)}" aria-label="${ask ? 'Ask' : 'Post'}">${esc(d.text || '')}</textarea>
     ${toLine}<div class="drow">
     <button class="b3" data-a="dcancel" title="${d.cont ? 'Done' : 'Cancel'} (Esc)">${d.cont ? 'Done' : 'Cancel'}</button>
     <button class="${ask ? 'b2' : 'b1'}" data-a="dpost" ${d.text?.trim() ? '' : 'disabled'} title="Post a part that sends nothing${ask ? '' : ` (${key}+Enter)`}">Post</button>
     <button class="${ask ? 'b1' : 'b2'}" data-a="dask" ${d.text?.trim() ? '' : 'disabled'} title="Ask: the model replies${ask ? ` (${key}+Enter)` : ''}">Ask</button></div></div>`;
 }
-/* the person who started the stack a part is in: only they continue it or insert into it; others branch */
-const threadOwner = id => headOf(id)?.by;
-const draftAt = (prev, pos) => st.draft && st.draft.prev === prev && (pos === 'any' || st.draft.pos === pos);
-/* one stack, from its head: each part, its interjections, then the part that continues it */
-function chainHtml(p) {
-  let h = partHtml(p);
-  const inl = inlineOf(p.id), open = st.inlOpen[p.id], shown = open || inl.length <= 2 ? inl : inl.slice(0, 1);
-  for (const c of shown) h += `<div class="inl">${chainHtml(c)}</div>`;
+const seamHtml = id => `<div class="seam"><span class="hz"></span><button class="sp" data-a="here" data-id="${id}" title="Ask here: insert an ask between these two parts. The parts below do not read it." aria-label="Ask here">+</button></div>`;
+/* the parts of a chain as sections: each part, its interjections, a gap, the part that continues it */
+function chainHtml(p, mine, first = false, depth = 0) {
+  let h = partHtml(p, first);
+  const inl = inlineOf(p.id), shown = st.inlOpen[p.id] || inl.length <= 2 ? inl : inl.slice(0, 1);
+  for (const c of shown) h += iforkHtml(c, mine, depth);
   if (shown.length < inl.length) h += `<button class="inlmore" data-a="inlmore" data-id="${p.id}">${inl.length - shown.length} more under this part</button>`;
-  if (draftAt(p.id, 'inline')) h += `<div class="inl">${draftHtml()}</div>`;
-  const n = nextOf(p.id), mine = threadOwner(p.id) === ME;
-  if (n && !mine) h += `<div class="gap"></div>` + chainHtml(n);
-  else if (n) h += `<div class="gap"><button data-a="here" data-id="${p.id}" title="Insert an ask between these two parts. The parts below do not see it.">Ask here</button></div>` + chainHtml(n);
-  else if (draftAt(p.id, 'next')) h += `<div class="gap"></div>${draftHtml()}`;
-  else if (mine && !p.run && !(st.draft && st.draft.prev === p.id)) h += `<div class="gap end"><button data-a="cont" data-id="${p.id}" title="Continue this series: a new part under this one">+ Continue</button></div>`;
+  if (draftAt(p.id, 'inline')) h += `<div class="ifork">${draftHtml()}</div>`;
+  const n = nextOf(p.id);
+  if (n) h += (paired(p, n) || !mine ? '<div class="pairline"></div>' : seamHtml(p.id)) + chainHtml(n, mine, false, depth);
+  else if (draftAt(p.id, 'next')) h += draftHtml();
+  else if (mine && !p.run && !(st.draft && st.draft.prev === p.id)) h += `<button class="addend" data-a="cont" data-id="${p.id}">+ Add to this ${depth ? 'interjection' : 'thread'}</button>`;
   return h;
+}
+function iforkHtml(c, mine, depth) {
+  const ids = stackFrom(c.id);
+  if (st.fold[c.id]) return `<div class="ifork folded"><button class="iffold" data-a="unfold" data-id="${c.id}"><span class="ar">↳</span><b>${esc(who(c))}</b><span class="tx">${esc(clip(plain(c), 60))}</span><span class="n">${ids.length > 1 ? ` · ${ids.length} parts` : ''}</span></button></div>`;
+  return `<div class="ifork"><div class="ifh">Interjection<button data-a="fold" data-id="${c.id}">Fold</button></div>${chainHtml(c, mine, false, depth + 1)}</div>`;
+}
+/* the ids under an inline chain head (its next chain and their interjections) */
+function stackFrom(id) { const out = []; const walk = q => { out.push(q.id); inlineOf(q.id).forEach(walk); const n = nextOf(q.id); if (n) walk(n); }; walk(P[id]); return out; }
+/* one card: a root gets a header strip (channel, collapse, drag); a branch gets a line naming what it branches from */
+function stackHtml(id) {
+  if (id === '__draft') return `<div class="stack sel" data-stack="__draft" style="--w:${W}px"><div class="sbody">${draftHtml()}</div></div>`;
+  const h = P[id], root = !!atOf(h.pos), mine = threadOwner(id) === ME, coll = root && st.collapsed.has(id);
+  let s = '';
+  if (root) s += `<div class="sh" data-grip="${id}"><span class="chn">#${esc(CANVAS.name)}</span><span class="grow"></span><button class="ib" data-a="collapse" data-id="${id}" aria-label="${coll ? 'Expand' : 'Collapse'}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button></div>`;
+  if (!root && h.prev && P[h.prev]) s += `<div class="fq"><i>Branch of</i> ${h.quote ? `“${esc(clip(h.quote, 110))}”` : esc(clip(plain(P[h.prev]), 70))}</div>`;
+  else if (root && isAsk(h) && h.to.length) s += `<div class="fq"><i>Asked of</i> ${esc(h.to.join(', '))}</div>`;
+  if (coll) {
+    const ids = stackIds(id), br = unitStacks(id).length - 1;
+    s += partHtml(h, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') + `<div class="cmeta">${ids.length} part${ids.length === 1 ? '' : 's'} · ${br} branch${br === 1 ? '' : 'es'}</div>`;
+  } else s += chainHtml(h, mine, true);
+  return `<div class="stack${st.cur === id ? ' sel' : ''}" data-stack="${id}" style="--w:${W}px"><div class="sbody">${s}</div></div>`;
+}
+
+/* ---- units and layout ----
+   A unit is a root card (pos at) and the branch cards in lanes to its right. Only the root stores a position. Each
+   branch wants to start level with its anchor part; siblings stack downward by the extent of their whole subtree, so
+   connectors do not cross. Units that overlap are drawn lower in one sweep; that offset is not stored, and the unit
+   being edited stays put. */
+function laneKids(id) {
+  if (id === '__draft' || (atOf(P[id].pos) && st.collapsed.has(id))) return [];
+  const ids = stackIds(id), out = ids.flatMap(besideOf).sort((a, b) => a.t - b.t).map(p => ({ id: p.id, anchor: p.prev }));
+  if (st.draft?.pos?.beside && ids.includes(st.draft.prev)) out.push({ id: '__draft', anchor: st.draft.prev });
+  return out;
+}
+const unitStacks = id => { const out = [id]; for (const k of laneKids(id)) out.push(...unitStacks(k.id)); return out; };
+const rootsList = () => [...Object.values(P).filter(p => atOf(p.pos)).sort((a, b) => a.t - b.t).map(p => p.id), ...(atOf(st.draft?.pos) ? ['__draft'] : [])];
+const rootPos = id => id === '__draft' ? st.draft.pos.at : P[id].pos.at;
+const unitOf = id => { if (id === '__draft') return !st.draft ? null : atOf(st.draft.pos) ? '__draft' : unitOf(headOf(st.draft.prev).id); if (!P[id]) return null; let h = headOf(id); while (h && !atOf(h.pos)) h = headOf(h.prev); return h?.id; };
+const POS = {}, LASTDY = {};
+const elOf = id => stacksEl.querySelector(`[data-part="${CSS.escape(id)}"]`);
+const stackEl = id => stacksEl.querySelector(`:scope > .stack[data-stack="${CSS.escape(id)}"]`);
+const boxOf = el => { const w = world.getBoundingClientRect(), r = el.getBoundingClientRect(), z = st.zoom; return { x: (r.left - w.left) / z, y: (r.top - w.top) / z, w: r.width / z, h: r.height / z }; };
+function anchorY(anchor, sEl) { const a = sEl.querySelector(`[data-part="${CSS.escape(anchor)}"]`); return a ? (a.getBoundingClientRect().top - sEl.getBoundingClientRect().top) / st.zoom : 0; }
+function placeUnit(id, x, y) {
+  const el = stackEl(id); if (!el) return 0;
+  POS[id] = { x, y }; let cursor = y, ext = el.offsetHeight;
+  const ks = laneKids(id).map(k => ({ ...k, want: y + anchorY(k.anchor, el) })).sort((a, b) => a.want - b.want);
+  for (const k of ks) { const fy = Math.max(k.want, cursor), e = placeUnit(k.id, x + W + GAP, fy); cursor = fy + e + VGAP; ext = Math.max(ext, fy + e - y); }
+  return ext;
+}
+function layout() {
+  for (const k in POS) delete POS[k];
+  const units = rootsList().map(r => { const p = rootPos(r), h = placeUnit(r, p.x, p.y), xs = unitStacks(r).filter(s => POS[s]).map(s => POS[s].x + W); return { r, x: p.x, y: p.y, w: Math.max(...xs) - p.x, h, dy: 0 }; });
+  const fixed = st.draft ? unitOf('__draft') : st.cur ? unitOf(st.cur) : null;
+  units.sort((a, b) => (b.r === fixed) - (a.r === fixed) || a.y - b.y || a.x - b.x);
+  const hit = (u, top, v) => u.x < v.x + v.w + 12 && v.x < u.x + u.w + 12 && top < v.y + v.dy + v.h + 20 && top + u.h > v.y + v.dy - 20;
+  for (let i = 0; i < units.length; i++) { const u = units[i]; let top = u.r === fixed ? u.y + (LASTDY[u.r] || 0) : u.y, moved = true;
+    while (moved) { moved = false; for (let j = 0; j < i; j++) { const v = units[j]; if (hit(u, top, v)) { top = v.y + v.dy + v.h + 24; moved = true; } } }
+    u.dy = top - u.y; }
+  for (const u of units) { LASTDY[u.r] = u.dy; for (const s of unitStacks(u.r)) if (POS[s]) POS[s].y += u.dy; }
+  stacksEl.querySelectorAll(':scope > .stack').forEach(e => { const p = POS[e.dataset.stack]; if (p) { e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; } });
+  st.units = units;
+  st.boxes = units.map(u => ({ x: u.x, y: u.y + u.dy, w: u.w, h: u.h }));
+  drawWires();
+}
+/* connectors: from the anchor on the parent card's right edge to the top-left of the branch card */
+function drawWires() {
+  const wr = world.getBoundingClientRect(), z = st.zoom, out = [];
+  const hotUnit = st.draft ? unitOf('__draft') : st.hot ? unitOf(st.hot) : st.cur ? unitOf(st.cur) : null;
+  const edge = (anchorId, toStack, dashed, unit) => {
+    const ae = elOf(anchorId), te = stackEl(toStack); if (!ae || !te) return;
+    const pe = ae.closest('.stack'), ar = ae.getBoundingClientRect(), pr = pe.getBoundingClientRect(), tr = te.getBoundingClientRect();
+    const x1 = (pr.right - wr.left) / z, y1 = (Math.min(ar.top + 16, ar.bottom - 4) - wr.top) / z, x2 = (tr.left - wr.left) / z, y2 = (tr.top - wr.top) / z + 16;
+    const mx = x2 < x1 ? 40 : Math.max(16, (x2 - x1) / 2), hot = unit && unit === hotUnit ? ' hot' : '';
+    out.push(`<path class="${dashed ? 'det' : ''}${hot}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="${hot}" cx="${x1}" cy="${y1}" r="${3 / Math.max(z, .4)}"/>`);
+  };
+  stacksEl.querySelectorAll(':scope > .stack').forEach(el => {
+    const id = el.dataset.stack, unit = unitOf(id);
+    if (id === '__draft') { const d = st.draft; if (d.pos?.beside) edge(d.prev, id, !!d.to?.length, unit); else if (d.to) d.to.forEach(t => edge(base(t), id, true, unit)); return; }
+    const h = P[id];
+    if (h.pos.beside) edge(h.prev, id, isAsk(h) && h.to.length > 0, unit);
+    else if (isAsk(h) && h.to.length) h.to.forEach(t => edge(base(t), id, true, unit));
+  });
+  wires.innerHTML = out.join('');
 }
 function render() {
   const ae = document.activeElement, keep = ae && ae.id === 'draft' ? [ae.selectionStart, ae.selectionEnd] : null;
-  const roots = Object.values(P).filter(isHead).sort((a, b) => a.t - b.t);
-  const draftRoot = st.draft && typeof st.draft.pos === 'object';   // a string pos ('next', 'inline') is drawn inside its stack
-  stacksEl.innerHTML = roots.map(r => `<div class="stack" data-root="${r.id}">${chainHtml(r)}</div>`).join('') + (draftRoot ? `<div class="stack" data-root="__draft">${draftHtml()}</div>` : '');
+  const list = rootsList().flatMap(unitStacks);
+  stacksEl.innerHTML = list.map(stackHtml).join('');
+  world.classList.toggle('far', st.zoom < .5);
+  const ta = $('#draft'); if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
   layout();
   renderTools();
-  const ta = $('#draft'); if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; if (keep) { ta.focus({ preventScroll: true }); ta.setSelectionRange(...keep); } }
+  if (ta && keep) { ta.focus({ preventScroll: true }); ta.setSelectionRange(...keep); }
   highlight();
 }
-/* positions: heads with `at` go where they were put; branches go at their offset from the part they hang from,
-   once that part is placed; a stack that would overlap one placed before it moves down. */
-const elOf = id => stacksEl.querySelector(`[data-part="${CSS.escape(id)}"]`);
-const boxOf = el => { const w = world.getBoundingClientRect(), r = el.getBoundingClientRect(), z = st.zoom; return { x: (r.left - w.left) / z, y: (r.top - w.top) / z, w: r.width / z, h: r.height / z }; };
-function layoutOrder(els) {
-  const byRoot = new Map(els.map(e => [e.dataset.root, e])), out = [], seen = new Set();
-  const visit = id => { const el = byRoot.get(id); if (!el || seen.has(id)) return; seen.add(id); out.push(el);
-    const ids = id === '__draft' ? [] : stackIds(id), br = ids.flatMap(besideOf).sort((a, b) => a.t - b.t).map(p => p.id);
-    if (st.draft?.pos?.beside && ids.includes(st.draft.prev)) br.push('__draft');
-    br.forEach(visit); };
-  els.filter(e => e.dataset.root === '__draft' ? st.draft.pos.at : P[e.dataset.root].pos.at).forEach(e => visit(e.dataset.root));
-  els.forEach(e => visit(e.dataset.root));
-  return out;
+function applyPan() {
+  world.style.transform = `translate(${st.pan.x}px, ${st.pan.y}px) scale(${st.zoom})`; world.style.setProperty('--z', st.zoom);
+  view_.style.backgroundPosition = `${st.pan.x}px ${st.pan.y}px`; view_.style.backgroundSize = `${22 * st.zoom}px ${22 * st.zoom}px`;
+  $('#zval').textContent = Math.round(st.zoom * 100) + '%';
 }
-function layout() {
-  const els = [...stacksEl.children], placed = [], todo = layoutOrder(els);
-  const posOf = el => { const id = el.dataset.root; return id === '__draft' ? st.draft.pos : P[id].pos; };
-  const anchorOf = el => { const id = el.dataset.root; return id === '__draft' ? st.draft.prev : P[id].prev; };
-  for (let guard = 0; todo.length && guard < 200; guard++) {
-    const el = todo.shift(), pos = posOf(el);
-    let x, y;
-    if (pos.at) { x = pos.at.x; y = pos.at.y; }
-    else { const a = elOf(anchorOf(el)), ar = a && placed.includes(a.closest('.stack')) ? boxOf(a) : null; if (!ar) { todo.push(el); continue; } x = ar.x + pos.beside.dx; y = ar.y + pos.beside.dy; }
-    const h = el.offsetHeight, w = el.offsetWidth;
-    const settle = (x, y) => { for (let moved = true, n = 0; moved && n < 50; n++) { moved = false;
-      for (const o of placed) { const b = o._box; if (x < b.x + b.w && x + w > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y) { y = b.y + b.h + 24; moved = true; } } } return y; };
-    const y0 = y; y = settle(x, y);
-    /* a branch that would be pushed far from its anchor tries the next lane to the right */
-    if (!pos.at && y - y0 > 160) { const y2 = settle(x + 314, y0); if (y2 - y0 < y - y0) { x += 314; y = y2; } }
-    el.style.left = x + 'px'; el.style.top = y + 'px'; el._box = { x, y, w, h }; placed.push(el);
-  }
-  st.boxes = placed.map(e => e._box);
-  drawWires();
+function zoomAt(z, cx = innerWidth / 2, cy = innerHeight / 2) {
+  z = Math.max(.15, Math.min(1.6, z)); const was = st.zoom < .5;
+  st.pan.x = cx - (cx - st.pan.x) * z / st.zoom; st.pan.y = cy - (cy - st.pan.y) * z / st.zoom; st.zoom = z;
+  if (was !== (z < .5)) world.classList.toggle('far', z < .5);
+  applyPan(); drawWires();
 }
-/* connectors: a branch, a reply placed beside its ask, an ask sent to a passage or to parts that are not right above
-   it. A part sent to the part above it, or inline, needs no line: its position shows the relation. */
-function drawWires() {
-  let out = '';
-  const line = (aEl, bEl, label, cls = '') => {
-    if (!aEl || !bEl) return;
-    const a = boxOf(aEl), b = boxOf(bEl);
-    const right = b.x >= a.x + a.w - 4, x1 = right ? a.x + a.w : a.x, y1 = a.y + Math.min(a.h / 2, 60), x2 = right ? b.x : b.x + b.w, y2 = b.y + Math.min(b.h / 2, 24);
-    const dx = Math.max(30, Math.abs(x2 - x1) / 2) * (right ? 1 : -1);
-    out += `<path class="${cls}" d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}"/><circle cx="${x1}" cy="${y1}" r="3"/>`;
-    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, tw = label.length * 6.2 + 10;
-    if (Math.hypot(x2 - x1, y2 - y1) > tw + 40) out += `<g class="lbl"><rect x="${mx - tw / 2}" y="${my - 8}" width="${tw}" height="16" rx="8"/><text x="${mx}" y="${my + 3.5}" text-anchor="middle">${esc(label)}</text></g>`;
-  };
-  for (const p of Object.values(P)) {
-    if (isAsk(p) && p.to.length) for (const t of p.to) { if (t === 'canvas') continue; line(elOf(base(t)), elOf(p.id), t.includes('#') ? 'ask · passage' : 'ask'); }
-    else if (isAsk(p) && p.pos?.beside) line(elOf(p.prev), elOf(p.id), 'ask');
-    else if (p.pos?.beside && !isAsk(p)) line(elOf(p.prev), elOf(p.id), p.model || p.via ? 'reply' : 'branch', p.model || p.via ? 'reply' : '');
-  }
-  const d = st.draft;
-  if (d && d.to?.length) for (const t of d.to) line(elOf(base(t)), elOf('__draft'), t.includes('#') ? 'ask · passage' : 'ask');
-  else if (d && d.pos?.beside) line(elOf(d.prev), elOf('__draft'), 'ask');
-  wires.innerHTML = out;
+function fit() {
+  const b = st.boxes; if (!b.length) return;
+  const x0 = Math.min(...b.map(u => u.x)), y0 = Math.min(...b.map(u => u.y)), x1 = Math.max(...b.map(u => u.x + u.w)), y1 = Math.max(...b.map(u => u.y + u.h)), pad = 40;
+  const z = Math.max(.15, Math.min(1, (innerWidth - pad * 2) / (x1 - x0), (innerHeight - pad * 2 - 60) / (y1 - y0)));
+  st.zoom = z; st.pan.x = (innerWidth - (x1 - x0) * z) / 2 - x0 * z; st.pan.y = 70 - y0 * z;
+  world.classList.toggle('far', z < .5); applyPan(); drawWires();
 }
-function applyPan() { world.style.transform = `translate(${st.pan.x}px, ${st.pan.y}px) scale(${st.zoom})`; view_.style.backgroundPosition = `${st.pan.x}px ${st.pan.y}px`; view_.style.backgroundSize = `${22 * st.zoom}px ${22 * st.zoom}px`; }
 function renderTools() {
   const n = st.sel.size;
-  $('#tools').innerHTML = `<button class="tb" data-a="addpost">+ Add post</button><button class="tb" data-a="addask">+ Add ask</button><label class="as" title="The person viewing. Only a thread's author can continue it or insert into it; everyone can branch.">as <select id="persona">${PERSONAS.map(u => `<option${u === ME ? ' selected' : ''}>${u}</option>`).join('')}</select></label>`
+  $('#tools').innerHTML = `<button class="tb" data-a="addpost">+ Add post</button><button class="tb" data-a="addask">+ Add ask</button><label class="as" title="The person viewing. Only a thread's author can add to it or insert into it; everyone can branch.">as <select id="persona">${PERSONAS.map(u => `<option${u === ME ? ' selected' : ''}>${u}</option>`).join('')}</select></label>`
     + (n ? `<span class="selnote">${n} selected · + Add ask sends to ${n === 1 ? 'it' : 'them'}<button data-a="selclear">Clear</button></span>` : `<span class="chan" title="The workspace model: every ask runs on ${esc(MODEL)}"><span class="cname">#public&nbsp;·&nbsp;</span><span class="mfull">${esc(MODEL)}</span><span class="mshort">${esc(MODEL_SHORT)}</span><button data-a="inspect" data-id="canvas" title="Inspect the canvas and its handlers">{ }</button></span>`);
 }
-/* highlight: the context of an ask (hover "saw", or the inspector's preview) */
+/* what an ask read: a tinted left bar on those parts (hover an ask or its reply, select it, or the inspector's preview) */
 function highlight() {
-  stacksEl.querySelectorAll('.part.saw').forEach(e => e.classList.remove('saw'));
+  stacksEl.querySelectorAll('.part.ctx').forEach(e => e.classList.remove('ctx'));
   let ids = st.hl;
   if (!ids) { const p = [...st.sel].map(id => P[id]).find(p => p && (isAsk(p) || ((p.model || p.via) && P[p.prev]))); if (p) ids = isAsk(p) ? p.saw : P[p.prev].saw; }
-  (ids || []).forEach(id => elOf(id)?.classList.add('saw'));
+  (ids || []).forEach(id => elOf(id)?.classList.add('ctx'));
+}
+
+/* ---- initial placement: units packed into columns, measured one at a time at the origin ---- */
+function initialLayout(order) {
+  const rs = order.filter(id => P[id] && atOf(P[id].pos)), size = {};
+  for (const r of rs) {
+    P[r].pos = { at: { x: 0, y: 0 } };
+    stacksEl.innerHTML = unitStacks(r).map(stackHtml).join('');
+    for (const k in POS) delete POS[k];
+    const h = placeUnit(r, 0, 0), maxX = Math.max(...Object.values(POS).map(p => p.x + W));
+    size[r] = { h, lanes: Math.max(1, Math.round((maxX + GAP) / (W + GAP))) };
+  }
+  const cols = 6, colH = Array(cols).fill(0), slot = W + GAP;
+  for (const r of rs) { const L = Math.min(cols, size[r].lanes); let best = 0, bestY = Infinity;
+    for (let c = 0; c + L <= cols; c++) { const y = Math.max(...colH.slice(c, c + L)); if (y < bestY - 1) { bestY = y; best = c; } }
+    P[r].pos = { at: { x: best * slot, y: bestY } }; for (let c = best; c < best + L; c++) colH[c] = bestY + size[r].h + 40; }
 }
 
 /* ---- the inspector ---- */
@@ -672,7 +784,7 @@ function applyHandler(key) {
 
 /* ---- drafts ---- */
 function openDraft(d) { st.draft = { text: '', ...d }; render(); focusDraft(); }
-function focusDraft() { const ta = $('#draft'); if (!ta) return; ta.focus({ preventScroll: true }); ensureVisible(ta.closest('.part')); }
+function focusDraft() { const ta = $('#draft'); if (!ta) return; ta.focus({ preventScroll: true }); ensureVisible(ta.closest('.draft')); }
 function ensureVisible(el) {
   if (!el) return; const r = el.getBoundingClientRect(), vw = innerWidth, vh = innerHeight, ins = $('#insp').hidden ? 0 : (vw > 640 ? 404 : 0), bottom = vw <= 640 && !$('#insp').hidden ? vh * .58 + 8 : 0;
   let dx = 0, dy = 0;
@@ -680,11 +792,11 @@ function ensureVisible(el) {
   if (r.bottom > vh - bottom - 16) dy = vh - bottom - 16 - r.bottom; if (r.top + dy < 56) dy = 56 - r.top;
   if (dx || dy) { st.pan.x += dx; st.pan.y += dy; applyPan(); }
 }
-/* a free spot for a new stack inside the visible area: scan a grid against the placed stacks */
+/* a free spot for a new card inside the visible area: scan a grid against the placed units */
 function freeSpot(h = 170) {
-  const z = st.zoom, x0 = (-st.pan.x + 24) / z, y0 = (-st.pan.y + 64) / z, W = innerWidth / z - ($('#insp').hidden || innerWidth <= 640 ? 0 : 404);
-  for (let y = y0; y < y0 + 2000; y += 30) for (let x = x0; x + 290 < x0 + Math.max(320, W - 40); x += 314) {
-    if (!st.boxes.some(b => x < b.x + b.w + 20 && x + 290 + 20 > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y)) return { x, y };
+  const z = st.zoom, x0 = (-st.pan.x + 24) / z, y0 = (-st.pan.y + 64) / z, Wv = innerWidth / z - ($('#insp').hidden || innerWidth <= 640 ? 0 : 404);
+  for (let y = y0; y < y0 + 3000; y += 30) for (let x = x0; x + W < x0 + Math.max(W + 30, Wv - 40); x += W + GAP) {
+    if (!st.boxes.some(b => x < b.x + b.w + 20 && x + W + 20 > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y)) return { x, y };
   }
   return { x: x0, y: y0 };
 }
@@ -692,7 +804,8 @@ function commitDraft(asAsk) {
   const d = st.draft, text = ($('#draft')?.value || d.text || '').trim(); if (!text) return;
   const p = add({ id: newId(asAsk ? 'a' : 'p'), by: ME, text, prev: d.prev, pos: d.pos, quote: d.quote, fresh: true, k: d.k });
   if (asAsk) p.to = d.to ? d.to.slice() : [];
-  st.draft = null;
+  if (atOf(p.pos)) LASTDY[p.id] = LASTDY.__draft || 0;
+  st.draft = null; st.cur = isHead(p) ? p.id : st.cur;
   if (asAsk) { const rep = send(p.id); rep.fresh = true; st.sel.clear(); render(); ensureVisible(elOf(rep.id)); return; }
   /* a post part: keep writing under it (a multi-part post); Done closes the draft */
   st.draft = { prev: p.id, pos: 'next', mode: 'post', text: '', cont: true };
@@ -701,26 +814,30 @@ function commitDraft(asAsk) {
 
 /* ---- events ---- */
 let toastT; function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 4200); }
+/* clicking a card selects it (its gaps show "+"); the background clears it. No re-render, so a text selection stays. */
+function setCur(id) { if (st.cur === id) return; st.cur = id; stacksEl.querySelectorAll(':scope > .stack').forEach(e => e.classList.toggle('sel', e.dataset.stack === id)); drawWires(); }
 document.addEventListener('click', e => {
+  if (e.target.closest('.br')) return;
   const t = e.target.closest('[data-a]');
   if (!t) {
-    /* Shift+click on a part selects it */
     const part = e.target.closest('.part[data-part]');
-    if (part && (e.shiftKey || e.metaKey || e.ctrlKey) && part.dataset.part !== '__draft') { toggleSel(part.dataset.part); }
+    if (part && (e.shiftKey || e.metaKey || e.ctrlKey)) { toggleSel(part.dataset.part); return; }
+    const sEl = e.target.closest('.stack[data-stack]');
+    if (sEl) setCur(sEl.dataset.stack); else if (e.target.closest('#view') && !e.target.closest('#selask')) setCur(null);
     return;
   }
   const a = t.dataset.a, id = t.dataset.id;
   if (a === 'addpost' || a === 'addask') {
     if (st.sel.size && a === 'addask') {
-      /* an ask to the selection: a new stack beside the selection's bounding box, a connector from each receiver */
-      const bs = [...st.sel].map(x => boxOf(elOf(x))), x = Math.max(...bs.map(b => b.x + b.w)) + 40, y = Math.min(...bs.map(b => b.y));
+      /* an ask to the selection: a new card beside the selection's bounding box, a dashed connector from each receiver */
+      const bs = [...st.sel].map(x => boxOf(elOf(x))), x = Math.max(...bs.map(b => b.x + b.w)) + GAP + 40, y = Math.min(...bs.map(b => b.y));
       openDraft({ mode: 'ask', pos: { at: { x, y } }, to: [...st.sel] }); return;
     }
     openDraft({ mode: a === 'addask' ? 'ask' : 'post', pos: { at: freeSpot() } }); return;
   }
   if (a === 'here') { const ks = inlineOf(id).map(c => c.k); openDraft({ mode: 'ask', prev: id, pos: 'inline', k: (ks.length ? Math.max(...ks) : 0) + 1 }); return; }
   if (a === 'cont') { openDraft({ mode: isAsk(P[id]) || P[id].model ? 'ask' : 'post', prev: id, pos: 'next' }); return; }
-  if (a === 'branch') { openDraft({ mode: 'ask', prev: id, pos: { beside: { dx: 314, dy: 0 } } }); return; }
+  if (a === 'branch') { openDraft({ mode: 'ask', prev: id, pos: { beside: { dx: W + GAP, dy: 0 } } }); return; }
   if (a === 'select') { toggleSel(id); return; }
   if (a === 'selclear') { st.sel.clear(); render(); return; }
   if (a === 'dcancel') { st.draft = null; render(); return; }
@@ -728,76 +845,81 @@ document.addEventListener('click', e => {
   if (a === 'dask') { commitDraft(true); return; }
   if (a === 'more') { st.open[id] = !st.open[id]; render(); return; }
   if (a === 'inlmore') { st.inlOpen[id] = true; render(); return; }
-  if (a === 'saw') { inspect(id); return; }
+  if (a === 'fold') { st.fold[id] = true; render(); return; }
+  if (a === 'unfold') { delete st.fold[id]; render(); return; }
+  if (a === 'collapse') { if (st.collapsed.has(id)) st.collapsed.delete(id); else st.collapsed.add(id); render(); return; }
   if (a === 'inspect') { inspect(id); if (t.classList.contains('ref')) ensureVisible(elOf(id)); return; }
   if (a === 'iclose') { st.insp = null; render(); renderInsp(); return; }
   if (a === 'hedit') { const [owner, sel] = t.dataset.k.split(':'); const own = owner === 'canvas' ? CANVAS.code[sel] : P[owner]?.code?.[sel]; INSP.edit[t.dataset.k] = own ?? (owner === 'canvas' ? DEFAULTS[sel] : lookupAll(owner, sel)[0].src); renderInsp(); document.getElementById('ed-' + t.dataset.k)?.focus(); return; }
   if (a === 'hcancel') { delete INSP.edit[t.dataset.k]; renderInsp(); return; }
   if (a === 'happly') { applyHandler(t.dataset.k); return; }
   if (a === 'hremove') { const [owner, sel] = t.dataset.k.split(':'); if (owner === 'canvas') delete CANVAS.code[sel]; else delete P[owner].code[sel]; delete INSP.edit[t.dataset.k]; delete ERR[owner + ':' + sel]; render(); renderInsp(); return; }
-  if (a === 'selask') { const s = st.selAsk; $('#selask')?.remove(); getSelection()?.removeAllRanges(); openDraft({ mode: 'ask', prev: s.id, pos: { beside: { dx: 314, dy: 0 } }, to: [`${s.id}#${s.s}-${s.e}`], quote: s.text }); return; }
+  if (a === 'selask') { const s = st.selAsk; $('#selask')?.remove(); getSelection()?.removeAllRanges(); openDraft({ mode: 'ask', prev: s.id, pos: { beside: { dx: W + GAP, dy: 0 } }, to: [`${s.id}#${s.s}-${s.e}`], quote: s.text }); return; }
 });
+$('#zin').addEventListener('click', () => zoomAt(st.zoom * 1.25));
+$('#zout').addEventListener('click', () => zoomAt(st.zoom / 1.25));
+$('#zval').addEventListener('click', () => zoomAt(1));
+$('#fit').addEventListener('click', fit);
 function toggleSel(id) { if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id); render(); }
 document.addEventListener('change', e => { if (e.target.id === 'persona') { ME = e.target.value; st.draft = null; render(); renderInsp(); } });
 document.addEventListener('input', e => {
   if (e.target.id === 'draft') { st.draft.text = e.target.value; e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px';
-    e.target.closest('.part').querySelectorAll('[data-a="dpost"], [data-a="dask"]').forEach(b => { b.disabled = !e.target.value.trim(); }); layout(); }
+    e.target.closest('.draft').querySelectorAll('[data-a="dpost"], [data-a="dask"]').forEach(b => { b.disabled = !e.target.value.trim(); }); layout(); }
   if (e.target.dataset.k && e.target.tagName === 'TEXTAREA') INSP.edit[e.target.dataset.k] = e.target.value;
 });
 document.addEventListener('keydown', e => {
   if (e.target.id === 'draft' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitDraft(st.draft.mode === 'ask'); return; }
   if (e.key === 'Escape') { if ($('#selask')) { $('#selask').remove(); return; } if (st.draft) { st.draft = null; render(); return; } if (st.insp) { st.insp = null; render(); renderInsp(); } }
 });
-/* hover an ask or a reply: dashed outlines on what that ask saw */
+/* hover: an ask or its reply shows what the ask read; a branch card lights its anchor and its unit's connectors */
 document.addEventListener('mouseover', e => {
+  const sEl = e.target.closest?.('.stack[data-stack]'), sid = sEl?.dataset.stack || null;
+  if (sid !== st.hot) {
+    st.hot = sid; stacksEl.querySelectorAll('.anchor-hot').forEach(x => x.classList.remove('anchor-hot'));
+    const h = sid && sid !== '__draft' ? P[sid] : null; if (h?.pos.beside) elOf(h.prev)?.classList.add('anchor-hot');
+    drawWires();
+  }
   if (st.insp) return;
   const el = e.target.closest?.('.part[data-part]'), p = el && P[el.dataset.part]; let ids = null;
   if (p && isAsk(p)) ids = p.saw; else if (p && (p.model || p.via) && P[p.prev]) ids = P[p.prev].saw;
-  if (!st.hlFrom) { st.hl = ids || null; highlight(); }
+  st.hl = ids || null; highlight();
 });
-/* select text in a part: "Ask about this" sends an ask to that passage */
+/* select text in a part: "Ask about this" branches from that part with the passage quoted as its focus */
 document.addEventListener('mouseup', e => setTimeout(() => {
   if (e.target.closest?.('#selask')) return;
   $('#selask')?.remove();
   const sel = getSelection(); if (!sel || sel.isCollapsed || !sel.rangeCount) return;
   const text = sel.toString().replace(/\s+/g, ' ').trim(); if (text.length < 3) return;
   const range = sel.getRangeAt(0), host = (range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement).closest('.ptext, .prose');
-  const partEl = host?.closest('.part[data-part]'); if (!partEl || partEl.dataset.part === '__draft') return;
+  const partEl = host?.closest('.part[data-part]'); if (!partEl) return;
   const pre = document.createRange(); pre.selectNodeContents(host); pre.setEnd(range.startContainer, range.startOffset);
   const s = pre.toString().length; st.selAsk = { id: partEl.dataset.part, s, e: s + range.toString().length, text };
   const r = range.getBoundingClientRect();
   const b = document.createElement('button'); b.id = 'selask'; b.dataset.a = 'selask'; b.textContent = 'Ask about this';
   const wr = world.getBoundingClientRect(); b.style.left = (r.left - wr.left) / st.zoom + 'px'; b.style.top = (r.bottom - wr.top + 6) / st.zoom + 'px'; world.appendChild(b);
 }));
-/* pan: drag the background (or drag anywhere with a finger); the wheel pans too */
+/* drag a card by its header strip: moves the root; its branches follow */
 let drag = null, move = null;
 stacksEl.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || e.target.closest('button, textarea, a')) return;
-  const ph = e.target.closest('.ph'), stack = ph?.closest('.stack'); if (!stack || stack.dataset.root === '__draft') return;
-  e.stopPropagation();
-  move = { el: stack, id: stack.dataset.root, x: e.clientX, y: e.clientY, l: parseFloat(stack.style.left), t: parseFloat(stack.style.top), moved: false, pid: e.pointerId };
+  if (e.button !== 0 || e.target.closest('button, textarea, a, select')) return;
+  const grip = e.target.closest('.sh[data-grip]'); if (!grip) return;
+  e.stopPropagation(); const id = grip.dataset.grip, p = P[id].pos.at;
+  move = { id, x: e.clientX, y: e.clientY, l: p.x, t: p.y + (LASTDY[id] || 0), moved: false, pid: e.pointerId };
 });
 window.addEventListener('pointermove', e => {
   if (!move || e.pointerId !== move.pid) return;
   const dx = (e.clientX - move.x) / st.zoom, dy = (e.clientY - move.y) / st.zoom;
   if (!move.moved && Math.hypot(dx, dy) < 4) return;
-  move.moved = true; move.el.classList.add('dragging');
-  move.el.style.left = move.l + dx + 'px'; move.el.style.top = move.t + dy + 'px'; drawWires();
+  if (!move.moved) { move.moved = true; setCur(move.id); LASTDY[move.id] = 0; stackEl(move.id)?.classList.add('dragging'); }
+  P[move.id].pos = { at: { x: move.l + dx, y: move.t + dy } }; layout();
 });
-window.addEventListener('pointerup', () => {
-  if (!move) return; const m = move; move = null; m.el.classList.remove('dragging'); if (!m.moved) return;
-  const p = P[m.id], x = parseFloat(m.el.style.left), y = parseFloat(m.el.style.top);
-  if (p.pos.at) p.pos = { at: { x, y } };
-  else { const a = boxOf(elOf(p.prev)); p.pos = { beside: { dx: Math.round(x - a.x), dy: Math.round(y - a.y) } }; }
-  render();
-});
+window.addEventListener('pointerup', () => { if (!move) return; const m = move; move = null; if (m.moved) render(); });
 view_.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
-  const onBg = !e.target.closest('.part, button, textarea, #selask');
+  const onBg = !e.target.closest('.stack, button, textarea, #selask');
   if (!onBg && e.pointerType === 'mouse') return;
-  if (e.target.closest('.ph')) return;
-  if (e.target.closest('button, textarea')) return;
-  drag = { x: e.clientX, y: e.clientY, px: st.pan.x, py: st.pan.y, moved: false, id: e.pointerId, bg: onBg };
+  if (e.target.closest('.sh, button, textarea, select')) return;
+  drag = { x: e.clientX, y: e.clientY, px: st.pan.x, py: st.pan.y, moved: false, id: e.pointerId };
 });
 window.addEventListener('pointermove', e => {
   if (!drag || move || e.pointerId !== drag.id) return;
@@ -809,13 +931,13 @@ window.addEventListener('pointermove', e => {
 window.addEventListener('pointerup', () => { if (drag?.moved) { view_.classList.remove('panning'); } drag = null; });
 /* Ctrl or Cmd + wheel (and a trackpad pinch) zooms around the pointer; the wheel alone pans */
 view_.addEventListener('wheel', e => { if (e.target.closest('textarea')) return; e.preventDefault(); $('#selask')?.remove();
-  if (e.ctrlKey || e.metaKey) { const z0 = st.zoom, z = Math.min(1.4, Math.max(.3, z0 * Math.exp(-e.deltaY * .0025)));
-    st.pan.x = e.clientX - (e.clientX - st.pan.x) * z / z0; st.pan.y = e.clientY - (e.clientY - st.pan.y) * z / z0; st.zoom = z; applyPan(); return; }
+  if (e.ctrlKey || e.metaKey) { zoomAt(st.zoom * Math.exp(-e.deltaY * .0025), e.clientX, e.clientY); return; }
   st.pan.x -= e.deltaX; st.pan.y -= e.deltaY; applyPan(); }, { passive: false });
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
 
 seed();
-if (innerWidth <= 520) st.pan.y = 40;   // the toolbar takes two rows on a phone
+initialLayout(['d0', 'i0', 'src0', 'g0', 's0', 't0', 'h0']);
+st.pan = { x: innerWidth <= 520 ? 16 : 24, y: innerWidth <= 520 ? 104 : 64 };   // on a phone the toolbar takes two rows
 render();
 applyPan();
 document.fonts?.ready.then(() => render());
