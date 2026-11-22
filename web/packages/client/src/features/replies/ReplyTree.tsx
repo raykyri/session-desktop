@@ -183,7 +183,7 @@ export function ReplyTree({
               Sign in to reply
             </button>
           ) : (
-            <span className="rnote">Replying opens once you have an invite</span>
+            <span className="rnote">You can reply once you have an invite</span>
           )}
         </div>
       )}

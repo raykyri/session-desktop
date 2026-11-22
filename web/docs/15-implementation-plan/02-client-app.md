@@ -507,7 +507,7 @@ none by others under them; confirmed by "Delete this reply and your replies
 under it?" / "This can't be undone."), `>` quotes and member `@mentions`, and
 a Reply / Close reply toggle; the reply composer's placeholder is "Reply to
 @handle". Below the tree "Reply at root" (signed out "Sign in to reply", no
-invite "Replying opens once you have an invite"; nothing in a frozen channel,
+invite "You can reply once you have an invite"; nothing in a frozen channel,
 whose banner gives the reason). The footer's Reply opens the
 root composer and scrolls to it (§4.5). When a sent post, reply or comment
 mentions handles, the toast lists the result the server returns with the
