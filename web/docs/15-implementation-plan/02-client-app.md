@@ -882,7 +882,7 @@ boxes:
   week." when empty;
 - "When included tokens run out": "Pause my asks until the reset" ("You can
   still read, post and reply.") and "Continue on my Anthropic key" ("Asks
-  bill to your Anthropic key until the reset."; disabled without a valid
+  use your Anthropic key until the reset."; disabled without a valid
   Anthropic key, with "Add a key below to turn this on." or, with only an
   OpenAI key, "Needs an Anthropic key. Your OpenAI key only runs GPT-6.1
   Sol."), written with `usage.setBilling`; toasts "Asks will continue on
@@ -906,8 +906,9 @@ boxes:
   toast "<Provider> key works." shows; a refusal saves nothing, reopens the
   form with the text kept, and shows "That key was rejected by <Provider>."
   or "Couldn't reach <Provider> to check the key. Try again." under the
-  field. Next to each key the 03 K14 note that calls on a personal key fall
-  under the person's agreement with the provider (a plan addition).
+  field. Next to each key, in every state of its row (Not set, Checking…,
+  Valid, Invalid), the 03 K14 note "Asks on this key go to <Provider>
+  directly." (a plan addition).
 
 All online-only (ADR-19), read through TanStack Query; the ring reads the same
 `usage.get` query, with a 30 s stale time, and refetches when one of the

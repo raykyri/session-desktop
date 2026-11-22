@@ -172,7 +172,7 @@ test.serial("billing: the two settings with their toasts", async (t) => {
   });
   const keyRadio = await screen.findByRole("radio", { name: /Continue on my Anthropic key/ });
   t.false(input(keyRadio).disabled);
-  t.truthy(screen.getByText("Asks bill to your Anthropic key until the reset."));
+  t.truthy(screen.getByText("Asks use your Anthropic key until the reset."));
   fireEvent.click(keyRadio);
   await waitUntil(t, () => currentToast() === "Asks will continue on your API key.", "key toast");
   t.deepEqual(app.trpc.calls.find((call) => call.path === "usage.setBilling")?.input, {
@@ -221,7 +221,7 @@ test.serial(
     await waitUntil(t, () => currentToast() === "Anthropic key works.", "the toast");
     await waitUntil(t, () => keyRow("anthropic").queryByText("Valid") !== null, "the Valid chip");
     t.truthy(keyRow("anthropic").getByText("sk-ant-••••a1f9"));
-    t.truthy(keyRow("anthropic").getByText(/fall under your own agreement with/));
+    t.truthy(keyRow("anthropic").getByText("Asks on this key go to Anthropic directly."));
   },
 );
 

@@ -468,7 +468,7 @@ meter updates within one second of the run record turning `complete`.
 
 The Usage page offers two settings (`usagePage()`): "Pause my asks until the
 reset" (default; "You can still read, post and reply.") and "Continue on my
-Anthropic key" ("Asks bill to your Anthropic key until the reset."), enabled
+Anthropic key" ("Asks use your Anthropic key until the reset."), enabled
 only with a valid Anthropic key; without one it reads "Add a key below to
 turn this on.", or "Needs an Anthropic key. Your OpenAI key only runs GPT-6.1
 Sol." when only an OpenAI key is set.
@@ -605,7 +605,9 @@ not in the registry, or an effort the model does not accept, answers
 **K14. Key-run privacy.** OpenRouter's zero-data-retention routing
 (`04-agent-runtime.md` §1) does not apply to calls made with a person's own
 Anthropic or OpenAI key; those calls fall under the person's own agreement
-with the provider. The Usage page says so next to each key.
+with the provider. The Usage page notes it next to each key, in every state
+of the key's row, with "Asks on this key go to <Provider> directly." (for
+Anthropic, OpenAI and any other provider listed).
 
 **K15. Default model and default effort (site admin).** Decided (P11): a
 site admin (`users.is_admin`) sets at runtime, on the Site Admin page (`02`

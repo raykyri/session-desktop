@@ -601,8 +601,7 @@ test.serial("C9: a request that fails without a refusal shows fixed copy", async
 // ------------------------------------------------------------ CD3
 
 test.serial("CD3: the K14 note is beside each key in every state", async (t) => {
-  const note = (provider: string) =>
-    `Asks on this key go to ${provider} directly. OpenRouter's zero-data-retention routing does not apply to them; they fall under your own agreement with ${provider}.`;
+  const note = (provider: string) => `Asks on this key go to ${provider} directly.`;
   const saved = { provider: "anthropic", last4: "a1f9", status: "valid", addedAt: 1 };
   let keys: unknown[] = [];
   let release: () => void = () => undefined;
@@ -635,4 +634,12 @@ test.serial("CD3: the K14 note is beside each key in every state", async (t) => 
   release();
   await row.findByText("Valid");
   t.truthy(row.getByText(note("Anthropic")), "Valid");
+  cleanup();
+  await renderApp("/usage", {
+    responses: {
+      "usage.get": () => testWeeklyUsage({ keys: [{ ...saved, status: "invalid" }] }),
+    },
+  });
+  const invalid = within((await screen.findByText("Invalid")).closest("[data-key]") as HTMLElement);
+  t.truthy(invalid.getByText(note("Anthropic")), "Invalid");
 });

@@ -138,7 +138,7 @@ function BillingSection({ billing, keys }: { billing: "pause" | "key"; keys: Key
     });
   };
   const keyHint = anthropic
-    ? "Asks bill to your Anthropic key until the reset."
+    ? "Asks use your Anthropic key until the reset."
     : openai
       ? openaiOnly.length > 0
         ? `Needs an Anthropic key. Your OpenAI key only runs ${openaiOnly.join(", ")}.`
@@ -296,12 +296,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
 
   const name = <b className="kname">{info.name}</b>;
   // 03 K14, shown in every state of the row.
-  const note = (
-    <p className="knote">
-      Asks on this key go to {info.name} directly. OpenRouter&apos;s zero-data-retention routing
-      does not apply to them; they fall under your own agreement with {info.name}.
-    </p>
-  );
+  const note = <p className="knote">Asks on this key go to {info.name} directly.</p>;
 
   let body;
   if (checking !== null) {

@@ -3013,7 +3013,7 @@ function keysSection() {
       : k ? `<div class="kstate"><b class="kname">${P.name}</b>${mask(P, k)}${kStatus(k)}<span class="grow"></span>${k.status === 'checking' ? '' : kRemove(id)}</div>`
       : `<div class="kstate"><b class="kname">${P.name}</b><small>Not set</small><span class="grow"></span>${kAdd(id)}</div>`;
     const live = k && st.keyForm !== id ? `${P.name} key: ${k.status === 'checking' ? 'Checking…' : k.status === 'invalid' ? 'Invalid' : 'Valid'}` : '';
-    return `<div class="krow one"><span class="sr" aria-live="polite">${live}</span><div class="kb">${body}<p class="knote">Asks on this key go to ${P.name} directly. OpenRouter's zero-data-retention routing does not apply to them; they fall under your own agreement with ${P.name}.</p></div></div>`;
+    return `<div class="krow one"><span class="sr" aria-live="polite">${live}</span><div class="kb">${body}<p class="knote">Asks on this key go to ${P.name} directly.</p></div></div>`;
   };
   return `<section class="box keys-sec"><h3>API keys</h3>${['anthropic', 'openai'].map(row).join('')}</section>`;
 }
@@ -3047,7 +3047,7 @@ function usagePage() {
     ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
-      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label>${st.billErr ? `<p class="ferr" role="alert">${esc(st.billErr)}</p>` : ''}</section>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks use your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label>${st.billErr ? `<p class="ferr" role="alert">${esc(st.billErr)}</p>` : ''}</section>
     ${keysSection()}</div></div>`;
 }
 
