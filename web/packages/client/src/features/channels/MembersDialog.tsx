@@ -153,7 +153,7 @@ export function MembersDialog({
             {members.map((m) => (
               <li key={m.u} data-member={m.u}>
                 <Avatar handle={m.u} size="sm" />
-                <span>
+                <span className="mltext">
                   @{m.u}
                   {m.u === me ? <small>You</small> : null}
                 </span>
@@ -175,7 +175,7 @@ export function MembersDialog({
                 {bans.map((b) => (
                   <li key={b.u} data-banned={b.u}>
                     <Avatar handle={b.u} size="sm" />
-                    <span>@{b.u}</span>
+                    <span className="mltext">@{b.u}</span>
                     <button type="button" className="btn2 sm" onClick={() => void unban(b)}>
                       Unban
                     </button>

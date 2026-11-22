@@ -8,6 +8,12 @@ import { DAY, QUEUED_RUNS_MAX, threadKey } from "@session/mutators";
 import { claimClientId } from "@session/sync/client";
 import test from "ava";
 
+import {
+  fetchNotificationThreads,
+  notifText,
+  notificationsOf,
+  unloadedThreads,
+} from "../src/features/notifications/notifications.js";
 import { HttpSyncTransport } from "../src/replica/http.js";
 import { channelByName, channelsOf, feedOf, repliesOf } from "../src/replica/queries.js";
 import { UNKNOWN, runQuery, type DraftRef } from "../src/replica/source.js";
@@ -499,6 +505,33 @@ test("leaving an open channel in this tab is not told as a ban", async (t) => {
   await until(() => !channelsOf(r).some((c) => c.name === "lounge" && c.joined));
   await new Promise((resolve) => setTimeout(resolve, 50));
   t.deepEqual(banned, []);
+});
+
+test("notifications about an open channel the viewer was banned from fetch their threads: the title and the kind", async (t) => {
+  const { f, lounge } = world();
+  const removed = f.id();
+  f.ok(MONA, "threads.create", { id: removed, space: lounge, kind: "post", q: "Off-topic post" });
+  const replied = f.id();
+  f.ok(MONA, "threads.create", { id: replied, space: lounge, kind: "post", q: "Mona's question" });
+  f.ok(OLGA, "research.createPostFollowUp", { id: f.id(), thread: replied, t: "An answer" });
+  f.ok(OLGA, "moderation.decide", { item: `p:${removed}`, decision: "removed", note: "Off topic" });
+  // the ban ends the membership: the replica reads the channel's log no more
+  f.ok(OLGA, "members.ban", { space: lounge, user: MONA });
+  const { r } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  t.false(channelsOf(r).some((c) => c.name === "lounge" && c.joined));
+  const texts = () =>
+    Object.fromEntries(notificationsOf(r).map((row) => [row.type, notifText(row)]));
+  t.is(r.get(threadKey(replied)), UNKNOWN);
+  t.is(texts()["removed"], "@olga removed your thread: “Off topic”", "the kind is not guessed");
+  t.is(texts()["reply"], "@olga replied to your post “a thread”");
+
+  const stop = fetchNotificationThreads(r);
+  t.teardown(stop);
+  await until(() => texts()["reply"] === "@olga replied to your post “Mona's question”");
+  t.is(texts()["removed"], "@olga removed your post: “Off topic”");
+  t.deepEqual(unloadedThreads(r), []);
 });
 
 test("joining an open channel moves its log to the stream", async (t) => {

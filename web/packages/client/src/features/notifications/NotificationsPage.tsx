@@ -30,9 +30,9 @@ import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
 
 import {
+  fetchNotificationThreads,
   notifParts,
   notificationsOf,
-  unloadedThreads,
   unreadLine,
   type NotifKind,
   type NotifRow,
@@ -51,12 +51,8 @@ export function NotificationsPage() {
   const source = useReplica();
   const writes = useWrites();
   const rows = useReplicaQuery(notificationsOf, []);
-  const unloaded = useReplicaQuery(unloadedThreads, []);
-  // a thread outside the window is fetched for its title
-  useEffect(() => {
-    if (unloaded === UNKNOWN) return;
-    for (const u of unloaded) source.open?.(u.thread, u.space);
-  }, [source, unloaded]);
+  // a thread the replica has not loaded is fetched for its title and kind
+  useEffect(() => fetchNotificationThreads(source), [source]);
 
   const list = rows === UNKNOWN ? null : rows;
   const unread = list?.filter((r) => !r.read).length ?? 0;

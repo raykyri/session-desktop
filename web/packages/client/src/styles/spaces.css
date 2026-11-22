@@ -1645,6 +1645,10 @@
 
 .mlist {
   display: grid;
+  /* one column no wider than the list: an auto column grows to the rows'
+     min-content width, which for a row with a long unbreakable text (an
+     invite link) is wider than the dialog */
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   margin: 0;
   padding: 0;
@@ -1662,7 +1666,10 @@
   line-height: 1.4;
 }
 
-.mlist li > span:not(.mlkind) {
+/* the row's text takes the free width; the avatar, the chips and the
+   buttons keep their own size (a row's avatar is a span too, and a
+   selector by element would stretch it into a pill) */
+.mlist li > .mltext {
   flex: 1;
   min-width: 0;
 }
