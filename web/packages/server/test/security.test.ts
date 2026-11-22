@@ -82,7 +82,12 @@ test("limit: accountInvites.create, 10 a day per user beyond the 3 open", async 
   // An admin is exempt from 3 open, not from 10 created a day.
   for (let index = 0; index < 10; index += 1) await admin.accountInvites.create();
   const before = rowCount(harness, "invites");
-  await t.throwsAsync(admin.accountInvites.create(), { code: "TOO_MANY_REQUESTS" } as never);
+  // The refusal names the limit and the wait: a token comes back every
+  // 2.4 hours, so the wait is 3 hours rounded up.
+  await t.throwsAsync(admin.accountInvites.create(), {
+    code: "TOO_MANY_REQUESTS",
+    message: "You can make 10 invite links a day. Try again in 3 hours.",
+  } as never);
   t.is(rowCount(harness, "invites"), before);
 });
 

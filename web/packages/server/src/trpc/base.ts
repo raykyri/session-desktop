@@ -108,12 +108,12 @@ export const mergeRouters = t.mergeRouters;
 /** No session required; `ctx.user` is null for a signed-out caller. */
 export const publicProcedure = t.procedure;
 
-/** The refusal every limit answers; recorded nowhere (04 Z1). */
-export function tooManyRequests(): TRPCError {
-  return new TRPCError({
-    code: "TOO_MANY_REQUESTS",
-    message: "too many requests at once; try again in a moment",
-  });
+/** The refusal every limit answers; recorded nowhere (04 Z1). A limit the
+ * person reaches by using a feature names itself (`limitMessage`). */
+export function tooManyRequests(
+  message = "too many requests at once; try again in a moment",
+): TRPCError {
+  return new TRPCError({ code: "TOO_MANY_REQUESTS", message });
 }
 
 /** Takes one token from `bucket` under `key`, or throws the refusal. */

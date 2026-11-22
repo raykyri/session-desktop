@@ -128,11 +128,23 @@ function wait(seconds: number): string {
   return `${Math.ceil(minutes / 60)} hours`;
 }
 
-/** The message of a `pre`-stage refusal: the limit, and when a use is free
- * again ("You can create 5 channels a day. Try again in 3 hours."). */
+/** The message of a limit's refusal: the limit, and when a use is free
+ * again ("You can make 10 invite links a day. Try again in 3 hours.").
+ * `retryAfter` is in seconds. */
+export function limitMessage(
+  what: string,
+  things: string,
+  spec: BucketSpec,
+  retryAfter: number,
+): string {
+  return `You can ${what} ${spec.limit} ${things} ${per(spec.windowMs)}. Try again in ${wait(retryAfter)}.`;
+}
+
+/** The message of a `pre`-stage refusal ("You can create 5 channels a day.
+ * Try again in 3 hours."). */
 export function preLimitMessage(limit: PreLimit, spec: BucketSpec, retryAfter: number): string {
   const { what, things } = PRE_BUCKETS[limit];
-  return `You can ${what} ${spec.limit} ${things} ${per(spec.windowMs)}. Try again in ${wait(retryAfter)}.`;
+  return limitMessage(what, things, spec, retryAfter);
 }
 
 /** The `pre`-stage limits of `04` Z1 over `limiter`'s sliding logs, keyed
