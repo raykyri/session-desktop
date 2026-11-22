@@ -465,8 +465,8 @@ a.hsv-e, a.hsv-b, a.hsv-d, a.hsaved { text-decoration: none; }
 .prose .nw { white-space: nowrap; }
 /* the usage ring's track, so it reads as a gauge */
 .m-ring circle:not(.arc) { stroke: var(--border-strong); }
-/* phones: the app name hides so the channel strip has room */
-@media (max-width: 520px) { .appbar .brand b { display: none; } .appbar { gap: 8px; } .hsp { margin-left: 0; } }
+/* phones: the app name hides (the bar's spacing at this width is set after the .appbar rule) */
+@media (max-width: 520px) { .appbar .brand b { display: none; } }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
 .preview .rtext { margin: 6px 0 2px; }
@@ -669,6 +669,14 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 @media (max-width: 1080px) { .sd-d > .sside { display: none; } .sd-d .tabs.sp-mob { display: block; } }
 @media (max-width: 860px) { .sd-c > .srail { display: none; } .spv-c3 > .mg { margin-left: 0; } .sd-c .tabs.sp-mob { display: block; } }
 .appbar { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--divider); background: var(--chrome); }
+/* phones: the channel strip folds into the scope menu (headerSpaces); 4px between the brand and the scope button,
+   6px between the controls on the right, 11px after the account menu */
+@media (max-width: 520px) { .appbar { gap: 6px; padding-right: 11px; } .hsp { margin-left: -2px; } .hsp .tabs { display: none; } .hsp > .mpick { flex: 0 1 auto; min-width: 0; } }
+.hsdd { max-width: 100%; min-width: 0; }
+.hsdd > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu.hsmenu { max-height: min(460px, 62vh); max-width: calc(100vw - 32px); overflow-y: auto; }
+.hsmenu .mi > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hsmenu .mi-note { padding: 6px 10px; font-size: var(--fs-sm); }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--t-heading); font-size: var(--fs-md); }
 /* simplification variants */
 .rchips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1654,6 +1662,7 @@ function place(margin, items) {
   margin.style.minHeight = y + 'px';
 }
 const narrow = () => matchMedia('(max-width: 860px)').matches;
+const phone = () => matchMedia('(max-width: 520px)').matches;
 const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', `<button type="button" class="anc" data-a="grpopen" data-id="${pid}" data-bi="${bi}" title="Open the branches on this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Open the first">${ARROW_REPLY}${total}</button>`); };
 const onPath = (p, T) => { const s = st.sel[p.id]; return new Set(s && T.nodes[s] ? T.path(s).map(n => n.id) : []); };
 const inGroup = (T, ns, id) => !!id && T.nodes[id] && ns.some(n => T.path(id).some(x => x.id === n.id));
@@ -1960,7 +1969,13 @@ function headerSpaces() {
   const add = canWrite() ? `<button class="tadd" id="k-newch" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
   const empty = list.length || loading ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
   const open = st.menu === 'hscope';
-  return `<div class="hsp">${SCOPES().length > 1 ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu" aria-label="Channels to show">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>` : ''}<nav class="tabs" aria-label="Channels"><div class="tabs-s" id="k-tabs">${list.map(x => `<span class="tchip">${chipBtn(x.id, esc(spName(x.id)))}${join(x)}</span>`).join('')}${empty}${add}</div></nav></div>`;
+  /* at 520px and below the strip is not shown: the scope menu lists the scope's channels (the open one checked), the
+     empty line, and New channel for writers; the button names the open channel, else the scope. The Join "+" stays
+     out of the menu (the channel's header has Join). The menu is drawn there with one scope too. */
+  const fold = phone(), here = st.screen === 'network' && SP[st.space] && SPACE_META[st.space] ? st.space : null;
+  const label = fold && here ? esc(spName(here)) : SCOPES().find(x => x[0] === sc)[1];
+  const chans = !fold ? '' : `${loading ? '' : `<div class="msep"></div>${list.length ? list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${here === x.id}" data-a="space" data-id="${x.id}"><span>${esc(spName(x.id))}</span>${here === x.id ? CHECK : ''}</button>`).join('') : `<div class="mi-note">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</div>`}`}${canWrite() ? `<div class="msep"></div><button type="button" class="mi" role="menuitem" data-a="newspace">${PLUS2}<span>New channel</span></button>` : ''}`;
+  return `<div class="hsp">${SCOPES().length > 1 || fold ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}"><span>${label}</span>${I.down}</button>${open ? `<div class="menu${fold ? ' hsmenu' : ''}" role="menu" aria-label="Channels to show">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}${chans}</div>` : ''}</span>` : ''}<nav class="tabs" aria-label="Channels"><div class="tabs-s" id="k-tabs">${list.map(x => `<span class="tchip">${chipBtn(x.id, esc(spName(x.id)))}${join(x)}</span>`).join('')}${empty}${add}</div></nav></div>`;
 }
 /* ---- B: a dropdown ---- */
 function navDropTop() {
@@ -2212,12 +2227,12 @@ app.addEventListener('click', e => {
   /* links (channel chips, Saved, Go to Home, Browse channels) open in the page; a modified click is left to the browser */
   if (t.tagName === 'A') { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return; e.preventDefault(); }
   const a = t.dataset.a, d = t.dataset;
-  if (a === 'space') { st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; st.spq = '';
+  if (a === 'space') { const fromScope = !!t.closest('.hsmenu'); st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; st.spq = '';
     if (SP[d.id] && st.auth === 'in') { const v = (VISITS[st.user] ||= []); v.splice(v.indexOf(d.id) >>> 0, v.includes(d.id) ? 1 : 0); v.unshift(d.id); SEEN[st.user + ':' + d.id] = true; }
-    render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
+    render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); if (fromScope) app.querySelector('[data-m="hscope"]')?.focus({ preventScroll: true }); return; }
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinChannel(d.id); render(); return; }
   if (a === 'leave') { const id = d.id, u = st.user; dropMember(id, u); if (sendOrHold({ kind: 'leave', undo: () => addMember(id, u) })) toast(`Left ${spName(id)}.`); if (isPrivate(id)) st.space = 'home'; render(); return; }
-  if (a === 'newspace') { st.menu = null; st.creatingFrom = sigOf(t); st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
+  if (a === 'newspace') { st.menu = null; st.creatingFrom = sigOf(t.closest('.hsmenu') ? app.querySelector('[data-m="hscope"]') : t); st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
   if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { id: x.id, desc: x.desc || '', err: '' }; render(); $('#ce-desc')?.focus(); return; }
   if (a === 'cecancel') { closeChEdit(); return; }
   if (a === 'modlog') { st.modlog = true; render(); app.querySelector('.mldlg .iconbtn')?.focus(); return; }
@@ -2453,7 +2468,7 @@ document.addEventListener('keydown', e => {
   const inMenu = st.menu && ae?.closest?.('#app .mpick .menu');
   if (inMenu && (e.key === 'Home' || e.key === 'End')) { const items = menuItems(); if (!items.length) return; e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); return; }
   if (inMenu && e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    const items = menuItems(), i = items.indexOf(ae.closest('.mi')), label = x => (x.querySelector('span:not(.glyph):not(.mi-ic)')?.textContent || x.textContent).trim().toLowerCase();
+    const items = menuItems(), i = items.indexOf(ae.closest('.mi')), label = x => (x.querySelector('span:not(.glyph):not(.mi-ic)')?.textContent || x.textContent).trim().toLowerCase().replace(/^#/, '');
     const to = [...items.slice(i + 1), ...items.slice(0, i + 1)].find(x => label(x).startsWith(e.key.toLowerCase()));
     if (to) { e.preventDefault(); to.focus(); } return;
   }
