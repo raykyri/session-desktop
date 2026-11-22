@@ -122,6 +122,7 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 .open > .clamp, .clamp.open { max-height: none; -webkit-mask-image: none; mask-image: none; }
 .tlink { color: var(--accent); font-size: var(--fs-sm); font-weight: 500; }
 .tlink:hover { text-decoration: underline; }
+a.tlink, a.btn1, a.btn2 { text-decoration: none; }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 13px;
   background: var(--control); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
 .chip:hover { background: var(--control-hover); color: var(--t-heading); }
@@ -236,7 +237,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
-@media (prefers-reduced-motion: reduce) { .status::before, .fadein { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .status::before, .fadein, .toast { animation: none !important; } .card, .card.flash, .grp { transition: none !important; } }
 .scroll { overflow-y: auto; overscroll-behavior: contain; }
 .empty { color: var(--t-faint); font-size: var(--fs-sm); padding: 8px 0; }
 .dayrule { display: flex; align-items: center; gap: 10px; color: var(--t-faint); font-size: var(--fs-xs); font-weight: 600; margin: 18px 0 6px; }
@@ -255,9 +256,9 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
   -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent);
   mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
 .tabs-s::-webkit-scrollbar { display: none; }
-.tabs button { flex: none; padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
-.tabs button:hover { background: var(--fill-hover); }
-.tabs button[aria-current="true"] { background: var(--t-heading); color: var(--canvas); }
+.tabs :is(a, button) { flex: none; padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; text-decoration: none; }
+.tabs :is(a, button):hover { background: var(--fill-hover); }
+.tabs a[aria-current="page"], .tabs button[aria-current="true"] { background: var(--t-heading); color: var(--canvas); }
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 21px; padding: 14px 0; justify-content: center; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 11px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
@@ -385,6 +386,8 @@ button.bq.bqx:hover { background: color-mix(in srgb, var(--accent) 8%, var(--ins
 .bqm { display: block; margin-top: 4px; color: var(--accent); font-weight: 500; }
 .composer button.cx { width: 26px; height: 26px; padding: 0; margin-bottom: 2px; border-radius: 13px; background: none; color: var(--t-faint); }
 .composer button.cx:hover { background: var(--fill-hover); color: var(--t-heading); }
+/* the selection actions sit in one group at the top left of the app; each is placed absolutely */
+#selwrap { position: absolute; top: 0; left: 0; width: 100%; height: 0 !important; z-index: 25; }
 #selbranch { position: absolute; z-index: 25; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: var(--t-heading); color: var(--canvas); font-size: var(--fs-xs); font-weight: 600; box-shadow: var(--shadow-pop, 0 4px 14px rgba(0,0,0,.18)); }
 #selbranch svg.i { width: 12px; height: 12px; }
 #sellook { position: absolute; z-index: 25; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: var(--t-heading); color: var(--canvas); font-size: var(--fs-xs); font-weight: 600; box-shadow: var(--shadow-pop); }
@@ -429,6 +432,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .hsv-b.on svg.i, .hsv-c.on svg.i, .hsv-e.on svg.i { fill: currentColor; }
 .hsv-c { position: relative; }
 .hcount { position: absolute; top: 1px; right: 0; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--accent-strong); color: var(--on-accent-light); font-size: 9.5px; font-weight: 700; line-height: 14px; text-align: center; }
+a.hsv-e, a.hsv-b, a.hsv-d, a.hsaved { text-decoration: none; }
 .hsv-e { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px; border-radius: 14px; color: var(--t-muted); box-shadow: inset 0 0 0 1px var(--divider); font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
 .hsv-e svg.i { width: 13px; height: 13px; }
 .hsv-e.has { color: var(--t-heading); }
@@ -500,7 +504,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .hsp + .grow { flex: 0; }
 .hsp .tabs { position: static; flex: 1; min-width: 0; padding: 0; background: none; box-shadow: none; clip-path: none; }
 .hsp .tabs-s { align-items: center; }
-.hsp .tabs button { padding: 4px 10px; }
+.hsp .tabs :is(a, button) { padding: 4px 10px; }
 .hsp .tabs .sscope { height: 28px; }
 .hsp .tabs .sscope button { height: 24px; }
 .hsdd { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 14px; background: var(--control); font-size: var(--fs-sm); font-weight: 600; color: var(--t-heading); }
@@ -545,7 +549,10 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .tabs .sscope { flex: none; margin-right: 6px; }
 .tabs .sscope { height: 29px; align-items: center; border-radius: 15px; }
 .tabs .sscope button { display: inline-flex; align-items: center; height: 25px; padding: 0 11px; border-radius: 13px; font-size: var(--fs-sm); line-height: 1; }
-.tabs .tj { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1; }
+/* a chip and its separate Join button */
+.tabs .tchip { flex: none; display: inline-flex; align-items: center; }
+.tabs .tchip > .tj { display: inline-grid; place-items: center; width: 16px; height: 16px; padding: 0; margin: 0 4px 0 -4px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1; }
+.tabs .tchip > .tj:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .tabs .tempty { align-self: center; padding: 0 8px; color: var(--t-faint); font-size: var(--fs-sm); white-space: nowrap; }
 /* C rail */
 .srail { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; border-right: 1px solid var(--divider); background: var(--chrome); overflow-y: auto; overflow-x: hidden; z-index: 15; }
@@ -708,8 +715,8 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .uchart.bare { height: 64px; margin-top: 10px; }
 .run.b { grid-template-columns: minmax(0, 1fr) auto 48px; }
 .dialog.rulesdlg { width: min(520px, calc(100% - 32px)); max-height: 70vh; overflow: auto; }
-button.brand.home { background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: var(--r-md, 8px); font-family: inherit; cursor: pointer; }
-button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.brand.home { background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: var(--r-md, 8px); font-family: inherit; cursor: pointer; text-decoration: none; }
+.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .brand.lg { font-size: var(--fs-lg); gap: 10px; }
 .navs { display: flex; gap: 2px; margin-left: 10px; }
 .nav { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-md); color: var(--t-secondary); font-weight: 500; font-size: var(--fs-sm); }
@@ -830,6 +837,9 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .chip.staff { background: var(--accent-soft); color: var(--accent); }
 .tlink.danger, .danger { color: var(--bad); }
 .empty { color: var(--t-faint); font-size: var(--fs-sm); }
+/* a page's or a section's read while it is pending: an empty status line */
+.page-empty { margin: 0; color: var(--t-faint); font-size: var(--fs-sm); }
+.uempty { margin: 0; padding: 8px 0; color: var(--t-faint); font-size: var(--fs-sm); }
 .vdone { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--good); font-weight: 600; }
 .vdone svg.i { width: 12px; height: 12px; }
 .rules { margin: 8px 0 0; }
@@ -989,6 +999,8 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .dialog p { margin: 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.5; }
 .dialog .inviter { box-shadow: none; background: var(--inset); }
 .dacts { display: flex; gap: 8px; justify-content: flex-end; }
+/* the two toast regions stay mounted and empty between toasts; only the pill inside changes */
+.toastr { position: absolute; z-index: 50; left: 0; right: 0; bottom: 0; height: 0; }
 .toast { position: absolute; z-index: 50; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border-radius: var(--r-lg); background: var(--t-heading); color: var(--card); font-size: var(--fs-sm); box-shadow: var(--shadow-pop); animation: fadein .2s ease; }
 .mi-note { padding: 6px 10px 4px; font-size: var(--fs-xs); color: var(--t-faint); }
 .mi .src { margin-left: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
@@ -1059,7 +1071,7 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .afact { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
 .afact b { color: var(--t-heading); font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
 .afact small { color: var(--t-faint); font-size: var(--fs-xs); }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr, .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tog { position: relative; flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--control-hover); transition: background .15s; }
 .tog > span { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
 .tog[aria-checked="true"] { background: var(--accent-strong); }
@@ -1102,6 +1114,7 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .card.skel { gap: 10px; }
 .card.skel > span { display: block; height: 14px; width: 60%; border-radius: 4px; background: var(--control); margin: 0 !important; }
 .card.skel > span + span { height: 12px; width: 100%; background: var(--fill-subtle); }
+.card.skel > span + span + span { width: 80%; }
 /* ---- "Not sent": under the item a write created, and the outbox toast for writes with no item ---- */
 .notsent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--fs-sm); color: var(--t-muted); }
 .notsent .tlink { font-size: inherit; }
@@ -1521,24 +1534,31 @@ const mine = u => u === me();
 /* comments by others on the node or any node under it count, as do branches by others */
 const othersUnderBranch = (T, id) => othersUnderReplies(BRP[T.p.id + ':' + id]) || T.kids(id).some(c => !mine(c.u) || othersUnderBranch(T, c.id));
 const othersUnderReplies = list => (list || []).some(r => !mine(r.u) || othersUnderReplies(r.kids));
-/* After a delete, focus moves to the next card (thread), the next tree row (branch, reply), else the one before. */
+/* After a delete, focus moves to the next card (thread), the next tree row (branch, reply), else the one before.
+   A delete is a write with no item: the item goes at once, and while the write is not sent the outbox toast offers
+   Retry and Discard. Discard puts the item back where it was. */
 function deleteItem(key) {
   const [kind, pid, id, cpath] = key.split(':'), p = byId(pid); if (!p) return;
   const rowsOf = () => kind === 'b' ? [...document.querySelectorAll(`#mr-${pid} .grow-r`)] : [...(document.getElementById('card-' + pid)?.closest('.row')?.querySelectorAll('.stick .grow-r') || [])];
-  let refocus = null;
+  let refocus = null, undo = null;
   if (kind === 't') {
     const row = document.getElementById('card-' + pid)?.closest('.row'), near = r => r?.querySelector('article.card')?.id, nid = near(row?.nextElementSibling) || near(row?.previousElementSibling);
     refocus = () => nid && document.getElementById(nid)?.focus({ preventScroll: true });
-    D.posts.splice(D.posts.indexOf(p), 1); if (st.asking === pid) st.asking = null;
+    const at = D.posts.indexOf(p); D.posts.splice(at, 1); if (st.asking === pid) st.asking = null;
+    undo = () => { if (!D.posts.includes(p)) D.posts.splice(Math.min(at, D.posts.length), 0, p); };
   } else if (kind === 'b' || kind === 'r') {
     const i = rowsOf().findIndex(r => r.dataset.node === id), back = kind === 'b' ? `[data-a="ask"][data-id="${pid}"]` : `[data-a="replyopen"][data-id="${pid}/top"]`;
     refocus = () => { const rows = rowsOf(); (rows[i] || rows[i - 1] || app.querySelector(back))?.focus({ preventScroll: true }); };
-    if (kind === 'b') { const T = tree(p), out = [id, ...T.dfs(id).map(x => x.n.id)]; out.forEach(x => DELETED.add(pid + ':' + x)); if (out.includes(st.sel[pid])) st.sel[pid] = null; }
-    else { const path = id.split('.'), i2 = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p); list.splice(i2, 1); st.rsel[pid] = null; }
+    if (kind === 'b') { const T = tree(p), out = [id, ...T.dfs(id).map(x => x.n.id)]; out.forEach(x => DELETED.add(pid + ':' + x)); if (out.includes(st.sel[pid])) st.sel[pid] = null;
+      undo = () => out.forEach(x => DELETED.delete(pid + ':' + x)); }
+    else { const path = id.split('.'), i2 = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p), [r] = list.splice(i2, 1); st.rsel[pid] = null;
+      undo = () => list.splice(i2, 0, r); }
   } else if (kind === 'c') {
-    const path = cpath.split('.'), i2 = +path.pop(), base = BRP[pid + ':' + id] || [], list = path.length ? replyAtIn(base, path.join('.')).kids : base; list.splice(i2, 1);
+    const path = cpath.split('.'), i2 = +path.pop(), base = BRP[pid + ':' + id] || [], list = path.length ? replyAtIn(base, path.join('.')).kids : base, [r] = list.splice(i2, 1);
     refocus = () => document.querySelector(`#mr-${pid} .grow-r.sel`)?.focus({ preventScroll: true });
+    undo = () => list.splice(i2, 0, r);
   }
+  sendOrHold({ kind: 'del', undo });
   st.menu = null; st.replying = null; render(); refocus?.();
 }
 /* Avatar placement on cards, per variant (V[st.v].av):
@@ -1552,7 +1572,6 @@ const ARROW_SEND = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path 
 const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11"/><path d="M3.5 7.5h5.5a4 4 0 0 1 4 4v1"/></svg>';
 function card(p) {
   const mode = V[st.v].av || 'header', fz = isFrozen(p.s), active = isActiveRun(p.run);
-  if (p.summary && st.loadingSummaries) return `<div class="card skel" id="card-${p.id}" role="status" aria-label="Loading" aria-busy="true"><span></span><span></span></div>`;
   /* removed: the placeholder reads "[deleted]" for the author for every reader; the author keeps Delete */
   if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}" tabindex="-1"><div class="rmnote">${RM_IC}<span style="flex:1">Removed by @${esc(r.by)}${r.note ? `<small>Reason: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} by [deleted] in ${esc(spName(p.s))}</small></span>${mine(p.u) ? moreMenu('t:' + p.id, true, p.k === 'ask' ? 'ask' : 'post') : ''}</div></article>`; }
   /* hidden: its author and the channel's owner read it under a line saying so; anyone else reads only that line */
@@ -1583,8 +1602,10 @@ function card(p) {
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
-  /* a summary thread whose records cannot be fetched (offline) */
-  const body = st.offline && p.summary ? '<div class="prose empty" role="status">Available when online.</div>'
+  /* a summary thread: its thread and counts records are held, so the card keeps its title and footer; only the
+     answer area waits while the rest loads, and reads "Available when online." while it cannot be fetched */
+  const body = p.summary && st.loadingSummaries ? '<div class="prose" role="status" aria-label="Loading" aria-busy="true"></div>'
+    : st.offline && p.summary ? '<div class="prose empty" role="status">Available when online.</div>'
     : `${p.run && !hasAnswer(p.run) ? runLine(p.id, 'r', p.run) : ''}<div class="prose" id="pr-${p.id}">${hasAnswer(p.run) && !hid && !p.del ? T.nodes.r.html : ''}</div>${runNote(p.run)}`;
   return `${art}${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
     ${body}
@@ -1678,7 +1699,7 @@ function branchReplies(p, n) {
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []), wr = canWriteIn(p.s);
   const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
   if (!rows.length) return '';
-  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'comment', 'comments')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 1) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(authorName(r.u))}</b><time>${rel(r.createdAt)}</time>${mine(r.u) && canWrite() && !r.del ? moreMenu('c:' + p.id + ':' + n.id + ':' + id, !othersUnderReplies(r.kids), 'comment') : ''}</div>${modLine(r)}${noText(r, p.s) ? '' : `<div class="rtext">${fmtReply(r.t, p.s)}</div>`}${r.unsent ? notSentLine(r.unsent) : ''}<div class="pf">${wr ? replyIcon(`data-a="brreply" data-k="${key}/${id}"`, st.brReplying === key + '/' + id) : ''}</div>${box(id)}</div>`).join('')}
+  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'comment', 'comments')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 1) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(authorName(r.u))}</b><time>${rel(r.createdAt)}</time>${mine(r.u) && canWrite() && !r.del ? moreMenu('c:' + p.id + ':' + n.id + ':' + id, !othersUnderReplies(r.kids), 'comment') : ''}</div>${modLine(r)}${noText(r, p.s) ? '' : `<div class="rtext">${fmtReply(r.t, p.s)}</div>`}<div class="pf">${wr ? replyIcon(`data-a="brreply" data-k="${key}/${id}"`, st.brReplying === key + '/' + id) : ''}</div>${r.unsent ? notSentLine(r.unsent) : ''}${box(id)}</div>`).join('')}
     </div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
@@ -1691,7 +1712,7 @@ function outline(p, T, G) {
   const rows = G.ns.flatMap(n => T.dfs(n.id, 0, [])), X = d => 10 + d * 13, tab = rows.some(x => x.n.id === sel) ? sel : rows[0]?.n.id;
   /* a tree widget: one row holds the tab stop; arrow keys move (treeKeys). A row whose author is a deleted account
      always shows its avatar: two deleted accounts are not known to be one person. */
-  return `<div class="graph" role="tree" aria-label="Branches on this passage" data-draw><svg aria-hidden="true"></svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}${n.id === sel ? ' sel' : ''}" role="treeitem" aria-level="${d + 1}" aria-selected="${n.id === sel}" tabindex="${n.id === tab ? 0 : -1}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-par="${d ? n.par : ''}" data-d="${d}" data-grp="${g}">${n.look ? `<span class="gq glook" title="Look up">${SEARCH}${esc(n.look)}</span>` : `<span class="gq">${esc(rowText(n, p.s, n.q))}</span>`}${gone(n.u) || n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(authorName(n.u))}">${av(n.u, 'xs')}</span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
+  return `<div class="graph" role="tree" aria-label="Branches on this passage" data-draw><svg aria-hidden="true"></svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}${n.id === sel ? ' sel' : ''}" role="treeitem" aria-level="${d + 1}" aria-selected="${n.id === sel}" tabindex="${n.id === tab ? 0 : -1}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-par="${d ? n.par : ''}" data-d="${d}" data-grp="${g}">${n.look ? `<span class="gq glook" title="Look up">${SEARCH}<span class="sr-only">Look up </span>${esc(n.look)}</span>` : `<span class="gq">${esc(rowText(n, p.s, n.q))}</span>`}${gone(n.u) || n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(authorName(n.u))}">${av(n.u, 'xs')}<span class="sr-only">, by ${esc(authorName(n.u))}</span></span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
 }
 function drawGraph(graph) {
   const X = d => 10 + d * 13, at = {};
@@ -1739,7 +1760,7 @@ function replyLines(p) {
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   /* a collapsed reply shows "+N" over the end of its row; Left collapses an expanded reply, Right or the count expands it */
-  const row = ({ r, d, id, hid }) => { const b = `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" role="treeitem" aria-level="${d + 1}" aria-selected="${id === sel}"${(r.kids || []).length ? ` aria-expanded="${!hid}"` : ''} tabindex="${id === tab ? 0 : -1}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(authorName(r.u))}">${av(r.u, 'xs')}</span><span class="gt">${esc(rowText(r, p.s, plainReply(r.t)))}</span></span></button>`;
+  const row = ({ r, d, id, hid }) => { const b = `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" role="treeitem" aria-level="${d + 1}" aria-selected="${id === sel}"${(r.kids || []).length ? ` aria-expanded="${!hid}"` : ''} tabindex="${id === tab ? 0 : -1}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(authorName(r.u))}">${av(r.u, 'xs')}</span><span class="sr-only">${esc(authorName(r.u))}: </span><span class="gt">${esc(rowText(r, p.s, plainReply(r.t)))}</span></span></button>`;
     return hid ? `<div class="grow-w">${b}<button type="button" class="rhid-btn" tabindex="-1" data-a="rcol" data-id="${p.id}" data-node="${id}" aria-label="Show ${noun(hid, 'more reply', 'more replies')}">+${hid}</button></div>` : b; };
   return `<div class="grp"><div class="graph" role="tree" aria-label="Replies" data-draw><svg aria-hidden="true"></svg>${rows.map(row).join('')}</div>
     ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(authorName(cur.r.u))}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) && !cur.r.del ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div>${modLine(cur.r)}${noText(cur.r, p.s) ? '' : `<div class="rtext">${fmtReply(cur.r.t, p.s)}</div>`}<div class="pf">${wr ? replyLink(p, cur.id) : ''}</div>${cur.r.unsent ? notSentLine(cur.r.unsent) : ''}${replyBox(p, cur.id, replyTo(cur.r.u))}</div>` : ''}
@@ -1763,8 +1784,9 @@ const EFFORT_OPTS = ['low', 'medium', 'high', 'max'], EFFORT_ORDER = ['low', 'me
 const stepDown = (e, acc) => { for (let i = EFFORT_ORDER.indexOf(e); i >= 0; i--) if (acc.includes(EFFORT_ORDER[i])) return EFFORT_ORDER[i]; return acc[0]; };
 const keyOnly = m => !MODELS[m].payers.includes('included');
 /* The composer runs on the tab's own choice while it is payable, else on the site default model; the effort is the
-   tab's choice or the site default, stepped down to what the model accepts. A default change reaches only
-   composers with no choice of their own. */
+   tab's choice or the site default, stepped down to what the model accepts. Choosing a model or an effort stores
+   both: the model, and the effort stepped down to what that model accepts. A default change on Site Admin therefore
+   reaches only a composer where nothing has been picked in this tab. */
 const payable = m => !!MODELS[m] && (!keyOnly(m) || (MODELS[m].payers[0] === 'key:openai' ? hasOpenAI() : keys().anthropic?.status === 'working'));
 const curModel = () => st.picked.model && payable(st.picked.model) ? st.picked.model : ADMIN.def;
 const curEffort = () => stepDown(st.picked.effort ?? ADMIN.effort, MODELS[curModel()].efforts);
@@ -1891,7 +1913,8 @@ const STAR = on => `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"${on ? 
 const SEARCH = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>';
 const spv = () => st.ui.sd + st.ui.sv;
 const curLabel = () => st.space === 'home' ? 'Home' : st.space === 'saved' ? 'Saved' : spName(st.space);
-const chipBtn = (id, inner, cls = '') => `<button class="${cls}" data-a="space" data-id="${id}" aria-current="${st.screen === 'network' && st.space === id}">${inner}</button>`;
+/* a channel chip is a link to the channel's address; only the current one has aria-current */
+const chipBtn = (id, inner, cls = '') => `<a class="${cls}" href="#c/${esc(SP[id]?.name || id)}" data-a="space" data-id="${id}"${st.screen === 'network' && st.space === id ? ' aria-current="page"' : ''}>${inner}</a>`;
 const spItem = (x, extra = '') => `<button type="button" class="mi" role="menuitemradio" aria-checked="${st.space === x.id}" data-a="space" data-id="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</span>${extra}${st.space === x.id ? CHECK : ''}</button>`;
 const newBtns = (cls = 'mi') => canWrite() ? `<button type="button" class="${cls}" data-a="newspace">${PLUS2}<span>New channel</span></button><button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse channels</span></button>` : `<button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse channels</span></button>`;
 /* the list inside every dropdown: Home, your spaces, joined, then New and Browse */
@@ -1916,12 +1939,13 @@ const scopeList = () => { const sc = curScope(); return sc === 'yours' ? yourSpa
 const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
 function headerSpaces() {
   if (!['network', 'usage', 'members', 'browse', 'notifications', 'admin'].includes(st.screen)) return '<span class="hsp"></span>';
-  const sc = curScope(), list = scopeList();
-  const join = x => sc === 'discover' && canWrite() && !isJoined(x.id) && !isFrozen(x.id) ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
-  const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
-  const empty = list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
+  /* while the channels load (Reads: Loading) the strip is empty: no chips and no empty line */
+  const sc = curScope(), loading = st.reads === 'loading', list = loading ? [] : scopeList();
+  const join = x => sc === 'discover' && canWrite() && !isJoined(x.id) && !isFrozen(x.id) ? `<button type="button" class="tj" data-a="join" data-id="${x.id}" title="Join" aria-label="Join ${esc(spName(x.id))}">+</button>` : '';
+  const add = canWrite() ? `<button class="tadd" id="k-newch" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
+  const empty = list.length || loading ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
   const open = st.menu === 'hscope';
-  return `<div class="hsp">${SCOPES().length > 1 ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>` : ''}<nav class="tabs"><div class="tabs-s" id="k-tabs">${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`;
+  return `<div class="hsp">${SCOPES().length > 1 ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu" aria-label="Channels to show">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>` : ''}<nav class="tabs" aria-label="Channels"><div class="tabs-s" id="k-tabs">${list.map(x => `<span class="tchip">${chipBtn(x.id, esc(spName(x.id)))}${join(x)}</span>`).join('')}${empty}${add}</div></nav></div>`;
 }
 /* ---- B: a dropdown ---- */
 function navDropTop() {
@@ -1966,9 +1990,9 @@ const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.s
 /* Browse: every open space, plus private ones you are in */
 function browsePage() {
   const q = (st.browseq || '').toLowerCase(), list = spaceList().filter(x => (!isPrivate(x.id) || isJoined(x.id)) && (!q || x.name.includes(q) || (x.desc || '').toLowerCase().includes(q)));
-  return `<div class="page"><div class="page-in narrow"><div class="shead"><h2>Browse channels</h2>${canWrite() ? '<button class="btn1 sm" data-a="newspace">New channel</button>' : ''}</div>
-    <label class="sfind big">${SEARCH}<input id="in-browseq" value="${esc(st.browseq || '')}" placeholder="Search channels" autocomplete="off"></label>
-    <div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by ${isFrozen(x.id) ? 'Deleted account' : '@' + esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isFrozen(x.id) ? '' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No channels match.</p>'}</div></div></div>`;
+  return `<div class="page"><div class="page-in narrow"><div class="shead"><h2>Browse channels</h2>${canWrite() ? '<button class="btn1 sm" id="browse-newch" data-a="newspace">New channel</button>' : ''}</div>
+    <label class="sfind big">${SEARCH}<input id="in-browseq" value="${esc(st.browseq || '')}" placeholder="Search channels" aria-label="Search channels" autocomplete="off"></label>
+    ${st.reads === 'loading' ? '<p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p>' : `<div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by ${isFrozen(x.id) ? 'Deleted account' : '@' + esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isFrozen(x.id) ? '' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No channels match.</p>'}</div>`}</div></div>`;
 }
 /* New space dialog */
 /* ---- channel info and moderation ----
@@ -1996,7 +2020,7 @@ function membersDlg(x) {
   const act = (k, u, label) => `<button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="${k}" data-id="${esc(u)}" data-sp="${x.id}"><span>${label}</span></button>`;
   const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}${m.u === me() ? '<small>You</small>' : ''}</span>${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : ''}</li>`;
   const bans = (BANS[x.id] || []).slice().sort((a, b) => b.at - a.at);
-  return `<div class="scrim ce-scrim" data-a="membersclose"></div><div class="dialog chdlg cedlg mbdlg" role="dialog" aria-modal="true" aria-labelledby="mb-h">
+  return `<div class="scrim ce-scrim" data-a="membersclose"></div><div class="dialog chdlg cedlg mbdlg" role="dialog" aria-modal="true" aria-labelledby="mb-h" tabindex="-1">
     <div class="chdlg-h">${glyph(x)}<h3 id="mb-h">Members of ${nm}</h3><button class="iconbtn" data-a="membersclose" aria-label="Close">${I.x}</button></div>
     <div class="cebody">${st.reads === 'loading' ? '<p class="chnone" role="status" aria-busy="true">Loading members…</p>' : `<ul class="mlist" aria-label="Members">${list.map(row).join('')}</ul>`}
     ${own ? `<h4 class="mbhead">Banned</h4>${bans.length ? `<ul class="mlist" aria-label="Banned">${bans.map(b => `<li>${av(b.u, 'sm')}<span>@${esc(b.u)}</span><button type="button" class="btn2 sm" data-a="unban" data-id="${esc(b.u)}" data-sp="${x.id}">Unban</button></li>`).join('')}</ul>` : `<p class="chnone">Nobody is banned from ${nm}.</p>`}` : ''}</div></div>`;
@@ -2087,17 +2111,21 @@ function rmDlg() {
     <div class="chdlg-h"><h3 id="rm-h">Remove @${esc(p.u)}'s ${p.k === 'post' ? 'post' : 'ask'}</h3><button class="iconbtn" data-a="rmclose" aria-label="Close">${I.x}</button></div>
     <p>“${esc(clip(p.q, 120))}”</p>
     <form class="pform" data-form="rm:${p.id}">
-      <label>Reason, shown with the removal <textarea id="rm-note" rows="2" placeholder="Optional">${esc(r.note || '')}</textarea></label>
+      <label>Reason, shown with the removal <textarea id="rm-note" rows="2" placeholder="Optional"${r.err ? ' aria-invalid="true" aria-describedby="rm-note-err"' : ''}>${esc(r.note || '')}</textarea></label>
       <p class="cefine">Readers see that it was removed. Branches and replies under it go with it. @${esc(p.u)} is notified, with the reason.</p>
-      ${r.err ? `<p class="ferr">${esc(r.err)}</p>` : ''}<div class="dacts"><button type="button" class="btn2" data-a="rmclose">Cancel</button><button type="submit" class="btn1 danger">Remove</button></div></form></div>`;
+      ${r.err ? `<p class="ferr" role="alert" id="rm-note-err">${esc(r.err)}</p>` : ''}<div class="dacts"><button type="button" class="btn2" data-a="rmclose">Cancel</button><button type="submit" class="btn1 danger">Remove</button></div></form></div>`;
 }
+/* closing Remove… (Cancel, Close, the scrim, Escape) puts focus back on the card's "…" button that opened it */
+function closeRm() { const pid = st.rm?.pid; st.rm = null; render(); app.querySelector(`[data-m="more:t:${CSS.escape(pid || '')}"]`)?.focus({ preventScroll: true }); }
+/* closing New channel puts focus back on the control that opened it */
+function closeNewSpace() { const from = st.creatingFrom; st.creating = null; st.creatingFrom = null; render(); findSig(from)?.focus({ preventScroll: true }); }
 function newSpaceDlg() {
   const c = st.creating; if (!c) return '';
   return `<div class="scrim" data-a="newspaceclose"></div><div class="dialog nsdlg" role="dialog" aria-modal="true" aria-labelledby="ns-h"><h3 id="ns-h">New channel</h3>
-    <form class="pform" data-form="newspace:x"><label>Name<span class="hwrap"><span>#</span><input id="ns-name" value="${esc(c.name)}" placeholder="reading-group" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers and dashes.</small></label>
+    <form class="pform" data-form="newspace:x"><label>Name<span class="hwrap"><span>#</span><input id="ns-name" value="${esc(c.name)}" placeholder="reading-group" autocomplete="off" spellcheck="false"${c.err ? ' aria-invalid="true" aria-describedby="ns-err"' : ''}></span><small>Lowercase letters, numbers and dashes.</small></label>
     <label>What is it for?<textarea id="ns-desc" rows="2" placeholder="One or two sentences shown at the top of the channel">${esc(c.desc)}</textarea></label>
-    <div class="nsvis">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people you add can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
-    ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}${st.offline ? '<p class="ferr" role="status">Creating a channel needs a connection.</p>' : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1"${st.offline ? ' disabled' : ''}>Create channel</button></div></form></div>`;
+    <div class="nsvis" role="radiogroup" aria-label="Visibility">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people you add can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
+    ${c.err ? `<p class="ferr" id="ns-err" role="alert">${esc(c.err)}</p>` : ''}${st.offline ? '<p class="ferr" role="status">Creating a channel needs a connection.</p>' : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1"${st.offline ? ' disabled' : ''}>Create channel</button></div></form></div>`;
 }
 function createSpace() {
   const c = st.creating, name = $('#ns-name').value.trim().toLowerCase().replace(/^#/, ''), desc = $('#ns-desc').value.trim(), vis = $('input[name="nsvis"]:checked')?.value || 'open';
@@ -2118,34 +2146,39 @@ function renderNetwork() {
   const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space);
   const navTop = d === 'a' ? '' : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
-  const empty = locked ? `<div class="row"><p class="empty saved-empty">This channel is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
+  /* while the feed's read is pending (Reads: Loading): one placeholder card in place of the threads and the empty line */
+  const loading = st.reads === 'loading' && !locked;
+  const empty = loading ? '' : locked ? `<div class="row"><p class="empty saved-empty">This channel is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
     : st.space === 'saved' && !posts.length ? `<div class="row">${savedEmpty()}<div></div></div>`
-    : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <button class="tlink inl" data-a="browse">Browse channels</button></p><div></div></div>'
+    : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <a class="tlink inl" href="#browse" data-a="browse">Browse channels</a></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
   /* no composer in a locked, frozen or not-joined channel, or on Home and Saved with no channel to post to */
   const noComposer = locked || (SP[st.space] && ((!isJoined(st.space) && st.auth === 'in') || isFrozen(st.space))) || ((st.space === 'home' || st.space === 'saved') && !postable().length);
   $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${SP[st.space] && isFrozen(st.space) ? `<div class="row new-row">${frozenBanner(st.space)}<div></div></div>` : ''}${noComposer ? '' : composerOrLock(v)}
-    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.summary && st.loadingSummaries ? '' : p.summary && st.offline && p.k === 'post' ? '<div class="stick" role="status"><p class="empty">Available when online.</p></div>' : p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}${siteFoot()}</div></div></div>`;
+    ${empty}${loading ? '<div class="row"><div class="card skel" id="k-feedload" role="status" aria-label="Loading" aria-busy="true"><span></span><span></span><span></span></div><div></div></div>' : ''}${(loading ? [] : posts).map(p => `<div class="row">${card(p)}<aside class="mgn">${p.summary && st.loadingSummaries ? '' : p.summary && st.offline && p.k === 'post' ? '<div class="stick" role="status"><p class="empty">Available when online.</p></div>' : p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}${siteFoot()}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
   if (v.ifs) mg.style.setProperty('--input-fs', v.ifs);
   if (ta && st.draft) ta.style.height = ta.scrollHeight + 'px';
   mg.scrollTop = top;
-  streamFor(st.space).forEach(p => p.k === 'ask' && !(p.summary && (st.offline || st.loadingSummaries)) && v.layout(p));
+  if (!loading) streamFor(st.space).forEach(p => p.k === 'ask' && !(p.summary && (st.offline || st.loadingSummaries)) && v.layout(p));
   mg.querySelectorAll('.stick.replies .graph[data-draw]').forEach(drawGraph);
   mg.scrollTop = top;
   const tabsEl = mg.querySelector('.tabs') || document.createElement('div'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
   let lastY = mg.scrollTop;
   const bar = () => { const y = mg.scrollTop, dy = y - lastY, el = $('#bar'); if (!el) return;
     if (st.keepBar) { st.keepBar = false; lastY = y; return; }  /* a jump from a notification keeps the app bar in view */
-    if (el.contains(document.activeElement)) { el.classList.remove('hid'); lastY = y; return; }  /* and so does focus in the bar */
+    if (st.barPinned) { el.classList.remove('hid'); lastY = y; return; }  /* and so does keyboard focus in the bar (not focus from a click) */
     if (y < 48 || st.menu) el.classList.remove('hid'); else if (dy > 4) el.classList.add('hid'); else if (dy < -4) el.classList.remove('hid');
     if (Math.abs(dy) > 4 || y < 48) lastY = y; };
-  edge(); mg.addEventListener('scroll', () => { edge(); bar(); $('#selbranch')?.remove(); $('#sellook')?.remove(); $('#citepop')?.remove(); }, { passive: true });
+  edge(); mg.addEventListener('scroll', () => { edge(); bar(); selClear(); $('#citepop')?.remove(); }, { passive: true });
   const ts = $('#k-tabs') || document.createElement('div'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
-  ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
+  /* centre the current chip when it is near or past an edge; its position is measured from the strip (the strip is
+     not positioned, so offsetLeft would count the brand and the scope button too) */
+  ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="page"]'); if (on) { const x = on.getBoundingClientRect().left - ts.getBoundingClientRect().left + ts.scrollLeft;
+    if (x + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || x < ts.scrollLeft + 40) ts.scrollLeft = x - ts.clientWidth / 2 + on.offsetWidth / 2; } }
   fade(); ts.addEventListener('scroll', fade, { passive: true });
   lastV = st.v;
 }
@@ -2161,13 +2194,15 @@ $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[da
 
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-a]'); if (!t) return;
+  /* links (channel chips, Saved, Go to Home, Browse channels) open in the page; a modified click is left to the browser */
+  if (t.tagName === 'A') { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return; e.preventDefault(); }
   const a = t.dataset.a, d = t.dataset;
   if (a === 'space') { st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; st.spq = '';
     if (SP[d.id] && st.auth === 'in') { const v = (VISITS[st.user] ||= []); v.splice(v.indexOf(d.id) >>> 0, v.includes(d.id) ? 1 : 0); v.unshift(d.id); SEEN[st.user + ':' + d.id] = true; }
     render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinChannel(d.id); render(); return; }
   if (a === 'leave') { const id = d.id, u = st.user; dropMember(id, u); if (sendOrHold({ kind: 'leave', undo: () => addMember(id, u) })) toast(`Left ${spName(id)}.`); if (isPrivate(id)) st.space = 'home'; render(); return; }
-  if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
+  if (a === 'newspace') { st.menu = null; st.creatingFrom = sigOf(t); st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
   if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { id: x.id, desc: x.desc || '', err: '' }; render(); $('#ce-desc')?.focus(); return; }
   if (a === 'cecancel') { closeChEdit(); return; }
   if (a === 'modlog') { st.modlog = true; render(); app.querySelector('.mldlg .iconbtn')?.focus(); return; }
@@ -2179,7 +2214,7 @@ app.addEventListener('click', e => {
   if (a === 'memask') { const sp = d.sp || st.chInfo; st.memberAct = { sp, u: d.id, k: d.k, from: st.menu, adm: admissionOf(sp, d.id) }; st.menu = null; render(); app.querySelector('[data-a="memno"].btn2')?.focus(); return; }
   if (a === 'memno') { closeMemberAct(); return; }
   if (a === 'memyes') { const m = st.memberAct; if (m.k === 'ban') banMember(m.sp, m.u); else removeMember(m.sp, m.u, m.adm); closeMemberAct(); return; }
-  if (a === 'unban') { const l = BANS[d.sp] || [], i = l.findIndex(b => b.u === d.id); if (i >= 0) l.splice(i, 1); MODLOG.push({ k: 'unban', s: d.sp, u: d.id, by: me(), at: tick() }); toast(`Unbanned @${d.id}.`); render(); return; }
+  if (a === 'unban') { const l = BANS[d.sp] || [], i = l.findIndex(b => b.u === d.id); if (i >= 0) l.splice(i, 1); MODLOG.push({ k: 'unban', s: d.sp, u: d.id, by: me(), at: tick() }); toast(`Unbanned @${d.id}.`); render(); app.querySelector('.mbdlg')?.focus({ preventScroll: true }); return; }
   if (a === 'chlinknew') { const sp = st.chInfo, mk = () => { CH_LINKS.push({ id: 'cl' + (++seq), sp, code: newChCode(), created: new Date(NOW).toISOString(), expires: new Date(NOW + 7 * 864e5).toISOString(), state: 'open' }); toast('Invite link created.'); };
     /* the server makes the code, so a link that is not sent shows nothing in the list */
     sendOrHold({ kind: 'chlink', send: mk }); render(); return; }
@@ -2188,12 +2223,13 @@ app.addEventListener('click', e => {
   if (a === 'chlinkrevoke') { CH_LINKS.find(x => x.id === d.id).state = 'revoked'; toast('Link revoked.'); render(); return; }
   if (a === 'chlinkundo') { CH_LINKS.find(x => x.id === d.id).state = 'open'; toast('Link restored.'); render(); return; }
   if (a === 'rmopen') { st.menu = null; st.rm = { pid: d.id, note: '' }; render(); $('#rm-note')?.focus(); return; }
-  if (a === 'rmclose') { st.rm = null; render(); return; }
+  if (a === 'rmclose') { closeRm(); return; }
   if (a === 'chinfo') { st.chInfo = d.id; render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
   if (a === 'chinfoclose') { const id = st.chInfo; st.chInfo = null; st.chEdit = null; st.modlog = false; st.members = false; st.chLinks = false; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
-  if (a === 'newspaceclose') { st.creating = null; render(); return; }
-  if (a === 'browse') { st.menu = null; st.screen = 'browse'; render(); $('#in-browseq')?.focus({ preventScroll: true }); return; }
-  if (a === 'spscope') { st.spScope = d.s; st.menu = null; render(); return; }
+  if (a === 'newspaceclose') { closeNewSpace(); return; }
+  /* Browse is a page: its heading takes focus, as on the other pages */
+  if (a === 'browse') { st.menu = null; st.screen = 'browse'; render(); const h = $('#k-page h2'); h?.setAttribute('tabindex', '-1'); h?.focus({ preventScroll: true }); return; }
+  if (a === 'spscope') { st.spScope = d.s; st.menu = null; render(); app.querySelector('[data-m="hscope"]')?.focus({ preventScroll: true }); return; }
   if (a === 'star') { e.stopPropagation(); const s0 = (STARRED[st.user] ||= []), i = s0.indexOf(d.id); if (i < 0) s0.push(d.id); else s0.splice(i, 1); render(); return; }
   if (a === 'seccol') { st.secCol = { ...(st.secCol || {}), [d.k]: !(st.secCol || {})[d.k] }; render(); return; }
   if (a === 'ask' && st.asking === d.id) { /* the Reply button again: close an empty composer, else go back to it */
@@ -2204,23 +2240,28 @@ app.addEventListener('click', e => {
   if (a === 'askfrom') { if (st.brReplying?.endsWith('/top')) st.brReplying = null; st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
-    const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+    const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); return; }
   if (a === 'laytoggle') { const flip = () => { st.ui.pl = st.ui.pl === 'b' ? 'a' : 'b'; }; flip(); sendOrHold({ kind: 'layout', undo: flip }); render(); app.querySelector('.hlay')?.focus(); return; }
-  if (a === 'sellook') { const p = byId(d.id); $('#selbranch')?.remove(); $('#sellook')?.remove(); getSelection()?.removeAllRanges();
+  if (a === 'sellook') { const p = byId(d.id); selClear(); getSelection()?.removeAllRanges();
     if (refused(p.s) || runBlocked(curModel())) { render(); return; }
     const nn = addBranch(p, 'r', lookPrompt(st.lookText), null, st.selBi, st.lookText);
     st.sel[d.id] = nn.id; st.asking = null; st.quote = null;
     sendOrHold({ kind: 'look', item: nn, undo: () => dropNode(p.id, nn), send: () => startRun(p.id, nn.id) }); render(); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
     if (a === 'askpass') q = blockText(blocksOf(pr)[+d.bi]);
-    $('#selbranch')?.remove(); $('#sellook')?.remove(); getSelection()?.removeAllRanges(); st.quote = { pid: d.id, text: q, open: false, bi: a === 'askpass' ? +d.bi : st.selBi }; st.asking = d.id; st.sel[d.id] = null; st.askPar = null; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
+    selClear(); getSelection()?.removeAllRanges(); st.quote = { pid: d.id, text: q, open: false, bi: a === 'askpass' ? +d.bi : st.selBi }; st.asking = d.id; st.sel[d.id] = null; st.askPar = null; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
   if (a === 'askclose') { st.asking = null; st.quote = null; st.askPar = null; render(); return; }
   if (a === 'brclose') { st.brReplying = null; render(); return; }
   if (a === 'rpclose') { st.replying = null; render(); return; }
   if (a === 'qexpand') { if (st.quote) st.quote.open = true; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
-  if (a === 'promote') { const P = byId(d.id), n = tree(P).nodes[d.node], id = 'new' + (++nseq);
-    D.posts.push({ id, s: P.s, u: n.u, k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, model: n.model || modelOf(P), from: { pid: d.id, nid: d.node } });
-    D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); goThread(id, undefined, { keepUrl: true }); return; }
+  /* Open as its own thread creates a thread (an item write): refused, nothing is made; not sent, the new card carries
+     "Not sent" and no confirmation toast */
+  if (a === 'promote') { const P = byId(d.id), n = tree(P).nodes[d.node], id = 'new' + (++nseq); st.menu = null;
+    if (refused(P.s)) { render(); return; }
+    const post = { id, s: P.s, u: n.u, k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, model: n.model || modelOf(P), from: { pid: d.id, nid: d.node } };
+    D.posts.push(post); D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id;
+    if (sendOrHold({ kind: 'promote', item: post, undo: () => { D.posts.splice(D.posts.indexOf(post), 1); delete PROMOTED[d.id + ':' + d.node]; } })) toast('Opened as its own thread.');
+    goThread(id, undefined, { keepUrl: true }); return; }
   if (a === 'gothread') { goThread(d.id); return; }
   if (a === 'gofrom') { goThread(d.id, d.node); return; }
   if (a === 'brreply') { st.brReplying = st.brReplying === d.k ? null : d.k; if (st.brReplying?.endsWith('/top')) { st.asking = null; st.askPar = null; } render(); document.getElementById('in-br:' + d.k.replace('/', ':'))?.focus(); return; }
@@ -2243,11 +2284,11 @@ app.addEventListener('click', e => {
     const prev = { ...run }; Object.assign(run, { attempt: run.attempt + 1, model: curModel(), fail: null, pay: null, note: null, status: 'queued', step: 0, text: '' });
     sendOrHold({ kind: 'again', undo: () => { Object.keys(run).forEach(k => delete run[k]); Object.assign(run, prev); }, send: () => startRun(d.id, d.node) }); render(); return; }
   if (a === 'nsretry' || a === 'nsdiscard') { const e1 = OUTBOX.filter(x => x.id === d.id); if (a === 'nsretry') obRetry(e1); else obDiscard(e1); return; }
-  if (a === 'obretry' || a === 'obdiscard') { const list = OUTBOX.filter(x => !x.item); if (a === 'obretry') obRetry(list); else obDiscard(list); return; }
+  if (a === 'obretry' || a === 'obdiscard') { const list = offScreen(); if (a === 'obretry') obRetry(list); else obDiscard(list); return; }
   if (a === 'upreload') { location.reload(); return; }
-  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (st.menu && d.m === 'acct' && e.detail > 0) $('#bar .menu')?.focus({ preventScroll: true }); else if (st.menu && (d.m === 'acct' || d.m.startsWith('more:'))) app.querySelector('.mpick .menu .mi:not([aria-disabled])')?.focus({ preventScroll: true }); else if (['model', 'space', 'send'].includes(d.m)) $('#in-new')?.focus({ preventScroll: true }); return; }
-  if (a === 'setmodel') { st.picked.model = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }  /* the effort steps down in curEffort() */
-  if (a === 'seteffort' || a === 'setspace') { if (a === 'seteffort') st.picked.effort = d.v; else st.newSpace = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
+  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (st.menu && d.m === 'acct' && e.detail > 0) $('#bar .menu')?.focus({ preventScroll: true }); else if (st.menu && (d.m === 'acct' || d.m.startsWith('more:'))) app.querySelector('.mpick .menu .mi:not([aria-disabled])')?.focus({ preventScroll: true }); else if (st.menu && d.m === 'hscope') app.querySelector('.mpick .menu [aria-checked="true"]')?.focus({ preventScroll: true }); else if (['model', 'space', 'send'].includes(d.m)) $('#in-new')?.focus({ preventScroll: true }); return; }
+  if (a === 'setmodel') { st.picked.effort = stepDown(st.picked.effort ?? ADMIN.effort, MODELS[d.v].efforts); st.picked.model = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
+  if (a === 'seteffort' || a === 'setspace') { if (a === 'seteffort') { st.picked.effort = d.v; st.picked.model = curModel(); } else st.newSpace = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
   if (a === 'notif') { openNotif(d.id); return; }
   if (a === 'notifall') { const un = notifs().filter(n => !n.read); un.forEach(n => { n.read = true; }); if (sendOrHold({ kind: 'read', undo: () => un.forEach(n => { n.read = false; }) })) toast('All notifications marked as read.'); render(); return; }
@@ -2287,11 +2328,13 @@ function lookPhrase(range, text) {
   const t = text.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''), n = t ? t.split(/\s+/).length : 0;
   return n >= 1 && n <= 4 ? t : null;
 }
-/* select text in an answer to branch from it: a mouse selection, or a keyboard one (selectionchange, 120 ms) */
+/* select text in an answer to branch from it: a mouse selection, or a keyboard one (selectionchange, 120 ms). Look up
+   and Branch here sit in one group, "Selection". */
+const selClear = () => $('#selwrap')?.remove();
 function showSelActions(keep) {
     const sel = getSelection(), t = sel && sel.toString().replace(/\s+/g, ' ').trim();
     if (keep && !t) return;  /* a selection that collapsed (the click on an action) leaves the actions in place */
-    $('#selbranch')?.remove(); $('#sellook')?.remove();
+    selClear();
     if (!t || t.length < 3 || !canWrite() || !sel.rangeCount) return;
     const an = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement), pr = an?.closest('.card .prose[id^="pr-"]');
     if (!pr || !pr.contains(sel.focusNode)) return;
@@ -2303,7 +2346,7 @@ function showSelActions(keep) {
     const tops = new Set([...sel.getRangeAt(0).getClientRects()].filter(x => x.width > 1).map(x => Math.round(x.top / 4)));
     const look = lookPhrase(sel.getRangeAt(0), st.selText), y = r.bottom - A.top + 8;
     if (look) st.lookText = look;
-    app.insertAdjacentHTML('beforeend', `${look ? `<button id="sellook" data-a="sellook" data-id="${pid}" style="top:${y}px">${SEARCH}Look up</button>` : ''}<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${y + (look ? 34 : 0)}px">${ARROW_REPLY}Branch here</button>`);
+    app.insertAdjacentHTML('beforeend', `<div id="selwrap" role="group" aria-label="Selection">${look ? `<button id="sellook" data-a="sellook" data-id="${pid}" style="top:${y}px">${SEARCH}Look up</button>` : ''}<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${y + (look ? 34 : 0)}px">${ARROW_REPLY}Branch here</button></div>`);
     const sb = $('#selbranch'), lk = $('#sellook'), w = Math.max(sb.offsetWidth, lk?.offsetWidth || 0), x = tops.size > 1 ? r.left - A.left : r.right - A.left - w;
     for (const el of [sb, lk]) if (el) { el.style.minWidth = w + 'px'; el.style.left = Math.max(8, Math.min(x, A.width - w - 8)) + 'px'; }
 }
@@ -2312,7 +2355,7 @@ let selT; document.addEventListener('selectionchange', () => { clearTimeout(selT
 /* while the actions show, Tab from the card (or from nothing focused) goes to Look up, else Branch here */
 document.addEventListener('keydown', e => {
   if (e.key !== 'Tab' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-  const b = $('#sellook') || $('#selbranch'), a = document.activeElement; if (!b || a === b || a?.id === 'selbranch') return;
+  const w = $('#selwrap'), b = w && (w.querySelector('#sellook') || w.querySelector('#selbranch')), a = document.activeElement; if (!b || w.contains(a)) return;
   if (!a || a === document.body || document.getElementById('card-' + b.dataset.id)?.contains(a)) { e.preventDefault(); b.focus(); }
 }, true);
 /* tree rows (branches, replies): Up and Down move, Left goes to the parent or collapses a reply, Right to the first
@@ -2379,22 +2422,40 @@ app.addEventListener('mousedown', e => {
    then a key form or remove confirm. Arrow keys move through open menus. */
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && st.ui.sd === 'b' && st.ui.sv === '3' && st.screen === 'network') { e.preventDefault(); st.menu = 'spsearch'; render(); $('#in-spq')?.focus(); return; }
+  /* a closed menu button: Down or Up opens its menu, with focus on the checked item, else the first */
+  const ae = document.activeElement;
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !st.menu && ae?.getAttribute?.('aria-haspopup') === 'menu' && ae.dataset.m && app.contains(ae)) {
+    e.preventDefault(); st.menu = ae.dataset.m; render(); const m = app.querySelector('.mpick .menu');
+    (m?.querySelector('[aria-checked="true"]') || m?.querySelector('.mi:not([aria-disabled="true"])'))?.focus({ preventScroll: true }); return;
+  }
+  const menuItems = () => [...app.querySelectorAll('.mpick .menu .mi')].filter(x => x.offsetParent && !x.matches('[aria-disabled="true"]'));
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && st.menu) {
-    const items = [...app.querySelectorAll('.mpick .menu .mi')].filter(x => x.offsetParent && !x.matches('[aria-disabled="true"]'));
+    const items = menuItems();
     if (!items.length) return; e.preventDefault();
     const i = items.indexOf(document.activeElement.closest?.('.mi')); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); return;
   }
+  /* with focus in an open menu: Home and End go to the first and last item, a letter to the next item that starts
+     with it, and Tab closes the menu and moves on from its button */
+  const inMenu = st.menu && ae?.closest?.('#app .mpick .menu');
+  if (inMenu && (e.key === 'Home' || e.key === 'End')) { const items = menuItems(); if (!items.length) return; e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); return; }
+  if (inMenu && e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const items = menuItems(), i = items.indexOf(ae.closest('.mi')), label = x => (x.querySelector('span:not(.glyph):not(.mi-ic)')?.textContent || x.textContent).trim().toLowerCase();
+    const to = [...items.slice(i + 1), ...items.slice(0, i + 1)].find(x => label(x).startsWith(e.key.toLowerCase()));
+    if (to) { e.preventDefault(); to.focus(); } return;
+  }
+  if (inMenu && e.key === 'Tab') { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
   if (e.key !== 'Escape') return;
   if (st.delAsk) { st.delAsk = null; render(); return; }
+  if (st.creating) { closeNewSpace(); return; }
   if (st.memberAct) { closeMemberAct(); return; }
-  if (st.rm) { st.rm = null; render(); return; }
+  if (st.rm) { closeRm(); return; }
   if (st.chEdit) { closeChEdit(); return; }
   if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
   if (st.chLinks) { st.chLinks = false; render(); app.querySelector('[data-a="chlinks"]')?.focus(); return; }
   if (st.members) { st.members = false; render(); app.querySelector('[data-a="members"]')?.focus(); return; }
   if (st.modlog) { st.modlog = false; render(); app.querySelector('[data-a="modlog"]')?.focus(); return; }
   if (st.chInfo) { const id = st.chInfo; st.chInfo = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
-  if ($('#selbranch')) { $('#selbranch').remove(); $('#sellook')?.remove(); return; }  /* the selection stays */
+  if ($('#selwrap')) { selClear(); return; }  /* the selection stays */
   const f = e.target.closest?.('form[data-form]');
   if (f) { const [k, pid] = f.dataset.form.split(':');
     if (k === 'mf') { st.asking = null; st.quote = null; st.askPar = null; render(); (app.querySelector(`#mr-${CSS.escape(pid)} .grow-r.sel`) || app.querySelector(`[data-a="ask"][data-id="${pid}"]`))?.focus({ preventScroll: true }); return; }
@@ -2411,7 +2472,7 @@ app.addEventListener('keydown', e => {
 app.addEventListener('input', e => {
   const t = e.target;
   /* editing the invite code after a check drops its result: the inviter and the sign-up buttons go until Continue */
-  if (t.id === 'in-code') { if (t.value !== st.code) { st.code = t.value; app.querySelectorAll('.authdlg .code-f ~ .inviter, .authdlg .code-f ~ .auth-acts').forEach(x => x.remove()); } return; }
+  if (t.id === 'in-code') { if (t.value !== (st.codeTyped ?? st.code)) { st.code = t.value; st.codeTyped = null; app.querySelectorAll('.authdlg .code-f ~ .inviter, .authdlg .code-f ~ .auth-acts').forEach(x => x.remove()); } return; }
   if (t.dataset.ce === 'desc' && st.chEdit) { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; }
   if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq' || t.id === 'in-admq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq', 'in-admq': 'admq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
@@ -2585,7 +2646,10 @@ const outMsg = () => `You're out of tokens until ${weekdayOf(RESET)}. You can st
 /* true when nothing can pay for a run on `model` now: included tokens are spent, the model takes included tokens,
    and the key rule does not hold (billing on the key, a model the Anthropic key can pay for, a valid key). Unknown
    while the usage reading failed. */
-const outOfTokens = (model = curModel()) => { if (st.reads === 'usage') return false; const P = MODELS[model].payers; if (!P.includes('included') || left() > 0) return false; return !(billing() === 'key' && P.includes('key:anthropic') && keys().anthropic?.status === 'working'); };
+/* a reading from before this week's reset is not current (offline in a tab left open across the reset): the ring and
+   the out-of-tokens check treat it like a failed read */
+const staleReading = () => st.offline && st.readAt < RESET - 7 * 864e5;
+const outOfTokens = (model = curModel()) => { if (st.reads === 'usage' || staleReading()) return false; const P = MODELS[model].payers; if (!P.includes('included') || left() > 0) return false; return !(billing() === 'key' && P.includes('key:anthropic') && keys().anthropic?.status === 'working'); };
 const resetShort = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d}d ${h % 24}h` : `${h}h`; };
 const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d} day${d === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
 /* charge a finished run (03 K8, K9): a key-only model bills its key; otherwise included tokens while any are left;
@@ -2608,7 +2672,14 @@ function charge(q, tok, model = ADMIN.def, ref = {}) {
 }
 let toastTimer;
 /* `alert`: a refusal, announced in a role="alert" region */
-function toast(t, o = {}) { st.toast = t; st.toastAlert = !!o.alert; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 4000); }
+/* Two regions stay mounted and empty between toasts (#toast-s, role="status"; #toast-a, role="alert"); a toast writes
+   its pill into one of them and the timer empties it, so re-renders never announce a toast again. */
+function toast(t, o = {}) { st.toast = t; st.toastAlert = !!o.alert; clearTimeout(toastTimer); paintToast(); toastTimer = setTimeout(() => { st.toast = ''; paintToast(); }, 4000); }
+function paintToast() {
+  const s = $('#toast-s'), a = $('#toast-a'); if (!s || !a) return;
+  const pill = st.toast ? `<div class="toast" id="toast">${esc(st.toast)}</div>` : '';
+  s.innerHTML = st.toast && !st.toastAlert ? pill : ''; a.innerHTML = st.toast && st.toastAlert ? pill : '';
+}
 /* refusals before or at send: a ban in the channel stops every write there; the mock bar's Writes: Refuse refuses */
 function refused(space) {
   if (space && st.auth === 'in' && isBanned(space, st.user)) { toast(`You are banned from ${spName(space)}.`, { alert: true }); return true; }
@@ -2624,8 +2695,9 @@ function runBlocked(model) {
 /* ---- connection and "Not sent" ----
    Offline (mock bar: Connection), a write is applied here at once and kept; its request fails, so it is "Not sent"
    until Retry sends it or Discard rolls it back (and puts its text back in its composer). A server limit (mock bar:
-   Limits, Writes: Rate limited) leaves a write unsent the same way, with the server's message. A write that made an
-   item shows "Not sent · Retry · Discard" under it; the others share one toast. */
+   Limits, Writes: Rate limited) leaves a write unsent the same way, with the server's message. A write whose item is
+   on screen shows "Not sent · Retry · Discard" under it; every other write (one with no item, or one whose item is not
+   on screen, such as a branch that is not the selected row) is counted in one shared toast. */
 const OUTBOX = [];
 let obSeq = 0;
 const RATE_MSG = 'Too many requests from your account. Try again in a minute.';
@@ -2652,8 +2724,19 @@ function restoreText(form, text) {
 }
 const dropNode = (pid, n) => { const l = EXTRA[pid] || [], i = l.indexOf(n); if (i >= 0) l.splice(i, 1); if (st.sel[pid] === n.id) st.sel[pid] = null; };
 const notSentLine = id => { const e = OUTBOX.find(x => x.id === id); return e ? `<div class="notsent"><span>${e.limit ? `Not sent: ${esc(e.limit)}` : 'Not sent'}</span><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsretry" data-id="${e.id}">Retry</button><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsdiscard" data-id="${e.id}">Discard</button></div>` : ''; };
-const outboxEl = () => { const list = OUTBOX.filter(e => !e.item); if (!list.length) return ''; const lim = list.find(e => e.limit)?.limit;
-  return `<div class="toast outbox" role="alert"><span>${list.length === 1 ? 'Not sent.' : `${list.length} changes not sent.`}${lim ? ' ' + esc(lim) : ''}</span><button type="button" data-a="obretry">Retry</button><button type="button" data-a="obdiscard">Discard</button></div>`; };
+/* runs after the page renders, so it can tell which items show their own line */
+const offScreen = () => OUTBOX.filter(e => !e.item || !app.querySelector(`.notsent [data-id="${e.id}"]`));
+/* the outbox toast and the upgrade notice are added once and then only their text changes while they show */
+function paintNotices() {
+  const list = offScreen(), ob = $('#ob-toast');
+  if (!list.length) ob?.remove();
+  else { const lim = list.find(e => e.limit)?.limit, t = `${list.length === 1 ? 'Not sent.' : `${list.length} changes not sent.`}${lim ? ' ' + lim : ''}`;
+    if (!ob) app.insertAdjacentHTML('beforeend', `<div class="toast outbox" id="ob-toast" role="alert"><span class="ob-t">${esc(t)}</span><button type="button" data-a="obretry">Retry</button><button type="button" data-a="obdiscard">Discard</button></div>`);
+    else if (ob.querySelector('.ob-t').textContent !== t) ob.querySelector('.ob-t').textContent = t; }
+  const up = $('#up-toast');
+  if (!st.upgrade) up?.remove();
+  else if (!up) app.insertAdjacentHTML('beforeend', '<div class="toast outbox upn" id="up-toast" role="alert"><span>Session was updated. Reload to continue.</span><button type="button" data-a="upreload">Reload</button></div>');
+}
 /* join: refused when banned or frozen; with a limit reached the join shows as done until Discard */
 function joinChannel(id) {
   if (isBanned(id, st.user)) { toast(`You are banned from ${spName(id)}.`, { alert: true }); return false; }
@@ -2677,7 +2760,8 @@ function composerOrLock(v) {
 }
 
 /* ---- token meter in the app bar (variants) ---- */
-/* With no current reading (mock bar: Reads, Usage fails) the ring draws its track only. Offline it keeps the last
+/* With no current reading (mock bar: Reads, Usage fails; or offline with a reading from before this week's reset) the
+   ring draws its track only. Offline it keeps the last
    reading and names when it was taken (st.readAt), with the date when that was not today. The ring is a link to
    Usage. */
 const readTime = ms => { const t = new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -2685,7 +2769,7 @@ const readTime = ms => { const t = new Date(ms).toLocaleTimeString('en-US', { ho
 function meter() {
   if (!isActive()) return '';
   const r = 7, c = 2 * Math.PI * r;
-  if (st.reads === 'usage') return `<a class="meter" href="#usage" data-ma="go" data-to="usage" aria-label="Included tokens left this week: unknown"><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/></svg></a>`;
+  if (st.reads === 'usage' || staleReading()) return `<a class="meter" href="#usage" data-ma="go" data-to="usage" aria-label="Included tokens left this week: unknown"><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/></svg></a>`;
   const u = used(), pct = Math.min(1, u / ALLOWANCE), l = left(), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
   const asOf = st.offline ? ` as of ${readTime(st.readAt)}` : '';
   const title = `${fmtTok(l, true)} of ${fmtTok(ALLOWANCE)} included tokens left this week${asOf}; resets in ${resetIn()}`;
@@ -2699,19 +2783,20 @@ function meter() {
 function savedBtn() {
   if (!isActive()) return '';
   const on = st.space === 'saved' && st.screen === 'network', n = Object.values(SAVED()).filter(Boolean).length, v = st.ui.savedbtn;
-  const attrs = `data-a="space" data-id="saved"${on ? ' aria-current="page"' : ''} aria-label="Saved${n ? `, ${n}` : ''}" title="Saved"`;
-  if (v === 'b') return `<button class="ghost hsv-b${on ? ' on' : ''}" ${attrs}>${I.save}<span>Saved</span></button>`;
-  if (v === 'c') return `<button class="iconbtn hsaved hsv-c${on ? ' on' : ''}" ${attrs}>${I.save}${n ? `<span class="hcount">${n}</span>` : ''}</button>`;
-  if (v === 'd') return `<button class="ghost hsv-d${on ? ' on' : ''}" ${attrs}>Saved</button>`;
-  if (v === 'e') return `<button class="hsv-e${on ? ' on' : ''}${n ? ' has' : ''}" ${attrs}>${I.save}${n ? `<span>${n}</span>` : ''}</button>`;
-  return `<button class="iconbtn hsaved${on ? ' on' : ''}" ${attrs}>${I.save}</button>`;
+  /* a link to /saved, with aria-current on /saved */
+  const attrs = `href="#saved" data-a="space" data-id="saved"${on ? ' aria-current="page"' : ''} aria-label="Saved${n ? `, ${n}` : ''}" title="Saved"`;
+  if (v === 'b') return `<a class="ghost hsv-b${on ? ' on' : ''}" ${attrs}>${I.save}<span>Saved</span></a>`;
+  if (v === 'c') return `<a class="iconbtn hsaved hsv-c${on ? ' on' : ''}" ${attrs}>${I.save}${n ? `<span class="hcount">${n}</span>` : ''}</a>`;
+  if (v === 'd') return `<a class="ghost hsv-d${on ? ' on' : ''}" ${attrs}>Saved</a>`;
+  if (v === 'e') return `<a class="hsv-e${on ? ' on' : ''}${n ? ' has' : ''}" ${attrs}>${I.save}${n ? `<span>${n}</span>` : ''}</a>`;
+  return `<a class="iconbtn hsaved${on ? ' on' : ''}" ${attrs}>${I.save}</a>`;
 }
 /* switches the feed between layout A (main column centred, side column to its right) and B (wider main
    column and narrower side, centred as a pair). Expand (arrows outward) goes to B, collapse (arrows inward) to A. */
 const LAY_EXPAND = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></svg>';
 const LAY_COLLAPSE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 2.5 9 7M9 3v4h4M2.5 13.5 7 9M7 13V9H3"/></svg>';
 function layoutBtn() {
-  if (st.screen !== 'network') return '';
+  if (st.screen !== 'network' || !isActive()) return '';
   const wide = st.ui.pl === 'b', label = wide ? 'Collapse' : 'Expand';
   return `<button class="hlay" data-a="laytoggle" aria-label="${label}" title="${label}">${wide ? LAY_COLLAPSE : LAY_EXPAND}</button>`;
 }
@@ -2721,13 +2806,13 @@ function appbar() {
   return `<header class="appbar">${brandBtn()}${headerSpaces()}
     <span class="grow"></span>${meter()}${savedBtn()}${layoutBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}" aria-label="Account${nUnread() ? `, ${noun(nUnread(), 'unread notification', 'unread notifications')}` : ''}">${av(st.user, 'sm')}${nUnread() ? '<span class="adot" aria-hidden="true"></span>' : ''}${I.down}</button>
-    ${open ? `<div class="menu right" role="menu" tabindex="-1"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff === 'admin' ? 'Admin' : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="notifications"><span>Notifications</span>${nUnread() ? `<b class="nbadge">${nUnread()}</b>` : ''}</button><div class="msep"></div><button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>${isAdmin() ? `<button class="mi" data-ma="go" data-to="admin"><span>Site Admin</span></button>` : ''}` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
-      <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
+    ${open ? `<div class="menu right" role="menu" aria-label="Account" tabindex="-1"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff === 'admin' ? 'Admin' : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
+      ${isActive() ? `<button class="mi" role="menuitem" data-ma="go" data-to="notifications"><span>Notifications</span>${nUnread() ? `<b class="nbadge">${nUnread()}</b>` : ''}</button><div class="msep"></div><button class="mi" role="menuitem" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" role="menuitem" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" role="menuitem" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>${isAdmin() ? `<button class="mi" role="menuitem" data-ma="go" data-to="admin"><span>Site Admin</span></button>` : ''}` : `<button class="mi" role="menuitem" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
+      <div class="msep"></div><button class="mi" role="menuitem" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
 /* ---- signed-out site: the open network with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
-const brandBtn = () => `<button class="brand home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
+const brandBtn = () => `<a class="brand home" href="#home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></a>`;
 const appbarOut = () => `<header class="appbar">${brandBtn()}${headerSpaces()}
   <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth" data-to="landing">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
@@ -2771,7 +2856,7 @@ function authScreen() {
     const C = CODE_COPY;
     /* in redeem mode (a waiting account) there is no Back, and a valid code goes on to the profile step */
     body = `<div class="auth-c">${st.redeemMode ? '' : back('landing')}<h2>${C.h}</h2>${C.p ? `<p>${C.p}</p>` : ''}
-      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"${st.codeErr ? ' aria-invalid="true" aria-describedby="code-err"' : ''}><button type="submit" class="btn1" id="code-go">${C.btn}</button></form>
+      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.codeTyped ?? st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"${st.codeErr ? ' aria-invalid="true" aria-describedby="code-err"' : ''}><button type="submit" class="btn1" id="code-go">${C.btn}</button></form>
       ${st.codeErr ? `<p class="ferr" role="alert" id="code-err">${esc(st.codeErr)}</p>` : ''}
       ${inv && !st.codeErr && !st.redeemMode ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
@@ -2796,7 +2881,7 @@ function authScreen() {
 
 /* ---- status page: signed in with X, no invite yet ----
    what is open now, and the code field */
-const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeem || '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1" id="redeem-go">${label}</button></form>${st.redeemErr ? `<p class="ferr" role="alert">${esc(st.redeemErr)}</p>` : ''}`;
+const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeemTyped ?? '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1" id="redeem-go">${label}</button></form>${st.redeemErr ? `<p class="ferr" role="alert">${esc(st.redeemErr)}</p>` : ''}`;
 function statusPage() {
   const m = meM();
   const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="network">Browse the network</button></div>`;
@@ -2828,14 +2913,18 @@ function treeA() {
 const TREE_COPY = [`Session is invite-only. You can have ${SLOTS} open invite links at a time. Each link works for one person. A slot frees when a link is used or revoked.`];
 function treeSection() {
   st.treeScope = 'all';
-  if (st.reads === 'invites') return '<section><h3>Invite tree</h3><p class="ferr">The invite tree could not be loaded.</p></section>';
-  if (st.reads === 'loading') return '<section><h3>Invite tree</h3><p class="sub" role="status" aria-busy="true">Loading the invite tree…</p></section>';
-  return `<section><h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}<div class="tgap"></div>${treeA()}</section>`;
+  /* the heading and the explanation stay while the tree loads or after its read failed */
+  const head = `<h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}`;
+  if (st.reads === 'invites') return `<section>${head}<p class="ferr">The invite tree could not be loaded.</p></section>`;
+  if (st.reads === 'loading') return `<section>${head}<p class="fine">Loading the invite tree…</p></section>`;
+  return `<section>${head}<div class="tgap"></div>${treeA()}</section>`;
 }
 function invSection() {
   /* every open link with Copy and a revoke x, a button for a new one, then the people you invited */
   /* a site admin has no cap: "N open", and the create button always shows */
-  if (st.reads === 'invites' || st.reads === 'loading') return `<section class="box invc"><div class="shead"><h3>Invite someone</h3></div>${st.reads === 'invites' ? '<p class="ferr">Your invites could not be loaded.</p>' : '<p class="sub" role="status" aria-busy="true">Loading…</p>'}</section>`;
+  /* while the invites load, or after their read failed, the box holds only that line */
+  if (st.reads === 'loading') return '<section class="box invc">Loading…</section>';
+  if (st.reads === 'invites') return '<section class="box invc"><p class="ferr">Your invites could not be loaded.</p></section>';
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = isAdmin() || used < SLOTS;
   const why = `You have ${SLOTS} open invites. One frees when it is used or revoked.`;
   const open = inv.filter(i => inviteState(i) === 'open'), L = x => inviteLink(x.code);
@@ -2894,17 +2983,19 @@ function usageTop() {
 function usageRunsSection() {
   /* each row: the question, then the share of the weekly allowance it used and the date */
   if (st.reads === 'runs') return `<section class="box"><h3>Recent runs</h3><p class="ferr" role="alert">Couldn't load your runs. Reload to try again.</p></section>`;
+  if (st.reads === 'runsloading') return '<section class="box"><h3>Recent runs</h3><p class="uempty" role="status" aria-label="Loading" aria-busy="true"></p></section>';
   const runs = usageRuns(), rq = r => r.missing ? `<span class="rq gone">${r.missing === 'removed' ? 'Removed' : 'No longer available'}</span>` : `<span class="rq">${esc(clip(r.q, 90))}</span>`;
   return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(r => `<div class="run re">${rq(r)}<span class="rpct">${r.bill && r.bill !== 'Included' ? esc(r.bill) : `${r.tok / ALLOWANCE < .005 ? '<1' : Math.round(r.tok / ALLOWANCE * 100)}%`} · ${runDay(r.at)}</span></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
 }
 function usagePage() {
   if (st.reads === 'usage') return `<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2><p class="ferr" role="alert">Couldn't load your usage. Reload to try again.</p></div></div>`;
+  if (st.reads === 'loading') return '<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2><p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p></div></div>';
   const hasKey = keys().anthropic?.status === 'working';
   return `<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2>
     ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
-      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label></section>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label>${st.billErr ? `<p class="ferr" role="alert">${esc(st.billErr)}</p>` : ''}</section>
     ${keysSection()}</div></div>`;
 }
 
@@ -2935,7 +3026,7 @@ function notifText(n) {
 const EMPTY_SAVE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5h7v11l-3.5-2.6-3.5 2.6Z"/></svg>';
 const EMPTY_BELL = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7.25a4 4 0 0 1 8 0v4.25l1 1.25H3Z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg>';
 const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3><p>${p}</p>${cta || ''}</div>`;
-const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.', '<button class="btn2 sm" data-a="space" data-id="home">Go to Home</button>')}</div>`;
+const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.', '<a class="btn2 sm" href="#home" data-a="space" data-id="home">Go to Home</a>')}</div>`;
 const notifEmpty = () => emptyBox(EMPTY_BELL, 'No notifications yet', 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.', '<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>');
 function notifPage() {
   if (st.reads === 'loading') return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall" disabled>Mark all as read</button></div><p class="sub" role="status" aria-busy="true">Loading notifications…</p></div></div>`;
@@ -2947,13 +3038,14 @@ function notifPage() {
     ${!list.length ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
     ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : notifEmpty()}</div></div>`;
 }
-/* opening a row marks it read; an invite_used row goes to Invites; a row whose thread is not known only marks it read */
+/* opening a row marks it read; an invite_used row goes to Invites; a row whose thread is gone marks it read and says
+   so (a thread the app has not loaded would open at its address instead; the mock has no fetch, so it says the same) */
 function openNotif(id) {
   const n = notifs().find(x => x.id === id); if (!n) return;
   if (!n.read) { n.read = true; sendOrHold({ kind: 'read', undo: () => { n.read = false; } }); }
   st.menu = null;
   if (n.k === 'invite_used') { st.screen = 'members'; render(); return; }
-  const p = byId(n.pid); if (!p) { render(); return; }
+  const p = byId(n.pid); if (!p) { toast('This thread is not available.'); render(); return; }
   let sel = n.rsel ?? (n.node && tree(p).nodes[n.node] ? n.node : undefined);
   goThread(p.id, sel);
 }
@@ -2993,6 +3085,7 @@ function adminPage() {
   const err = g => st.admErr?.[g] ? `<p class="ferr" role="alert">${esc(st.admErr[g])}</p>` : '';
   /* the settings read fails with the usage read (mock bar: Reads, Usage fails) */
   if (st.reads === 'usage') return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p><p class="ferr" role="alert">Couldn't load the settings. Reload to try again.</p></div></div>`;
+  if (st.reads === 'loading') return '<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p><p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p></div></div>';
   return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p>
     <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div>${err('def')}</section>
     <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section></div></div>`;
@@ -3042,10 +3135,12 @@ function renderMock() {
   const base = ['sol', 'ines.v', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
   /* a person with a change waiting for them (banned, removed) gets a persona button so the change can be seen */
   const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`]), ...Object.keys(PENDING).filter(waiting).map(u => [u, '@' + u])];
+  (st.extraPersonas || []).forEach(u => { if (!personas.some(([k]) => k === u)) personas.push([u, '@' + u]); });
   const cur = st.auth === 'out' ? 'out' : st.user;
   const sw = (k, label, opts) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${opts.map(([v, l]) => `<button data-mx="${k}" data-x="${v}" aria-pressed="${String(st[k]) === v}">${l}</button>`).join('')}</span></span>`;
-  /* Connection: online, offline, or offline with a usage reading taken on an earlier day (the ring's "as of") */
-  const conn = !st.offline ? 'on' : new Date(st.readAt).toDateString() === new Date(NOW).toDateString() ? 'off' : 'old';
+  /* Connection: online, offline, offline with a usage reading taken on an earlier day of this week (the ring's
+     "as of"), or offline with a reading from before this week's reset (no current reading) */
+  const conn = !st.offline ? 'on' : staleReading() ? 'prev' : new Date(st.readAt).toDateString() === new Date(NOW).toDateString() ? 'off' : 'old';
   const leaver = st.chInfo && st.members && (MEMBERSHIP[st.chInfo] || []).find(m => m.role !== 'owner' && m.u !== me());
   /* Member rejoins: the member of the open Remove confirm, else the same member as Member leaves, gets a new admission */
   const rejoiner = st.chInfo && st.members && isPrivate(st.chInfo) && ((st.memberAct && (MEMBERSHIP[st.chInfo] || []).find(m => m.u === st.memberAct.u)) || leaver);
@@ -3053,15 +3148,15 @@ function renderMock() {
   const fold = matchMedia('(max-width: 520px)').matches, shown = !fold || st.mkopen;
   const focusId = document.activeElement?.closest?.('#mock') ? document.activeElement.id : '';
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? (isActive() ? '' : '<button data-mo="link" title="Open an account invite link">Invited</button>') : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button></span></span>
+    <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? (isActive() ? '' : '<button data-mo="link" title="Open an account invite link">Invited</button>') : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button><button data-mo="chlinkbanned" title="As @ines.v, banned from #grant-review, open an invite link to it">Channel link, banned</button><button data-mo="chlinknm" title="As @jun.park, who is not in #grant-review, open a used invite link to it">Used link, not a member</button></span></span>
     ${fold ? `<button class="fsbtn" data-mx="mkopen" aria-expanded="${!!st.mkopen}">${st.mkopen ? 'Hide states' : 'Show states'}</button>` : ''}${!shown ? '' : `
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>
-    ${sw('reads', 'Reads', [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail'], ['invites', 'Invites fail'], ['loading', 'Loading']])}
+    ${sw('reads', 'Reads', [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail'], ['invites', 'Invites fail'], ['loading', 'Loading'], ['runsloading', 'Runs loading']])}
     ${sw('mrun', 'Runs', [['answer', 'Answer'], ['interrupt', 'Interrupt'], ['fail', 'Fail']])}
     ${failDropdown()}
     ${sw('mq', 'Queue', [['as', 'As is'], ['full', 'Full']])}
     ${sw('ml', 'Limits', [['as', 'As is'], ['reached', 'Reached']])}
-    <span class="mk"><span class="mkl">Connection</span><span class="seg">${[['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14']].map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
+    <span class="mk"><span class="mkl">Connection</span><span class="seg">${[['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14'], ['prev', 'Offline, reading from Nov 12']].map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
     ${sw('mw', 'Writes', [['accept', 'Accept'], ['refuse', 'Refuse'], ['rate', 'Rate limited']])}
     <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}${rejoiner ? `<button data-mx="rejoin" title="@${esc(rejoiner.u)} leaves and joins again with a new link">Member rejoins</button>` : ''}</span></span>`}`;
   if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
@@ -3078,8 +3173,10 @@ function findSig(g) {
   const q = [['a', 'data-a'], ['ma', 'data-ma'], ['k', 'data-k'], ['i', 'data-id'], ['n', 'data-node'], ['m', 'data-m'], ['v', 'data-v'], ['to', 'data-to']].filter(([k]) => g[k]).map(([k, at]) => `[${at}="${CSS.escape(g[k])}"]`).join('');
   return q ? app.querySelector(q) : null;
 }
-let lastFlow = null;
-function render() {
+let lastFlow = null, inRender = false, lastDown = -1e9;
+document.addEventListener('pointerdown', () => { lastDown = Date.now(); }, true);
+function render() { inRender = true; try { renderOnce(); } finally { inRender = false; } }
+function renderOnce() {
   const focusSig = sigOf(document.activeElement), drafts = {};
   app.querySelectorAll('#page textarea').forEach(t => { if (t.id && t.id !== 'in-new' && !t.id.startsWith('ce-') && t.value) drafts[t.id] = t.value; });
   renderInner();
@@ -3092,7 +3189,14 @@ function render() {
 }
 function renderInner() {
   renderMock();
-  if (!$('#shell')) { app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>'; lastV = null; $('#bar').addEventListener('focusin', () => $('#bar').classList.remove('hid')); }
+  if (!$('#shell')) {
+    app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div><div class="toastr" id="toast-s" role="status" aria-live="polite"></div><div class="toastr" id="toast-a" role="alert" aria-live="assertive"></div></div>'; lastV = null; paintToast();
+    /* keyboard focus in the app bar keeps it shown; focus within 1 s of a pointer press there does not. A re-render
+       that puts focus back on a rebuilt control keeps the flag as it was. */
+    const bar = $('#bar');
+    bar.addEventListener('focusin', () => { if (inRender) return; st.barPinned = Date.now() - lastDown > 1000; if (st.barPinned) bar.classList.remove('hid'); });
+    bar.addEventListener('focusout', e => { if (!inRender && !bar.contains(e.relatedTarget)) st.barPinned = false; });
+  }
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
   { const ts = $('#k-tabs'); if (ts && st.screen !== 'network') { const fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); }; fade(); ts.addEventListener('scroll', fade, { passive: true }); } }
   if (st.screen !== 'network' || st.menu) $('#bar').classList.remove('hid');
@@ -3100,11 +3204,10 @@ function renderInner() {
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
   else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' ? (isAdmin() ? adminPage() : notFoundPage()) : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page .page-in')?.insertAdjacentHTML('beforeend', siteFoot()); $('#k-page').scrollTop = keep; }
-  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #sellook, :scope > #citepop, :scope > .toast').forEach(x => x.remove());
+  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selwrap, :scope > #citepop').forEach(x => x.remove());
   citeReady();
-  if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
-  app.insertAdjacentHTML('beforeend', outboxEl() + (st.upgrade ? '<div class="toast outbox upn" role="alert"><span>Session was updated. Reload to continue.</span><button type="button" data-a="upreload">Reload</button></div>' : ''));
-  /* the sign-in dialog, also over "Invite required" for a waiting account (no-account, code and profile steps) */
+  paintNotices();
+  /* the sign-in dialog, also over the page of a waiting account (no-account, code and profile steps) */
   if (st.authOpen && (st.auth === 'out' || !isActive())) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
@@ -3113,7 +3216,6 @@ function renderInner() {
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : k0 === 'c' ? 'this comment and your replies under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const siteFoot = () => '<footer class="sfoot">Session · Report abuse: <a href="mailto:abuse@session.dev">abuse@session.dev</a></footer>';
-const toastEl = () => st.toast ? `<div class="toast" id="toast" role="${st.toastAlert ? 'alert' : 'status'}">${esc(st.toast)}</div>` : '';
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
@@ -3128,19 +3230,22 @@ function previewVariant(k) {
   if (k === 'meter') $('.meter')?.focus();
 }
 function signIn(u) {
-  st.authOpen = false; st.auth = 'in'; st.user = u; st.picked = { model: null, effort: null }; st.screen = member(u).status === 'active' ? 'network' : 'status'; st.menu = null; st.sel = {};
+  /* every account lands on the feed it was on (Home by default); a waiting account reads it under the invite banner.
+     "Invite required" opens only from the banner, the account menu, or a new identity with no invite. */
+  st.authOpen = false; st.auth = 'in'; st.user = u; st.picked = { model: null, effort: null }; st.screen = 'network'; st.menu = null; st.sel = {};
   if (!spaceList().some(x => isMemberOf(x.id, u)) && !isBanned('public', u)) addMember('public', u);
   /* a change another person made while this persona was away (a ban, a removal): its toast, on that channel */
   const ev = PENDING[u]?.shift(); if (ev) { st.space = ev.sp; st.screen = 'network'; toast(ev.text); }
   if (st.chLinkId && member(u).status === 'active') { useChLink(st.chLinkId); return; }
   /* a waiting account that holds an invite (it closed "Create your account" before creating) gets that step again */
-  if (member(u).status === 'waiting' && member(u).pendingInvite) { st.code = member(u).pendingInvite; openProfile(member(u), null); return; }
+  if (member(u).status === 'waiting' && member(u).pendingInvite) { st.code = member(u).pendingInvite; st.codeTyped = null; openProfile(member(u), null); return; }
   render();
 }
 /* /c/<name>#<code>: the code leaves the address and the channel opens. Signed out, the sign-in dialog says what the
    link is for; a waiting account redeems an account invite first; after either, the account joins. */
 function openChLink(lid) {
-  const l = CH_LINKS.find(x => x.id === lid); st.menu = null; st.confirm = null; st.chLink = l.sp; st.chLinkId = lid;
+  /* the link is the channel's address, so the channel's page is behind the dialog */
+  const l = CH_LINKS.find(x => x.id === lid); st.menu = null; st.confirm = null; st.chLink = l.sp; st.chLinkId = lid; st.screen = 'network'; st.space = l.sp; st.codeTyped = null;
   if (st.auth === 'out') { st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; st.redeemMode = false; render(); return; }
   if (!isActive()) { st.authOpen = true; st.flow = 'code'; st.redeemMode = true; st.code = ''; st.codeErr = ''; render(); return; }
   useChLink(lid);
@@ -3153,13 +3258,21 @@ function useChLink(lid) {
   else { addMember(sp, st.user); l.state = 'used'; l.usedBy = st.user; toast(`Joined ${spName(sp)}.`); }
   render();
 }
-const openProfile = (m, from) => { st.profile = { name: m.name, handle: m.u, err: '' }; st.profileFrom = from; st.authOpen = true; st.flow = 'profile'; st.redeemMode = false; st.redeemOrigin = null; render(); };
+const openProfile = (m, from) => { st.codeTyped = null; st.profile = { name: m.name, handle: m.u, err: '' }; st.profileFrom = from; st.authOpen = true; st.flow = 'profile'; st.redeemMode = false; st.redeemOrigin = null; render(); };
 const renameMember = (m, h) => { const old = m.u; for (const s in MEMBERSHIP) MEMBERSHIP[s].forEach(x => { if (x.u === old) x.u = h; }); m.u = h; };
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
-  if (p) { st.chLink = null; st.chLinkId = null; st.redeemMode = false; st.redeemOrigin = null; st.profileFrom = null; if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.code = ''; st.xacct = null; st.profile = null; st.fromLink = false; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
+  if (p) { st.chLink = null; st.chLinkId = null; st.codeTyped = null; st.redeemMode = false; st.redeemOrigin = null; st.profileFrom = null; if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.code = ''; st.xacct = null; st.profile = null; st.fromLink = false; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
   const o = e.target.closest('[data-mo]');
+  if (o) st.codeTyped = null;
   if (o && (o.dataset.mo === 'chlink' || o.dataset.mo === 'chlinkused')) { openChLink(o.dataset.mo === 'chlink' ? 'cl-open' : 'cl-used'); return; }
+  /* a banned person opens a working link: "You are banned from #grant-review.", and the channel stays locked */
+  if (o && o.dataset.mo === 'chlinkbanned') { st.chLink = null; st.chLinkId = null; if (st.auth !== 'in' || st.user !== 'ines.v') signIn('ines.v');
+    if (!isBanned('grants', 'ines.v')) { const at = tick(); (BANS.grants ||= []).push({ u: 'ines.v', at }); MODLOG.push({ k: 'ban', s: 'grants', u: 'ines.v', by: ownerOf('grants'), at }); }
+    dropMember('grants', 'ines.v'); openChLink('cl-open'); return; }
+  /* an active member who is not in the channel opens a used link */
+  if (o && o.dataset.mo === 'chlinknm') { st.chLink = null; st.chLinkId = null; st.extraPersonas = [...new Set([...(st.extraPersonas || []), 'jun.park'])];
+    if (st.auth !== 'in' || st.user !== 'jun.park') signIn('jun.park'); openChLink('cl-used'); return; }
   /* a waiting account opens /i#code: the redeem step with the code filled in, no Back */
   if (o && o.dataset.mo === 'link' && st.auth === 'in' && !isActive()) { Object.assign(st, { authOpen: true, flow: 'code', redeemMode: true, redeemOrigin: 'dialog', code: 'SESS-9TQ2-X8', codeErr: '', menu: null, confirm: null }); render(); return; }
   if (o) { const k = o.dataset.mo; st.auth = 'out'; st.authOpen = true; st.confirm = null; st.menu = null; st.codeErr = ''; st.chLink = null; st.chLinkId = null; st.redeemMode = false;
@@ -3173,7 +3286,7 @@ document.addEventListener('click', e => {
   const sv = e.target.closest('[data-msv]'); if (sv) { st.ui.sv = sv.dataset.msv; st.menu = null; st.screen = 'network'; if (st.ui.sd === 'b' && st.ui.sv !== '1') st.menu = null; render(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
   const x = e.target.closest('[data-mx]'); if (x) { const k = x.dataset.mx, v = x.dataset.x;
-    if (k === 'conn') { const was = st.offline; st.offline = v !== 'on'; st.readAt = v === 'old' ? Date.parse('2026-11-14T15:05:00Z') : NOW;
+    if (k === 'conn') { const was = st.offline; st.offline = v !== 'on'; st.readAt = v === 'old' ? Date.parse('2026-11-14T15:05:00Z') : v === 'prev' ? Date.parse('2026-11-12T15:05:00Z') : NOW;
       if (was && !st.offline) { st.loadingSummaries = true; setTimeout(() => { st.loadingSummaries = false; render(); }, 800); } }
     else if (k === 'upgrade') st.upgrade = !st.upgrade;
     else if (k === 'mkopen') st.mkopen = !st.mkopen;
@@ -3188,34 +3301,39 @@ app.addEventListener('click', e => {
   const t = e.target.closest('[data-ma]'); if (!t || (t.tagName === 'INPUT' && t.type === 'radio')) return;
   const a = t.dataset.ma, d = t.dataset;
   if (a === 'go') { if (t.tagName === 'A') { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); } st.screen = d.to; st.menu = null; if (d.to === 'network' && t.classList.contains('brand')) st.space = 'home'; render(); if ($('#k-page')) { $('#k-page').scrollTop = 0; const h = $('#k-page h2, #k-page h3'); h?.setAttribute('tabindex', '-1'); h?.focus({ preventScroll: true }); } return; }
-  if (a === 'flow') { st.flow = d.to; st.codeErr = ''; if (d.to === 'code') { st.intent = 'signup'; st.redeemMode = false; } render(); $('#in-code')?.focus(); return; }
-  if (a === 'redeemcode') { st.flow = 'code'; st.redeemMode = true; st.redeemOrigin = null; st.code = ''; st.codeErr = ''; render(); $('#in-code')?.focus(); return; }
+  /* "I have an invite code" leaves the link behind: Back from the code step shows the plain landing */
+  if (a === 'flow') { st.flow = d.to; st.codeErr = ''; st.codeTyped = null; if (d.to === 'code') { st.intent = 'signup'; st.redeemMode = false; st.fromLink = false; } render(); $('#in-code')?.focus(); return; }
+  if (a === 'redeemcode') { st.flow = 'code'; st.redeemMode = true; st.redeemOrigin = null; st.code = ''; st.codeTyped = null; st.codeErr = ''; render(); $('#in-code')?.focus(); return; }
   if (a === 'xauth') { st.provider = d.p || 'x'; st.xErr = ''; if (st.flow === 'landing') st.intent = st.fromLink ? 'signup' : 'signin'; st.flow = 'xauth'; render(); return; }
   if (a === 'openauth') { authFrom = sigOf(t); st.authOpen = true; st.flow = d.to || 'landing'; st.codeErr = ''; st.redeemMode = false; if (d.to === 'code') st.intent = 'signup'; render(); return; }
   if (a === 'closeauth') { closeAuth(); return; }
-  if (a === 'nolink') { st.fromLink = false; st.code = ''; st.intent = 'signin'; st.flow = 'landing'; lastFlow = null; render(); return; }
-  if (a === 'fill') { st.code = d.code; st.codeErr = ''; render(); return; }
+  if (a === 'nolink') { st.fromLink = false; st.code = ''; st.codeTyped = null; st.intent = 'signin'; st.flow = 'landing'; lastFlow = null; render(); return; }
+  if (a === 'fill') { st.code = d.code; st.codeTyped = null; st.codeErr = ''; render(); return; }
   if (a === 'xpick' || a === 'xgo') {
     /* the server refuses to start the sign-in (mock bar: Writes, Refuse or Rate limited) */
     if (a === 'xgo' && (st.mw === 'refuse' || st.mw === 'rate')) { st.xErr = st.mw === 'rate' ? 'Too many sign-in attempts. Try again in a minute.' : 'Sign-in is not available right now. Try again later.'; render(); return; }
     const x = a === 'xgo' ? st.mockX : d.x, m = MEMBERS.find(mm => mm.x === x);
     st.xacct = x; st.xErr = '';
-    /* an existing identity signs in and the code is ignored: a waiting account lands on "Invite required" */
+    /* an existing identity signs in and the code is ignored: a waiting account lands on the feed under the banner */
     if (m) { signIn(m.u); return; }
     /* a new identity: the waiting account is made first. With an open invite it holds the invite and the profile step
-       opens over "Invite required"; without one the no-account step opens there. */
+       opens over the feed it signed in from; without one the no-account step opens over "Invite required" (the app's
+       /welcome?new=1). */
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
     const a2 = X_ACCOUNTS.find(z => z.x === x), u = x.replace(/[^a-z0-9._]/g, '').slice(0, 20);
     if (!member(u)) MEMBERS.push({ created: true, u, name: a2.name, x, inviter: null, joined: new Date(NOW).toISOString(), status: 'waiting' });
     const ch = st.chLinkId; st.chLinkId = null; signIn(u); st.chLinkId = ch; st.authOpen = true;
     if (st.intent === 'signup' && inv) { st.profile = { name: a2.name, handle: u, err: '' }; st.profileFrom = null; st.redeemMode = false; st.flow = 'profile'; render(); return; }
-    st.flow = 'noaccount'; render(); return;
+    st.flow = 'noaccount'; st.screen = 'status'; render(); return;
   }
-  if (a === 'signout') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.xacct = null; st.menu = null; render(); return; }
+  if (a === 'signout') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeTyped = null; st.xacct = null; st.menu = null; st.space = 'home'; st.screen = 'network'; render(); return; }
   if (a === 'cancel') { st.confirm = null; render(); return; }
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
   if (a === 'waitlist') { st.authOpen = false; st.flow = 'landing'; st.screen = 'network'; st.space = 'home'; render(); return; }
-  if (a === 'newinvite') { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
+  /* the server allows 10 new links a day (mock bar: Limits, Reached); the button stays, since only the 3-open cap hides it */
+  if (a === 'newinvite') { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return;
+    if (st.ml === 'reached') { toast('You can make 10 invite links a day. Try again in 9 hours.', { alert: true }); render(); return; }
+    const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
   if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = inviteLink(i.code); try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
@@ -3224,32 +3342,36 @@ app.addEventListener('click', e => {
   if (a === 'keyask') { st.removing = d.k; render(); $('.kconfirm [data-ma="keykeep"]')?.focus(); return; }
   if (a === 'keykeep') { const k = st.removing; st.removing = null; render(); $(`[data-ma="keyask"][data-k="${k}"]`)?.focus(); return; }
   /* removing the Anthropic key returns billing to pause; a composer on a model nothing can pay for now falls back to the default (curModel) */
-  if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (d.k === 'anthropic') BILLING[st.user] = 'pause'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); $(`[data-ma="keyadd"][data-k="${d.k}"]`)?.focus(); return; }
+  if (a === 'keyremove') { if (refused()) { st.removing = null; render(); return; } delete keys()[d.k]; st.removing = null; if (d.k === 'anthropic') BILLING[st.user] = 'pause'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); $(`[data-ma="keyadd"][data-k="${d.k}"]`)?.focus(); return; }
 });
 app.addEventListener('change', e => {
   const t = e.target, k = t.dataset.adm; if (!k) return;
   if (k === 'def') setDefault(t.value);
   if (k === 'eff') setDefaultEffort(t.value);
 });
-app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
+/* a refused choice puts the stored one back and shows the server's message under the choices, until the next choice */
+app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { if (st.mw === 'refuse') { st.billErr = 'You don’t have permission to do this.'; render(); return; } st.billErr = ''; BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
 app.addEventListener('submit', e => {
   const f = e.target.closest('[data-mform]'); if (!f) return;
   e.preventDefault();
   const kind = f.dataset.mform;
+  /* the field keeps exactly what was typed; the canonical code goes only into the check. After the check focus goes to
+     the field (an open code, a refusal), except for an empty field, where it stays on the button. */
+  const EMPTY_CODE = 'Enter the code from your invite.';
   if (kind === 'code') {
-    const c = parseCode($('#in-code').value); st.code = c;
+    const raw = $('#in-code').value, c = parseCode(raw); st.code = c; st.codeTyped = raw;
     /* used, revoked, unknown or malformed codes get one message; a rate-limited check gets the server's */
     const inv = INVITES.find(i => i.code === c);
-    st.codeErr = !c ? 'Enter the code from your invite.' : st.mw === 'rate' ? ATTEMPTS_MSG : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
-    if (!st.codeErr && st.redeemMode) { if (st.auth === 'in' && meM()) { openProfile(meM(), st.redeemOrigin || 'welcome'); return; } st.profile.dead = false; st.profile.err = ''; st.redeemMode = false; st.flow = 'profile'; }
-    render(); return;
+    st.codeErr = !c ? EMPTY_CODE : st.mw === 'rate' ? ATTEMPTS_MSG : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
+    if (!st.codeErr && st.redeemMode) { if (st.auth === 'in' && meM()) { openProfile(meM(), st.redeemOrigin || 'welcome'); return; } st.profile.dead = false; st.profile.err = ''; st.redeemMode = false; st.flow = 'profile'; st.codeTyped = null; }
+    render(); if (st.flow === 'code' && st.codeErr !== EMPTY_CODE) $('#in-code')?.focus(); return;
   }
   if (kind === 'redeem') {
-    const c = parseCode($('#in-redeem').value), inv = INVITES.find(i => i.code === c); st.redeem = c;
-    st.redeemErr = !c ? 'Enter the code from your invite.' : st.mw === 'rate' ? ATTEMPTS_MSG : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
-    if (st.redeemErr) { render(); return; }
+    const raw = $('#in-redeem').value, c = parseCode(raw), inv = INVITES.find(i => i.code === c); st.redeem = c; st.redeemTyped = raw;
+    st.redeemErr = !c ? EMPTY_CODE : st.mw === 'rate' ? ATTEMPTS_MSG : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
+    if (st.redeemErr) { render(); if (st.redeemErr !== EMPTY_CODE) $('#in-redeem')?.focus(); return; }
     /* a valid code opens the profile step; the account becomes active on Create account */
-    st.code = inv.code; st.redeem = ''; openProfile(meM(), 'welcome'); return;
+    st.code = inv.code; st.redeem = ''; st.redeemTyped = null; openProfile(meM(), 'welcome'); return;
   }
   if (kind === 'profile') {
     const pf = st.profile, m0 = profileSelf(); pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase();
@@ -3285,9 +3407,11 @@ app.addEventListener('submit', e => {
 });
 let authFrom = null;
 const closeAuth = () => { const self = st.flow === 'profile' && profileSelf(); if (self && st.code) self.pendingInvite = st.code; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; render(); findSig(authFrom)?.focus({ preventScroll: true }); authFrom = null; };
+/* every dialog keeps focus inside it: Tab past the last control goes to the first, Shift+Tab before the first to the
+   last. The topmost dialog is the last one in the app (stacked dialogs are added after the one they sit over). */
 document.addEventListener('keydown', e => {
-  const dlg = $('.authdlg');
-  if (e.key === 'Tab' && dlg) { const fs = [...dlg.querySelectorAll('button, input, a[href], [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent); if (!fs.length) return;
+  const dlgs = app.querySelectorAll(':scope > .dialog, :scope > .authdlg'), dlg = dlgs[dlgs.length - 1];
+  if (e.key === 'Tab' && dlg && !e.target.closest?.('#mock')) { const fs = [...dlg.querySelectorAll('button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent && !(x.type === 'radio' && !x.checked && dlg.querySelector(`input[type="radio"][name="${CSS.escape(x.name)}"]:checked`))); if (!fs.length) return;
     const i = fs.indexOf(document.activeElement); if (e.shiftKey && i <= 0) { e.preventDefault(); fs[fs.length - 1].focus(); } else if (!e.shiftKey && (i === fs.length - 1 || i < 0)) { e.preventDefault(); fs[0].focus(); } return; }
   if (e.key !== 'Escape') return;
   if (st.confirm) { st.confirm = null; render(); } else if (st.authOpen && (st.auth === 'out' || !isActive())) closeAuth();
