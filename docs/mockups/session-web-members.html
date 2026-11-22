@@ -2181,7 +2181,7 @@ function createSpace() {
   if (st.offline) return;  /* creating a channel is online-only */
   /* the server checks the daily limit before the name */
   c.err = !/^[a-z0-9][a-z0-9-]{1,29}$/.test(name) ? 'Use 2 to 30 lowercase letters, numbers or dashes.'
-    : st.ml === 'reached' || (CREATED[st.user] || []).filter(t => NOW - t < 864e5).length >= 5 ? `Couldn't create #${name}. Check your connection and try again.` : SP[name] ? `#${name} already exists.` : '';
+    : st.ml === 'reached' || (CREATED[st.user] || []).filter(t => NOW - t < 864e5).length >= 5 ? 'You can create 5 channels a day. Try again in 22 hours.' : SP[name] ? `#${name} already exists.` : '';
   if (c.err) { render(); $('#ns-name')?.focus(); return; }
   /* an empty description is sent as nothing: the channel has no About */
   const x = { id: name, name, title: name, desc, createdAt: new Date(NOW).toISOString(), av: 1 + hashN(name, 6), online: 1, posts: 0 };
@@ -2896,7 +2896,7 @@ const pMark = p => p === 'github' ? GHMARK : XMARK;
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth" data-p="x">${XMARK}${label}</button><button class="xbtn" data-ma="xauth" data-p="github">${GHMARK}${label.replace(/X$/, 'GitHub')}</button>`;
 /* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
 const CODE_COPY = { h: 'Join with invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
-const BAD_CODE = 'Something went wrong. Try again.';
+const BAD_CODE = "This invite code doesn't work. Ask the person who invited you for a new one.";
 const ATTEMPTS_MSG = 'Too many attempts. Try again in a few minutes.';
 /* a pasted link or a typed code: cut at the last '#' or '/', drop spaces and dashes, add a missing SESS prefix */
 const parseCode = s => { let t = s.trim().replace(/\/+$/, ''); t = t.slice(Math.max(t.lastIndexOf('#'), t.lastIndexOf('/')) + 1);
