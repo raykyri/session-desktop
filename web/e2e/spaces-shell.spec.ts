@@ -30,7 +30,7 @@ test.beforeAll(async ({ browser }) => {
   const many = await person(browser, STRIP_LOGIN);
   await many.join(lounge.id);
   for (let i = 1; i <= 8; i++) {
-    await many.join(await olga.channel(channelName(`shell-strip-${i}`)));
+    await many.join(await olga.channel(channelName(`strip-${i}`)));
   }
   // enough rows to scroll the feed
   await olga.all(
@@ -348,13 +348,16 @@ test.describe("narrow widths", () => {
     const strip = page.locator(".channel-strip");
     const names = await strip.getByRole("link").allTextContents();
     expect(names.length).toBeGreaterThanOrEqual(9);
-    const last = (names.at(-1) ?? "").replace(/^#/, "");
+    // A chip in the middle of the strip, past its right edge at these
+    // widths, with chips on both sides: centring it needs no clamped scroll.
+    const middle = (names[4] ?? "").replace(/^#/, "");
     for (const width of [700, 600, 520]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/c/${last}`);
+      await page.goto(`/c/${middle}`);
       const chip = strip.locator('[aria-current="page"]');
-      await expect(chip).toHaveText(`#${last}`);
-      // The chip lies inside the strip's box once the scroll has settled.
+      await expect(chip).toHaveText(`#${middle}`);
+      // The chip lies inside the strip's box once the scroll has settled; a
+      // chip wider than the strip covers it, centred.
       await expect
         .poll(
           () =>
@@ -362,7 +365,11 @@ test.describe("narrow widths", () => {
               const own = el.getBoundingClientRect();
               const box = el.closest(".channel-strip")?.getBoundingClientRect();
               if (!box) return "no strip";
-              return own.left >= box.left - 0.5 && own.right <= box.right + 0.5
+              const inside = own.left >= box.left - 0.5 && own.right <= box.right + 0.5;
+              const centred =
+                own.width > box.width &&
+                Math.abs(own.left + own.right - (box.left + box.right)) <= 2;
+              return inside || centred
                 ? "inside"
                 : `chip ${own.left}-${own.right}, strip ${box.left}-${box.right}`;
             }),
