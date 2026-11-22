@@ -9,7 +9,7 @@
 
 import { frozenMessage, msToIso, type NotifRec, type StoredRecord } from "@session/mutators";
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
-import test from "ava";
+import test, { type ExecutionContext } from "ava";
 
 import { safeReturn } from "../src/features/auth/AuthDialog.js";
 import { useAuthDialog } from "../src/features/auth/authDialog.js";
@@ -1173,6 +1173,48 @@ test.serial(
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitUntil(t, () => calls.length > 0, "the delete is sent");
     t.deepEqual(calls[0], ["comments.delete", { id: OWN_COMMENT }]);
+  },
+);
+
+/** Selects the branch row `label` in a thread's side column and answers its
+ * card's "…" menu items, then closes the menu. */
+async function branchMenu(t: ExecutionContext, thread: string, label: RegExp): Promise<string[]> {
+  fireEvent.click(within(side(thread)).getByRole("treeitem", { name: label }));
+  const card = side(thread).querySelector<HTMLElement>(".preview .who");
+  if (!card) throw new Error("no branch card");
+  fireEvent.click(within(card).getByRole("button", { name: "More" }));
+  const menu = await screen.findByRole("menu");
+  const items = within(menu)
+    .getAllByRole("menuitem")
+    .map((item) => item.textContent ?? "");
+  fireEvent.keyDown(menu, { key: "Escape" });
+  await waitUntil(t, () => screen.queryByRole("menu") === null, "the menu closes");
+  return items;
+}
+
+test.serial(
+  "Open as its own thread is offered only where the server accepts it: answered, not hidden (03 G5)",
+  async (t) => {
+    const UNANSWERED = "01M7HWGZJGT7JTFFVSYPX0NA01";
+    prepare = (replica) => {
+      const nodes = replica.rawAll("node").filter((x) => x.th === BRANCHED);
+      const hidden = nodes.find((x) => /^which lem stories/.test(x.q));
+      const answered = nodes.find((x) => /darknet/.test(x.q));
+      if (!hidden || !answered) throw new Error("no branches");
+      rewrite(replica, hidden, { mod: "hidden", modBy: "jun.park", u: "ines.v" });
+      replica.write([
+        { ...answered, id: UNANSWERED, q: "a branch with no answer yet", promoted: null },
+      ]);
+    };
+    await renderApp("/");
+    await waitUntil(t, () => side(BRANCHED) !== null, "the side column renders");
+    const OPEN = "Open as its own thread";
+    t.true((await branchMenu(t, BRANCHED, /how does the darknet/)).includes(OPEN), "answered");
+    t.false((await branchMenu(t, BRANCHED, /which lem stories/)).includes(OPEN), "hidden");
+    t.false(
+      (await branchMenu(t, BRANCHED, /a branch with no answer yet/)).includes(OPEN),
+      "no answer",
+    );
   },
 );
 

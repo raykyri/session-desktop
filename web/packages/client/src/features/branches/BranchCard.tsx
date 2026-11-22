@@ -76,7 +76,10 @@ export function BranchCard({
   const mine = me !== null && node.u === me;
 
   const actions: MoreAction[] = [];
-  if (writer && !pending && !promoted)
+  // Where the server's `promote` accepts it (03 G5): a branch with an
+  // answer that is not hidden, removed or deleted, and not yet promoted.
+  const promotable = answer !== undefined && node.mod === null && !node.del;
+  if (writer && !pending && !promoted && promotable)
     actions.push({
       label: "Open as its own thread",
       onSelect: () =>
