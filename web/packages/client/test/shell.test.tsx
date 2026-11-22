@@ -153,6 +153,25 @@ test.serial("while the replica loads: no empty line in the strip and no Saved co
   t.is(saved.textContent, "", "no count");
 });
 
+test.serial("Sign out shows the signed-out bar at once, on Home", async (t) => {
+  for (const user of [testUser(), waitingUser()]) {
+    const app = await renderApp("/browse", { user });
+    openMenu(within(bar()).getByRole("button", { name: /^Account/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Sign out" }));
+    await waitUntil(
+      t,
+      () => within(bar()).queryByRole("button", { name: "Sign in" }) !== null,
+      `${user.status}: the signed-out bar`,
+    );
+    t.is(app.router.state.location.pathname, "/", user.status);
+    t.is(within(bar()).queryByRole("button", { name: /^Account/ }), null, user.status);
+    t.truthy(within(bar()).getByRole("button", { name: "Join with invite" }), user.status);
+    t.is(screen.queryByText(/You don't have an invite yet/), null, `${user.status}: no banner`);
+    t.is(app.queryClient.getQueryData(["me"]), null, "the cache holds no account");
+    app.unmount();
+  }
+});
+
 test.serial("Site Admin is in the account menu for site admins only", async (t) => {
   await renderApp("/", { user: testUser({ login: "sol", isAdmin: true }) });
   openMenu(within(bar()).getByRole("button", { name: "Account" }));

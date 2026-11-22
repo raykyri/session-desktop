@@ -310,6 +310,23 @@ test.describe("signed in", () => {
     await tab.close();
   });
 
+  test("Sign out shows the signed-out bar at once, on Home", async ({ page }) => {
+    await page.goto(`/c/${lounge.name}`);
+    await expect(page.locator(".tcard").first()).toBeVisible();
+    const bar = page.getByRole("banner");
+    await bar.getByRole("button", { name: /^Account/ }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    // without a reload
+    await expect(bar.getByRole("button", { name: "Sign in" })).toBeVisible({ timeout: 3_000 });
+    await expect(bar.getByRole("button", { name: "Join with invite" })).toBeVisible();
+    await expect(bar.getByRole("button", { name: /^Account/ })).toHaveCount(0);
+    await expect(bar.getByRole("link", { name: /^Saved/ })).toHaveCount(0);
+    await expect(page).toHaveURL(`${APP_ORIGIN}/`);
+    // the session has ended on the server too: a reload stays signed out
+    await page.reload();
+    await expect(bar.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
   test("a member's bar", async ({ page }) => {
     await openHome(page);
     const bar = page.getByRole("banner");
