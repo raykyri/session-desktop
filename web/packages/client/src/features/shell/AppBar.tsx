@@ -80,9 +80,9 @@ export function AppBar(props: AppBarProps) {
   const { viewer } = props;
   const writer = canWrite(viewer);
   return (
-    <header className="app-bar bg-surface-header border-border-divider flex h-12 items-center border-b phone:gap-2">
+    <header className="app-bar bg-surface-header border-border-divider phone:gap-2 flex h-12 items-center border-b">
       <BrandButton />
-      <div className="ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5 phone:ml-0">
+      <div className="phone:ml-0 ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5">
         {props.showStrip ? (
           <>
             <ScopePicker

@@ -20,9 +20,9 @@ import {
   runControl,
   type FixtureReplica,
 } from "../src/replica/fixtureReplica.js";
+import { restoreDraft } from "../src/replica/live.js";
 import { channelByName } from "../src/replica/queries.js";
 import type { WriteOutcome } from "../src/replica/source.js";
-import { restoreDraft } from "../src/replica/live.js";
 import { QUEUE_FULL_MESSAGE, makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { claimLocalAccountState, clearLocalAccountState } from "../src/stores/localAccount.js";
@@ -489,12 +489,15 @@ test.serial(
     const side = () => document.querySelector<HTMLElement>(`[data-side="${FIRST}"]`) as HTMLElement;
     await waitUntil(t, () => side() !== null, "the side column renders");
     answerNotSent(replicaOf());
-    const branchRow = () => side().querySelector<HTMLElement>(`[role="treeitem"][data-row="${branch}"]`);
+    const branchRow = () =>
+      side().querySelector<HTMLElement>(`[role="treeitem"][data-row="${branch}"]`);
     fireEvent.click(branchRow() as HTMLElement);
     const text = await within(side()).findByText("My comment to delete");
 
     // the comment: focus goes to the selected row, the branch
-    fireEvent.click(within(text.closest(".brr") as HTMLElement).getByRole("button", { name: "More" }));
+    fireEvent.click(
+      within(text.closest(".brr") as HTMLElement).getByRole("button", { name: "More" }),
+    );
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
     fireEvent.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),

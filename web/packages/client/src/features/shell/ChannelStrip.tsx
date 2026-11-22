@@ -105,7 +105,8 @@ export function ChannelStrip({
     const el = strip.current;
     const chip = el?.querySelector<HTMLElement>('[aria-current="page"]');
     if (!el || !chip) return;
-    const left = chip.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+    const left =
+      chip.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
     const target = centredScrollLeft(
       { scrollLeft: el.scrollLeft, clientWidth: el.clientWidth },
       { left, width: chip.offsetWidth },

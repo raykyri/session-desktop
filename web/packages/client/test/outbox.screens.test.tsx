@@ -427,7 +427,8 @@ test.serial("an offline delete of a reply moves focus to the next row at once", 
   );
   await waitUntil(
     t,
-    () => document.activeElement === within(side()).queryByRole("treeitem", { name: /Olga's reply/ }),
+    () =>
+      document.activeElement === within(side()).queryByRole("treeitem", { name: /Olga's reply/ }),
     "focus on the next row",
   );
 });
