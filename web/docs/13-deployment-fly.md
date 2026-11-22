@@ -47,6 +47,7 @@ kill_timeout = "30s"
   SESSION_WEEKLY_TOKENS = "2000000"
   SESSION_OVERDRAFT_TOKENS = "200000"
   SESSION_RUN_MAX_TOKENS = "400000"
+  SESSION_INVITES_PER_MEMBER = "3"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"
@@ -98,9 +99,14 @@ to defaults:
 
 Session is invite-only in every deployment: an identity without an invite
 becomes a waiting account that reads open channels (plan `04` I4). There is
-no setting for it. A member's own weekly allowance is a `user_limits` row
-(`weekly_tokens`), so raising one member's allowance does not change anyone
-else's.
+no setting for it. `SESSION_INVITES_PER_MEMBER = "3"` is the number of
+account invites each member gets in all (plan `04` I2): a used link spends
+one, an open link holds one, and revoking an unused link gives it back; site
+admins have no limit. A member's own weekly allowance and the extra invites
+site admins gave them are a `user_limits` row (`weekly_tokens`,
+`extra_invites`), so changing one member's does not change anyone else's.
+Site admins give invites on Site Admin; the operator command is
+`node /app/packages/server/dist/admin.mjs --grant-invites <handle> <n>`.
 
 Deploying:
 
