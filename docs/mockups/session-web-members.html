@@ -1100,6 +1100,12 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .tog:disabled { opacity: .55; cursor: default; }
 .page-in.awide { max-width: 940px; }
 .adm h4 { margin: 18px 0 2px; font-size: var(--fs-sm); color: var(--t-heading); }
+/* Site Admin, Invites: a handle field and Look up, the member's line, a count and Give invites */
+.adm .kform + .kform, .adm .admline + .kform { margin-top: 8px; }
+.adm .kform .hwrap { flex: 1; min-width: 0; height: 34px; }
+.adm .kform .hwrap input { flex: 1; min-width: 0; height: 32px; border: 0; box-shadow: none; padding: 0 12px 0 2px; background: none; }
+.adm .kform input.admn { flex: none; width: 90px; }
+.admline { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--t-secondary); }
 /* the admin page: two radio groups */
 .adm + .adm { margin-top: 12px; }
 .adm h3 { margin: 0 0 10px; font-size: var(--fs-md); color: var(--t-heading); }
@@ -2530,8 +2536,11 @@ let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTime
 const ALLOWANCE = 2_000_000;                       /* included tokens per member per week */
 const RESET = Date.parse('2026-11-20T00:00:00Z');  /* weekly reset: Fridays 00:00 UTC, shown in the viewer's zone (Thursday west of UTC) */
 const WEEK = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'], TODAY = 3;
+/* Invites are a lifetime grant: each member gets SLOTS in total, plus any extra a site admin gives (INVITE_EXTRA).
+   A used link spends one, an open link holds one, and revoking an unused link (or one expiring unused) gives it
+   back: left = total - used - open. Site admins are not limited. */
 const SLOTS = 3;
-const OPEN_INVITES = SLOTS;
+const INVITE_EXTRA = { 'ines.v': 3 };
 const day = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const addDays = (iso, n) => new Date(Date.parse(iso) + n * 864e5).toISOString();
 /* `down`: the amount left is rounded down ("1.99M", "999k"); a value that would read 1000k reads "1M" */
@@ -2562,6 +2571,12 @@ const INVITES = [
   { code: 'SESS-K8CM-3T', by: 'sol', created: '2026-11-16T08:00:00Z', used: null },
   /* an open link whose stored code the server cannot decrypt (its secret key changed): "Code unavailable", no Copy */
   { code: 'SESS-QZ5R-7N', by: 'ines.v', created: '2026-11-12T10:00:00Z', used: null, unreadable: true },
+  /* the links the earlier members came in by (used links spend an invite), and one that expired unused (given back) */
+  { code: 'SESS-J7PK-2D', by: 'ines.v', created: '2026-10-01T10:00:00Z', used: 'jun.park' },
+  { code: 'SESS-L3TM-8W', by: 'ines.v', created: '2026-10-10T10:00:00Z', used: 'lettie' },
+  { code: 'SESS-X4VE-9H', by: 'ines.v', created: '2026-10-20T10:00:00Z', used: null, expires: '2026-10-27T10:00:00Z' },
+  { code: 'SESS-0D8Y-4F', by: 'hal_b', created: '2026-09-28T10:00:00Z', used: 'oduya' },
+  { code: 'SESS-M1RK-6C', by: 'hal_b', created: '2026-10-03T10:00:00Z', used: 'mira_k' },
 ];
 const X_ACCOUNTS = [
   { x: 'ines_v', name: 'Ines V.', note: 'Has a Session account' },
@@ -2674,9 +2689,14 @@ const ancestors = u => { const out = []; let m = member(u); while (m && m.invite
 const activeSince = m => m.activated || addDays(m.joined, 2);
 const canInvite = m => m?.status === 'active';
 const myInvites = () => INVITES.filter(i => i.by === st.user);
-const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : 'open';
-const openCount = () => myInvites().filter(i => inviteState(i) === 'open').length;
-const slotsUsed = () => openCount();
+const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : i.expires && Date.parse(i.expires) <= NOW ? 'expired' : 'open';
+const invitesOf = u => INVITES.filter(i => i.by === u);
+const inviteTotal = u => SLOTS + (INVITE_EXTRA[u] || 0);
+const invitesUsed = u => invitesOf(u).filter(i => inviteState(i) === 'used').length;
+const invitesOpen = u => invitesOf(u).filter(i => inviteState(i) === 'open').length;
+const invitesLeft = u => Math.max(0, inviteTotal(u) - invitesUsed(u) - invitesOpen(u));
+const openCount = () => invitesOpen(st.user);
+const canCreate = () => isAdmin() || invitesLeft(st.user) > 0;
 function newCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = n => Array.from({ length: n }, () => a[Math.floor(Math.random() * a.length)]).join(''); return `SESS-${r(4)}-${r(2)}`; }
 const usage = () => (USAGE[st.user] ||= [0, 0, 0, 0, 0, 0, 0]);
 const used = () => usage().reduce((a, b) => a + b, 0);
@@ -2973,13 +2993,13 @@ function invSection() {
   /* while the invites load, or after their read failed, the box holds only that line */
   if (st.reads === 'loading') return '<section class="box invc">Loading…</section>';
   if (st.reads === 'invites') return '<section class="box invc"><p class="ferr">Your invites could not be loaded.</p></section>';
-  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = isAdmin() || used < SLOTS;
-  const why = `You have ${SLOTS} open invites. One frees when it is used or revoked.`;
+  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), can = canCreate(), total = inviteTotal(st.user);
+  const why = `You have used your ${total} invites. An admin can give you more.`;
   const open = inv.filter(i => inviteState(i) === 'open'), L = x => inviteLink(x.code);
   /* deleted accounts are left out here; they stay in the invite tree as "Deleted account" */
   const ppl = MEMBERS.filter(m => m.inviter === st.user && !gone(m.u)).sort((a, b) => a.joined < b.joined ? 1 : -1);
   const revokeBtn = x => `<button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button>`;
-  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${SLOTS - used} of ${SLOTS} left`}</small></div>
+  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${invitesLeft(st.user)} of ${total} left`}</small></div>
     ${open.map(x => x.unreadable ? `<div class="ilink"><code>Code unavailable</code>${revokeBtn(x)}</div>` : `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button>${revokeBtn(x)}</div>`).join('')}
     ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
     ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
@@ -3135,7 +3155,17 @@ function adminPage() {
   if (st.reads === 'loading') return '<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p><p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p></div></div>';
   return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p>
     <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div>${err('def')}</section>
-    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section></div></div>`;
+    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section>
+    ${adminInvites(err)}</div></div>`;
+}
+/* Invites on Site Admin: look a member up by handle, see what they have left, and give more (1-100). Giving raises the
+   member's total, so their Invites page shows it. A deleted or unknown handle: "No account with that handle." */
+function adminInvites(err) {
+  const a = st.admInv || { h: '', n: '1', found: null }, u = a.found;
+  const line = u ? `@${esc(u)}: ${invitesLeft(u)} of ${inviteTotal(u)} invites left (${invitesUsed(u)} used${invitesOpen(u) ? `, ${invitesOpen(u)} open` : ''})` : '';
+  return `<section class="box adm"><h3>Invites</h3><p class="sub">Each member starts with ${SLOTS} invites. Give more to a member who has used theirs.</p>
+    <form class="kform" data-mform="admlook"><span class="hwrap"><span aria-hidden="true">@</span><input id="adm-h" value="${esc(a.h)}" placeholder="handle" autocomplete="off" spellcheck="false" aria-label="Handle"></span><button type="submit" class="btn2 sm">Look up</button></form>
+    ${line ? `<p class="admline" id="adm-line" role="status">${line}</p><form class="kform" data-mform="admgive" novalidate><input id="adm-n" class="admn" type="number" min="1" max="100" step="1" value="${esc(a.n)}" aria-label="Invites to give"><button type="submit" class="btn1 sm">Give invites</button></form>` : ''}${err('inv')}</section>`;
 }
 
 
@@ -3364,9 +3394,9 @@ const mockSig = el => { if (!el?.closest?.('#mock')) return null; if (el.id) ret
   const parts = ['mx', 'x', 'mt', 'mp', 'mo', 'mkx'].filter(k => el.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`); return parts.length ? parts.join('') : null; };
 const findMock = sig => sig ? document.querySelector('#mock ' + sig) : null;
 function renderMock() {
-  const base = ['sol', 'ines.v', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
+  const base = ['sol', 'ines.v', 'hal_b', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
   /* a person with a change waiting for them (banned, removed) gets a persona button so the change can be seen */
-  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`]), ...Object.keys(PENDING).filter(waiting).map(u => [u, '@' + u])];
+  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['hal_b', 'Member, no invites left'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`]), ...Object.keys(PENDING).filter(waiting).map(u => [u, '@' + u])];
   (st.extraPersonas || []).forEach(u => { if (!personas.some(([k]) => k === u)) personas.push([u, '@' + u]); });
   const cur = st.auth === 'out' ? 'out' : st.user;
   const sw = (k, label, opts) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${opts.map(([v, l]) => `<button data-mx="${k}" data-x="${v}" aria-pressed="${String(st[k]) === v}">${l}</button>`).join('')}</span></span>`;
@@ -3562,10 +3592,10 @@ app.addEventListener('click', e => {
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
   if (a === 'waitlist') { st.authOpen = false; st.flow = 'landing'; st.screen = 'network'; st.space = 'home'; render(); return; }
   /* the server allows 10 new links a day (mock bar: Limits, Reached); the button stays, since only the 3-open cap hides it */
-  if (a === 'newinvite') { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return;
+  if (a === 'newinvite') { if (!canCreate() || !canInvite(meM())) return;
     if (st.ml === 'reached') { toast('You can make 10 invite links a day. Try again in 9 hours.', { alert: true }); render(); return; }
     const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
-  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = inviteLink(i.code); try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
+  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if (!canCreate() || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = inviteLink(i.code); try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
   if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; st.keyDraft = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
@@ -3617,6 +3647,15 @@ app.addEventListener('submit', e => {
       if (from === 'welcome') { toast(`You're in. ${nameOf(inv.by)} invited you.`); signIn(m0.u); } else { signIn(m0.u); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); } return; }
     MEMBERS.push({ created: true, u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'active' });
     st.code = ''; signIn(pf.handle); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); return;
+  }
+  if (kind === 'admlook' || kind === 'admgive') {
+    const a = (st.admInv ||= { h: '', n: '1', found: null }); st.admErr = null;
+    if (kind === 'admlook') { a.h = $('#adm-h').value.trim().replace(/^@/, '').toLowerCase(); const m = member(a.h); a.found = m && !gone(m.u) ? m.u : null;
+      if (!a.found) st.admErr = { inv: 'No account with that handle.' }; render(); $(a.found ? '#adm-n' : '#adm-h')?.focus(); return; }
+    a.n = $('#adm-n').value.trim(); const n = Number(a.n);
+    if (!Number.isInteger(n) || n < 1 || n > 100) { st.admErr = { inv: 'Give between 1 and 100 invites.' }; render(); $('#adm-n')?.focus(); return; }
+    if (admRefused('inv')) return;
+    INVITE_EXTRA[a.found] = (INVITE_EXTRA[a.found] || 0) + n; toast(`Gave @${a.found} ${n} more ${n === 1 ? 'invite' : 'invites'}.`); render(); $('#adm-n')?.focus(); return;
   }
   if (kind.startsWith('key:')) {
     const id = kind.slice(4), P = PROVIDERS[id], v = f.querySelector('input').value.trim(); st.keyForm = id;
