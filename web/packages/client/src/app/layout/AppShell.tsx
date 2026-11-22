@@ -1,5 +1,4 @@
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/account.js";
@@ -16,7 +15,6 @@ import { ToastHost } from "../../features/shell/Toast.js";
 import { UpgradeNotice } from "../../features/shell/UpgradeNotice.js";
 import { channelOfPath, isFeedPath, showsChannelStrip } from "../../features/shell/screens.js";
 import { scopesFor, useLayoutPreference, useShellData } from "../../features/shell/shellData.js";
-import { useBarAlign } from "../../features/shell/useBarAlign.js";
 import { useBarAutoHide } from "../../features/shell/useBarAutoHide.js";
 import { viewerOf, type Viewer } from "../../features/shell/viewer.js";
 import { ReplicaProvider } from "../../replica/ReplicaProvider.js";
@@ -45,8 +43,7 @@ const BASE_UI_LAYER_SELECTOR =
  * The bar is positioned over the scroll container, so hiding or showing it
  * never moves the page (02 §2.2 "Placement"); every screen reserves its
  * height (`.feed-inner`, `.page-inner`). On feeds it hides while scrolling
- * down (`useBarAutoHide`, W2.3) and, in layout `centred` above 860 px, it is
- * a floating card aligned to the feed's columns (`useBarAlign`).
+ * down (`useBarAutoHide`, W2.3). It spans the window in every layout.
  *
  * One capture-phase keydown listener gives Escape to the top of the overlay
  * stack (`stores/overlays`), for the layers Base UI does not own (02 §10.2).
@@ -87,13 +84,11 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
   const showStrip = showsChannelStrip(pathname);
   const data = useShellData(viewer);
 
-  const [shell, setShell] = useState<HTMLDivElement | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const bar = useBarAutoHide(scroller, isFeed, menuOpen);
-  const alignment = useBarAlign(shell, scroller, layout, isFeed);
 
   // A new screen starts at its top (the mock's `scrollTop = 0` on a channel
   // change). A thread address (`?t=`) scrolls to its row once the feed has
@@ -131,17 +126,10 @@ function ShellBody({ viewer }: { viewer: Viewer }) {
     });
   }, [logout, navigate, router]);
 
-  const style = alignment
-    ? ({ "--bl": `${alignment.left}px`, "--bw": `${alignment.width}px` } as CSSProperties)
-    : undefined;
-
   return (
     <div
-      ref={setShell}
       className="app-shell bg-surface-feed text-fg-primary"
-      data-bar-aligned={alignment ? "" : undefined}
       data-bar-hidden={bar.hidden ? "" : undefined}
-      style={style}
     >
       <SessionBoot />
       <div

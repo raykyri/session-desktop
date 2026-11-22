@@ -1,7 +1,8 @@
-// The app shell end to end (02 §2.2, W2.2, W2.3, W2.7; 05 M4): where the app
-// bar sits per layout and width band, the bar hiding on scroll without moving
-// the page, the site footer on feeds and pages, the signed-out bar, and the
-// tab's client id across a reload and in a duplicated tab (01 Y3).
+// The app shell end to end (02 §2.2, W2.2, W2.3, W2.7; 05 M4): the app bar
+// spanning the window in both layouts and at every width, the bar hiding on
+// scroll without moving the page, the site footer on feeds and pages, the
+// signed-out bar, and the tab's client id across a reload and in a
+// duplicated tab (01 Y3).
 //
 // The feeds are a channel of olga's that the viewer joined, with posts
 // written through the sync routes before the specs run (`world.ts`).
@@ -48,8 +49,8 @@ interface Box {
   bottom: number;
 }
 
-/** The boxes the placement rules compare: the bar, the shell, and the main
- * and side cells of the first feed row. */
+/** The boxes the placement checks read: the bar, the shell, and the main and
+ * side cells of the first feed row. */
 async function shellBoxes(page: Page) {
   return page.evaluate(() => {
     const box = (element: Element | null): Box | null => {
@@ -71,8 +72,7 @@ type Boxes = Awaited<ReturnType<typeof shellBoxes>>;
 
 /**
  * Waits until the bar's left and right edges are `expected`'s, within half a
- * pixel (the columns are centred and can sit on a half pixel). The bar
- * re-measures one frame after a resize or a layout change.
+ * pixel: a resize or a layout change reaches the layout a frame later.
  */
 async function expectBarEdges(
   page: Page,
@@ -94,11 +94,6 @@ async function expectBarEdges(
     .toEqual([0, 0]);
 }
 
-const mainColumn = ({ main }: Boxes): [number, number] => [main?.left ?? NaN, main?.right ?? NaN];
-const bothColumns = ({ main, side }: Boxes): [number, number] => [
-  main?.left ?? NaN,
-  side?.right ?? NaN,
-];
 const fullWidth = (width: number) => (): [number, number] => [0, width];
 
 /** Home, a channel, Browse and Usage, with the heading of each page; a feed
@@ -130,52 +125,62 @@ test.describe("signed in", () => {
     await signIn(page, { login: LOGIN });
   });
 
-  test("the bar's placement per layout and width", async ({ page }) => {
-    await page.setViewportSize({ width: 1600, height: 900 });
+  test("the bar spans the window in both layouts and at every width", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await openHome(page);
     const toggle = (name: "Expand" | "Collapse") => page.getByRole("button", { name, exact: true });
     await expect(toggle("Expand")).toBeVisible();
-
-    // Centred above 1320 px: a floating card with the main column's left edge
-    // and width (600 px), at the top.
-    await expectBarEdges(page, mainColumn, "centred at 1600");
-    const centred = await shellBoxes(page);
-    expect(Math.round((centred.bar?.right ?? 0) - (centred.bar?.left ?? 0))).toBe(600);
-    expect(centred.bar?.top).toBe(0);
-    await expect(page.locator(".app-shell")).toHaveAttribute("data-bar-aligned", "");
-    // The card's narrower insets (`#shell.colbar .appbar`).
     const header = page.locator("header.app-bar");
-    await expect(header).toHaveCSS("padding-left", "10px");
-    await expect(header).toHaveCSS("padding-right", "8px");
-    await expect(header).toHaveCSS("border-left-width", "1px");
+    /** The bar's insets, borders and corners: the same in every layout. */
+    const expectFullWidthStyle = async (message: string) => {
+      expect(
+        await header.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return {
+            padding: [style.paddingLeft, style.paddingRight],
+            gap: style.columnGap,
+            borders: [
+              style.borderTopWidth,
+              style.borderRightWidth,
+              style.borderBottomWidth,
+              style.borderLeftWidth,
+            ],
+            radius: style.borderRadius,
+          };
+        }),
+        message,
+      ).toEqual({
+        padding: ["16px", "14px"],
+        gap: "12px",
+        borders: ["0px", "0px", "1px", "0px"],
+        radius: "0px",
+      });
+    };
 
-    // Centred from 861 to 1320 px: from the main column's left edge to the
-    // side column's right edge.
-    await page.setViewportSize({ width: 1150, height: 900 });
-    await expectBarEdges(page, bothColumns, "centred at 1150");
-    const pair = await shellBoxes(page);
-    expect(Math.round((pair.bar?.right ?? 0) - (pair.bar?.left ?? 0))).toBe(600 + 21 + 330);
+    // Centred at 1440 px: the bar's box is the viewport's width, at the top,
+    // with no rounded corners.
+    await expectBarEdges(page, fullWidth(1440), "centred at 1440");
+    const centred = await shellBoxes(page);
+    expect(centred.bar?.top).toBe(0);
+    expect(Math.round((centred.bar?.right ?? 0) - (centred.bar?.left ?? 0))).toBe(1440);
+    // the feed's main column is narrower than the bar
+    expect((centred.main?.right ?? 0) - (centred.main?.left ?? 0)).toBeLessThan(1440);
+    await expectFullWidthStyle("centred at 1440");
+    for (const width of [1150, 600]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectBarEdges(page, fullWidth(width), `centred at ${width}`);
+    }
 
-    // 860 px and below: full width.
-    await page.setViewportSize({ width: 600, height: 900 });
-    await expectBarEdges(page, fullWidth(600), "centred at 600");
-    await expect(page.locator(".app-shell")).not.toHaveAttribute("data-bar-aligned");
-
-    // Wide: full width at every width.
+    // Wide: the same at every width.
     await toggle("Expand").click();
     await expect(toggle("Collapse")).toBeVisible();
-    for (const width of [600, 1150, 1600]) {
+    for (const width of [600, 1150, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expectBarEdges(page, fullWidth(width), `wide at ${width}`);
     }
-    // Full width: the bar's own insets and only a bottom border.
-    await expect(header).toHaveCSS("padding-left", "16px");
-    await expect(header).toHaveCSS("padding-right", "14px");
-    await expect(header).toHaveCSS("border-left-width", "0px");
-
-    // Back to centred: the floating card again.
+    await expectFullWidthStyle("wide at 1440");
     await toggle("Collapse").click();
-    await expectBarEdges(page, mainColumn, "centred again at 1600");
+    await expect(toggle("Expand")).toBeVisible();
   });
 
   test("the bar hides on scroll down and returns on scroll up without moving the page", async ({
