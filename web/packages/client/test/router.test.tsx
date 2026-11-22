@@ -92,7 +92,7 @@ test.serial("a channel path with an invalid name is not found", async (t) => {
   await renderApp("/c/Not_A_Channel", { user: testUser() });
   await waitUntil(
     t,
-    () => screen.queryByRole("alert")?.textContent?.includes("Not found") === true,
+    () => screen.queryAllByRole("alert").some((node) => node.textContent?.includes("Not found")),
     "not found",
   );
 });

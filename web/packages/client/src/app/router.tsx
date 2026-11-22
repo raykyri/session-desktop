@@ -190,16 +190,22 @@ const channelRoute = createRoute({
   path: "/c/$name",
   validateSearch: validateFeedSearch,
   beforeLoad: ({ params, location, search }) => {
-    if (!CHANNEL_NAME.test(params.name)) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw notFound();
-    }
+    if (!CHANNEL_NAME.test(params.name)) return;
     if (location.hash === "") return;
     const code = fragmentCode(location.hash);
     if (code !== "") savePendingInvite({ kind: "channel", channel: params.name, code });
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw redirect({ to: "/c/$name", params, search, replace: true });
   },
+  // Not found is thrown from `loader`, not `beforeLoad`: the router hands a
+  // `notFound()` from `beforeLoad` to the root route, outside the shell.
+  loader: ({ params }) => {
+    if (!CHANNEL_NAME.test(params.name)) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw notFound();
+    }
+  },
+  notFoundComponent: RouteNotFoundPanel,
   component: ChannelFeedPage,
 });
 
@@ -258,13 +264,10 @@ const notificationsRoute = createRoute({
   component: NotificationsPage,
 });
 
-/** Site admins only: anyone else gets the not-found page (02 W8.2). */
-async function requireSiteAdmin(args: {
-  context: RouterContext;
-  location: { href: string };
-}): Promise<void> {
-  await requireSignedIn(args);
-  const viewer = await loadViewer(args.context.queryClient);
+/** Site admins only: anyone else gets the not-found page (02 W8.2), from
+ * `loader` (see the channel route). */
+async function requireSiteAdmin({ context }: { context: RouterContext }): Promise<void> {
+  const viewer = await loadViewer(context.queryClient);
   if (viewer.kind !== "member" || !viewer.isAdmin) {
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw notFound();
@@ -274,7 +277,9 @@ async function requireSiteAdmin(args: {
 const adminRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/admin",
-  beforeLoad: requireSiteAdmin,
+  beforeLoad: requireSignedIn,
+  loader: requireSiteAdmin,
+  notFoundComponent: RouteNotFoundPanel,
   component: lazyRouteComponent(loadAdminRoute, "AdminPage"),
   pendingComponent: RoutePendingPanel,
 });

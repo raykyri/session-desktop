@@ -119,7 +119,11 @@ test("a site admin sets the default model and effort; a member's composer starts
 
   // A member who is not a site admin gets the not-found page.
   await member.page.goto("/admin");
-  await expect(member.page.getByRole("alert")).toContainText("Not found");
+  // inside the shell: the toast region is an alert too, and the bar stays
+  await expect(
+    member.page.getByRole("alert").filter({ has: member.page.getByRole("heading") }),
+  ).toContainText("Not found");
+  await expect(member.page.locator("header.app-bar")).toBeVisible();
   await expect(member.page.getByRole("radiogroup", { name: "Default model" })).toHaveCount(0);
   await member.context.close();
 });
