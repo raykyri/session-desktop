@@ -136,6 +136,24 @@ test("Look up over two words writes a look-up under the answer and selects it", 
   page,
 }) => {
   await selectWords(page, 0, 2);
+  // both pills keep their label on one line at their 28 px height: the
+  // `.selwrap` box they sit in has no width of its own
+  for (const name of ["Look up", "Branch here"]) {
+    const pill = page.getByRole("button", { name });
+    expect((await pill.boundingBox())?.height, name).toBeCloseTo(28, 0);
+    const lines = await pill.evaluate((el) => {
+      // one client rect per line box of the label's text
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const tops = new Set<number>();
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const r of range.getClientRects()) if (r.width > 0) tops.add(Math.round(r.top));
+      }
+      return tops.size;
+    });
+    expect(lines, name).toBe(1);
+  }
   await page.getByRole("button", { name: "Look up" }).click();
   const row = side(page).getByRole("treeitem", { selected: true });
   await expect(row).toContainText("Bloom filters");
