@@ -324,6 +324,18 @@ test("at 400px wide an invite link is cut off inside its row and Copy and Revoke
   const copyBox = await copy.boundingBox();
   expect((codeBox?.x ?? 0) + (codeBox?.width ?? Infinity)).toBeLessThanOrEqual(copyBox?.x ?? 0);
   expect(await code.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  // plain text, not the Invites page's link chip (`.invbox .ilink`): no
+  // fill, padding, rounding or margin, and "Expires …" right under it
+  expect(
+    await code.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return [style.backgroundColor, style.padding, style.margin, style.borderRadius];
+    }),
+  ).toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
+  const expires = await row.locator("small").boundingBox();
+  expect(Math.abs((expires?.y ?? 0) - ((codeBox?.y ?? 0) + (codeBox?.height ?? 0)))).toBeLessThan(
+    1,
+  );
   // the full link is its title, and Copy copies all of it
   await expect(code).toHaveAttribute("title", link);
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);

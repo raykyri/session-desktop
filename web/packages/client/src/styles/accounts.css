@@ -459,7 +459,7 @@
   font-size: var(--fs-xs);
 }
 
-.ilink {
+.invbox .ilink {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -469,11 +469,11 @@
   background: var(--content-inset-bg);
 }
 
-.ilink + .ilink {
+.invbox .ilink + .ilink {
   margin-top: 0;
 }
 
-.ilink code {
+.invbox .ilink code {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -484,7 +484,7 @@
   color: var(--text-heading);
 }
 
-.ilink .btn1 {
+.invbox .ilink .btn1 {
   margin-right: 2px;
   height: 22px;
   padding: 0 10px;
