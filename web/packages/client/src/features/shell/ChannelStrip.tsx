@@ -3,7 +3,8 @@
 // unjoined chips under All; a trailing New channel button for writers; and
 // the scope's empty line. No scrollbar: the edges fade 40 px only while chips
 // are hidden past them, and the current chip is scrolled to the centre when
-// it lies within 40 px of an edge.
+// it lies within 40 px of an edge. Until the replica has the channels the
+// strip has no chips and no empty line (02 W9.1).
 
 import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef } from "react";
@@ -50,7 +51,8 @@ export function emptyStripLine(scope: ChannelScope): string {
 }
 
 export interface ChannelStripProps {
-  channels: readonly ShellChannel[];
+  /** Null while the replica loads them. */
+  channels: readonly ShellChannel[] | null;
   scope: ChannelScope;
   /** The channel whose feed is open, without `#`. */
   current: string | null;
@@ -113,12 +115,16 @@ export function ChannelStrip({
   }, [current, channels]);
 
   return (
-    <nav aria-label="Channels" className="flex min-w-0 flex-1">
+    <nav
+      aria-label="Channels"
+      aria-busy={channels === null ? true : undefined}
+      className="flex min-w-0 flex-1"
+    >
       <div
         ref={strip}
         className="channel-strip flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
       >
-        {channels.map((channel) => {
+        {(channels ?? []).map((channel) => {
           // as Browse and the channel header: no Join on a frozen channel
           const joinable = scope === "all" && canWrite && !channel.joined && !channel.frozen;
           return (
@@ -149,7 +155,7 @@ export function ChannelStrip({
             </span>
           );
         })}
-        {channels.length === 0 ? (
+        {channels?.length === 0 ? (
           <span className="text-fg-faint px-2 text-sm whitespace-nowrap">
             {emptyStripLine(scope)}
           </span>

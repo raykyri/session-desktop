@@ -56,13 +56,15 @@ export interface AppBarProps {
   scopes: readonly ChannelScope[];
   scope: ChannelScope;
   onScopeChange: (scope: ChannelScope) => void;
-  channels: readonly ShellChannel[];
+  /** Null while the replica loads them. */
+  channels: readonly ShellChannel[] | null;
   currentChannel: string | null;
   onJoin?: ((channel: ShellChannel) => void) | undefined;
   onNewChannel?: (() => void) | undefined;
   usage: UsageReading | null;
   usageOffline?: boolean;
-  savedCount: number;
+  /** Null while the replica loads the saves. */
+  savedCount: number | null;
   onSaved: boolean;
   layout: FeedLayout;
   onToggleLayout: () => void;
