@@ -186,7 +186,8 @@ test.serial("an inline composer: with text Close and its button go under the fie
 
 test.serial("empty states: Saved, and a channel without threads", async (t) => {
   await renderApp("/saved");
-  t.truthy(await screen.findByRole("heading", { name: "Nothing saved yet" }));
+  const heading = await screen.findByRole("heading", { name: "No saved threads" });
+  t.is(heading.parentElement?.querySelector("p"), null, "no explanation");
   t.truthy(screen.getByRole("link", { name: "Go to Home" }));
   const replica = made[made.length - 1];
   if (!replica) throw new Error("no replica");

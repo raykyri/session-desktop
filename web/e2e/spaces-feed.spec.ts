@@ -220,7 +220,7 @@ test("save: the toasts, the Saved count and the Saved feed", async ({ page }) =>
     .getByRole("button", { name: /^Saved/ })
     .click();
   await expect(toast(page)).toHaveText("Removed from saved.");
-  await expect(page.getByRole("heading", { name: "Nothing saved yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No saved threads" })).toBeVisible();
 });
 
 test("no model or effort text in a card", async ({ page }) => {

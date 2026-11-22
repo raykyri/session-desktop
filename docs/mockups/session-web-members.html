@@ -3077,8 +3077,8 @@ function notifText(n) {
 /* ---- empty states: an icon, a heading, one sentence on what appears here and a next step ---- */
 const EMPTY_SAVE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5h7v11l-3.5-2.6-3.5 2.6Z"/></svg>';
 const EMPTY_BELL = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7.25a4 4 0 0 1 8 0v4.25l1 1.25H3Z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg>';
-const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3><p>${p}</p>${cta || ''}</div>`;
-const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.', '<a class="btn2 sm" href="#home" data-a="space" data-id="home">Go to Home</a>')}</div>`;
+const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3>${p ? `<p>${p}</p>` : ''}${cta || ''}</div>`;
+const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'No saved threads', '', '<a class="btn2 sm" href="#home" data-a="space" data-id="home">Go to Home</a>')}</div>`;
 const notifEmpty = () => emptyBox(EMPTY_BELL, 'No notifications yet', 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.', '<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>');
 function notifPage() {
   if (st.reads === 'loading') return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall" disabled>Mark all as read</button></div><p class="sub" role="status" aria-busy="true">Loading notifications…</p></div></div>`;

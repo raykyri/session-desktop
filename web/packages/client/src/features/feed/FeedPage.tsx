@@ -69,11 +69,7 @@ function SavedEmpty() {
         <span className="eic" aria-hidden="true">
           <EmptySaveIcon />
         </span>
-        <h3>Nothing saved yet</h3>
-        <p>
-          Threads you save appear here, newest first. Save one with the bookmark at the bottom of
-          the thread; saving again removes it.
-        </p>
+        <h3>No saved threads</h3>
         <Link to="/" search={{}} className="btn2 sm">
           Go to Home
         </Link>

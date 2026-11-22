@@ -340,10 +340,8 @@ state, one row `[card | side column]` per thread, and the site footer (W2.7).
 The layout is the `prefs` record in the user log (01 C13, written with
 `prefs.set`), default `centred`; `navigation` holds the applied value so the
 first paint does not wait for the replica (ADR-20). Empty states:
-- Saved (`savedEmpty`): a box with a bookmark icon, "Nothing saved yet",
-  "Threads you save appear here, newest first. Save one with the bookmark at
-  the bottom of the thread; saving again removes it." and the button "Go to
-  Home";
+- Saved (`savedEmpty`): a box with a bookmark icon, the heading "No saved
+  threads" and the button "Go to Home";
 - Home: "Join a few channels to fill Home." followed by the inline link
   "Browse channels";
 - a channel without threads: "No threads here yet. Ask the first question.";
