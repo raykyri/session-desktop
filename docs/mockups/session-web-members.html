@@ -1125,8 +1125,15 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .run .rq.gone { color: var(--t-faint); }
 .chip.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
 .knote { margin: 0; color: var(--t-faint); font-size: var(--fs-xs); line-height: 1.45; }
-/* ---- mock bar: a select for the run failure reason ---- */
-.mksel { height: 27px; max-width: 100%; border: 0; border-radius: var(--r-lg); padding: 0 6px; background: var(--control); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; }
+/* ---- mock bar: a dropdown for the run failure reason (a listbox in the menu style) ---- */
+.mkdd { position: relative; display: inline-flex; max-width: 100%; }
+.mkdd-b { display: inline-flex; align-items: center; gap: 6px; height: 27px; max-width: 100%; border-radius: var(--r-lg); padding: 0 8px 0 10px; background: var(--control); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.mkdd-b:hover, .mkdd-b[aria-expanded="true"] { color: var(--t-heading); }
+.mkdd-b svg.i { width: 12px; height: 12px; color: var(--t-muted); }
+.menu.mkdd-l { z-index: 60; min-width: 220px; max-width: calc(100vw - 32px); }
+.mkdd-l:focus { outline: none; }
+.mkdd-l .mi.cur { background: var(--fill-hover); }
+.mkdd-l:focus-visible .mi.cur { box-shadow: inset 0 0 0 1.5px var(--accent); }
 @media (max-width: 520px) { .mockbar { gap: 6px 10px; } .mk { flex-wrap: wrap; max-width: 100%; } .seg button { padding: 4px 8px; } }
 </style>
 
@@ -3001,6 +3008,36 @@ function setSeedFail(v) {
   const r = SEED_FAIL.run, f = failOf(v), m = v === 'key:key_only' ? KEY_ONLY_MODEL : 'Gemini 3.8 Flash';
   clearTimeout(RUN_T[SEED_FAIL.id + ':r']); Object.assign(r, { status: 'failed', step: 0, text: v === MID_FAIL ? SEED_PARTIAL : '', fail: f.fail, pay: f.pay || null, model: m }); SEED_FAIL.model = m;
 }
+/* Run failure: a button showing the current reason and a listbox of FAIL_OPTS. Choosing a reason applies it at once
+   (setSeedFail). Up and Down step without wrapping, on the closed button too; Home and End go to the ends; Enter,
+   Space or a click on an option applies it and closes; Escape or a click outside closes. Focus goes back to the
+   button. The open list keeps focus itself and marks the current option with aria-activedescendant. */
+const failIdx = () => Math.max(0, FAIL_OPTS.findIndex(([v]) => v === st.mfail));
+function failDropdown() {
+  const i = failIdx(), open = !!st.failOpen;
+  return `<span class="mk"><span class="mkl" id="mk-fail-l">Run failure</span><span class="mkdd"><button type="button" id="mk-fail" class="mkdd-b" data-mfx="toggle" aria-haspopup="listbox" aria-expanded="${open}" aria-labelledby="mk-fail-l mk-fail"${open ? ' aria-controls="mk-fail-list"' : ''}><span>${esc(FAIL_OPTS[i][1])}</span>${I.down}</button>${open ? `<div class="menu mkdd-l" id="mk-fail-list" role="listbox" tabindex="-1" aria-labelledby="mk-fail-l" aria-activedescendant="mk-fail-o${i}">${FAIL_OPTS.map(([v, l], j) => `<div class="mi${j === i ? ' cur' : ''}" id="mk-fail-o${j}" role="option" aria-selected="${j === i}" data-mfail="${v}"><span>${esc(l)}</span>${j === i ? CHECK : ''}</div>`).join('')}</div>` : ''}</span></span>`;
+}
+function applyFail(v, { close = false } = {}) {
+  if (v !== st.mfail) { st.mfail = v; setSeedFail(v); }
+  if (close) st.failOpen = false;
+  render();
+  document.getElementById(st.failOpen ? 'mk-fail-list' : 'mk-fail')?.focus({ preventScroll: true });
+}
+document.addEventListener('keydown', e => {
+  const t = e.target; if (!t.closest?.('#mk-fail, #mk-fail-list')) return;
+  const i = failIdx(), last = FAIL_OPTS.length - 1;
+  const to = { ArrowDown: Math.min(last, i + 1), ArrowUp: Math.max(0, i - 1), Home: 0, End: last }[e.key];
+  if (to != null) { e.preventDefault(); e.stopPropagation(); applyFail(FAIL_OPTS[to][0]); return; }
+  if (t.id === 'mk-fail-list' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); applyFail(FAIL_OPTS[i][0], { close: true }); return; }
+  /* Tab closes the list and moves on from the button */
+  if (st.failOpen && (e.key === 'Escape' || e.key === 'Tab')) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } st.failOpen = false; render(); $('#mk-fail')?.focus({ preventScroll: true }); }
+}, true);
+document.addEventListener('click', e => {
+  const o = e.target.closest?.('[data-mfail]');
+  if (o) { applyFail(o.dataset.mfail, { close: true }); return; }
+  if (e.target.closest?.('[data-mfx="toggle"]')) { st.failOpen = !st.failOpen; render(); document.getElementById(st.failOpen ? 'mk-fail-list' : 'mk-fail')?.focus({ preventScroll: true }); return; }
+  if (st.failOpen) { st.failOpen = false; render(); $('#mk-fail')?.focus({ preventScroll: true }); }
+});
 function renderMock() {
   const base = ['sol', 'ines.v', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
   /* a person with a change waiting for them (banned, removed) gets a persona button so the change can be seen */
@@ -3014,18 +3051,22 @@ function renderMock() {
   const rejoiner = st.chInfo && st.members && isPrivate(st.chInfo) && ((st.memberAct && (MEMBERSHIP[st.chInfo] || []).find(m => m.u === st.memberAct.u)) || leaver);
   /* on phones the state switches fold behind one button, so the app keeps most of the screen */
   const fold = matchMedia('(max-width: 520px)').matches, shown = !fold || st.mkopen;
+  const focusId = document.activeElement?.closest?.('#mock') ? document.activeElement.id : '';
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? (isActive() ? '' : '<button data-mo="link" title="Open an account invite link">Invited</button>') : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button></span></span>
     ${fold ? `<button class="fsbtn" data-mx="mkopen" aria-expanded="${!!st.mkopen}">${st.mkopen ? 'Hide states' : 'Show states'}</button>` : ''}${!shown ? '' : `
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>
     ${sw('reads', 'Reads', [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail'], ['invites', 'Invites fail'], ['loading', 'Loading']])}
     ${sw('mrun', 'Runs', [['answer', 'Answer'], ['interrupt', 'Interrupt'], ['fail', 'Fail']])}
-    <span class="mk"><label class="mkl" for="mk-fail">Run failure</label><select id="mk-fail" class="mksel">${FAIL_OPTS.map(([v, l]) => `<option value="${v}"${st.mfail === v ? ' selected' : ''}>${l}</option>`).join('')}</select></span>
+    ${failDropdown()}
     ${sw('mq', 'Queue', [['as', 'As is'], ['full', 'Full']])}
     ${sw('ml', 'Limits', [['as', 'As is'], ['reached', 'Reached']])}
     <span class="mk"><span class="mkl">Connection</span><span class="seg">${[['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14']].map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
     ${sw('mw', 'Writes', [['accept', 'Accept'], ['refuse', 'Refuse'], ['rate', 'Rate limited']])}
     <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}${rejoiner ? `<button data-mx="rejoin" title="@${esc(rejoiner.u)} leaves and joins again with a new link">Member rejoins</button>` : ''}</span></span>`}`;
+  if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+  /* keep the open list inside the window */
+  { const l = $('#mk-fail-list'); if (l) { const r = l.getBoundingClientRect(), over = r.right - (innerWidth - 16); if (over > 0) l.style.left = -over + 'px'; } }
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 /* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
@@ -3142,7 +3183,6 @@ document.addEventListener('click', e => {
     render(); return; }
   const t = e.target.closest('[data-mt]'); if (t) { st.mt = t.dataset.mt; const u = usage(); const need = { norm: null, low: ALLOWANCE * .85, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
-document.addEventListener('change', e => { if (e.target.id === 'mk-fail') { st.mfail = e.target.value; setSeedFail(st.mfail); render(); } });
 const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, v.slice()]));
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-ma]'); if (!t || (t.tagName === 'INPUT' && t.type === 'radio')) return;
