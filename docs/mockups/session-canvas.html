@@ -24,7 +24,7 @@ Data model (in memory; a reload starts over)
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
 :root {
-  --page: #efece7; --grid: rgba(60,40,20,.07); --card: #ffffff; --card-m: #fbfaf8; --inset: #f5f2ee;
+  --page: #efece7; --grid: rgba(60,40,20,.07); --card: #ffffff; --card-m: #fbfaf8; --part-u: #ffffff; --part-m: #fcfbfa; --inset: #f5f2ee;
   --control: #efece8; --control-hover: #e6e2dc; --divider: #ebe7e2; --border-strong: #ddd7cf;
   --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --on-accent: #ffffff;
   --t-heading: #121617; --t-body: #33393b; --t-secondary: #4a5350; --t-faint: #686e6b; --t-dim: #9aa19d;
@@ -36,7 +36,7 @@ Data model (in memory; a reload starts over)
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  color-scheme: dark; --page: #151413; --grid: rgba(255,255,255,.05); --card: #211f1e; --card-m: #1d1c1b; --inset: #181716;
+  color-scheme: dark; --page: #151413; --grid: rgba(255,255,255,.05); --card: #211f1e; --card-m: #1d1c1b; --part-u: #232120; --part-m: #1b1a19; --inset: #181716;
   --control: #282827; --control-hover: #313130; --divider: #2d2d2c; --border-strong: #3a3937;
   --accent: #33adff; --accent-soft: rgba(51,173,255,.14); --on-accent: #0f1413;
   --t-heading: #f4f3ec; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-faint: #8f9893; --t-dim: #5a615e;
@@ -46,7 +46,7 @@ Data model (in memory; a reload starts over)
   --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 } }
 :root[data-theme="dark"] {
-  color-scheme: dark; --page: #151413; --grid: rgba(255,255,255,.05); --card: #211f1e; --card-m: #1d1c1b; --inset: #181716;
+  color-scheme: dark; --page: #151413; --grid: rgba(255,255,255,.05); --card: #211f1e; --card-m: #1d1c1b; --part-u: #232120; --part-m: #1b1a19; --inset: #181716;
   --control: #282827; --control-hover: #313130; --divider: #2d2d2c; --border-strong: #3a3937;
   --accent: #33adff; --accent-soft: rgba(51,173,255,.14); --on-accent: #0f1413;
   --t-heading: #f4f3ec; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-faint: #8f9893; --t-dim: #5a615e;
@@ -113,18 +113,20 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .fq { padding: 7px 12px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: 10px 10px 0 0; }
 .fq i { font-style: normal; color: var(--t-faint); }
 .fq .old { color: var(--warn); }
-.cmeta { padding: 0 12px 10px; font-size: 11.5px; color: var(--t-faint); }
+.cmeta { display: flex; gap: 9px; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
 
 .part { position: relative; padding: 10px 12px 10px 11px; display: flex; gap: 9px; align-items: flex-start; }
 .part > .gut { flex: none; width: 22px; display: flex; justify-content: center; position: relative; }
 .part > .gut .av { width: 20px; height: 20px; font-size: 8px; margin-top: 1px; }
 .part > .gut .mk { width: 21px; height: 21px; border-radius: 6px; }
 .part > .gut .mk svg { width: 13px; height: 13px; }
-.part > .gut .dot { position: absolute; right: -3px; top: -2px; z-index: 1; box-shadow: 0 0 0 1.5px var(--card); }
-.part.m > .gut .dot { box-shadow: 0 0 0 1.5px var(--card-m); }
+.part > .gut .dot { position: absolute; right: -3px; top: -2px; z-index: 1; box-shadow: 0 0 0 1.5px var(--part-u); }
+.part.m > .gut .dot { box-shadow: 0 0 0 1.5px var(--part-m); }
 .part > .pb { flex: 1; min-width: 0; }
 .part + .part, .seam + .part, .part + .seam { }
-.part.m { background: var(--card-m); }
+/* a person's part, and a model answer: each tinted against the page */
+.part { background: var(--part-u); }
+.part.m { background: var(--part-m); }
 .part.ctx { box-shadow: inset 3px 0 0 var(--ctx); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
 .ph { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t-faint); margin-top: 4px; flex-wrap: wrap; }
 .ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; }
@@ -175,9 +177,11 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stack.sel .bseam .sp:hover { opacity: 1; color: var(--accent); }
 @media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; }
   .stack.sel .bseam .sp { width: 28px; height: 28px; line-height: 28px; top: -14px; } .seam .hz { display: none; } }
-.addend { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 6px 12px 7px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
+.addend { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
+.addend .lc, .cmeta .gutsp { width: 22px; flex: none; }
+.addend .lc { height: 14px; }
 .addend:hover { color: var(--accent); background: var(--inset); }
-@media (pointer: coarse) { .addend { padding: 11px 12px; } }
+@media (pointer: coarse) { .addend { padding: 11px 12px 11px 11px; } }
 
 /* inline forks: a stack drawn inside its parent, at its anchor */
 .stack.coll .ifork { display: none; }
@@ -190,7 +194,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .ifork .part.m { background: var(--inset); border-radius: 6px; }
 .ifork .ifh { font-size: 11px; color: var(--t-faint); display: flex; gap: 8px; align-items: center; }
 .ifork .ifh button { color: var(--accent); font-weight: 500; }
-.ifork .addend { border: 0; padding: 4px 6px; }
+.ifork .addend { border: 0; padding: 4px 4px 4px 5px; gap: 7px; }
+.ifork .addend .lc { width: 18px; }
 .ifork .seam .sp { left: -24px; }
 
 /* draft: a small stack of part fields */
@@ -387,7 +392,7 @@ function proseHTML(p, s, selected) {
   const openIn = inl.some(f => V.openIn.has(f.id) || V.draft?.st === f.id);
   const long = isModel(p) && strip(p.text).length > 520 && p.run.status === 'complete', big = long && !V.full.has(p.id) && !openIn;
   let out = `<div class="prose${big ? ' clamp' : ''}" data-p="${p.id}">${html}</div>`;
-  if (big) out += `<button class="more" data-a="full" data-id="${p.id}">Show the whole answer${inl.length ? ` · ${inl.length} inline fork${inl.length > 1 ? 's' : ''}` : ''}</button>`;
+  if (big) out += `<button class="more" data-a="full" data-id="${p.id}">Show all${inl.length ? ` · ${inl.length} inline fork${inl.length > 1 ? 's' : ''}` : ''}</button>`;
   else if (long) out += `<button class="more" data-a="full" data-id="${p.id}">Show less</button>`;
   for (const f of inl.filter(f => f.fork.block == null)) out += ifork(f, selected);
   const st = null;
@@ -418,7 +423,7 @@ function ifork(f, selected) {
     return `<div class="ifork folded" data-stack="${f.id}" data-fl="s:${f.id}"><button class="iffold" data-a="ifopen" data-id="${f.id}">${nw ? '<span class="dot"></span>' : ''}<span class="ar">${icon('corner-down-right')}</span><b>${esc(NAMES[q.by.u] || q.by.u)}</b> ${esc(clip(strip(q.text), 60))}<span class="n">${ps.length > 1 ? ` · ${ps.length} parts` : ''}</span></button></div>`; }
   return `<div class="ifork" data-stack="${f.id}" data-fl="s:${f.id}"><div class="ifh">Inline fork${f.fork.block != null ? ' on this passage' : ''}<button data-a="ifclose" data-id="${f.id}">Fold</button><button data-a="moveout" data-id="${f.id}">Move out</button></div>
     ${ps.map((q, i) => partHTML(q, f, selected) + (d && V.draft.after === q.id ? draftHTML() : '') + (selected && own && i < ps.length - 1 && !pairedWith(q, ps[i + 1]) ? seam(f.id, q.id) : '')).join('')}${d && !V.draft.after ? draftHTML() : ''}
-    ${!d && own ? `<button class="addend" data-a="seam" data-st="${f.id}" data-after="${ps.length ? ps[ps.length - 1].id : ''}">${icon('plus')}Add to this fork</button>` : ''}</div>`;
+    ${!d && own ? `<button class="addend" data-a="seam" data-st="${f.id}" data-after="${ps.length ? ps[ps.length - 1].id : ''}">${icon('plus')}Continue</button>` : ''}</div>`;
 }
 function stackHTML(s) {
   const ps = partsOf(s.id), selected = V.sel === s.id, isRoot = !s.fork || s.x != null, collapsed = isRoot && V.collapsed.has(s.id);
@@ -430,13 +435,14 @@ function stackHTML(s) {
   if (collapsed) {
     const u = unitStacks(s), np = u.reduce((n, x) => n + partsOf(x.id).length, 0);
     h += ps[0] ? partHTML(ps[0], s, false, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') : '';
-    h += `<div class="cmeta">${np} part${np === 1 ? '' : 's'} · ${u.length - 1} fork${u.length === 2 ? '' : 's'}</div>`;
+    const more = np - 1, nf = u.length - 1;
+    h += `<div class="cmeta"><span class="gutsp"></span><span>${more} more post${more === 1 ? '' : 's'}${nf ? ` · ${nf} fork${nf === 1 ? '' : 's'}` : ''}</span></div>`;
   } else {
     const d = V.draft?.st === s.id;
     if (d && V.draft.after === '') h += draftHTML();
     const own = authorOf(s) === ME;
     ps.forEach((p, i) => { h += partHTML(p, s, selected, i === 0); if (d && V.draft.after === p.id) h += draftHTML(); else if (i < ps.length - 1) h += pairedWith(p, ps[i + 1]) || !own ? '<div class="pairline"></div>' : seam(s.id, p.id); });
-    if (!d && ps.length && own) h += `<button class="addend" data-a="seam" data-st="${s.id}" data-after="${ps[ps.length - 1].id}">${icon('plus')}Add to this stack</button>`;
+    if (!d && ps.length && own) h += `<button class="addend" data-a="seam" data-st="${s.id}" data-after="${ps[ps.length - 1].id}">${icon('plus')}Continue</button>`;
   }
   return `<div class="stack${selected ? ' sel' : ''}${collapsed ? ' coll' : ''}" data-stack="${s.id}" data-fl="s:${s.id}" style="--sw:${W()}px"><div class="sbody">${h}</div></div>`;
 }
