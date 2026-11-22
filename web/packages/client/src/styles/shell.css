@@ -49,6 +49,16 @@
   gap: 12px;
 }
 
+/* 520 px and below (02 W2.5): 6 px between the bar's controls and 11 px
+   after the account menu. The scope picker's box pulls 2 px towards the
+   brand (`phone:-ml-0.5`), so 4 px separate the two. */
+@media (max-width: 520px) {
+  .app-bar {
+    padding-right: 11px;
+    gap: 6px;
+  }
+}
+
 .app-scroll {
   flex: 1;
   min-height: 0;

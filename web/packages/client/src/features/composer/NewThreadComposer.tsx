@@ -13,6 +13,7 @@ import type { MouseEvent, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { useMediaQuery } from "../../lib/media.js";
 import { useOnlineData } from "../../replica/ReplicaProvider.js";
 import {
   composerModel,
@@ -39,20 +40,6 @@ export type Mode = "ask" | "post";
 
 const MENU_POPUP = `${SHELL_MENU_POPUP} fpop-menu`;
 
-function useNarrow(width: number): boolean {
-  const query = `(max-width: ${width}px)`;
-  const get = () => typeof window.matchMedia === "function" && window.matchMedia(query).matches;
-  const [narrow, setNarrow] = useState(get);
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const list = window.matchMedia(query);
-    const on = () => setNarrow(list.matches);
-    list.addEventListener("change", on);
-    return () => list.removeEventListener("change", on);
-  }, [query]);
-  return narrow;
-}
-
 /** The channel picker (title "Channel"): the joined channels as radio items. */
 function ChannelPicker({
   channels,
@@ -65,7 +52,7 @@ function ChannelPicker({
   onChange: (id: string) => void;
   field: RefObject<HTMLTextAreaElement | null>;
 }) {
-  const narrow = useNarrow(600);
+  const narrow = useMediaQuery("(max-width: 600px)");
   return (
     <Menu.Root>
       <Menu.Trigger className="pick" title="Channel">
@@ -130,7 +117,7 @@ export function ModelPicker({
   onChange: (choice: { model: string; effort: Effort }) => void;
   field: RefObject<HTMLTextAreaElement | null>;
 }) {
-  const narrow = useNarrow(600);
+  const narrow = useMediaQuery("(max-width: 600px)");
   const navigate = useNavigate();
   return (
     <Menu.Root>

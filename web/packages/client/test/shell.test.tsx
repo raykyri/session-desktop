@@ -13,6 +13,8 @@ import { UsageRing } from "../src/features/shell/UsageRing.js";
 import type { ShellChannel } from "../src/features/shell/shellData.js";
 import { viewerOf } from "../src/features/shell/viewer.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
+import { FIXTURE_MEMBER } from "../src/replica/fixtureData.js";
+import { fixtureReplicaConfig, type FixtureReplica } from "../src/replica/fixtureReplica.js";
 import { MemoryReplica } from "../src/replica/memory.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
@@ -194,6 +196,124 @@ test.serial("the scope picker offers three radio items to a member", async (t) =
   fireEvent.click(items[1] as HTMLElement);
   await waitUntil(t, () => useNavigationStore.getState().scope === "yours", "scope stored");
   t.truthy(within(bar()).getByText("You have not made a channel yet."));
+});
+
+// ------------------------------------------------------------ the phone width
+
+/** `matchMedia` answering the phone query (520 px and below) with `phone`,
+ * every other query false; returns the restore. */
+function stubWidth(phone: boolean): () => void {
+  const before = Object.getOwnPropertyDescriptor(window, "matchMedia");
+  window.matchMedia = (query: string) =>
+    ({
+      matches: phone && query === "(max-width: 520px)",
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+  return () => {
+    if (before) Object.defineProperty(window, "matchMedia", before);
+  };
+}
+
+/** The fixture world's replica, as the viewer `ines.v` reads it. */
+function fixtureWorld(): FixtureReplica[] {
+  const made: FixtureReplica[] = [];
+  configureReplica({
+    ...fixtureReplicaConfig({ runMs: null }),
+    create: (viewer) => {
+      const replica = fixtureReplicaConfig({ runMs: null }).create(viewer) as FixtureReplica;
+      made.push(replica);
+      return replica;
+    },
+  });
+  return made;
+}
+
+test.serial("at the phone width the scope menu lists the strip's channels", async (t) => {
+  const restore = stubWidth(true);
+  const made = fixtureWorld();
+  try {
+    const app = await renderApp("/", { user: testUser({ login: FIXTURE_MEMBER }) });
+    const strip = within(bar()).getByRole("navigation", { name: "Channels" });
+    t.true(strip.classList.contains("phone:hidden"), "the strip is hidden by the phone rule");
+    await waitUntil(t, () => within(strip).queryAllByRole("link").length > 1, "channels loaded");
+    const chips = within(strip)
+      .getAllByRole("link")
+      .map((chip) => chip.textContent);
+
+    openMenu(within(bar()).getByRole("button", { name: "Joined" }));
+    const menu = await screen.findByRole("menu");
+    const radios = within(menu).getAllByRole("menuitemradio");
+    t.deepEqual(
+      radios.map((item) => item.textContent),
+      ["Joined", "Channels you manage", "All", ...chips],
+      "the scopes, then the strip's channels in its order",
+    );
+    t.is(radios[0]?.getAttribute("aria-checked"), "true");
+    t.true(radios.slice(3).every((item) => item.getAttribute("aria-checked") === "false"));
+    t.truthy(within(menu).getByRole("menuitem", { name: "New channel" }), "a writer");
+
+    // Choosing a channel opens it; the button then names it and its row is
+    // checked.
+    const target = chips[1] ?? "";
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: target }));
+    await waitUntil(
+      t,
+      () => app.router.state.location.pathname === `/c/${target.slice(1)}`,
+      "the channel opened",
+    );
+    await waitUntil(t, () => screen.queryByRole("menu") === null, "the menu closed");
+    const named = within(bar()).getByRole("button", { name: target });
+    openMenu(named);
+    const again = await screen.findByRole("menu");
+    t.is(
+      within(again).getByRole("menuitemradio", { name: target }).getAttribute("aria-checked"),
+      "true",
+    );
+  } finally {
+    restore();
+    for (const replica of made) replica.dispose();
+  }
+});
+
+test.serial("above the phone width the scope menu lists the scopes only", async (t) => {
+  const restore = stubWidth(false);
+  const made = fixtureWorld();
+  try {
+    await renderApp("/", { user: testUser({ login: FIXTURE_MEMBER }) });
+    const strip = within(bar()).getByRole("navigation", { name: "Channels" });
+    await waitUntil(t, () => within(strip).queryAllByRole("link").length > 1, "channels loaded");
+    openMenu(within(bar()).getByRole("button", { name: "Joined" }));
+    const menu = await screen.findByRole("menu");
+    t.deepEqual(
+      within(menu)
+        .getAllByRole("menuitemradio")
+        .map((item) => item.textContent),
+      ["Joined", "Channels you manage", "All"],
+    );
+    t.is(within(menu).queryByRole("menuitem", { name: "New channel" }), null);
+  } finally {
+    restore();
+    for (const replica of made) replica.dispose();
+  }
+});
+
+test.serial("signed out at the phone width the menu button stays, with All", async (t) => {
+  const restore = stubWidth(true);
+  try {
+    await renderApp("/", { user: null });
+    openMenu(within(bar()).getByRole("button", { name: "All" }));
+    const menu = await screen.findByRole("menu");
+    t.is(within(menu).getAllByRole("menuitemradio")[0]?.textContent, "All");
+    t.is(within(menu).queryByRole("menuitem", { name: "New channel" }), null, "not a writer");
+  } finally {
+    restore();
+  }
 });
 
 // ------------------------------------------------------------ the strip per route

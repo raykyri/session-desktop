@@ -130,7 +130,8 @@ Left to right (`appbar`):
    icon; channels the viewer owns, only for accounts that can write) and All
    (compass icon; 01 C7). The scope chooses which channels the strip lists;
    Home always shows joined channels. With one scope (signed out, where Joined
-   would equal All) no picker is drawn.
+   would equal All) no picker is drawn above 520 px; at 520 px and below it
+   carries the strip (W2.5) and is drawn with one scope too.
 3. **Channel strip**: horizontally scrolling `#name` chips with
    `aria-current="page"` on the current one, a join "+" (title "Join") on
    unjoined chips under All, a trailing New channel button (label "New
@@ -139,7 +140,8 @@ Left to right (`appbar`):
    scrollbar; a mask fades 40 px at an edge only while content is hidden past
    it (`--fl`, `--fr`). The current chip is scrolled to the centre when it
    lies within 40 px of an edge. Shown on the feed routes, Browse, Invites,
-   Usage, Notifications and Site Admin; not on `/welcome`.
+   Usage, Notifications and Site Admin; not on `/welcome`. Not shown at 520 px
+   and below, where the scope picker's menu lists its channels (W2.5).
 4. **Usage ring** (`meter`): an 18 px ring only, at every width (no "Nk left"
    text and no track bar): an arc for the share used over a full-circle
    track; tone `ok` below 80 % used, `warn` from 80 %, `bad` from 95 %
@@ -174,7 +176,8 @@ Items 4-6 are not rendered for accounts without an invite.
 page's layout or scroll position; the feed and every page reserve its height
 with 49 px of top padding (and `scroll-padding-top: 49px` on pages). It spans
 the window in both layouts, at every width and on every screen, with the
-`.app-bar` insets (16 px left, 14 px right, 12 px gap), a 1 px divider at its
+`.app-bar` insets (16 px left, 14 px right, 12 px gap; at 520 px and below
+11 px right and 6 px gap, W2.5), a 1 px divider at its
 bottom and no rounded corners. The mock's column-aligned floating card in
 layout `centred` above 860 px (`alignBar`) is not built.
 
@@ -217,7 +220,26 @@ inset are not built (removed: web-only build). Acceptance: no
 `requestFullscreen` in the client.
 
 **W2.5 Narrow widths.** ≤ 520 px: brand word hidden, composer controls wrap to
-a second row under the text (`ncw`). ≤ 600 px: the composer's menus are
+a second row under the text (`ncw`). The channel strip is not shown and folds
+into the scope picker's menu: the scope items as above, the current one
+checked; below a separator the current scope's channels in the strip's order
+as `menuitemradio` items, the open channel checked (the scope's empty line
+instead when it has none; nothing while the channels load); and, for accounts
+that can write, a separator and a last item "New channel" in place of the
+strip's trailing button. The Join "+" of unjoined channels under All is not in
+the menu: the channel's header carries Join. Choosing a channel opens it,
+closes the menu and returns focus to the button. The button names where the
+viewer is: the open channel ("#name"), otherwise the scope. The menu keeps the
+menu keyboard (arrows, Home and End, first letter, matched without the `#`,
+Escape, and Tab to close) and scrolls past `min(460px, 62vh)`. Signed out the
+button is drawn too, with All as its one scope. The bar's spacing: 4 px
+between the brand and the scope button, 6 px between the ring, Saved, the
+layout toggle and the account menu, 11 px after the account menu. Acceptance:
+a component test with a `matchMedia` stub (the menu lists the strip's channels;
+choosing one navigates and checks it); Playwright at 400 px (strip hidden, the
+menu's channels, opening one, the button's name, the spacing, nothing past the
+bar's edges) and at 521 and 860 px (the strip shows, the menu has the scopes
+only). ≤ 600 px: the composer's menus are
 right-anchored and capped at `100vw - 40px`, and the Effort submenu is drawn
 inline under its row instead of flying out to the side. ≤ 860 px: feed rows,
 Invites and Usage stack to one column, the side column is not sticky, and the
@@ -1208,7 +1230,7 @@ delivers them.
 
 | Spec (`web/e2e/`) | Milestone | Drives |
 |---|---|---|
-| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the site footer (W2.7) on feeds and pages, signed in and out |
+| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the strip folded into the scope menu at 400 px (W2.5), the site footer (W2.7) on feeds and pages, signed in and out |
 | `spaces-feed.spec.ts` | M4, M5a | post, save and the Saved count, the footer meta and no model or effort text, a second context seeing a post without a reload, delete, the removed placeholder; the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload); from M5a, an ask streaming with a reload mid-stream, the queue-full refusal |
 | `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions and the mention toast |
 | `spaces-signed-out.spec.ts` | M4 | signed-out reading of a thread, its branches and replies (§9.5); write controls open the auth dialog |
