@@ -84,11 +84,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   font-size: 12.5px; font-weight: 600; color: var(--t-heading); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tl button:hover, .br button:hover { background: var(--inset); }
 .tl button .pl { color: var(--accent); font-weight: 700; font-size: 15px; line-height: 1; }
-.br { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 20; align-items: center; }
+.br { position: fixed; right: 12px; top: 12px; display: flex; gap: 6px; z-index: 20; align-items: center; }
 .br .zv { min-width: 52px; justify-content: center; font-variant-numeric: tabular-nums; }
 .br .nn b { color: var(--new); }
 .hint { position: fixed; left: 352px; top: 12px; height: 32px; line-height: 32px; padding: 0 12px; border-radius: 8px; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(4px); z-index: 19; font-size: 11.5px; color: var(--t-faint); max-width: calc(100vw - 260px); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 1000px) { .hint { display: none; } }
+@media (max-width: 1100px) { .hint { display: none; } }
+.hint { max-width: calc(100vw - 700px); }
+@media (max-width: 760px) { .br { top: 56px; left: 12px; right: auto; } }
+@media (max-width: 760px) and (pointer: coarse) { .br { top: 62px; } }
 @media (max-width: 360px) { .tl .modl { display: none; } }
 @media (max-width: 640px) { .br button { padding: 0 10px; } }
 @media (pointer: coarse) { .tl button, .br button { height: 40px; } }
@@ -114,7 +117,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .part > .gut .av { width: 20px; height: 20px; font-size: 8px; margin-top: 1px; }
 .part > .gut .mk { width: 21px; height: 21px; border-radius: 6px; }
 .part > .gut .mk svg { width: 13px; height: 13px; }
-.part > .gut .dot { position: absolute; left: -5px; top: 2px; }
+.part > .gut .dot { position: absolute; right: -3px; top: -2px; z-index: 1; box-shadow: 0 0 0 1.5px var(--card); }
+.part.m > .gut .dot { box-shadow: 0 0 0 1.5px var(--card-m); }
 .part > .pb { flex: 1; min-width: 0; }
 .part + .part, .seam + .part, .part + .seam { }
 .part.m { background: var(--card-m); }
@@ -158,14 +162,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .seam .sp { position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
   box-shadow: var(--shadow); font-weight: 700; font-size: 15px; line-height: 22px; text-align: center; opacity: 0; transition: opacity .1s, transform .1s; z-index: 3; }
 .seam .hz { position: absolute; left: -26px; right: 0; top: -7px; height: 14px; z-index: 2; }
-.seam:hover .sp, .seam .sp:focus-visible, .stack.sel .seam .sp { opacity: 1; }
+.seam:hover .sp, .seam .sp:focus-visible, .seam.near .sp { opacity: 1; }
 .seam:hover { background: var(--accent); }
 .seam .sp:hover { transform: scale(1.12); }
 .bseam { position: relative; height: 0; }
 .bseam .sp { position: absolute; left: -26px; top: -10px; width: 20px; height: 20px; border-radius: 50%; color: var(--t-faint); background: var(--card); box-shadow: var(--shadow); font-size: 13px; line-height: 20px; text-align: center; font-weight: 700; opacity: 0; z-index: 3; }
 .stack.sel .bseam .sp { opacity: .75; }
 .stack.sel .bseam .sp:hover { opacity: 1; color: var(--accent); }
-@media (pointer: coarse) { .stack.sel .seam .sp { width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; }
+@media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; }
   .stack.sel .bseam .sp { width: 28px; height: 28px; line-height: 28px; top: -14px; } .seam .hz { display: none; } }
 .addend { display: block; width: 100%; text-align: left; padding: 6px 12px 7px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
 .addend:hover { color: var(--accent); background: var(--inset); }
@@ -197,7 +201,26 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #bfork:hover { background: var(--accent); color: var(--on-accent); }
 .part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
 .prose > .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
-.prose > .bhov { box-shadow: -8px 0 0 -5px var(--accent); }
+body[data-hl="bar"] .prose > .bhov { box-shadow: -8px 0 0 -5px var(--accent); }
+body[data-hl="tint"] .prose > .bhov { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
+#bfork.round { width: 22px; height: 22px; padding: 0; justify-content: center; border-radius: 50%; font-size: 12px; }
+#bfork.chip { height: 20px; padding: 0 6px; border-radius: 10px; font-size: 11px; }
+.bseam.bpick { height: auto; margin: 2px 0 10px; }
+.bpick button { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px 0 8px; border-radius: 13px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+.bpick button:hover { background: var(--accent); color: var(--on-accent); }
+/* mock-only: the Tweaks box, for trying the Fork here variants */
+#tweaks { position: fixed; left: 12px; bottom: 12px; z-index: 22; width: 250px; background: var(--card); border-radius: 10px; box-shadow: var(--shadow), var(--shadow-pop); font-size: 12px; color: var(--t-secondary); }
+#tweaks > button { width: 100%; display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-weight: 600; color: var(--t-heading); }
+#tweaks > button .sub { font-weight: 400; color: var(--t-faint); }
+#tweaks .tw { padding: 2px 12px 12px; display: grid; gap: 8px; }
+#tweaks label { display: grid; gap: 3px; font-size: 11.5px; color: var(--t-faint); }
+#tweaks select { height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--inset); color: var(--t-heading); font: inherit; font-size: 12px; padding: 0 6px; }
+#tweaks .note { font-size: 11px; color: var(--t-faint); line-height: 1.4; }
+#tweaks:not(.open) .tw { display: none; }
+#bmenu { position: fixed; z-index: 40; min-width: 200px; padding: 4px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
+#bmenu button { display: flex; width: 100%; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 5px; font-size: 12.5px; color: var(--t-heading); text-align: left; }
+#bmenu button:hover, #bmenu button:focus-visible { background: var(--control); outline: none; }
+#bmenu button span { color: var(--accent); width: 14px; }
 @media (pointer: coarse) { #bfork { height: 34px; padding: 0 12px; border-radius: 17px; } }
 .sbody > .draft:first-child { border-top: 0; border-radius: 10px 10px 0 0; }
 .draft .dp { position: relative; }
@@ -539,8 +562,10 @@ function bounds() { const u = V.units || []; if (!u.length) return { x: 0, y: 0,
   const x0 = Math.min(...u.map(a => a.x)), y0 = Math.min(...u.map(a => a.y + a.dy)), x1 = Math.max(...u.map(a => a.x + a.w)), y1 = Math.max(...u.map(a => a.y + a.dy + a.h)); return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; }
 function fit() { const b = bounds(), pad = 60; const z = Math.max(0.15, Math.min(1, Math.min((innerWidth - pad * 2) / b.w, (innerHeight - pad * 2 - 40) / b.h)));
   V.z = z; V.x = (innerWidth - b.w * z) / 2 - b.x * z; V.y = 60 - b.y * z; world.classList.toggle('far', z < 0.5); applyView(); drawLinks(); }
+/* room above the canvas content for the toolbars: one row, or two on a narrow page */
+const topInset = () => innerWidth <= 760 ? 112 : 64;
 function centerOn(sid, z = Math.max(V.z, 0.9)) { const p = POS[sid]; if (!p) return; V.z = z; world.classList.toggle('far', z < 0.5);
-  V.x = Math.min(60, innerWidth / 2 - (p.x + W() / 2) * z); if (innerWidth > 900) V.x = 80 - p.x * z; V.y = 64 - p.y * z; applyView(); drawLinks(); }
+  V.x = Math.min(60, innerWidth / 2 - (p.x + W() / 2) * z); if (innerWidth > 900) V.x = 80 - p.x * z; V.y = topInset() - p.y * z; applyView(); drawLinks(); }
 
 $('#zin').onclick = () => zoomAt(V.z * 1.25, innerWidth / 2, innerHeight / 2);
 $('#zout').onclick = () => zoomAt(V.z / 1.25, innerWidth / 2, innerHeight / 2);
@@ -683,7 +708,7 @@ function newRoot(mode) {
   document.querySelector('.draft textarea')?.focus({ preventScroll: true });
 }
 function centerOnNew(id) { const p = POS[id]; if (!p) return; if (V.z < 0.7) V.z = 1; world.classList.toggle('far', false);
-  const sx = p.x * V.z + V.x, sy = p.y * V.z + V.y; if (sx < 20 || sx + W() * V.z > innerWidth - 20 || sy < 56 || sy > innerHeight - 200) { V.x = innerWidth / 2 - (p.x + W() / 2) * V.z; V.y = 90 - p.y * V.z; } applyView(); drawLinks(); }
+  const sx = p.x * V.z + V.x, sy = p.y * V.z + V.y; if (sx < 20 || sx + W() * V.z > innerWidth - 20 || sy < 56 || sy > innerHeight - 200) { V.x = innerWidth / 2 - (p.x + W() / 2) * V.z; V.y = topInset() + 26 - p.y * V.z; } applyView(); drawLinks(); }
 function hideHint() { $('#hint').hidden = true; }
 $('#add-post').onclick = () => newRoot('post');
 $('#add-ask').onclick = () => newRoot('ask');
@@ -756,25 +781,85 @@ document.addEventListener('mouseup', () => setTimeout(() => {
   const n = sel.anchorNode?.nodeType === 1 ? sel.anchorNode : sel.anchorNode?.parentElement, pr = n?.closest('.prose[data-p]'); if (!pr) return;
   const kids = [...pr.children].filter(c => !c.classList.contains('bseam') && !c.classList.contains('ifork')), block = kids.findIndex(k => k.contains(n));
   const r = sel.getRangeAt(0).getBoundingClientRect(), b = document.createElement('button');
-  b.id = 'selfork'; b.textContent = 'Fork from selection'; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 160)) + 'px'; b.style.top = (r.bottom + 8) + 'px';
+  b.id = 'selfork'; b.textContent = TW.lb === 'fork' ? 'Fork from selection' : 'Ask about this'; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 160)) + 'px'; b.style.top = (r.bottom + 8) + 'px';
   b.onclick = ev => { ev.stopPropagation(); b.remove(); getSelection().removeAllRanges(); newFork(pr.dataset.p, { block: block >= 0 ? block : null, quote: t }); };
   document.body.append(b);
 }));
 
-/* "Fork here": hovering a block of an answer (or tapping one in a selected stack, on touch) shows one control at
-   that block's lower-left edge. It opens an inline fork after the block, anchored to it. */
+/* "Fork here": a control for asking about one passage (block) of an answer. It opens an inline fork after the block,
+   anchored to it, with the full context up to the answer. Its form is a mock tweak (the Tweaks box, bottom left):
+     pill    a "Fork here" pill at the block's lower right (the first version)
+     edge    a round ↳ on the card's right edge, level with the block's first line
+     gutter  a round ↳ in the left gutter, level with the block's first line
+     end     a small chip after the block's last word
+     click   click a passage: an "Ask about this passage" row opens under it
+     select  no passage control: select text, then "Ask about this"
+     menu    no visible control: right-click (or long-press) a passage for a small menu"
+   The hovered or picked passage is marked with a bar, a tint, or nothing. */
+const TW = (() => { const d = { fh: 'edge', hl: 'tint', lb: 'ask' }; try { return Object.assign(d, JSON.parse(localStorage.getItem('session-canvas:tweaks') || '{}')); } catch { return d; } })();
+const forkLabel = () => TW.lb === 'fork' ? 'Fork here' : 'Ask about this';
 let bTimer;
+const blocksOf = pr => [...pr.children].filter(c => !c.classList.contains('ifork') && !c.classList.contains('bseam'));
+function markBlock(blockEl) { document.querySelectorAll('.bhov').forEach(x => x.classList.remove('bhov')); blockEl?.classList.add('bhov'); }
 function showBfork(blockEl) {
-  const pr = blockEl.parentElement, pid = pr.dataset.p, kids = [...pr.children].filter(c => !c.classList.contains('ifork')), i = kids.indexOf(blockEl);
+  if (TW.fh === 'click' || TW.fh === 'select' || TW.fh === 'menu') return;
+  const pr = blockEl.parentElement, pid = pr.dataset.p, i = blocksOf(pr).indexOf(blockEl);
   if (i < 0 || /^H\d/.test(blockEl.tagName) || V.z < 0.5) return;
-  document.querySelectorAll('.bhov').forEach(x => x.classList.remove('bhov')); blockEl.classList.add('bhov');
-  let b = $('#bfork'); if (!b) { b = document.createElement('button'); b.id = 'bfork'; b.dataset.a = 'bfork'; b.innerHTML = '<span aria-hidden="true">↳</span>Fork here'; b.title = 'Ask about this passage, inline'; document.body.append(b);
+  const r = blockEl.getBoundingClientRect(), pb = pr.getBoundingClientRect();
+  if (r.top + 12 > pb.bottom) { $('#bfork')?.remove(); return; }   // hidden under the clamp
+  markBlock(blockEl);
+  let b = $('#bfork'); if (!b) { b = document.createElement('button'); b.id = 'bfork'; b.dataset.a = 'bfork'; document.body.append(b);
     b.addEventListener('mouseenter', () => clearTimeout(bTimer)); b.addEventListener('mouseleave', hideBforkSoon); }
-  b.dataset.id = pid; b.dataset.b = i; const r = blockEl.getBoundingClientRect(), pb = pr.getBoundingClientRect();
-  if (r.bottom > pb.bottom + 2) { b.remove(); return; }
-  b.style.left = (Math.min(r.right, pb.right) - b.offsetWidth + 4) + 'px'; b.style.top = (Math.min(r.bottom, pb.bottom) - 8) + 'px';
+  const round = TW.fh === 'edge' || TW.fh === 'gutter';
+  b.className = round ? 'round' : TW.fh === 'end' ? 'chip' : '';
+  b.innerHTML = round ? '<span aria-hidden="true">↳</span>' : `<span aria-hidden="true">↳</span>${TW.fh === 'end' && TW.lb === 'icon' ? '' : forkLabel()}`;
+  b.title = 'Ask about this passage'; b.setAttribute('aria-label', 'Ask about this passage');
+  b.dataset.id = pid; b.dataset.b = i;
+  const line = r.top + 10;   // the middle of the block's first line
+  if (TW.fh === 'edge') { const st = blockEl.closest('.stack, .ifork').getBoundingClientRect(); b.style.left = (st.right - 11) + 'px'; b.style.top = (line - 11) + 'px'; }
+  else if (TW.fh === 'gutter') { const pt = blockEl.closest('.part').getBoundingClientRect(); b.style.left = (pt.left + 11) + 'px'; b.style.top = (line - 11 + (i === 0 ? 26 : 0)) + 'px'; }
+  else if (TW.fh === 'end') {
+    const rg = document.createRange(); rg.selectNodeContents(blockEl); const rs = [...rg.getClientRects()].filter(x => x.width > 0), last = rs[rs.length - 1] || r;
+    const w = b.offsetWidth, fits = last.right + 6 + w <= pb.right;
+    b.style.left = (fits ? last.right + 6 : pb.right - w) + 'px'; b.style.top = (fits ? last.top + (last.height - 20) / 2 : last.bottom + 2) + 'px';
+  } else { b.style.left = (Math.min(r.right, pb.right) - b.offsetWidth + 4) + 'px'; b.style.top = (Math.min(r.bottom, pb.bottom) - 8) + 'px'; }
 }
-const hideBforkSoon = () => { clearTimeout(bTimer); bTimer = setTimeout(() => { $('#bfork')?.remove(); document.querySelectorAll('.bhov').forEach(x => x.classList.remove('bhov')); }, 250); };
+/* menu: right-click a passage (or any part) for a small menu; Escape or a click elsewhere closes it */
+function closeBmenu() { $('#bmenu')?.remove(); if (TW.fh === 'menu') markBlock(null); }
+document.addEventListener('contextmenu', e => {
+  if (TW.fh !== 'menu') return;
+  const partEl = e.target.closest?.('.part[data-part]'); if (!partEl || e.target.closest('textarea, input') || V.z < 0.5) return;
+  e.preventDefault(); closeBmenu();
+  const blk = e.target.closest('.part.m > .pb > .prose[data-p] > *');
+  const ok = blk && !blk.closest('.ifork') && !blk.classList.contains('ifork') && !/^H\d/.test(blk.tagName);
+  const items = [];
+  if (ok) { markBlock(blk); items.push(`<button data-a="bfork" data-id="${blk.parentElement.dataset.p}" data-b="${blocksOf(blk.parentElement).indexOf(blk)}"><span aria-hidden="true">↳</span>Ask about this passage</button>`); }
+  items.push(`<button data-a="fork" data-id="${partEl.dataset.part}"><span aria-hidden="true">⑂</span>Fork from here</button>`);
+  const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.innerHTML = items.join(''); document.body.append(m);
+  m.querySelectorAll('button').forEach(b => b.setAttribute('role', 'menuitem'));
+  m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + 'px';
+  m.querySelector('button').focus();
+});
+document.addEventListener('click', e => { if ($('#bmenu')) setTimeout(closeBmenu, 0); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#bmenu')) { e.stopPropagation(); closeBmenu(); } }, true);
+vp.addEventListener('wheel', closeBmenu, { passive: true });
+/* click: a row under the picked passage */
+function pickBlock(pid, i) {
+  document.querySelectorAll('.bpick').forEach(x => x.remove()); markBlock(null);
+  const pr = pid && document.querySelector(`.prose[data-p="${pid}"]`), blk = pr && blocksOf(pr)[i];
+  if (blk) { const row = document.createElement('div'); row.className = 'bseam bpick';
+    row.innerHTML = `<button data-a="bfork" data-id="${pid}" data-b="${i}" title="Ask about this passage"><span aria-hidden="true">↳</span>${TW.lb === 'icon' ? '' : forkLabel()}</button>`;
+    blk.after(row); markBlock(blk); }
+  layout(); drawLinks();
+}
+document.addEventListener('click', e => {
+  if (TW.fh !== 'click' || e.target.closest('.bpick, #tweaks')) return;
+  const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *');
+  const ok = blk && !blk.closest('.ifork') && !blk.classList.contains('ifork') && !/^H\d/.test(blk.tagName) && !getSelection()?.toString().trim();
+  const pid = ok ? blk.parentElement.dataset.p : null, i = ok ? blocksOf(blk.parentElement).indexOf(blk) : -1;
+  setTimeout(() => pickBlock(pid, i), 0);   // after the click has re-rendered the stack, if it did
+});
+const hideBforkSoon = () => { if (TW.fh === 'click') return; clearTimeout(bTimer); bTimer = setTimeout(() => { $('#bfork')?.remove(); markBlock(null); }, 250); };
 document.addEventListener('mouseover', e => {
   if (matchMedia('(pointer: coarse)').matches) return;
   const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || blk.classList.contains('ifork')) { if (!e.target.closest?.('#bfork')) hideBforkSoon(); return; }
@@ -786,6 +871,37 @@ document.addEventListener('click', e => {
   setTimeout(() => showBfork(blk), 0);
 });
 vp.addEventListener('wheel', () => $('#bfork')?.remove(), { passive: true });
+
+/* the "+" insert controls show only in the gaps directly above and below the hovered part; a question and its answer
+   count as one */
+function nearSeams(partEl) {
+  document.querySelectorAll('.seam.near').forEach(x => x.classList.remove('near'));
+  if (!partEl) return;
+  const walk = (el, dir) => { let n = el[dir]; while (n) { if (n.classList.contains('seam')) return n; if (n.classList.contains('pairline')) { n = n[dir]?.[dir]; continue; } return null; } return null; };
+  walk(partEl, 'previousElementSibling')?.classList.add('near'); walk(partEl, 'nextElementSibling')?.classList.add('near');
+}
+let nearPart = null;
+document.addEventListener('mouseover', e => { if (e.target.closest?.('.seam')) return; const p = e.target.closest?.('.sbody > .part, .ifork > .part') || null; if (p === nearPart) return; nearPart = p; nearSeams(p); });
+document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').matches) return; const p = e.target.closest?.('.sbody > .part, .ifork > .part'); if (p) setTimeout(() => { const live = document.querySelector(`[data-part="${p.dataset.part}"]`); nearPart = live; nearSeams(live); }, 0); });
+
+/* ---- mock-only: Tweaks ---- */
+function renderTweaks() {
+  let el = $('#tweaks'); const open = el?.classList.contains('open');
+  if (!el) { el = document.createElement('div'); el.id = 'tweaks'; document.body.append(el); }
+  el.className = open ? 'open' : '';
+  const opt = (k, v, t) => `<option value="${v}"${TW[k] === v ? ' selected' : ''}>${t}</option>`;
+  el.innerHTML = `<button type="button" data-tw="toggle" aria-expanded="${!!open}">Tweaks <span class="sub">· mock only</span></button><div class="tw">
+    <label>Passage control<select data-k="fh">${opt('fh', 'edge', 'Round ↳ on the card edge')}${opt('fh', 'gutter', 'Round ↳ in the left gutter')}${opt('fh', 'end', 'Chip after the last word')}${opt('fh', 'pill', 'Pill at the lower right (first version)')}${opt('fh', 'click', 'Click a passage, then a row under it')}${opt('fh', 'menu', 'Right-click menu')}${opt('fh', 'select', 'Text selection only')}</select></label>
+    <label>Passage highlight<select data-k="hl">${opt('hl', 'tint', 'Tint')}${opt('hl', 'bar', 'Bar on the left')}${opt('hl', 'none', 'None')}</select></label>
+    <label>Label<select data-k="lb">${opt('lb', 'ask', '“Ask about this”')}${opt('lb', 'fork', '“Fork here”')}${opt('lb', 'icon', 'Icon only')}</select></label>
+    <div class="note">Hover an answer's paragraph${TW.fh === 'click' ? ' and click it' : TW.fh === 'select' ? ' and select some text' : TW.fh === 'menu' ? ' and right-click it' : ''}. Kept in this browser.</div></div>`;
+  document.body.dataset.hl = TW.hl;
+}
+document.addEventListener('change', e => { const k = e.target.closest?.('#tweaks select')?.dataset.k; if (!k) return; TW[k] = e.target.value;
+  try { localStorage.setItem('session-canvas:tweaks', JSON.stringify(TW)); } catch {}
+  $('#bfork')?.remove(); closeBmenu(); pickBlock(null); renderTweaks(); });
+document.addEventListener('click', e => { if (e.target.closest?.('[data-tw="toggle"]')) { $('#tweaks').classList.toggle('open'); renderTweaks(); } });
+renderTweaks();
 
 /* ---- initial placement: units ordered by last activity, packed into columns ---- */
 function initialLayout() {
