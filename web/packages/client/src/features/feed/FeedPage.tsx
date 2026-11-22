@@ -200,7 +200,8 @@ function ThreadList({
 /** Brings the thread of an address (`?t=&sel=`) or of a request
  * (`revealThread`) into place once its row can be: waits while the thread
  * is not loaded, and says "This thread is not available." when it is known
- * to be absent (02 §2.1). */
+ * to be absent (02 §2.1): no record, or a thread deleted before anyone
+ * replied (`gone`, which no list shows). */
 function useReveal(
   ids: string[] | null,
   t: string | undefined,
@@ -220,7 +221,11 @@ function useReveal(
   );
   const key = target ? (target.n >= 0 ? `r${target.n}` : `a:${t}:${sel ?? ""}`) : null;
   const status = useReplicaQuery(
-    (source) => (target ? (threadOf(source, target.thread) ? "found" : "absent") : "none"),
+    (source) => {
+      if (!target) return "none";
+      const view = threadOf(source, target.thread);
+      return view && !view.thread.gone ? "found" : "absent";
+    },
     [target?.thread],
   );
   // A thread outside the window is fetched from its channel's log (02 §2.1,

@@ -22,7 +22,8 @@ export type NotifKind = NotifRec["type"];
 /** Where opening a row goes: a thread in its channel's feed with the item
  * to select, or the Invites page. */
 /** Where a row opens. `gone`: the replica knows the thread no longer exists
- * (it was erased), so the row opens nothing and says so. */
+ * (erased, or deleted by its author before anyone replied: a `gone`
+ * record), so the row opens nothing and says so. */
 export type NotifTarget =
   | { kind: "thread"; channel: string; thread: string; sel?: string }
   | { kind: "invites" }
@@ -92,7 +93,7 @@ export function notificationsOf(source: ReplicaSource): NotifRow[] {
     const target: NotifTarget | null =
       n.type === "invite_used"
         ? { kind: "invites" }
-        : n.th && t === undefined
+        : n.th && (t === undefined || thread?.gone === true)
           ? { kind: "gone" }
           : space && n.th
             ? { kind: "thread", channel: space.name, thread: n.th, ...(sel ? { sel } : {}) }
