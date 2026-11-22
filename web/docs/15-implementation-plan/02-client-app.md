@@ -872,7 +872,8 @@ without an invite.
 
 **W8.1 Usage page** (`usagePage`, 03 §6): heading "Usage and API keys", then
 boxes:
-- "You have N% of usage left this week. Next reset on Fri, in 2d 5h." with a
+- "N% of usage left this week. Next reset Friday, in 2d 5h." (the share in
+  bold, the weekday in full in the viewer's zone) with a
   bar (`role="img"`, "N% left") in the ring's tones;
 - "Recent runs" (`usage.listRuns`): question clipped at 90, or "Removed" /
   "No longer available" without text (03 K5); the share of the weekly

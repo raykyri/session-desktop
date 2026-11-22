@@ -60,7 +60,7 @@ test("the usage sentence, the run charge and a run without its question", (t) =>
       now,
       "UTC",
     ),
-    { percent: 75, weekday: "Fri", resetIn: "2d 5h" },
+    { percent: 75, weekday: "Friday", resetIn: "2d 5h" },
   );
   t.is(runCharge({ bill: "included", share: 0.004 }), "<1%");
   // the cut-off is 0.5 %, which itself rounds to 1 % (03 K5)
@@ -113,7 +113,11 @@ test.serial("the usage line and bar in the ring's tones, and the recent runs", a
   // the bar's fill is what is left, not what was used
   // (the page writes "15.0%"; the style reads it back as "15%")
   t.is(bar.querySelector("span")?.style.width, "15%");
-  t.regex(document.querySelector(".usent")?.textContent ?? "", /^You have 15% of usage left/);
+  t.regex(
+    document.querySelector(".usent")?.textContent ?? "",
+    /^15% of usage left this week\. Next reset [A-Z][a-z]+day, in /,
+  );
+  t.is(document.querySelector(".usent b")?.textContent, "15%", "the share is bold");
   const runs = within(screen.getByRole("region", { name: "Recent runs" }));
   t.truthy(await runs.findByText("How do bloom filters trade memory for false positives?"));
   t.truthy(runs.getByText("2% · Nov 23"));

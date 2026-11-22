@@ -440,8 +440,8 @@ messages and the third saves `valid`; a test per format refusal.
 
 **K5. Usage read.** tRPC `usage.get` returns `{ allowance, used, resetAt,
 billing, keys }`, with `used` counting open ledger rows (K1). The page's
-first line reads "You have N% of usage left this week. Next reset on Fri, in
-2d 5h." (`usageTop()`), above a bar of what is left. `usage.listRuns`
+first line reads "N% of usage left this week. Next reset Friday, in 2d 5h."
+(`usageTop()`; the weekday in full, in the viewer's zone), above a bar of what is left. `usage.listRuns`
 returns the person's owned runs of the current week, newest first, paged (the
 page shows 6): question (clipped at 90 characters on the client), the share
 of the allowance ("<1%" below 0.5%) or, when not `included`, the payer label

@@ -3030,7 +3030,7 @@ function usageRuns() {
 }
 function usageTop() {
   const pct = Math.min(1, used() / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok', lp = Math.round((1 - pct) * 100);
-  return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of usage left this week. Next reset on ${weekdayOf(RESET, true)}, in ${resetShort()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
+  return `<section class="box"><p class="usent ${tone}"><b>${lp}%</b> of usage left this week. Next reset ${weekdayOf(RESET)}, in ${resetShort()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
 }
 function usageRunsSection() {
   /* each row: the question, then the share of the weekly allowance it used and the date */

@@ -66,7 +66,7 @@ function UsageTop({
   return (
     <section className="box">
       <p className={`usent ${tone}`}>
-        You have <b>{percent}%</b> of usage left this week. Next reset on {weekday}, in {resetIn}.
+        <b>{percent}%</b> of usage left this week. Next reset {weekday}, in {resetIn}.
       </p>
       <div className={`utrack ${tone}`} role="img" aria-label={`${percent}% left`}>
         <span style={{ width: `${(left * 100).toFixed(1)}%` }} />
