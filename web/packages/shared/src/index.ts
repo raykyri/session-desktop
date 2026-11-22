@@ -24,6 +24,7 @@ export const version = "0.0.0";
 export type * from "./wire/index.js";
 export * from "./schemas/index.js";
 
+export * from "./app/accountInvites.js";
 export * from "./app/helpers.js";
 export * from "./app/inviteCode.js";
 export * from "./app/taggedInstructions.js";

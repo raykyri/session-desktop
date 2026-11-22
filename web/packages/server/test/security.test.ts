@@ -76,10 +76,10 @@ test("limit: snapshots, 30 a minute per user and per IP signed out", async (t) =
   t.is((await snapshot({ "Fly-Client-IP": "1.1.1.1" }, cookie)).status, 429);
 });
 
-test("limit: accountInvites.create, 10 a day per user beyond the 3 open", async (t) => {
+test("limit: accountInvites.create, 10 a day per user, site admins included", async (t) => {
   const harness = pinned(t);
   const admin = harness.caller(harness.addUser("seeder", { isAdmin: true }));
-  // An admin is exempt from 3 open, not from 10 created a day.
+  // An admin has no invite limit, but the 10 created a day still apply.
   for (let index = 0; index < 10; index += 1) await admin.accountInvites.create();
   const before = rowCount(harness, "invites");
   // The refusal names the limit and the wait: a token comes back every
@@ -238,8 +238,8 @@ test("limit: handle availability, 30 a minute per user", async (t) => {
 });
 
 test("limits are settings validated at boot", (t) => {
-  const harness = createHarness(t, { env: { SESSION_LIMIT_OPEN_INVITES: "5" } });
-  t.is(harness.config.abuse.openInvites, 5);
+  const harness = createHarness(t, { env: { SESSION_LIMIT_INVITES_PER_DAY: "5" } });
+  t.is(harness.config.abuse.invitesPerDay, 5);
   t.throws(() => createHarness(t, { env: { SESSION_LIMIT_AUTH_PER_MINUTE: "0" } }), {
     message: /SESSION_LIMIT_AUTH_PER_MINUTE/,
   });

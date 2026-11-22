@@ -1043,9 +1043,10 @@ export const spacePageInput = {
   limit: z.number().int().min(1).max(100).optional(),
 };
 
-/** Online-only tRPC procedures: not replicated records, not mutators. At most
- * 3 open account invites per active member; `auth.checkInvite` has one
- * failure answer, `unusable`, for used, revoked and unknown codes. */
+/** Online-only tRPC procedures: not replicated records, not mutators. Each
+ * active member gets `SESSION_INVITES_PER_MEMBER` account invites in all,
+ * plus any a site admin gives (`04` I2); `auth.checkInvite` has one failure
+ * answer, `unusable`, for used, revoked and unknown codes. */
 export const spaceOnlineProcedures = {
   "auth.checkInvite": {
     input: z.strictObject({ code: z.string().max(64) }),
