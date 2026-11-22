@@ -838,7 +838,7 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .tlink.danger, .danger { color: var(--bad); }
 .empty { color: var(--t-faint); font-size: var(--fs-sm); }
 /* a page's or a section's read while it is pending: an empty status line */
-.page-empty { margin: 0; color: var(--t-faint); font-size: var(--fs-sm); }
+.page-empty { margin: 0; min-height: 20px; color: var(--t-faint); font-size: var(--fs-sm); }
 .uempty { margin: 0; padding: 8px 0; color: var(--t-faint); font-size: var(--fs-sm); }
 .vdone { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--good); font-weight: 600; }
 .vdone svg.i { width: 12px; height: 12px; }
@@ -1001,7 +1001,7 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .dacts { display: flex; gap: 8px; justify-content: flex-end; }
 /* the two toast regions stay mounted and empty between toasts; only the pill inside changes */
 .toastr { position: absolute; z-index: 50; left: 0; right: 0; bottom: 0; height: 0; }
-.toast { position: absolute; z-index: 50; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border-radius: var(--r-lg); background: var(--t-heading); color: var(--card); font-size: var(--fs-sm); box-shadow: var(--shadow-pop); animation: fadein .2s ease; }
+.toast { position: absolute; z-index: 50; left: 50%; bottom: 18px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); padding: 9px 14px; border-radius: var(--r-lg); background: var(--t-heading); color: var(--card); font-size: var(--fs-sm); box-shadow: var(--shadow-pop); animation: fadein .2s ease; }
 .mi-note { padding: 6px 10px 4px; font-size: var(--fs-xs); color: var(--t-faint); }
 .mi .src { margin-left: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
 @media (max-width: 860px) {
@@ -1061,6 +1061,11 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .ntx small { display: block; margin-top: 2px; color: var(--t-faint); font-size: var(--fs-xs); }
 .ndot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--accent-strong); }
 .card.flash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); transition: box-shadow .4s; }
+/* the item a mock-bar control affects, flashed when the control is chosen */
+.card.mflash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); }
+.mflash:not(.card) { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 3px; }
+/* on a phone the app frame keeps room under the mock bar; the window scrolls to it */
+@media (max-width: 520px) { .frame { min-height: min(620px, 85vh); } }
 /* ---- admin ---- */
 .fsel-w { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
 .fsel { appearance: none; -webkit-appearance: none; height: 36px; min-width: 220px; max-width: 100%; padding: 0 32px 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
@@ -2273,8 +2278,7 @@ app.addEventListener('click', e => {
   if (a === 'delyes') { const k = st.delAsk; st.delAsk = null; if (refused(byId(k.split(':')[1])?.s)) { render(); return; } deleteItem(k); return; }
   if (a === 'delno') { st.delAsk = null; render(); return; }
   if (a === 'save' && st.auth === 'out') { authFrom = sigOf(t); st.authOpen = true; st.flow = 'landing'; st.fromLink = false; render(); return; }
-  if (a === 'save') { if (refused(byId(d.id)?.s)) { render(); return; } const S = SAVED(), on = !S[d.id]; S[d.id] = on;
-    if (sendOrHold({ kind: 'save', undo: () => { S[d.id] = !on; } })) toast(on ? 'Saved.' : 'Removed from saved.'); render(); return; }
+  if (a === 'save') { saveThread(d.id); return; }
   if (a === 'runstop') { const run = runAt(d.id, d.node); if (!isActiveRun(run)) return; if (refused(byId(d.id)?.s)) { render(); return; }
     const prev = { status: run.status }; clearTimeout(RUN_T[d.id + ':' + d.node]); run.status = 'cancelled';
     sendOrHold({ kind: 'stop', undo: () => { run.status = prev.status; startRun(d.id, d.node, true); } }); render(); return; }
@@ -2680,6 +2684,13 @@ function paintToast() {
   const pill = st.toast ? `<div class="toast" id="toast">${esc(st.toast)}</div>` : '';
   s.innerHTML = st.toast && !st.toastAlert ? pill : ''; a.innerHTML = st.toast && st.toastAlert ? pill : '';
 }
+/* Save or unsave a thread: refused, nothing changes; not sent, the outbox toast offers Retry and Discard */
+function saveThread(id) {
+  if (refused(byId(id)?.s)) { render(); return; }
+  const S = SAVED(), on = !S[id]; S[id] = on;
+  if (sendOrHold({ kind: 'save', undo: () => { S[id] = !on; } })) toast(on ? 'Saved.' : 'Removed from saved.');
+  render();
+}
 /* refusals before or at send: a ban in the channel stops every write there; the mock bar's Writes: Refuse refuses */
 function refused(space) {
   if (space && st.auth === 'in' && isBanned(space, st.user)) { toast(`You are banned from ${spName(space)}.`, { alert: true }); return true; }
@@ -2723,7 +2734,7 @@ function restoreText(form, text) {
   st.restore = { id: 'in-' + form, text };
 }
 const dropNode = (pid, n) => { const l = EXTRA[pid] || [], i = l.indexOf(n); if (i >= 0) l.splice(i, 1); if (st.sel[pid] === n.id) st.sel[pid] = null; };
-const notSentLine = id => { const e = OUTBOX.find(x => x.id === id); return e ? `<div class="notsent"><span>${e.limit ? `Not sent: ${esc(e.limit)}` : 'Not sent'}</span><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsretry" data-id="${e.id}">Retry</button><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsdiscard" data-id="${e.id}">Discard</button></div>` : ''; };
+const notSentLine = id => { const e = OUTBOX.find(x => x.id === id); return e ? `<div class="notsent" data-ob="${e.id}"><span>${e.limit ? `Not sent: ${esc(e.limit)}` : 'Not sent'}</span><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsretry" data-id="${e.id}">Retry</button><span aria-hidden="true">·</span><button type="button" class="tlink" data-a="nsdiscard" data-id="${e.id}">Discard</button></div>` : ''; };
 /* runs after the page renders, so it can tell which items show their own line */
 const offScreen = () => OUTBOX.filter(e => !e.item || !app.querySelector(`.notsent [data-id="${e.id}"]`));
 /* the outbox toast and the upgrade notice are added once and then only their text changes while they show */
@@ -3113,7 +3124,7 @@ function failDropdown() {
 function applyFail(v, { close = false } = {}) {
   if (v !== st.mfail) { st.mfail = v; setSeedFail(v); }
   if (close) st.failOpen = false;
-  render();
+  render(); STAGE.mfail();
   document.getElementById(st.failOpen ? 'mk-fail-list' : 'mk-fail')?.focus({ preventScroll: true });
 }
 document.addEventListener('keydown', e => {
@@ -3131,6 +3142,148 @@ document.addEventListener('click', e => {
   if (e.target.closest?.('[data-mfx="toggle"]')) { st.failOpen = !st.failOpen; render(); document.getElementById(st.failOpen ? 'mk-fail-list' : 'mk-fail')?.focus({ preventScroll: true }); return; }
   if (st.failOpen) { st.failOpen = false; render(); $('#mk-fail')?.focus({ preventScroll: true }); }
 });
+/* ---- the error and connectivity controls: each option also stages a view that shows its effect ----
+   Choosing an option goes to the screen where it matters, makes the item it affects visible, scrolls it into view and
+   flashes it, and performs or stages the action the effect needs. Focus stays on the control (Queue: Full focuses the
+   composer to send, then returns). The normal value undoes what was staged where that makes sense: the staged unsent
+   reply and the staged unsent save are discarded, the sample ask leaves the composer and the staged New channel
+   dialog closes; a staged run keeps the outcome it had, and a screen that was opened stays open. */
+const STAGED = {};
+const SAMPLE_REPLY = 'Following up on this with one more source.';
+const SAMPLE_ASK = 'list the open datasets on container ship port waiting times';
+const SAMPLE_FOLLOWUP = 'what would change the conclusion';
+let flashT;
+/* flash every element matching `sel` for 1.6 s, the way goThread flashes a card; re-renders keep it */
+function flash(sel) {
+  st.flashSel = sel; clearTimeout(flashT); applyFlash();
+  flashT = setTimeout(() => { st.flashSel = null; applyFlash(); }, 1600);
+}
+function applyFlash() {
+  app.querySelectorAll('.mflash').forEach(x => x.classList.remove('mflash'));
+  if (st.flashSel) app.querySelectorAll(st.flashSel).forEach(x => x.classList.add('mflash'));
+}
+/* scroll each scrolling box around `el` (innermost first) so it shows below the app bar, and keep the bar shown */
+function reveal(el) {
+  if (!el) return;
+  const boxes = [];
+  for (let n = el.parentElement; n && n !== app; n = n.parentElement) { const oy = getComputedStyle(n).overflowY; if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) boxes.push(n); }
+  for (const sc of boxes) {
+    const b = el.getBoundingClientRect(), r = sc.getBoundingClientRect(), top = r.top + (sc.id === 'k-mg' || sc.id === 'k-page' ? 49 + 12 : 8), bot = r.bottom - 12;
+    if (b.top < top || b.bottom > bot) { st.keepBar = true; sc.scrollTop += b.top - top; }
+  }
+  $('#bar')?.classList.remove('hid');
+  /* on a phone the app frame can sit below the mock bar: bring the item into the window too */
+  const b = el.getBoundingClientRect(); if (b.top < 0 || b.bottom > innerHeight) window.scrollBy(0, b.top - Math.max(16, innerHeight / 4));
+}
+/* a line inside a side card (Not sent, a run's status) scrolls in with its card */
+const show = (sel, flashSel = sel) => { const el = app.querySelector(sel); reveal(el?.closest('.preview') || el); flash(flashSel); };
+/* staging needs an account that can write; a signed-out or waiting viewer becomes the Member persona */
+const ensureMember = () => { if (!isActive()) signIn('ines.v'); };
+/* a feed on screen: the current one when `has()` finds what is needed there, else Home */
+const toFeed = has => { st.screen = 'network'; st.authOpen = false; render(); if (!has()) { st.space = 'home'; render(); } };
+/* discard a staged write without putting its text back in a composer */
+function dropStaged(key) {
+  const e = OUTBOX.find(x => x.id === STAGED[key]); STAGED[key] = null; if (!e) return;
+  OUTBOX.splice(OUTBOX.indexOf(e), 1); if (e.item) delete e.item.unsent; e.undo?.(); render();
+}
+const usable = p => p && !p.removed && !p.del && !p.hidden && !p.summary && canWriteIn(p.s) && !isBanned(p.s, st.user);
+const firstIn = (kind, space) => streamFor(space).find(p => p.k === kind && usable(p) && (kind !== 'ask' || hasAnswer(p.run)));
+/* the thread to stage on: in the current feed, else on Home, else anywhere the viewer can write */
+function pickThread(kind) {
+  const here = st.screen === 'network' && st.reads !== 'loading' ? firstIn(kind, st.space) : null;
+  if (here) return here;
+  const home = firstIn(kind, 'home'); if (home) { st.space = 'home'; return home; }
+  const any = D.posts.filter(p => p.k === kind && usable(p) && isJoined(p.s) && (kind !== 'ask' || hasAnswer(p.run))).sort(byNew)[0];
+  if (any) st.space = any.s; return any;
+}
+const STAGE = {
+  conn(v) {
+    if (v === 'on') { dropStaged('reply'); return; }
+    ensureMember();
+    let e = OUTBOX.find(x => x.id === STAGED.reply);
+    if (!e) {
+      const p = pickThread('post'); if (!p) return;
+      st.screen = 'network'; const r = addReply(p, 'top', SAMPLE_REPLY), into = replies(p); st.rsel[p.id] = String(into.length - 1); st.replying = null;
+      sendOrHold({ kind: 'rp', item: r, form: `rp:${p.id}:top`, text: SAMPLE_REPLY, undo: () => { into.splice(into.indexOf(r), 1); if (st.rsel[p.id] === String(into.length)) st.rsel[p.id] = null; } });
+      STAGED.reply = r.unsent; e = OUTBOX.find(x => x.id === r.unsent);
+    } else {
+      const p = D.posts.find(x => replies(x).includes(e.item)); if (p) { st.space = p.s; st.rsel[p.id] = String(replies(p).indexOf(e.item)); }
+    }
+    st.screen = 'network'; render();
+    show(`.notsent[data-ob="${e.id}"]`, `.notsent[data-ob="${e.id}"], #bar .meter`);
+  },
+  reads(v) {
+    if (v === 'ok') return;
+    if (v === 'loading') {
+      if (st.screen === 'status' || (st.screen !== 'network' && !isActive())) { st.screen = 'network'; render(); }
+      const sel = st.screen === 'network' ? '#k-feedload' : st.screen === 'members' ? '#k-page .fine, #k-page .invc' : '#k-page [aria-busy="true"]';
+      show(sel.split(',')[0], sel); return;
+    }
+    ensureMember();
+    st.screen = v === 'invites' ? 'members' : 'usage'; st.chInfo = null; st.creating = null; render();
+    const sel = v === 'runsloading' ? '.uempty' : v === 'runs' ? '#k-page .ferr' : v === 'invites' ? '#k-page .ferr' : '#k-page .ferr, #bar .meter';
+    show(sel.split(',')[0], sel);
+  },
+  mrun(v) {
+    if (v === 'answer') return;
+    ensureMember();
+    const p = pickThread('ask'); if (!p) return;
+    st.screen = 'network'; st.chInfo = null; st.creating = null;
+    if (refused(p.s) || runBlocked(curModel())) { render(); show(`#card-${p.id}`); return; }
+    const nn = addBranch(p, 'r', SAMPLE_FOLLOWUP, null, -1);
+    st.sel[p.id] = nn.id; st.asking = null; st.quote = null; st.askPar = null;
+    sendOrHold({ kind: 'mf', item: nn, form: `mf:${p.id}:r`, text: SAMPLE_FOLLOWUP, undo: () => dropNode(p.id, nn), send: () => startRun(p.id, nn.id) });
+    render();
+    show(`.preview[data-node="${nn.id}"] .runp, .preview[data-node="${nn.id}"] .notsent`, `.preview[data-node="${nn.id}"]`);
+  },
+  mfail() {
+    if (!D.posts.includes(SEED_FAIL)) return;
+    st.screen = 'network'; st.space = SEED_FAIL.s; st.chInfo = null; st.creating = null; st.authOpen = false; render();
+    show(`#card-${SEED_FAIL.id}`);
+  },
+  mq(v, from) {
+    if (v !== 'full') { if (STAGED.draft && st.draft === STAGED.draft) { st.draft = ''; render(); } STAGED.draft = null; return; }
+    ensureMember();
+    st.chInfo = null; st.creating = null; st.newMode = 'ask'; st.draft = SAMPLE_ASK; STAGED.draft = SAMPLE_ASK;
+    toFeed(() => !!$('#in-new'));
+    const ta = $('#in-new'); if (!ta) return;
+    reveal(ta); flash('.nb-dock');
+    ta.focus({ preventScroll: true }); ta.form.requestSubmit(ta.form.querySelector('.split-main'));
+    setTimeout(() => { if (document.activeElement === $('#in-new')) findMock(from)?.focus({ preventScroll: true }); }, 900);
+    return true;  /* focus comes back later */
+  },
+  ml(v) {
+    if (v !== 'reached') { if (STAGED.creating && st.creating) { st.creating = null; render(); } STAGED.creating = false; return; }
+    ensureMember();
+    st.chInfo = null; st.authOpen = false; st.creatingFrom = null; st.creating = { name: 'reading-group', desc: '', vis: 'open', err: '' }; STAGED.creating = true; render();
+    createSpace();
+    show('#ns-err');
+  },
+  mw(v) {
+    if (v === 'accept') { dropStaged('save'); return; }
+    ensureMember();
+    st.chInfo = null; st.creating = null;
+    /* an unsent save staged earlier is shown again rather than sent twice */
+    const held = OUTBOX.find(x => x.id === STAGED.save);
+    if (held && v === 'rate') { st.screen = 'network'; st.space = byId(held.pid)?.s || st.space; render(); show(`#card-${held.pid}`, `#card-${held.pid}, #ob-toast`); return; }
+    const saves = () => [...app.querySelectorAll('#k-mg article.card [data-a="save"]:not([disabled])')];
+    toFeed(() => saves().length > 0);
+    const box = $('#k-mg')?.getBoundingClientRect(), btns = saves();
+    const btn = btns.find(b => { const r = b.getBoundingClientRect(); return r.top > box.top + 49 && r.bottom < box.bottom; }) || btns[0]; if (!btn) return;
+    const id = btn.dataset.id, n0 = OUTBOX.length;
+    saveThread(id);
+    const made = OUTBOX.length > n0 ? OUTBOX[OUTBOX.length - 1] : null;
+    if (made) { made.pid = id; STAGED.save = made.id; }
+    show(`#card-${id}`, `#card-${id}${made ? ', #ob-toast' : ''}`);
+  },
+  upgrade() { if (st.upgrade) show('#up-toast'); },
+  leave() { show('.mbdlg .mlist'); },
+  rejoin() { show('#toast'); },
+};
+/* the mock-bar control that has focus, as a selector, so a re-render can put focus back on it */
+const mockSig = el => { if (!el?.closest?.('#mock')) return null; if (el.id) return '#' + CSS.escape(el.id);
+  const parts = ['mx', 'x', 'mt', 'mp', 'mo', 'mkx'].filter(k => el.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`); return parts.length ? parts.join('') : null; };
+const findMock = sig => sig ? document.querySelector('#mock ' + sig) : null;
 function renderMock() {
   const base = ['sol', 'ines.v', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
   /* a person with a change waiting for them (banned, removed) gets a persona button so the change can be seen */
@@ -3146,7 +3299,7 @@ function renderMock() {
   const rejoiner = st.chInfo && st.members && isPrivate(st.chInfo) && ((st.memberAct && (MEMBERSHIP[st.chInfo] || []).find(m => m.u === st.memberAct.u)) || leaver);
   /* on phones the state switches fold behind one button, so the app keeps most of the screen */
   const fold = matchMedia('(max-width: 520px)').matches, shown = !fold || st.mkopen;
-  const focusId = document.activeElement?.closest?.('#mock') ? document.activeElement.id : '';
+  const focusSig = mockSig(document.activeElement);
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? (isActive() ? '' : '<button data-mo="link" title="Open an account invite link">Invited</button>') : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button><button data-mo="chlinkbanned" title="As @ines.v, banned from #grant-review, open an invite link to it">Channel link, banned</button><button data-mo="chlinknm" title="As @jun.park, who is not in #grant-review, open a used invite link to it">Used link, not a member</button></span></span>
     ${fold ? `<button class="fsbtn" data-mx="mkopen" aria-expanded="${!!st.mkopen}">${st.mkopen ? 'Hide states' : 'Show states'}</button>` : ''}${!shown ? '' : `
@@ -3159,7 +3312,7 @@ function renderMock() {
     <span class="mk"><span class="mkl">Connection</span><span class="seg">${[['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14'], ['prev', 'Offline, reading from Nov 12']].map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
     ${sw('mw', 'Writes', [['accept', 'Accept'], ['refuse', 'Refuse'], ['rate', 'Rate limited']])}
     <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}${rejoiner ? `<button data-mx="rejoin" title="@${esc(rejoiner.u)} leaves and joins again with a new link">Member rejoins</button>` : ''}</span></span>`}`;
-  if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+  findMock(focusSig)?.focus({ preventScroll: true });
   /* keep the open list inside the window */
   { const l = $('#mk-fail-list'); if (l) { const r = l.getBoundingClientRect(), over = r.right - (innerWidth - 16); if (over > 0) l.style.left = -over + 'px'; } }
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -3186,6 +3339,7 @@ function renderOnce() {
   const dlg = $('.authdlg');
   if (dlg && st.flow !== lastFlow) { const h = dlg.querySelector('h2'); h?.setAttribute('tabindex', '-1'); (dlg.querySelector('input:not([type="checkbox"])') || h)?.focus({ preventScroll: true }); }
   lastFlow = dlg ? st.flow : null;
+  applyFlash();
 }
 function renderInner() {
   renderMock();
@@ -3285,15 +3439,21 @@ document.addEventListener('click', e => {
   const sd = e.target.closest('[data-msd]'); if (sd) { st.ui.sd = sd.dataset.msd; st.ui.sv = '1'; st.menu = null; st.screen = 'network'; st.authOpen = false; render(); return; }
   const sv = e.target.closest('[data-msv]'); if (sv) { st.ui.sv = sv.dataset.msv; st.menu = null; st.screen = 'network'; if (st.ui.sd === 'b' && st.ui.sv !== '1') st.menu = null; render(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
-  const x = e.target.closest('[data-mx]'); if (x) { const k = x.dataset.mx, v = x.dataset.x;
+  const x = e.target.closest('[data-mx]'); if (x) { const k = x.dataset.mx, v = x.dataset.x, sig = mockSig(x);
     if (k === 'conn') { const was = st.offline; st.offline = v !== 'on'; st.readAt = v === 'old' ? Date.parse('2026-11-14T15:05:00Z') : v === 'prev' ? Date.parse('2026-11-12T15:05:00Z') : NOW;
       if (was && !st.offline) { st.loadingSummaries = true; setTimeout(() => { st.loadingSummaries = false; render(); }, 800); } }
     else if (k === 'upgrade') st.upgrade = !st.upgrade;
     else if (k === 'mkopen') st.mkopen = !st.mkopen;
     else if (k === 'leave') { const m = (MEMBERSHIP[st.chInfo] || []).find(y => y.role !== 'owner' && y.u !== me()); if (m) dropMember(st.chInfo, m.u); }
-    else if (k === 'rejoin') { const l = MEMBERSHIP[st.chInfo] || [], m = (st.memberAct && l.find(y => y.u === st.memberAct.u)) || l.find(y => y.role !== 'owner' && y.u !== me()); if (m) { m.adm = (m.adm || 0) + 1; m.at = new Date(NOW).toISOString(); } }
+    /* the member leaves and joins again with a new link; the owner's removal, sent with the admission the owner saw,
+       is then refused as stale */
+    else if (k === 'rejoin') { const sp = st.chInfo, l = MEMBERSHIP[sp] || [], m = (st.memberAct && l.find(y => y.u === st.memberAct.u)) || l.find(y => y.role !== 'owner' && y.u !== me());
+      if (m) { const seen = st.memberAct?.u === m.u ? st.memberAct.adm : admissionOf(sp, m.u); m.adm = (m.adm || 0) + 1; m.at = new Date(NOW).toISOString(); st.memberAct = null; removeMember(sp, m.u, seen); } }
     else st[k] = v;
-    render(); return; }
+    render();
+    /* each error and connectivity option also shows its effect; focus stays on the option */
+    if (STAGE[k] && !STAGE[k](v, sig)) findMock(sig)?.focus({ preventScroll: true });
+    return; }
   const t = e.target.closest('[data-mt]'); if (t) { st.mt = t.dataset.mt; const u = usage(); const need = { norm: null, low: ALLOWANCE * .85, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
 const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, v.slice()]));
