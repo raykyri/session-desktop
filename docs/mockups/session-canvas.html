@@ -794,9 +794,9 @@ document.addEventListener('mouseup', () => setTimeout(() => {
      end     a small chip after the block's last word
      click   click a passage: an "Ask about this passage" row opens under it
      select  no passage control: select text, then "Ask about this"
-     menu    no visible control: right-click (or long-press) a passage for a small menu"
+     menu    no visible control: right-click (or long-press) a passage for a small menu (the default)"
    The hovered or picked passage is marked with a bar, a tint, or nothing. */
-const TW = (() => { const d = { fh: 'edge', hl: 'tint', lb: 'ask' }; try { return Object.assign(d, JSON.parse(localStorage.getItem('session-canvas:tweaks') || '{}')); } catch { return d; } })();
+const TW = (() => { const d = { fh: 'menu', hl: 'none', lb: 'ask' }; try { return Object.assign(d, JSON.parse(localStorage.getItem('session-canvas:tweaks') || '{}')); } catch { return d; } })();
 const forkLabel = () => TW.lb === 'fork' ? 'Fork here' : 'Ask about this';
 let bTimer;
 const blocksOf = pr => [...pr.children].filter(c => !c.classList.contains('ifork') && !c.classList.contains('bseam'));
@@ -891,8 +891,8 @@ function renderTweaks() {
   el.className = open ? 'open' : '';
   const opt = (k, v, t) => `<option value="${v}"${TW[k] === v ? ' selected' : ''}>${t}</option>`;
   el.innerHTML = `<button type="button" data-tw="toggle" aria-expanded="${!!open}">Tweaks <span class="sub">· mock only</span></button><div class="tw">
-    <label>Passage control<select data-k="fh">${opt('fh', 'edge', 'Round ↳ on the card edge')}${opt('fh', 'gutter', 'Round ↳ in the left gutter')}${opt('fh', 'end', 'Chip after the last word')}${opt('fh', 'pill', 'Pill at the lower right (first version)')}${opt('fh', 'click', 'Click a passage, then a row under it')}${opt('fh', 'menu', 'Right-click menu')}${opt('fh', 'select', 'Text selection only')}</select></label>
-    <label>Passage highlight<select data-k="hl">${opt('hl', 'tint', 'Tint')}${opt('hl', 'bar', 'Bar on the left')}${opt('hl', 'none', 'None')}</select></label>
+    <label>Passage control<select data-k="fh">${opt('fh', 'menu', 'Right-click menu')}${opt('fh', 'edge', 'Round ↳ on the card edge')}${opt('fh', 'gutter', 'Round ↳ in the left gutter')}${opt('fh', 'end', 'Chip after the last word')}${opt('fh', 'pill', 'Pill at the lower right (first version)')}${opt('fh', 'click', 'Click a passage, then a row under it')}${opt('fh', 'select', 'Text selection only')}</select></label>
+    <label>Passage highlight<select data-k="hl">${opt('hl', 'none', 'None')}${opt('hl', 'tint', 'Tint')}${opt('hl', 'bar', 'Bar on the left')}</select></label>
     <label>Label<select data-k="lb">${opt('lb', 'ask', '“Ask about this”')}${opt('lb', 'fork', '“Fork here”')}${opt('lb', 'icon', 'Icon only')}</select></label>
     <div class="note">Hover an answer's paragraph${TW.fh === 'click' ? ' and click it' : TW.fh === 'select' ? ' and select some text' : TW.fh === 'menu' ? ' and right-click it' : ''}. Kept in this browser.</div></div>`;
   document.body.dataset.hl = TW.hl;
