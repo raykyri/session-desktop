@@ -1,18 +1,22 @@
+import type { Appearance } from "@session/shared";
 import type { ReactNode } from "react";
 
 import { PageFrame } from "../features/shell/Frames.js";
-import { useResolvedAppearance } from "../lib/appearance.js";
 import { isApplePlatform } from "../lib/platform.js";
 import { useSettingsStore } from "../stores/settings.js";
 import { Select, type SelectOption } from "../ui/Select.js";
 import { Checkbox } from "../ui/Toggle.js";
 
-/** The desktop's two appearances. A stored "system" (from an earlier web
- * build) shows as the appearance it resolves to until one is picked. */
+/** "System" follows the device's light or dark setting
+ * (`prefers-color-scheme`), and is the default. */
 const APPEARANCE_OPTIONS: SelectOption[] = [
+  { value: "system", label: "System" },
   { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
 ];
+
+const asAppearance = (value: string): Appearance =>
+  value === "light" || value === "dark" ? value : "system";
 
 /** The desktop's theme names are internal; the labels are the desktop's. */
 const COLOR_THEME_OPTIONS: SelectOption[] = [
@@ -49,7 +53,6 @@ function SettingsRow({ label, children }: { label: string; children: ReactNode }
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
   const set = useSettingsStore((state) => state.set);
-  const appearance = useResolvedAppearance(settings.appearance);
   // The desktop names the macOS chord; elsewhere the browser's is Ctrl+↵.
   const sendChord = isApplePlatform() ? "⌘↵" : "Ctrl+↵";
 
@@ -73,10 +76,10 @@ export function SettingsPage() {
         <SettingsRow label="Appearance">
           <Select
             label="Appearance"
-            value={appearance}
+            value={settings.appearance}
             options={APPEARANCE_OPTIONS}
             className={PICKER_CLASS}
-            onChange={(value) => set("appearance", value === "light" ? "light" : "dark")}
+            onChange={(value) => set("appearance", asAppearance(value))}
           />
         </SettingsRow>
         <SettingsRow label="Color theme">

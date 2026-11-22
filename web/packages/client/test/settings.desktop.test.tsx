@@ -100,3 +100,37 @@ test.serial("the settings page lists the settings that remain", async (t) => {
   t.true(useSettingsStore.getState().settings.reduceMotion);
   app.unmount();
 });
+
+test.serial(
+  "the appearance setting offers System, Dark and Light, and System follows the device",
+  async (t) => {
+    const app = await renderApp("/settings");
+    const pick = async (keyName: "Home" | "End") => {
+      fireEvent.click(screen.getByRole("combobox", { name: "Appearance" }));
+      const list = await screen.findByRole("listbox");
+      // Base UI commits on the keyboard in jsdom (see ui.primitives.test.tsx).
+      fireEvent.keyDown(list, { key: keyName });
+      fireEvent.keyDown(document.activeElement ?? list, { key: "Enter" });
+    };
+    // the default is System
+    const select = await screen.findByRole("combobox", { name: "Appearance" });
+    t.regex(select.textContent ?? "", /System/);
+    fireEvent.click(select);
+    await screen.findByRole("listbox");
+    t.deepEqual(
+      screen.getAllByRole("option").map((o) => o.textContent?.trim()),
+      ["System", "Dark", "Light"],
+    );
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    await pick("End");
+    await waitUntil(t, () => useSettingsStore.getState().settings.appearance === "light", "Light");
+    await pick("Home");
+    await waitUntil(
+      t,
+      () => useSettingsStore.getState().settings.appearance === "system",
+      "System",
+    );
+    t.regex(screen.getByRole("combobox", { name: "Appearance" }).textContent ?? "", /System/);
+    app.unmount();
+  },
+);
