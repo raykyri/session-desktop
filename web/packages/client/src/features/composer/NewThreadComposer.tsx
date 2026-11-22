@@ -228,9 +228,9 @@ export function ModelPicker({
   );
 }
 
-/** The split send button: the send arrow in both modes ("Ask" or "Post"),
- * disabled while the field is empty; the chevron ("Ask or post") opens the
- * mode menu. */
+/** The split send button: the send arrow for "Ask" and the pencil for
+ * "Post" (the icons of the mode menu's rows), disabled while the field is
+ * empty; the chevron ("Ask or post") opens the mode menu. */
 function SendSplitButton({
   mode,
   empty,
@@ -252,7 +252,7 @@ function SendSplitButton({
         aria-label={label}
         title={label}
       >
-        <SendArrowIcon />
+        {mode === "post" ? <PencilIcon /> : <SendArrowIcon />}
       </button>
       <Menu.Root>
         <Menu.Trigger className="split-more" aria-label="Ask or post">

@@ -38,6 +38,9 @@ test.afterEach.always(() => {
   configureReplica(null);
 });
 
+/** The first stroke of the pencil icon (`PencilIcon`, the mock's `PENCIL`). */
+const PENCIL_PATH = "M10.8 2.7a1.6 1.6 0 0 1 2.3 2.3L5.6 12.5 2.5 13.5l1-3.1Z";
+
 const firstCard = () => document.getElementById(`card-${FIRST}`) as HTMLElement;
 
 test.serial("a member's footer: counts, the follow-up and Save with its toasts", async (t) => {
@@ -106,6 +109,7 @@ test.serial(
     t.is(field.getAttribute("placeholder"), "Ask anything");
     const send = screen.getByRole("button", { name: "Ask" });
     t.true((send as HTMLButtonElement).disabled);
+    t.is(send.querySelector("path")?.getAttribute("d"), "M3 8h10", "the send arrow for Ask");
     t.truthy(screen.getByTitle("Model and effort"));
     t.truthy(screen.getByTitle("Channel"));
     // The member's avatar at the start.
@@ -114,6 +118,9 @@ test.serial(
     fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Post/ }));
     await waitUntil(t, () => field.getAttribute("placeholder") === "Write a post", "post mode");
     t.is(screen.queryByTitle("Model and effort"), null);
+    // The main action shows the pencil of the Post row, not the send arrow.
+    const post = screen.getByRole("button", { name: "Post" });
+    t.is(post.querySelector("path")?.getAttribute("d"), PENCIL_PATH);
     fireEvent.change(field, { target: { value: "hello" } });
     t.false(screen.getByRole("button", { name: "Post" }).hasAttribute("disabled"));
     t.is(useDraftsStore.getState().byKey["new"]?.text, "hello");

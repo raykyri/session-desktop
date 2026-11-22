@@ -1843,12 +1843,13 @@ const isAsk = () => st.newMode === 'ask';
 const ph = () => st.auth === 'out' ? 'Sign in to ask or post' : isAsk() ? 'Ask anything' : 'Write a post';
 const modeSend = () => sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post');
 const COMPOSERS = {
-  /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. */
+  /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. The main part shows
+     the icon of the chosen row: the send arrow for Ask, the pencil for Post. */
   split: (extra = '', face = true) => {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span class="mi-ic">${m === 'ask' ? ARROW_SEND : PENCIL}</span><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
     return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
-      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${ARROW_SEND}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
+      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${isAsk() ? ARROW_SEND : PENCIL}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'Agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
