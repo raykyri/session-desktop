@@ -2,7 +2,6 @@ import type { Appearance } from "@session/shared";
 import type { ReactNode } from "react";
 
 import { PageFrame } from "../features/shell/Frames.js";
-import { isApplePlatform } from "../lib/platform.js";
 import { useSettingsStore } from "../stores/settings.js";
 import { Select, type SelectOption } from "../ui/Select.js";
 import { Checkbox } from "../ui/Toggle.js";
@@ -49,21 +48,17 @@ function SettingsRow({ label, children }: { label: string; children: ReactNode }
  * research client's rows (research instructions, widgets in answers, the
  * default model, the body font) are gone: answers are plain Markdown (P21),
  * the default model is a site setting (W8.2), and the face is Inter (§11).
+ * "Require ⌘↵ to send" and "Show keyboard shortcut hints" are gone too:
+ * every composer sends on ⌘↵ (Ctrl↵) with Enter as a newline (§5), and
+ * the app has no shortcut hints to show.
  */
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
   const set = useSettingsStore((state) => state.set);
-  // The desktop names the macOS chord; elsewhere the browser's is Ctrl+↵.
-  const sendChord = isApplePlatform() ? "⌘↵" : "Ctrl+↵";
 
   return (
     <PageFrame title="Settings" narrow>
       <div className="mt-4 flex flex-col gap-5">
-        <Checkbox
-          label={`Require ${sendChord} to send`}
-          checked={settings.requireCmdEnterToSend}
-          onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
-        />
         <Checkbox
           label="Notifications"
           description="Show popup notifications for background server events."
@@ -93,11 +88,6 @@ export function SettingsPage() {
             }
           />
         </SettingsRow>
-        <Checkbox
-          label="Show keyboard shortcut hints"
-          checked={settings.showShortcutHints}
-          onCheckedChange={(checked) => set("showShortcutHints", checked)}
-        />
         <Checkbox
           label="Reduce motion"
           checked={settings.reduceMotion}

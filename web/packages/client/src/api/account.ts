@@ -281,7 +281,12 @@ export function useLogout() {
     mutationFn: () => logout(),
     onSuccess: () => {
       // Nothing of the signed-out account stays in memory or in this tab.
-      client.clear();
+      // `auth.me` is set to null rather than dropped: the shell's mounted
+      // `useMe` observer keeps the last data of a query that is removed
+      // from the cache, and would go on showing the account until a reload.
+      client.setQueryData(queryKeys.me(), null);
+      client.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me()[0] });
+      client.getMutationCache().clear();
       useSettingsStore.getState().reset();
       clearLocalAccountState();
     },

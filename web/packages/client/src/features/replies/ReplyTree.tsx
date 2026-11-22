@@ -261,11 +261,11 @@ function ReplyCard({
         onConfirm={() => {
           const gone = [reply.id, ...replies.filter((r) => r.parent === reply.id).map((r) => r.id)];
           const next = nextRowAfter(thread, gone);
-          void writes.deleteReply(reply.id).then((ok) => {
-            if (!ok) return;
-            select(thread, null);
-            focusSoon(next);
-          });
+          // The prediction removes the rows at once, whether or not the
+          // write is sent.
+          void writes.deleteReply(reply.id);
+          select(thread, null);
+          focusSoon(next);
         }}
       />
     </div>

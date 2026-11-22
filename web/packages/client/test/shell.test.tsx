@@ -12,6 +12,8 @@ import { SavedButton } from "../src/features/shell/SavedButton.js";
 import { UsageRing } from "../src/features/shell/UsageRing.js";
 import type { ShellChannel } from "../src/features/shell/shellData.js";
 import { viewerOf } from "../src/features/shell/viewer.js";
+import { configureReplica } from "../src/replica/ReplicaProvider.js";
+import { MemoryReplica } from "../src/replica/memory.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
 import {
@@ -33,7 +35,20 @@ test.beforeEach(() => {
 test.afterEach.always(() => {
   cleanup();
   resetDocumentRoot();
+  configureReplica(null);
 });
+
+/** A loaded replica with nothing in it: every list is known and empty.
+ * Without it `renderApp` gives the replica that never loads. */
+function loadedEmptyReplica() {
+  configureReplica({
+    create: (viewer) =>
+      new MemoryReplica({
+        me: viewer.kind === "signedOut" ? null : (viewer.user.handle ?? viewer.user.login),
+        clock: () => Date.now(),
+      }),
+  });
+}
 
 function bar(): HTMLElement {
   const header = document.querySelector<HTMLElement>("header.app-bar");
@@ -93,6 +108,7 @@ test.serial("without an invite: only the account menu, with Enter an invite code
 });
 
 test.serial("a member: ring, Saved, layout toggle and the full account menu", async (t) => {
+  loadedEmptyReplica();
   await renderApp("/", { user: testUser({ login: "ines.v", name: "Ines" }) });
   const header = within(bar());
 
@@ -105,10 +121,12 @@ test.serial("a member: ring, Saved, layout toggle and the full account menu", as
   const saved = header.getByRole("link", { name: "Saved" });
   t.is(saved.textContent, "", "no number at zero");
   t.is(saved.getAttribute("aria-current"), null, "not current off /saved");
+  t.is(saved.getAttribute("aria-busy"), null, "the saves are loaded");
 
   t.truthy(header.getByRole("button", { name: "Expand" }));
   t.truthy(header.getByRole("button", { name: "New channel" }));
   t.truthy(header.getByText("Nothing here yet."));
+  t.is(header.getByRole("navigation", { name: "Channels" }).getAttribute("aria-busy"), null);
 
   openMenu(header.getByRole("button", { name: "Account" }));
   const menu = await screen.findByRole("menu");
@@ -121,6 +139,39 @@ test.serial("a member: ring, Saved, layout toggle and the full account menu", as
   t.is(within(menu).queryByRole("menuitem", { name: "Settings" }), null, "P23");
 });
 
+test.serial("while the replica loads: no empty line in the strip and no Saved count", async (t) => {
+  // `renderApp`'s default replica never loads: every query is unknown.
+  await renderApp("/", { user: testUser() });
+  const header = within(bar());
+  const strip = header.getByRole("navigation", { name: "Channels" });
+  t.is(strip.getAttribute("aria-busy"), "true");
+  t.is(header.queryByText("Nothing here yet."), null, "not an empty state");
+  t.is(within(strip).queryAllByRole("link").length, 0);
+  t.truthy(header.getByRole("button", { name: "New channel" }));
+  const saved = header.getByRole("link", { name: "Saved" });
+  t.is(saved.getAttribute("aria-busy"), "true");
+  t.is(saved.textContent, "", "no count");
+});
+
+test.serial("Sign out shows the signed-out bar at once, on Home", async (t) => {
+  for (const user of [testUser(), waitingUser()]) {
+    const app = await renderApp("/browse", { user });
+    openMenu(within(bar()).getByRole("button", { name: /^Account/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Sign out" }));
+    await waitUntil(
+      t,
+      () => within(bar()).queryByRole("button", { name: "Sign in" }) !== null,
+      `${user.status}: the signed-out bar`,
+    );
+    t.is(app.router.state.location.pathname, "/", user.status);
+    t.is(within(bar()).queryByRole("button", { name: /^Account/ }), null, user.status);
+    t.truthy(within(bar()).getByRole("button", { name: "Join with invite" }), user.status);
+    t.is(screen.queryByText(/You don't have an invite yet/), null, `${user.status}: no banner`);
+    t.is(app.queryClient.getQueryData(["me"]), null, "the cache holds no account");
+    app.unmount();
+  }
+});
+
 test.serial("Site Admin is in the account menu for site admins only", async (t) => {
   await renderApp("/", { user: testUser({ login: "sol", isAdmin: true }) });
   openMenu(within(bar()).getByRole("button", { name: "Account" }));
@@ -130,6 +181,7 @@ test.serial("Site Admin is in the account menu for site admins only", async (t) 
 });
 
 test.serial("the scope picker offers three radio items to a member", async (t) => {
+  loadedEmptyReplica();
   await renderApp("/", { user: testUser() });
   openMenu(within(bar()).getByRole("button", { name: "Joined" }));
   const menu = await screen.findByRole("menu");

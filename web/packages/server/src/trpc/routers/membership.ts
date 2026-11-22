@@ -21,7 +21,7 @@ import { accountInviteLink, cleanDisplayName, isAccountHandle } from "@session/s
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { abuseBuckets } from "../../middleware/rateLimit.js";
+import { abuseBuckets, limitMessage } from "../../middleware/rateLimit.js";
 import type { AppContext } from "../base.js";
 import {
   limit,
@@ -211,8 +211,10 @@ export const accountInvitesRouter = router({
     const daily = abuseBuckets(ctx.config.abuse).invitesCreated;
     const dailyKey = `invitesCreated:user:${ctx.user.id}`;
     // `take` on the refusal path records it for `session_rate_limited_total`.
-    if (!ctx.limiter.has(dailyKey, daily) && !ctx.limiter.take(dailyKey, daily).allowed) {
-      throw tooManyRequests();
+    if (!ctx.limiter.has(dailyKey, daily)) {
+      const refused = ctx.limiter.take(dailyKey, daily);
+      if (!refused.allowed)
+        throw tooManyRequests(limitMessage("make", "invite links", daily, refused.retryAfter));
     }
     const made = accountInvites.create(ctx.db, {
       createdBy: ctx.user.id,

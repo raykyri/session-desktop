@@ -1,7 +1,8 @@
 // Saved in the app bar (02 §2.2 item 5; `savedBtn` variant `e`): a 30 px
 // pill with the bookmark and the count of saved threads, a 30 px circle with
 // the bookmark alone at zero. The bookmark is filled while anything is saved.
-// It is a link to `/saved`, current there.
+// It is a link to `/saved`, current there. Until the replica has the saves
+// it shows the bookmark alone and is `aria-busy`, with no count.
 
 import { Link } from "@tanstack/react-router";
 
@@ -15,14 +16,15 @@ export function savedLabel(count: number): string {
   return count > 0 ? `Saved, ${count}` : "Saved";
 }
 
-export function SavedButton({ count, current }: { count: number; current: boolean }) {
-  const has = count > 0;
+export function SavedButton({ count, current }: { count: number | null; current: boolean }) {
+  const has = count !== null && count > 0;
   return (
     <Link
       to="/saved"
       search={{}}
       title="Saved"
-      aria-label={savedLabel(count)}
+      aria-label={savedLabel(count ?? 0)}
+      aria-busy={count === null ? true : undefined}
       aria-current={current ? "page" : undefined}
       className={cn(
         ROUND_BUTTON,

@@ -31,9 +31,11 @@ export interface ShellChannel {
 }
 
 export interface ShellData {
-  /** The channels of the current scope, in strip order. */
-  channels: ShellChannel[];
-  savedCount: number;
+  /** The channels of the current scope, in strip order; null until the
+   * replica has loaded them (02 W9.1: a loading state, not an empty one). */
+  channels: ShellChannel[] | null;
+  /** Null until the replica has loaded the user log's saves. */
+  savedCount: number | null;
   unreadCount: number;
   /** The current week's reading; null while unknown (`currentReading`). */
   usage: UsageReading | null;
@@ -69,8 +71,6 @@ export function channelsInScope(all: readonly ShellChannel[], scope: ChannelScop
   }
 }
 
-const EMPTY_CHANNELS: ShellChannel[] = [];
-
 /** The app bar's data, from the replica (02 §9.1: `useChannels(scope)`, the
  * save records of the user log, `useNotifications()`) and the online data
  * (`useUsage()`; the fixture build's reading until M5b). */
@@ -85,7 +85,7 @@ export function useShellData(viewer: Viewer): ShellData & { scope: ChannelScope 
   const connected = useOnline();
   const all =
     channels === UNKNOWN
-      ? EMPTY_CHANNELS
+      ? null
       : channels.map((c) => ({
           id: c.id,
           name: c.name,
@@ -96,8 +96,8 @@ export function useShellData(viewer: Viewer): ShellData & { scope: ChannelScope 
         }));
   return {
     scope,
-    channels: channelsInScope(all, scope),
-    savedCount: savedCount === UNKNOWN ? 0 : savedCount,
+    channels: all === null ? null : channelsInScope(all, scope),
+    savedCount: savedCount === UNKNOWN ? null : savedCount,
     unreadCount: unreadCount === UNKNOWN ? 0 : unreadCount,
     usage: currentReading(online.usage, source.now()),
     usageOffline: !connected,

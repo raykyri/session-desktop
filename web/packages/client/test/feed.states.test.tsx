@@ -12,7 +12,7 @@ import { Profiler } from "react";
 
 import { useNewChannelDialog } from "../src/features/channels/NewChannelDialog.js";
 import { ThreadRow } from "../src/features/feed/ThreadRow.js";
-import { currentToast } from "../src/features/shell/Toast.js";
+import { clearToast, currentToast } from "../src/features/shell/Toast.js";
 import { ReplicaProvider, configureReplica } from "../src/replica/ReplicaProvider.js";
 import {
   createFixtureReplica,
@@ -20,12 +20,13 @@ import {
   runControl,
   type FixtureReplica,
 } from "../src/replica/fixtureReplica.js";
+import { restoreDraft } from "../src/replica/live.js";
 import { channelByName } from "../src/replica/queries.js";
 import type { WriteOutcome } from "../src/replica/source.js";
 import { QUEUE_FULL_MESSAGE, makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { claimLocalAccountState, clearLocalAccountState } from "../src/stores/localAccount.js";
-import { useThreadUiStore } from "../src/stores/threadUi.js";
+import { composerKey, useThreadUiStore, type InlineComposer } from "../src/stores/threadUi.js";
 
 import { renderApp, renderInRouter, testUser, waitUntil } from "./helpers.js";
 
@@ -178,6 +179,24 @@ test.serial("a run is refused before it is sent while the queue is full", async 
   replica.dispose();
 });
 
+test.serial("Open as its own thread confirms only a write that was sent", async (t) => {
+  const replica = createFixtureReplica("ines.v", { runMs: null });
+  const writes = makeWrites(replica);
+  const answers: WriteOutcome[] = [
+    { ok: true, result: undefined, unsent: true },
+    { ok: true, result: undefined },
+  ];
+  replica.mutate = () => Promise.resolve(answers.shift() as WriteOutcome);
+  clearToast();
+  // Not sent: the new card's Not sent line tells the person, not a toast.
+  t.truthy(await writes.promote(FIRST, "n1"));
+  t.is(currentToast(), null);
+  t.truthy(await writes.promote(FIRST, "n1"));
+  t.is(currentToast(), "Opened as its own thread.");
+  clearToast();
+  replica.dispose();
+});
+
 test.serial("the server's queue_full refusal shows the same toast", async (t) => {
   const replica = createFixtureReplica("ines.v", { runMs: null });
   replica.mutate = () =>
@@ -195,7 +214,7 @@ test.serial("the server's queue_full refusal shows the same toast", async (t) =>
 test.serial("thread selections and composers are cleared per account", (t) => {
   const ui = useThreadUiStore.getState();
   claimLocalAccountState("a");
-  ui.open(FIRST, { kind: "ask", parent: "r" } as never, "r");
+  ui.open(FIRST, { kind: "ask", parent: "r", from: null }, "r");
   claimLocalAccountState("a");
   t.truthy(useThreadUiStore.getState().byThread[FIRST]);
   claimLocalAccountState("b");
@@ -420,3 +439,121 @@ test.serial("a write to one thread re-renders that row only (W9.1)", async (t) =
   t.is(commits[SECOND], before[SECOND]);
   replica.dispose();
 });
+
+/** Every write applies its prediction and then answers "Not sent", as a
+ * request that failed does. */
+function answerNotSent(replica: FixtureReplica) {
+  const mutate = replica.mutate.bind(replica);
+  replica.mutate = async (name, input) => {
+    const outcome = await mutate(name, input);
+    return outcome.ok ? { ...outcome, unsent: true } : outcome;
+  };
+}
+
+test.serial(
+  "a branch or comment delete that is not sent moves focus at once, as a confirmed one does",
+  async (t) => {
+    const comment = "01M7HWGZJGT7JTFFVSYPX0CM09";
+    let branch = "";
+    prepare = (replica) => {
+      // a branch with nothing under it and no comments, made the viewer's
+      const nodes = replica.rawAll("node").filter((x) => x.th === FIRST);
+      const comments = replica.rawAll("comment");
+      const n = nodes.find(
+        (x) =>
+          x.par !== "r" &&
+          !nodes.some((y) => y.par === x.id) &&
+          !comments.some((c) => c.node === x.id),
+      );
+      if (!n) throw new Error("no branch");
+      branch = n.id;
+      rewrite(replica, n, { u: "ines.v" });
+      replica.write([
+        {
+          kind: "comment",
+          id: comment,
+          th: FIRST,
+          s: n.s,
+          node: n.id,
+          parent: null,
+          u: "ines.v",
+          t: "My comment to delete",
+          edited: false,
+          del: false,
+          mod: null,
+          createdAt: "2026-11-16T09:40:00Z",
+        },
+      ]);
+    };
+    await renderApp("/");
+    const side = () => document.querySelector<HTMLElement>(`[data-side="${FIRST}"]`) as HTMLElement;
+    await waitUntil(t, () => side() !== null, "the side column renders");
+    answerNotSent(replicaOf());
+    const branchRow = () =>
+      side().querySelector<HTMLElement>(`[role="treeitem"][data-row="${branch}"]`);
+    fireEvent.click(branchRow() as HTMLElement);
+    const text = await within(side()).findByText("My comment to delete");
+
+    // the comment: focus goes to the selected row, the branch
+    fireEvent.click(
+      within(text.closest(".brr") as HTMLElement).getByRole("button", { name: "More" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitUntil(
+      t,
+      () => within(side()).queryByText("My comment to delete") === null,
+      "the comment is gone",
+    );
+    await waitUntil(t, () => document.activeElement === branchRow(), "focus on the branch row");
+
+    // the branch: focus goes to the next row of the tree
+    const card = side().querySelector<HTMLElement>(".preview .who") as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "More" }));
+    const del = await screen.findByRole("menuitem", { name: /^Delete branch/ });
+    fireEvent.click(del);
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitUntil(t, () => branchRow() === null, "the branch is gone");
+    await waitUntil(
+      t,
+      () =>
+        document.activeElement?.getAttribute("role") === "treeitem" &&
+        side().contains(document.activeElement),
+      "focus on a row of the tree",
+    );
+  },
+);
+
+test.serial(
+  "Discard on an ask that was not sent opens its composer again at its row, with the text",
+  async (t) => {
+    await renderApp("/");
+    const side = () => document.querySelector<HTMLElement>(`[data-side="${FIRST}"]`) as HTMLElement;
+    await waitUntil(t, () => side() !== null, "the side column renders");
+    const replica = replicaOf();
+    const nodes = replica.rawAll("node").filter((x) => x.th === FIRST && x.par !== "r");
+    const node = nodes[0];
+    if (!node) throw new Error("no nested branch");
+    const cases: [InlineComposer, string, string | null][] = [
+      // Continue on the branch, Branch beside it, the footer's follow-up
+      [{ kind: "ask", parent: node.id, from: node.id }, "Continue ask", node.id],
+      [{ kind: "ask", parent: node.par, from: node.id }, "Ask beside this", node.id],
+      [{ kind: "ask", parent: "r", from: null }, "Ask about the answer", null],
+    ];
+    for (const [composer, name, selected] of cases) {
+      useThreadUiStore.getState().reset();
+      useDraftsStore.setState({ byKey: {}, hidden: false });
+      const text = `kept for ${name}`;
+      // what the sync replica calls on Discard (`SyncReplica.discard`)
+      restoreDraft({ key: composerKey(FIRST, composer), text }, { discarded: true });
+      const field = await within(side()).findByRole("textbox", { name });
+      t.is((field as HTMLTextAreaElement).value, text, name);
+      t.is(useThreadUiStore.getState().byThread[FIRST]?.selected ?? null, selected, name);
+      await waitUntil(t, () => document.activeElement === field, `${name}: focused`);
+    }
+  },
+);

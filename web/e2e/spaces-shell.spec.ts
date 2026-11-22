@@ -14,6 +14,8 @@ import { signIn } from "./helpers.js";
 import { channelName, person, ulid } from "./world.js";
 
 const LOGIN = "e2e-shell";
+/** A member of many channels, so the strip scrolls at narrow widths. */
+const STRIP_LOGIN = "e2e-shell-strip";
 const lounge = { name: "", id: "" };
 const lab = { name: "" };
 
@@ -25,6 +27,11 @@ test.beforeAll(async ({ browser }) => {
   lab.name = channelName("shell-lab");
   await olga.channel(lab.name, { vis: "private" });
   await me.join(lounge.id);
+  const many = await person(browser, STRIP_LOGIN);
+  await many.join(lounge.id);
+  for (let i = 1; i <= 8; i++) {
+    await many.join(await olga.channel(channelName(`strip-${i}`)));
+  }
   // enough rows to scroll the feed
   await olga.all(
     Array.from(
@@ -303,6 +310,23 @@ test.describe("signed in", () => {
     await tab.close();
   });
 
+  test("Sign out shows the signed-out bar at once, on Home", async ({ page }) => {
+    await page.goto(`/c/${lounge.name}`);
+    await expect(page.locator(".tcard").first()).toBeVisible();
+    const bar = page.getByRole("banner");
+    await bar.getByRole("button", { name: /^Account/ }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    // without a reload
+    await expect(bar.getByRole("button", { name: "Sign in" })).toBeVisible({ timeout: 3_000 });
+    await expect(bar.getByRole("button", { name: "Join with invite" })).toBeVisible();
+    await expect(bar.getByRole("button", { name: /^Account/ })).toHaveCount(0);
+    await expect(bar.getByRole("link", { name: /^Saved/ })).toHaveCount(0);
+    await expect(page).toHaveURL(`${APP_ORIGIN}/`);
+    // the session has ended on the server too: a reload stays signed out
+    await page.reload();
+    await expect(bar.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
   test("a member's bar", async ({ page }) => {
     await openHome(page);
     const bar = page.getByRole("banner");
@@ -313,6 +337,65 @@ test.describe("signed in", () => {
     await expect(bar.getByRole("button", { name: "Expand" })).toBeVisible();
     await expect(bar.getByRole("button", { name: /^Account/ })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Sign in" })).toHaveCount(0);
+  });
+});
+
+test.describe("narrow widths", () => {
+  test("the current chip is scrolled into the strip", async ({ page }) => {
+    await signIn(page, { login: STRIP_LOGIN });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openHome(page);
+    const strip = page.locator(".channel-strip");
+    const names = await strip.getByRole("link").allTextContents();
+    expect(names.length).toBeGreaterThanOrEqual(9);
+    // A chip in the middle of the strip, past its right edge at these
+    // widths, with chips on both sides: centring it needs no clamped scroll.
+    const middle = (names[4] ?? "").replace(/^#/, "");
+    for (const width of [700, 600, 520]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/c/${middle}`);
+      const chip = strip.locator('[aria-current="page"]');
+      await expect(chip).toHaveText(`#${middle}`);
+      // The chip lies inside the strip's box once the scroll has settled; a
+      // chip wider than the strip covers it, centred.
+      await expect
+        .poll(
+          () =>
+            chip.evaluate((el) => {
+              const own = el.getBoundingClientRect();
+              const box = el.closest(".channel-strip")?.getBoundingClientRect();
+              if (!box) return "no strip";
+              const inside = own.left >= box.left - 0.5 && own.right <= box.right + 0.5;
+              const centred =
+                own.width > box.width &&
+                Math.abs(own.left + own.right - (box.left + box.right)) <= 2;
+              return inside || centred
+                ? "inside"
+                : `chip ${own.left}-${own.right}, strip ${box.left}-${box.right}`;
+            }),
+          { message: `at ${width} px` },
+        )
+        .toBe("inside");
+    }
+  });
+
+  test("the breakpoints include their own width", async ({ page }) => {
+    await signIn(page, { login: LOGIN });
+    const brand = page.getByRole("link", { name: "Session home" }).locator("b");
+    const ring = page.getByRole("link", { name: /included tokens left/ });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openHome(page);
+    // 520 px is a phone width, as the composer's `max-width: 520px` rule
+    // has it: only the mark shows.
+    await page.setViewportSize({ width: 520, height: 900 });
+    await expect(brand).toBeHidden();
+    await page.setViewportSize({ width: 521, height: 900 });
+    await expect(brand).toBeVisible();
+    // 860 px is one column (`shell.css`): the ring's tighter padding.
+    await page.setViewportSize({ width: 860, height: 900 });
+    await expect(ring).toHaveCSS("padding-left", "6px");
+    await page.setViewportSize({ width: 861, height: 900 });
+    await expect(ring).toHaveCSS("padding-left", "10px");
   });
 });
 

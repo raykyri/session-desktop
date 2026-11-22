@@ -215,9 +215,12 @@ export function makeWrites(source: ReplicaSource, options: WritesOptions = {}): 
     },
     deleteNode: (thread, node) => done("followups.delete", { thread, node }),
     promote: async (thread, node) => {
-      const made_ = await made("threads.create", { id: id(), from: { th: thread, node } });
-      if (made_) showToast("Opened as its own thread.");
-      return made_;
+      const input = { id: id(), from: { th: thread, node } };
+      const outcome = await send("threads.create", input);
+      if (!outcome.ok) return null;
+      // Not sent: the new card's Not sent line says so, not this toast.
+      if (!outcome.unsent) showToast("Opened as its own thread.");
+      return input.id;
     },
     reply: (thread, t, parent, draft) =>
       made(
