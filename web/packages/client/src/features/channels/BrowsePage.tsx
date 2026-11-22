@@ -2,7 +2,9 @@
 // New channel for writers, a search over names and descriptions, and a card
 // per channel: glyph, `#name`, lock, "by @owner · N members", the
 // description clipped at 120, and Yours, Joined (leaves) or Join. Open
-// channels, and the private ones the viewer is in.
+// channels, and the private ones the viewer is in. A frozen channel (04 B6)
+// names its owner as its info dialog does, "by Deleted account", and has no
+// Join: the server refuses a join there.
 
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -13,13 +15,21 @@ import { UNKNOWN } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { ChannelGlyph } from "../../ui/Avatar.js";
 import { useFeedViewer } from "../feed/FeedContext.js";
-import { clip, noun } from "../feed/format.js";
+import { DELETED_ACCOUNT, clip, noun } from "../feed/format.js";
 import { LockIcon, SearchIcon } from "../feed/icons.js";
 import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
 
 import { joinChannel } from "./ChannelHeader.js";
 import { useNewChannelDialog } from "./NewChannelDialog.js";
+
+/** A card's line under the name: the owner and the member count. The owner
+ * of a frozen channel has no active account, and the line names them as the
+ * channel's info dialog does. */
+export function browseByline(c: Pick<ChannelView, "owner" | "members" | "frozen">): string {
+  const by = c.frozen ? DELETED_ACCOUNT : `@${c.owner}`;
+  return `by ${by} · ${noun(c.members, "member", "members")}`;
+}
 
 /** The channels Browse lists for a query. */
 export function browseList(channels: readonly ChannelView[], query: string): ChannelView[] {
@@ -75,9 +85,7 @@ export function BrowsePage() {
                     #{c.name}
                     {c.private ? <LockIcon /> : null}
                   </b>
-                  <small>
-                    by @{c.owner} · {noun(c.members, "member", "members")}
-                  </small>
+                  <small>{browseByline(c)}</small>
                 </span>
               </Link>
               <p>{clip(c.desc, 120)}</p>
@@ -93,7 +101,7 @@ export function BrowsePage() {
                 >
                   Joined
                 </button>
-              ) : (
+              ) : c.frozen ? null : (
                 <button
                   type="button"
                   className="btn1 sm"

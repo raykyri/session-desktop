@@ -123,6 +123,9 @@ test("B6: the frozen channels of a deleted owner", async (t) => {
   t.true(keys(lounge).includes(`thread:${post}`));
   const space = lounge.records.find((r) => r.key === `space:${open}`)?.record;
   t.like(space, { frozen: true, owner: "olga" });
+  // the directory (Browse, All) serves the flag too
+  const listed = (await h.caller(null).spaces.directory()).spaces.find((s) => s.id === open);
+  t.like(listed, { frozen: true, owner: "olga" });
   const lab = await mel.snapshot(`space:${closed}`);
   t.true(keys(lab).includes(`thread:${secret}`));
   t.false(keys(await signedOutSnapshot(h, `space:${closed}`)).includes(`thread:${secret}`));

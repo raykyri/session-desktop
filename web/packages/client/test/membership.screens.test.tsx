@@ -1109,6 +1109,25 @@ test.serial("a non-member sees Join on an open channel, and none once it is froz
   t.is(screen.queryByRole("button", { name: "Join" }), null);
 });
 
+test.serial("Browse: a frozen channel is by Deleted account and has no Join (04 B6)", async (t) => {
+  const channel = unjoinedChannel();
+  const card = async () =>
+    (await screen.findByText(`#${channel.name}`, { selector: "b" })).closest(
+      ".bcard",
+    ) as HTMLElement;
+  const app = await renderApp("/browse");
+  const open = await card();
+  t.regex(open.textContent ?? "", /by @\S+ · \d+ members?/);
+  t.truthy(within(open).getByRole("button", { name: "Join" }));
+  app.unmount();
+  prepare = (replica) => rewrite(replica, space(replica, channel.name), { frozen: true });
+  await renderApp("/browse");
+  const frozen = await card();
+  t.regex(frozen.textContent ?? "", /by Deleted account · \d+ members?/);
+  t.notRegex(frozen.textContent ?? "", /by @/);
+  t.is(within(frozen).queryByRole("button", { name: "Join" }), null);
+});
+
 test.serial("a frozen channel is left out of the composer's channel picker", async (t) => {
   prepare = (replica) => rewrite(replica, space(replica, "public"), { frozen: true });
   await renderApp("/");
