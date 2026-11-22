@@ -8,7 +8,9 @@ import { modelListing, setDefaultEffort, setDefaultModel } from "../../models/si
 import { adminProcedure, limit, protectedProcedure, router } from "../base.js";
 
 /** 60 calls a minute per site admin (`04` Z1), shared with `admin.invites.*`. */
-export const adminModelsProcedure = adminProcedure.use(limit("adminModels", "user"));
+export const adminModelsProcedure = adminProcedure.use(
+  limit("adminModels", "user", (wait) => `Too many changes. Try again in ${wait}.`),
+);
 
 export const modelsRouter = router({
   /** Every registry entry with its payers and efforts, the default model and

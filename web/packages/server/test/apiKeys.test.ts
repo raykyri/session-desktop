@@ -401,11 +401,11 @@ test("format refusals answer the mockup's messages before any provider call", as
     ],
     [
       { provider: "anthropic", raw: OPENAI_KEY },
-      "Anthropic keys start with sk-ant- and are longer than this. Copy the whole key from your Anthropic account.",
+      "Anthropic keys start with sk-ant-. Copy the whole key from your Anthropic account.",
     ],
     [
       { provider: "openai", raw: "sk-short" },
-      "OpenAI keys start with sk- and are longer than this. Copy the whole key from your OpenAI account.",
+      "OpenAI keys start with sk-. Copy the whole key from your OpenAI account.",
     ],
   ];
   for (const [input, message] of refusals) {

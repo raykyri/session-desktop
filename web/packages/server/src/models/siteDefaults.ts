@@ -105,7 +105,10 @@ interface AdminWrite {
 export function setDefaultModel(write: AdminWrite, model: string): string {
   const entry = write.registry.find((candidate) => candidate.id === model);
   if (!entry) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "That model is not available." });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "That model is no longer available. Reload to see the current list.",
+    });
   }
   if (!payableWithIncluded(entry)) {
     throw new TRPCError({

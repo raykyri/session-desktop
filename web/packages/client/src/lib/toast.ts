@@ -60,7 +60,7 @@ export function trpcErrorCode(error: unknown): string | null {
 
 /** What a failed request shows when it carries no refusal of the server's
  * (the network failed, or the answer was not tRPC's). */
-export const UNREACHABLE_MESSAGE = "Couldn't reach Session. Try again.";
+export const UNREACHABLE_MESSAGE = "Couldn't reach Session. Check your connection and try again.";
 
 /** A failed call's message for the reader: the server's own message for a
  * tRPC refusal that carries one, else `UNREACHABLE_MESSAGE`. The text of
