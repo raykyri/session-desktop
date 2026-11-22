@@ -4,9 +4,13 @@
 // preference. That a write re-renders one row only is in
 // `feed.states.test.tsx`.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
+import { InlineComposer } from "../src/features/composer/InlineComposer.js";
 import { currentToast } from "../src/features/shell/Toast.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
 import { fixtureReplicaConfig, type FixtureReplica } from "../src/replica/fixtureReplica.js";
@@ -14,7 +18,7 @@ import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
-import { renderApp, waitUntil, waitingTestUser } from "./helpers.js";
+import { renderApp, renderInRouter, waitUntil, waitingTestUser } from "./helpers.js";
 
 const FIRST = "01M7HWGZJGT7JTFFVSYPX055KV";
 const waiting = () => waitingTestUser();
@@ -126,6 +130,59 @@ test.serial(
     t.is(useDraftsStore.getState().byKey["new"]?.text, "hello");
   },
 );
+
+/** The declarations of the last top-level rule for `selector` in
+ * `spaces.css`, whitespace collapsed. */
+function spacesRule(selector: string): string {
+  const css = readFileSync(join(import.meta.dirname, "..", "src", "styles", "spaces.css"), "utf8");
+  const at = css.lastIndexOf(`\n${selector} {`);
+  if (at < 0) return "";
+  return css.slice(at, css.indexOf("}", at)).replace(/\s+/g, " ");
+}
+
+test.serial(
+  "the composer: with text its controls take a row under the field; cleared, one row",
+  async (t) => {
+    await renderApp("/");
+    const field = await screen.findByRole("textbox", { name: "Ask or post" });
+    const form = field.closest("form") as HTMLFormElement;
+    t.false(form.classList.contains("open"), "empty: one row");
+    field.focus();
+    fireEvent.change(field, { target: { value: " " } });
+    t.true(form.classList.contains("open"), "any text, whitespace too");
+    t.is(document.activeElement, field, "focus stays in the field");
+    // the stylesheet wraps the open composer: the field fills the row after
+    // the avatar, so the controls go to the next one
+    t.regex(spacesRule(".nb.open"), /flex-wrap: wrap/);
+    t.regex(spacesRule(".nb.open > textarea"), /flex: 1 1 calc\(100% - 28px\)/);
+    t.regex(spacesRule(".nb > textarea"), /max-height: min\(480px, calc\(100vh - 80px\)\)/);
+    fireEvent.change(field, { target: { value: "" } });
+    t.false(form.classList.contains("open"), "cleared: one row again");
+  },
+);
+
+test.serial("an inline composer: with text Close and its button go under the field", async (t) => {
+  await renderInRouter(
+    <InlineComposer
+      draftKey="test:inline"
+      placeholder="Reply"
+      submitLabel="Reply"
+      onSubmit={() => Promise.resolve(true)}
+      onClose={() => {}}
+      focusOnOpen={false}
+    />,
+  );
+  const field = screen.getByRole("textbox", { name: "Reply" });
+  const form = field.closest("form") as HTMLFormElement;
+  t.false(form.classList.contains("open"));
+  fireEvent.change(field, { target: { value: "a" } });
+  t.true(form.classList.contains("open"));
+  t.regex(spacesRule(".icomp.open"), /flex-wrap: wrap/);
+  t.regex(spacesRule(".icomp.open textarea"), /flex: 1 1 100%/);
+  t.regex(spacesRule(".icomp textarea"), /max-height: min\(320px, calc\(100vh - 80px\)\)/);
+  fireEvent.change(field, { target: { value: "" } });
+  t.false(form.classList.contains("open"));
+});
 
 test.serial("empty states: Saved, and a channel without threads", async (t) => {
   await renderApp("/saved");

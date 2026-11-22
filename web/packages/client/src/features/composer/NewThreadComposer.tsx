@@ -10,7 +10,7 @@
 import { Menu } from "@base-ui/react/menu";
 import { useNavigate } from "@tanstack/react-router";
 import type { MouseEvent, RefObject } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { useMediaQuery } from "../../lib/media.js";
@@ -334,6 +334,12 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
   }, []);
 
   const empty = !text.trim();
+  // Any text, whitespace included, puts the controls on their own row; the
+  // field's height is measured again at its new width.
+  const open = text !== "";
+  useLayoutEffect(() => {
+    if (field.current && open) growField(field.current);
+  }, [open]);
   const placeholder = signedOut
     ? "Sign in to ask or post"
     : mode === "ask"
@@ -391,7 +397,7 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
     // the form is reachable from the keyboard.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <form
-      className={cn("nb", !empty && "has-text")}
+      className={cn("nb", !empty && "has-text", open && "open")}
       onSubmit={(event) => {
         event.preventDefault();
         void send();

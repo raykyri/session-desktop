@@ -134,14 +134,18 @@ a.tlink, a.btn1, a.btn2 { text-decoration: none; }
 .composer { display: flex; gap: 8px; align-items: flex-end; background: var(--field); border: 1px solid var(--control-border);
   border-radius: 20px; padding: 4px 4px 4px 15px; }
 .composer:focus-within { border-color: var(--accent); }
-.composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: 160px; }
+.composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: min(320px, calc(100vh - 80px)); }
+/* an inline composer holding any text: the field takes the first row, Close and the submit button a row under it */
+.composer.open { flex-wrap: wrap; row-gap: 4px; }
+.composer.open textarea { flex: 1 1 100%; }
+.composer.open textarea + * { margin-left: auto; }
 .composer textarea::placeholder { color: var(--placeholder); }
 .row.new-row { padding: 15px 0 0; }
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
 .nb { min-width: 0; }
 .nb-dock > .av, .nb-dock > textarea { position: relative; top: -1px; }
-.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
+.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: min(480px, calc(100vh - 80px)); }
 .nb textarea::placeholder { color: var(--placeholder); }
 .nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .pick { position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 22px 0 9px; border-radius: 13px; background: var(--control); flex: none; }
@@ -443,6 +447,12 @@ a.hsv-e, a.hsv-b, a.hsv-d, a.hsaved { text-decoration: none; }
 .hlay:hover { background: var(--control); color: var(--t-heading); }
 .hlay svg.i { width: 15px; height: 15px; }
 @media (max-width: 520px) { .ncw .nb-dock { flex-wrap: wrap; row-gap: 6px; } .ncw .nb-dock > textarea { flex: 1 1 calc(100% - 40px); } .ncw .nb-dock > textarea + * { margin-left: 28px; } .ncw .nb-dock > .split { margin-left: auto; } }
+/* the new-thread composer holding any text (.open): the field takes the first row after the avatar and the controls
+   wrap onto their own row under the text, the send button at its end; emptied, it is one row again. No transition. */
+.ncw .nb-dock.open { flex-wrap: wrap; row-gap: 6px; }
+.ncw .nb-dock.open > textarea { flex: 1 1 calc(100% - 28px); }
+.ncw .nb-dock.open > textarea + * { margin-left: 28px; }
+.ncw .nb-dock.open > .split { margin-left: auto; }
 .rtext p { margin: 2px 0; }
 .rtext blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--t-faint); }
 .mention { color: var(--accent); font-weight: 500; }
@@ -1828,7 +1838,7 @@ const newSpaceId = () => st.space === 'home' || st.space === 'saved' ? st.newSpa
 const draft = (ph, extra = '') => `<textarea id="in-new" rows="1" placeholder="${esc(ph)}" aria-label="Ask or post"${extra}>${esc(st.draft)}</textarea>`;
 const sendBtn = (val, label) => `<button type="submit" value="${val}" class="send" data-enter aria-label="${label}" title="${label}">${I.up}</button>`;
 const modeSeg = () => `<span class="modes" role="group" aria-label="Ask or post">${['ask', 'post'].map(m => `<button type="button" data-a="mode" data-m="${m}" aria-pressed="${st.newMode === m}">${m === 'ask' ? 'Ask' : 'Post'}</button>`).join('')}</span>`;
-const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}`;
+const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}${st.draft !== '' ? ' open' : ''}`;
 /* Custom model menu: models first, then Effort at the bottom as a submenu (opens on hover or focus). */
 const cap1 = x => x[0].toUpperCase() + x.slice(1);
 const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
@@ -2504,6 +2514,8 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
+  /* a composer holding any text puts its controls on a row under the field (.open), before its height is measured */
+  if (t.tagName === 'TEXTAREA' && t.form?.matches('.composer, .nb')) t.form.classList.toggle('open', t.value !== '');
   /* editing the invite code after a check drops its result: the inviter and the sign-up buttons go until Continue */
   if (t.id === 'in-code') { if (t.value !== (st.codeTyped ?? st.code)) { st.code = t.value; st.codeTyped = null; app.querySelectorAll('.authdlg .code-f ~ .inviter, .authdlg .code-f ~ .auth-acts').forEach(x => x.remove()); } return; }
   if (t.dataset.ce === 'desc' && st.chEdit) { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; }
@@ -3398,8 +3410,8 @@ function renderOnce() {
   const focusSig = sigOf(document.activeElement), drafts = {};
   app.querySelectorAll('#page textarea').forEach(t => { if (t.id && t.id !== 'in-new' && !t.id.startsWith('ce-') && t.value) drafts[t.id] = t.value; });
   renderInner();
-  for (const id in drafts) { const t = document.getElementById(id); if (t && !t.value) { t.value = drafts[id]; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
-  if (st.restore) { const t = document.getElementById(st.restore.id); if (t) { t.value = st.restore.text; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; t.focus({ preventScroll: true }); } st.restore = null; return; }
+  for (const id in drafts) { const t = document.getElementById(id); if (t && !t.value) { t.value = drafts[id]; t.form?.classList.add('open'); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
+  if (st.restore) { const t = document.getElementById(st.restore.id); if (t) { t.value = st.restore.text; t.form?.classList.toggle('open', t.value !== ''); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; t.focus({ preventScroll: true }); } st.restore = null; return; }
   if (focusSig && (document.activeElement === document.body || !document.activeElement)) { const el = findSig(focusSig); if (el) { el.focus({ preventScroll: true }); if (el.tagName === 'TEXTAREA') el.setSelectionRange(el.value.length, el.value.length); } }
   const dlg = $('.authdlg');
   if (dlg && st.flow !== lastFlow) { const h = dlg.querySelector('h2'); h?.setAttribute('tabindex', '-1'); (dlg.querySelector('input:not([type="checkbox"])') || h)?.focus({ preventScroll: true }); }

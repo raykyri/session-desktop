@@ -610,6 +610,16 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   (label "Ask or post") opens Ask (arrow) / Post (pencil) with descriptions
   ("Agent researches and answers", "A message to people in the channel")
   and a check;
+- the rows: empty, the composer is one row holding the avatar, the field and
+  its controls; holding any text (whitespace included; `.open`) the field
+  takes the whole first row after the avatar and the controls (channel
+  picker, model picker, split send button) wrap onto their own row under the
+  text, indented to the text with the send button at the row's end; emptied,
+  it is one row again. Typing keeps focus, the caret and the selection, the
+  change does not scroll the page, and there is no transition (so none under
+  reduced motion). The field grows with its text to
+  `min(480px, calc(100vh - 80px))` (was 240 px) and scrolls past it. At
+  520 px and below the controls row may wrap further;
 - ⌘↵ (Ctrl↵ elsewhere, `formatChord`) sends, Enter is a newline; a pointer-down
   on the composer outside a control keeps the caret in the field; choosing
   in any of its menus returns focus to the field;
@@ -637,12 +647,19 @@ Inline composers (asks on a thread, comments, replies) are one `InlineComposer`
 with a text submit ("Ask", "Comment", "Reply") and a Close button (label
 "Close"), with the placeholders "Ask about the answer", "Ask about this
 passage", "Continue ask", "Ask beside this", "Comment here", "Reply" and
-"Reply to @handle" (§4).
+"Reply to @handle" (§4). Holding any text, the field takes the whole first
+row and Close and the submit button move to a row under it, at its end;
+emptied, the composer is one row again. The field grows to
+`min(320px, calc(100vh - 80px))` (was 160 px) and scrolls past it.
 
 **W5.1** Replace `features/composer/*` (`ResearchQueryComposer`, `AskNoteSwitch`
 deleted). Drafts persist per composer key in `stores/drafts`. Acceptance: tests
 for mode switching (label, placeholder, model picker hidden for Post, the
-send arrow for Ask and the pencil for Post), the empty-text state, the member's avatar at the
+send arrow for Ask and the pencil for Post), the empty-text state, the
+controls' own row once the field holds text and one row when it is cleared
+(new-thread and inline composers; Playwright at 1440 px reads the field's
+box across the row and the controls under it, and the 480 px cap after 60
+lines), the member's avatar at the
 start, the signed-out cover, out-of-tokens refusal for each run-starting
 write and not for Post, reply or comment, the queue-full pre-check and the
 rollback on a `queue_full` refusal with the text restored, draft restore

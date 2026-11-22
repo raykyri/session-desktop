@@ -92,6 +92,90 @@ test.beforeEach(async ({ page }) => {
   await signInAndOpen(page, LOGIN);
 });
 
+test("the composer puts its controls under the text once it holds any", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const field = page.getByRole("textbox", { name: "Ask or post" });
+  const form = page.locator("form.nb");
+  const box = async (locator: ReturnType<typeof page.locator>) => {
+    const b = await locator.boundingBox();
+    if (!b) throw new Error("not rendered");
+    return { left: b.x, right: b.x + b.width, top: b.y, bottom: b.y + b.height, width: b.width };
+  };
+  const scroller = page.locator("[data-shell-scroll]");
+  const top = await scroller.evaluate((el) => el.scrollTop);
+  // empty: one row
+  expect((await box(page.locator("form.nb .split"))).top).toBeLessThan((await box(field)).bottom);
+
+  await field.click();
+  await field.pressSequentially("ab");
+  await expect(form).toHaveClass(/\bopen\b/);
+  // focus, the caret and the scroll stay where they were
+  await expect(field).toBeFocused();
+  expect(await field.evaluate((el: HTMLTextAreaElement) => el.selectionStart)).toBe(2);
+  expect(await scroller.evaluate((el) => el.scrollTop)).toBe(top);
+  // the composer spans its column; the field the whole row after the avatar
+  const column = await box(form.locator(".."));
+  const f = await box(form);
+  const input = await box(field);
+  expect(f.width).toBeCloseTo(column.width, 0);
+  expect(input.left).toBeCloseTo(f.left + 13 + 28, 0);
+  expect(input.right).toBeCloseTo(f.right - 7, 0);
+  for (const control of await form.locator(":scope > :not(textarea):not(.nb-av)").all()) {
+    expect((await box(control)).top).toBeGreaterThanOrEqual(input.bottom);
+  }
+
+  // 60 lines grow the field to min(2 × 240 px, 100vh − 80 px), then it scrolls
+  await field.fill(Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n"));
+  expect(await field.evaluate((el) => el.getBoundingClientRect().height)).toBeCloseTo(480, 0);
+  expect(await field.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+
+  // cleared: one row again
+  await field.fill("");
+  await expect(form).not.toHaveClass(/\bopen\b/);
+  expect((await box(page.locator("form.nb .split"))).top).toBeLessThan((await box(field)).bottom);
+
+  // with text, nothing passes the composer's edges at the narrower widths
+  await field.fill("A question long enough to wrap onto a second line at the phone width.");
+  for (const width of [860, 521, 400]) {
+    await page.setViewportSize({ width, height: 900 });
+    const out = await form.evaluate((el) => {
+      const own = el.getBoundingClientRect();
+      return [...el.children]
+        .map((c) => c.getBoundingClientRect())
+        .filter((c) => c.left < own.left - 0.5 || c.right > own.right + 0.5).length;
+    });
+    expect(out, `${width}`).toBe(0);
+    expect(await form.evaluate((el) => el.scrollWidth - el.clientWidth), `${width}`).toBe(0);
+  }
+  await field.fill("");
+});
+
+test("an inline composer puts Close and its button under the text once it holds any", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await card(page, "My question for the group")
+    .getByRole("button", { name: /^Reply/ })
+    .click();
+  const form = page.locator("form.icomp").first();
+  const field = form.locator("textarea");
+  const send = form.getByRole("button", { name: "Reply", exact: true });
+  const bottom = async () => (await field.boundingBox())?.y ?? 0;
+  const height = async () => (await field.boundingBox())?.height ?? 0;
+  expect((await send.boundingBox())?.y ?? 0).toBeLessThan((await bottom()) + (await height()));
+  await field.pressSequentially("ok");
+  await expect(form).toHaveClass(/\bopen\b/);
+  await expect(field).toBeFocused();
+  expect((await send.boundingBox())?.y ?? 0).toBeGreaterThanOrEqual(
+    (await bottom()) + (await height()),
+  );
+  // 60 lines: min(2 × 160 px, 100vh − 80 px)
+  await field.fill(Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join("\n"));
+  expect(await height()).toBeCloseTo(320, 0);
+  await field.fill("");
+  await expect(form).not.toHaveClass(/\bopen\b/);
+});
+
 test("a post goes to the top of Home with its channel in the footer", async ({ page }) => {
   // The send action's icon has 9 px before it and 6 px after it; the
   // chevron segment keeps its 24 px.

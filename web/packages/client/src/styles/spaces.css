@@ -1111,7 +1111,22 @@
   line-height: 1.4;
   color: inherit;
   resize: none;
-  max-height: 160px;
+  max-height: min(320px, calc(100vh - 80px));
+}
+
+/* An inline composer holding any text: the field takes the whole first row
+   and Close and the submit button move to a row under it, at its end. */
+.icomp.open {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.icomp.open textarea {
+  flex: 1 1 100%;
+}
+
+.icomp.open textarea + * {
+  margin-left: auto;
 }
 
 .icomp .send-text {
@@ -1216,7 +1231,7 @@
   line-height: 1.5;
   padding: 3px 0;
   min-height: 28px;
-  max-height: 240px;
+  max-height: min(480px, calc(100vh - 80px));
   margin-bottom: calc(10px - var(--fs-input) * 0.75);
 }
 
@@ -1394,6 +1409,27 @@
   .nb > .split {
     margin-left: auto;
   }
+}
+
+/* Holding any text (`.open`), the field takes the whole first row after the
+   avatar and the controls wrap onto a row of their own under the text, the
+   send button at its end; emptied, the composer is one row again. No
+   transition: the rows change as the text does. */
+.nb.open {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.nb.open > textarea {
+  flex: 1 1 calc(100% - 28px);
+}
+
+.nb.open > textarea + * {
+  margin-left: 28px;
+}
+
+.nb.open > .split {
+  margin-left: auto;
 }
 
 /* ---- empty states and the banner ---- */
