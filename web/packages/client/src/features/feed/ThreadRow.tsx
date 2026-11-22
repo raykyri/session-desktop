@@ -35,7 +35,7 @@ import { showToast } from "../shell/Toast.js";
 import { AnswerProse, type PassageGroup } from "./AnswerProse.js";
 import { FrozenChannel, useFeedViewer, useRunChoice } from "./FeedContext.js";
 import { ConfirmDelete } from "./FeedDialog.js";
-import { ModerationNote, rowText } from "./Moderated.js";
+import { DELETED_BY_AUTHOR, ModerationNote, moderationLine, rowText } from "./Moderated.js";
 import { MoreMenu, type MoreAction } from "./MoreMenu.js";
 import { authorName, clip, footerMeta, noun, relTime, showsSaveCount } from "./format.js";
 import { RemovedIcon, ReplyArrowIcon, SaveIcon } from "./icons.js";
@@ -90,8 +90,9 @@ function LoadingCard() {
   );
 }
 
-/** The placeholder of a removed thread (01 C12, 04 §6.2): who removed it,
- * the reason, and "Ask by [deleted] in #name" for every reader. */
+/** The placeholder of a removed thread (01 C12, 04 §6.2): "Removed by the
+ * channel owner", the reason, and "Ask in #name" for every reader. The
+ * author is withheld, and so is the remover's handle. */
 function RemovedCard({ view }: { view: ThreadView }) {
   const { thread, space } = view;
   const { me } = useFeedViewer();
@@ -108,10 +109,10 @@ function RemovedCard({ view }: { view: ThreadView }) {
       <div className="rmnote">
         <RemovedIcon />
         <span className="flex-1">
-          Removed by @{thread.modBy ?? "owner"}
+          {moderationLine("removed")}
           {thread.modNote ? <small>Reason: “{thread.modNote}”</small> : null}
           <small>
-            {thread.k === "post" ? "Post" : "Ask"} by [deleted] in #{space?.name ?? ""}
+            {thread.k === "post" ? "Post" : "Ask"} in #{space?.name ?? ""}
           </small>
         </span>
         {mine ? (
@@ -144,7 +145,7 @@ function RemovedCard({ view }: { view: ThreadView }) {
 
 /** A row whose thread's own records are not loaded (a summary thread, 01
  * R3) asks for them once it renders. True while they could not be fetched
- * (offline, a refused read): the row shows "Available when online." */
+ * (offline, a refused read): the row shows "Couldn't load the rest of this thread." */
 function useOpenUnloaded(thread: string, value: unknown): boolean {
   const source = useReplica();
   const unloaded = value === UNKNOWN;
@@ -295,7 +296,7 @@ function ThreadCard({
   /** Whether someone else replied to a post; null while the replies are not
    * loaded. */
   replyOthers?: boolean | null;
-  /** An ask's records could not be fetched: "Available when online." */
+  /** An ask's records could not be fetched: "Couldn't load the rest of this thread." */
   unavailable?: boolean;
 }) {
   const { thread, counts, space, saved } = view;
@@ -433,7 +434,7 @@ function ThreadCard({
       <div className="tt">
         <span className="ttn" aria-hidden="true" />
         <h3 className="tt-title" id={`title-${thread.id}`}>
-          {deleted ? "[deleted]" : rowText(thread, thread.q)}
+          {deleted ? DELETED_BY_AUTHOR : rowText(thread, thread.q)}
         </h3>
         <span
           className="ttav"

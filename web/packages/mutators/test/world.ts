@@ -10,6 +10,7 @@ import type { ExecutionContext } from "ava";
 import {
   MUTATORS,
   Refusal,
+  inputMessage,
   StagedTx,
   UnknownRead,
   authorize,
@@ -170,7 +171,7 @@ export class World {
         ok: false,
         error: new Refusal(
           "BAD_REQUEST",
-          undefined,
+          inputMessage(parsed.error.issues),
           parsed.error.issues.map((x) => `input.${x.path.join(".")}: ${x.code}`),
         ).toError(),
       };

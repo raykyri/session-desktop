@@ -157,7 +157,7 @@ test("format errors are shown before anything is sent", async ({ page }) => {
   );
   await addKey(page, "openai", "sk-short");
   await expect(openai.getByRole("alert")).toHaveText(
-    "OpenAI keys start with sk- and are longer than this. Copy the whole key from your OpenAI account.",
+    "OpenAI keys start with sk-. Copy the whole key from your OpenAI account.",
   );
 
   // With only an OpenAI key, the billing setting says why it is off.

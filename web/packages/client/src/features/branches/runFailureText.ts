@@ -26,10 +26,10 @@ export interface FailureView {
 export const TOKENS_PAST_TEXT =
   "This ask did not run: included tokens had run out. Run again to start it.";
 export const TOKENS_OTHER_TEXT = "This ask did not run: its author had no included tokens left.";
-export const KEY_OTHER_TEXT = "This run stopped: its author's API key could not be used.";
+export const KEY_OTHER_TEXT = "Stopped: author's API key could not be used.";
 export const ACCESS_OTHER_TEXT =
   "This ask did not run: its author could no longer read this channel.";
-export const RATE_OTHER_TEXT = "The model provider is rate limiting this deployment.";
+export const RATE_OTHER_TEXT = "Stopped: rate limited by model provider.";
 /** The asker's key copy for a record written without `detail`. */
 export const KEY_TEXT =
   "The API key for this run was rejected or removed. Check your keys in Usage.";
@@ -54,11 +54,11 @@ export function keyFailureText(run: Pick<RunRec, "pay" | "bill" | "fail">): stri
     case "key_unset":
       return `No valid ${name === null ? "API" : name} key was set when this run started. Add a key in Usage.`;
     case "key_changed":
-      return `${yourKey} was removed, replaced or marked invalid, or billing stopped using it, during this run. Check your keys in Usage.`;
+      return `${yourKey} was removed, replaced or marked invalid during this run. See Usage for more details.`;
     case "key_rejected":
-      return `${name ?? "The provider"} rejected your API key, and it is now marked Invalid. Add a working key in Usage.`;
+      return `${name ?? "The provider"} rejected your API key. Add a new key in Usage.`;
     case "key_forbidden":
-      return `${name ?? "The provider"} refused your API key permission for this request. The key is still valid; check its permissions in your ${name ?? "provider"} account.`;
+      return `${name ?? "The provider"} rejected this request with a permission error.`;
     case undefined:
       return KEY_TEXT;
   }

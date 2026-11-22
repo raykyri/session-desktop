@@ -267,12 +267,12 @@ test.serial("each format error, before anything is sent", async (t) => {
     [
       "openai",
       "sk-short",
-      "OpenAI keys start with sk- and are longer than this. Copy the whole key from your OpenAI account.",
+      "OpenAI keys start with sk-. Copy the whole key from your OpenAI account.",
     ],
     [
       "anthropic",
       "sk-proj-an-openai-key-pasted-here-0000",
-      "Anthropic keys start with sk-ant- and are longer than this. Copy the whole key from your Anthropic account.",
+      "Anthropic keys start with sk-ant-. Copy the whole key from your Anthropic account.",
     ],
   ];
   for (const [provider, value, message] of cases) {
@@ -305,7 +305,7 @@ test.serial("removing a key asks first, then shows the toast", async (t) => {
   await waitUntil(t, () => document.querySelector('[data-key="openai"] .chip') !== null, "row");
   t.truthy(keyRow("openai").getByText("sk-••••77c2"));
   fireEvent.click(keyRow("openai").getByRole("button", { name: "Remove" }));
-  t.truthy(keyRow("openai").getByText("Remove the OpenAI key? Asks billed to it will stop."));
+  t.truthy(keyRow("openai").getByText("Remove the OpenAI key?"));
   fireEvent.click(keyRow("openai").getByRole("button", { name: "Keep" }));
   t.truthy(keyRow("openai").getByText("Valid"));
   fireEvent.click(keyRow("openai").getByRole("button", { name: "Remove" }));
@@ -344,7 +344,7 @@ test.serial("Escape closes the key form, then the removal confirm (02 §10.2)", 
   await waitUntil(t, () => screen.queryByLabelText("Anthropic API key") === null, "closed again");
 
   fireEvent.click(keyRow("openai").getByRole("button", { name: "Remove" }));
-  t.truthy(keyRow("openai").getByText("Remove the OpenAI key? Asks billed to it will stop."));
+  t.truthy(keyRow("openai").getByText("Remove the OpenAI key?"));
   fireEvent.keyDown(document.body, { key: "Escape" });
   await waitUntil(t, () => keyRow("openai").queryByText(/Remove the OpenAI key/) === null, "kept");
   t.truthy(keyRow("openai").getByText("Valid"));
@@ -472,7 +472,7 @@ test.serial("Site Admin: a refused change restores the choice and shows the erro
     responses: {
       "models.list": KEY_ONLY_LISTING,
       "admin.models.setDefault": () => {
-        throw trpcRefusal("That model is not available.");
+        throw trpcRefusal("That model is no longer available. Reload to see the current list.");
       },
     },
   });
@@ -483,7 +483,11 @@ test.serial("Site Admin: a refused change restores the choice and shows the erro
     () =>
       screen
         .queryAllByRole("alert")
-        .some((node) => node.textContent === "That model is not available."),
+        .some(
+          (node) =>
+            node.textContent ===
+            "That model is no longer available. Reload to see the current list.",
+        ),
     "the error",
   );
   t.true(input(models.getByRole("radio", { name: /Gemini 3.8 Flash/ })).checked);

@@ -15,6 +15,7 @@ import {
 } from "../../api/membership.js";
 import { COPY_FAILED, writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
+import { refusalMessage } from "../../lib/toast.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { authorName } from "../feed/format.js";
 import { CloseIcon } from "../feed/icons.js";
@@ -167,7 +168,7 @@ function InviteBox() {
             onClick={() =>
               revoke.mutate(link.id, {
                 onSuccess: () => showToast("Invite revoked."),
-                onError: (failure) => showToast(failure.message, { alert: true }),
+                onError: (failure) => showToast(refusalMessage(failure), { alert: true }),
               })
             }
           >
@@ -184,7 +185,7 @@ function InviteBox() {
             create.mutate(undefined, {
               onSuccess: (made) =>
                 showToast(`Invite ${made.code} created. Send the link to one person.`),
-              onError: (failure) => showToast(failure.message, { alert: true }),
+              onError: (failure) => showToast(refusalMessage(failure), { alert: true }),
             })
           }
         >

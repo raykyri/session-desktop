@@ -63,7 +63,7 @@ test("private channels are not read; their address shows the landing", async ({ 
   await expect(page.getByText("Not for readers outside the channel")).toHaveCount(0);
   await page.goto(`/c/${w.lab}`);
   await expect(
-    page.getByText(`This channel is private. Ask @${w.olga?.handle ?? ""} to add you.`),
+    page.getByText("This channel is private. You need an invite link to join."),
   ).toBeVisible();
 });
 

@@ -273,11 +273,11 @@ test("C2: another reader reads the author's failure, not the asker's", (t) => {
   t.is(failedRunText(failed({ why: "access" }), other), ACCESS_OTHER_TEXT);
   t.is(
     failedRunText(failed({ why: "rate", at: 0 }), other),
-    "The model provider is rate limiting this deployment.",
+    "Stopped: rate limited by model provider.",
   );
   t.is(
     failedRunText(failed({ why: "error", cls: "timeout" }), other),
-    "The run exceeded the maximum duration allowed by this Session instance and was stopped.",
+    "Stopped: exceeded maximum duration.",
     "a provider error reads the same for everyone",
   );
 });
@@ -303,15 +303,15 @@ test("CD6: the asker's key copy for each detail, with the key's provider", (t) =
   );
   t.is(
     text("key_changed", "key:anthropic"),
-    "Your Anthropic key was removed, replaced or marked invalid, or billing stopped using it, during this run. Check your keys in Usage.",
+    "Your Anthropic key was removed, replaced or marked invalid during this run. See Usage for more details.",
   );
   t.is(
     text("key_rejected", "key:anthropic"),
-    "Anthropic rejected your API key, and it is now marked Invalid. Add a working key in Usage.",
+    "Anthropic rejected your API key. Add a new key in Usage.",
   );
   t.is(
     text("key_forbidden", "key:openai"),
-    "OpenAI refused your API key permission for this request. The key is still valid; check its permissions in your OpenAI account.",
+    "OpenAI rejected this request with a permission error.",
   );
   t.is(text(undefined, "key:anthropic"), KEY_TEXT, "a record written before `detail`");
   t.is(
@@ -323,7 +323,7 @@ test("CD6: the asker's key copy for each detail, with the key's provider", (t) =
       },
       asker,
     ),
-    "Anthropic rejected your API key, and it is now marked Invalid. Add a working key in Usage.",
+    "Anthropic rejected your API key. Add a new key in Usage.",
     "a run that moved to the key reads its provider from its bill",
   );
 });
@@ -344,7 +344,7 @@ test.serial(
     });
     await waitUntil(
       t,
-      () => card().queryByText(/^Anthropic refused your API key permission/) !== null,
+      () => card().queryByText(/^Anthropic rejected this request with a permission error/) !== null,
       "asker, the key's detail",
     );
 

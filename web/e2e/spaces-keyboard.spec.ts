@@ -237,7 +237,7 @@ test.describe("focus and Escape on an ask", () => {
     const branchHere = page.getByRole("button", { name: "Branch here" });
     await expect(branchHere).toBeVisible();
     // Tab from the card goes to the actions first.
-    const actions = page.getByRole("group", { name: "Selection" }).getByRole("button");
+    const actions = page.getByRole("group", { name: "Selected text" }).getByRole("button");
     await page.keyboard.press("Tab");
     await expect(actions.first()).toBeFocused();
     if ((await actions.count()) > 1) await page.keyboard.press("Tab");

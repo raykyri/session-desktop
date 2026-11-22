@@ -46,7 +46,7 @@ export function apiKeyFormatError(provider: ApiKeyProvider, raw: string): string
     raw.length > API_KEY_MAX_LENGTH ||
     /\s/.test(raw)
   ) {
-    return `${info.name} keys start with ${info.prefix} and are longer than this. Copy the whole key from your ${info.name} account.`;
+    return `${info.name} keys start with ${info.prefix}. Copy the whole key from your ${info.name} account.`;
   }
   return null;
 }

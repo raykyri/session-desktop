@@ -175,7 +175,10 @@ export function stepDownEffort(effort: Effort, accepted: readonly Effort[]): Eff
   return accepted[0] ?? "low";
 }
 
-export const effortLabel = (effort: Effort) => effort.charAt(0).toUpperCase() + effort.slice(1);
+/** The effort's name in the composer's submenu and Effort row: `xhigh`
+ * reads "Extra". */
+export const effortLabel = (effort: Effort) =>
+  effort === "xhigh" ? "Extra" : effort.charAt(0).toUpperCase() + effort.slice(1);
 
 export function defaultOnlineData(): OnlineData {
   return {

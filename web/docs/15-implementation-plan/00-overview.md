@@ -186,7 +186,7 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
 - Overdraft is limited per member: `SESSION_OVERDRAFT_TOKENS` (200,000 a
   week) is shared by all of a member's included-token runs; at allowance
   plus that limit every such run stops at its next checkpoint with "Stopped:
-  this week's included tokens ran out." The per-run cap of 400,000 stays
+  out of tokens." The per-run cap of 400,000 stays
   (01 S3; 03 K9).
 - Beyond 20 queued runs per user, `pre` refuses with a recorded
   `PRECONDITION_FAILED` (`reason: "queue_full"`); `TOO_MANY_REQUESTS` is
@@ -206,7 +206,8 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
 ## Decisions recorded after review
 
 - The weekly allowance is 2,000,000 included tokens per member (03 K3).
-- A removed thread's placeholder shows "[deleted]" for its author; the
+- A removed thread's placeholder names no author ("Removed by the channel
+  owner", "Ask in #name"); the
   author's handle is served to the author only (04 §6.2, 01 C12).
 - Backups have no retention requirement: removed text may remain in
   Litestream generations and archives (01 §9 q3, 05 S1).

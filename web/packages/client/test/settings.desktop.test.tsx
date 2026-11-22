@@ -61,7 +61,7 @@ test.serial("the settings page lists the settings that remain", async (t) => {
   const app = await renderApp("/settings");
   await waitUntil(t, () => screen.queryByText("Reduce motion") !== null, "the page");
   t.truthy(screen.getAllByText("Color theme").length > 0);
-  t.truthy(screen.getByRole("checkbox", { name: /^Notifications/ }));
+  t.is(screen.queryByRole("checkbox", { name: /^Notifications/ }), null, "Notifications");
   // The research client's rows are gone (02 §1, §11, P21).
   for (const gone of [
     "Widgets in answers",

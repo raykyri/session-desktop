@@ -71,7 +71,7 @@ export function WelcomePage() {
     } catch (failure) {
       refused(
         trpcErrorCode(failure) === "TOO_MANY_REQUESTS"
-          ? "Too many attempts. Wait a while and try again."
+          ? "Too many attempts. Try again in a few minutes."
           : UNUSABLE_INVITE_MESSAGE,
       );
     } finally {

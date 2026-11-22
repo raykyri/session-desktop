@@ -215,7 +215,7 @@ test("the profile step: name and handle rules, taken handles, a used invite", as
   t.is((await profile.auth.me())?.pendingInvite, null);
   // An active account cannot redeem again.
   await t.throwsAsync(harness.caller(active).accountInvites.redeem({ code: first.code }), {
-    message: "Your account is already active.",
+    message: "Your account is already active. Reload to continue.",
   });
 });
 

@@ -75,8 +75,8 @@ The server starts without these, but the launch does not work without them:
 
 | Variable | Without it | Source |
 | --- | --- | --- |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `/auth/github` answers 503 "GitHub sign-in is not configured on this deployment" | Fly secret; the production GitHub OAuth app, callback `https://session.dev/auth/github/callback`, scopes `read:user user:email` |
-| `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET` | `/auth/x` answers 503; X sign-in is a launch blocker (Q8) | Fly secret, new; the production X app (§4.6), OAuth 2.0 confidential client, callback `https://session.dev/auth/x/callback`, scopes `users.read tweet.read users.email` |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `/auth/github` redirects to `/login?error=unavailable&provider=github` ("Sign-in with GitHub is not available right now. Try again later."), and the log says "GitHub sign-in is not configured on this deployment"; the start route answers 503 | Fly secret; the production GitHub OAuth app, callback `https://session.dev/auth/github/callback`, scopes `read:user user:email` |
+| `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET` | `/auth/x` redirects to the sign-in page with the same message; X sign-in is a launch blocker (Q8) | Fly secret, new; the production X app (§4.6), OAuth 2.0 confidential client, callback `https://session.dev/auth/x/callback`, scopes `users.read tweet.read users.email` |
 | `LITESTREAM_REPLICA_URL` | The entrypoint runs the server without replication: no backup | Fly secret, changed: `<new replica URL>` (§4.9, staged in §6 step 3). The old prefix is the rollback source |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Litestream and the documents archive cannot write the bucket | Fly secret, kept from the current app unless the bucket changes. `AWS_ENDPOINT_URL_S3` and `AWS_REGION` are honoured when the bucket needs them (Fly sets the endpoint for Tigris) |
 | `SESSION_METRICS_TOKEN` | `GET /metrics` answers 404; spend and volume space are not observable | Fly secret, kept or new: `openssl rand -hex 32` |

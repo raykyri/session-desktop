@@ -127,8 +127,8 @@ test.serial("running: the step and the text written so far", async (t) => {
 test.serial("complete: the answer, then each stop note", async (t) => {
   const card = await open(t);
   for (const note of [
-    "Stopped at the run's token limit.",
-    "Stopped: this week's included tokens ran out.",
+    "Stopped: reached token limit for a single run.",
+    "Stopped: out of tokens.",
   ]) {
     setRun({ status: "complete", step: 3, note });
     await waitUntil(t, () => card().queryByText(note) !== null, note);
@@ -158,10 +158,7 @@ test.serial("failed: the reason for each fail.why, and Run again", async (t) => 
       { why: "access", at: null, cls: null },
       "You can no longer read this channel, so the ask did not run.",
     ],
-    [
-      { why: "error", at: null, cls: "timeout" },
-      "The run exceeded the maximum duration allowed by this Session instance and was stopped.",
-    ],
+    [{ why: "error", at: null, cls: "timeout" }, "Stopped: exceeded maximum duration."],
   ];
   for (const [fail, text] of reasons) {
     setRun({ status: "failed", fail });

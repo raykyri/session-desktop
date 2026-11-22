@@ -3,8 +3,8 @@
 // per channel: glyph, `#name`, lock, "by @owner · N members", the
 // description clipped at 120, and Yours, Joined (leaves) or Join. Open
 // channels, and the private ones the viewer is in. A frozen channel (04 B6)
-// names its owner as its info dialog does, "by Deleted account", and has no
-// Join: the server refuses a join there.
+// reads "Unavailable" in place of its owner, as its info dialog does, and has
+// no Join: the server refuses a join there.
 
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -15,7 +15,7 @@ import { UNKNOWN } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { ChannelGlyph } from "../../ui/Avatar.js";
 import { useFeedViewer } from "../feed/FeedContext.js";
-import { DELETED_ACCOUNT, clip, noun } from "../feed/format.js";
+import { CHANNEL_UNAVAILABLE, clip, noun } from "../feed/format.js";
 import { LockIcon, SearchIcon } from "../feed/icons.js";
 import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
@@ -24,11 +24,11 @@ import { joinChannel } from "./ChannelHeader.js";
 import { useNewChannelDialog } from "./NewChannelDialog.js";
 
 /** A card's line under the name: the owner and the member count. The owner
- * of a frozen channel has no active account, and the line names them as the
- * channel's info dialog does. */
+ * of a frozen channel has no active account, and the line says "Unavailable"
+ * in place of "by @owner", as the channel's info dialog does. */
 export function browseByline(c: Pick<ChannelView, "owner" | "members" | "frozen">): string {
-  const by = c.frozen ? DELETED_ACCOUNT : `@${c.owner}`;
-  return `by ${by} · ${noun(c.members, "member", "members")}`;
+  const by = c.frozen ? CHANNEL_UNAVAILABLE : `by @${c.owner}`;
+  return `${by} · ${noun(c.members, "member", "members")}`;
 }
 
 /** The channels Browse lists for a query. */
@@ -71,7 +71,7 @@ export function BrowsePage() {
         />
       </label>
       {channels === UNKNOWN ? (
-        <p className="page-empty" role="status" aria-label="Loading" aria-busy="true" />
+        <p className="page-empty" role="status" aria-label="Loading channels" aria-busy="true" />
       ) : list.length === 0 ? (
         <p className="page-empty">No channels match.</p>
       ) : (

@@ -9,8 +9,9 @@
 // bucket's 5 and the 5 that refill through in one day.
 
 import type { PreLimit } from "@session/mutators";
+import { retryWaitText } from "@session/shared";
 import type { PreLimits } from "@session/sync/server";
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 
 import type { AbuseLimits } from "../config.js";
 import type { AppEnv } from "../deps.js";
@@ -120,14 +121,6 @@ function per(windowMs: number): string {
   return `in ${Math.round(windowMs / MINUTE)} minutes`;
 }
 
-/** How long until a use is free again, in words, rounded up: minutes below
- * two hours, hours above. */
-function wait(seconds: number): string {
-  const minutes = Math.max(1, Math.ceil(seconds / 60));
-  if (minutes < 120) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
-  return `${Math.ceil(minutes / 60)} hours`;
-}
-
 /** The message of a limit's refusal: the limit, and when a use is free
  * again ("You can make 10 invite links a day. Try again in 3 hours.").
  * `retryAfter` is in seconds. */
@@ -137,7 +130,7 @@ export function limitMessage(
   spec: BucketSpec,
   retryAfter: number,
 ): string {
-  return `You can ${what} ${spec.limit} ${things} ${per(spec.windowMs)}. Try again in ${wait(retryAfter)}.`;
+  return `You can ${what} ${spec.limit} ${things} ${per(spec.windowMs)}. Try again in ${retryWaitText(retryAfter)}.`;
 }
 
 /** The message of a `pre`-stage refusal ("You can create 5 channels a day.
@@ -276,18 +269,23 @@ export class RateLimiter {
 export const RATE_LIMITED_MESSAGE = "Rate limit exceeded. Please try again shortly.";
 
 /** Limits a plain HTTP route by the client's IP key (`ipKey`: the address,
- * or its /64 prefix for IPv6). */
+ * or its /64 prefix for IPv6). `refused` may answer a refusal itself (a
+ * page the browser navigated to); otherwise the answer is the JSON 429. */
 export function rateLimitByIp(
   limiter: RateLimiter,
   scope: string,
   spec: BucketSpec,
+  refused?: (c: Context<AppEnv>, retryAfter: number) => Response | null,
 ): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const result = limiter.take(`${scope}:ip:${c.get("ipKey")}`, spec);
     if (!result.allowed) {
-      return c.json({ error: RATE_LIMITED_MESSAGE }, 429, {
-        "Retry-After": String(result.retryAfter),
-      });
+      return (
+        refused?.(c, result.retryAfter) ??
+        c.json({ error: RATE_LIMITED_MESSAGE }, 429, {
+          "Retry-After": String(result.retryAfter),
+        })
+      );
     }
     return next();
   };

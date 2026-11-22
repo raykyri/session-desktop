@@ -239,13 +239,17 @@ test.serial("billing: a refused change shows its error and keeps the stored choi
     responses: {
       "usage.get": testWeeklyUsage({ keys: [ANTHROPIC] }),
       "usage.setBilling": () => {
-        throw trpcRefusal("Add a working Anthropic key to continue on it.");
+        throw trpcRefusal("Add a working Anthropic key below to use this option.");
       },
     },
   });
   const keyRadio = await screen.findByRole("radio", { name: /Continue on my Anthropic key/ });
   fireEvent.click(keyRadio);
-  await waitUntil(t, () => hasAlert("Add a working Anthropic key to continue on it."), "the error");
+  await waitUntil(
+    t,
+    () => hasAlert("Add a working Anthropic key below to use this option."),
+    "the error",
+  );
   t.true(input(screen.getByRole("radio", { name: /Pause my asks/ })).checked);
 });
 

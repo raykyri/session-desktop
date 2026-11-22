@@ -68,7 +68,7 @@ export function FeedPlaceholder() {
     <FeedRow>
       <div
         role="status"
-        aria-label="Loading"
+        aria-label="Loading threads"
         aria-busy="true"
         data-placeholder=""
         className="bg-surface-card flex flex-col gap-2.5 rounded-xl px-5 pt-[18px] pb-4 shadow-[0_0_0_1px_var(--surface-border-faint)]"

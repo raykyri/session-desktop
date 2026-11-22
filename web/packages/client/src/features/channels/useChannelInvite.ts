@@ -4,8 +4,9 @@
 //
 // - an active account joins with it (`spaces.join { space, invite }`), with
 //   the toast "Joined #name."; a link that is used, revoked or expired, or
-//   whose channel is frozen, answers "This invite link has expired or was
-//   already used." (04 §9, B5); a banned person gets the server's message;
+//   whose channel is frozen, answers "This invite link no longer works. Ask
+//   the channel owner for a new one." (04 §9, B5); a banned person gets the
+//   server's message;
 // - a member of the channel already: the code is dropped;
 // - signed out: the auth dialog opens on "Sign in to join #name.". A
 //   sign-in through a provider leaves the page; the code waits in this
@@ -15,7 +16,7 @@
 //   redeems an invite in the dialog joins next; one that signed up with an
 //   account invite gets the profile step first.
 
-import { frozenMessage, type ApiError } from "@session/mutators";
+import { INVITE_LINK_DEAD, frozenMessage, type ApiError } from "@session/mutators";
 import { useEffect, useRef } from "react";
 
 import { useMe } from "../../api/account.js";
@@ -27,7 +28,7 @@ import { showToast } from "../shell/Toast.js";
 import type { Viewer } from "../shell/viewer.js";
 
 /** The one message for a channel link that does not work. */
-export const LINK_UNUSABLE = "This invite link has expired or was already used.";
+export const LINK_UNUSABLE = INVITE_LINK_DEAD;
 
 /** What a refused link join shows: the one message for a link that does not
  * work (unknown, used, revoked or expired, or its channel frozen), else the

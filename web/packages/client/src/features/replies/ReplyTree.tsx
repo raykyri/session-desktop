@@ -16,7 +16,7 @@ import { TreeRail, type TreeRow } from "../branches/TreeRail.js";
 import { InlineComposer, focusSoon, selectedRowOr } from "../composer/InlineComposer.js";
 import { useFeedViewer } from "../feed/FeedContext.js";
 import { ConfirmDelete } from "../feed/FeedDialog.js";
-import { ModerationNote, rowText } from "../feed/Moderated.js";
+import { DELETED_BY_AUTHOR, ModerationNote, rowText } from "../feed/Moderated.js";
 import { MoreMenu } from "../feed/MoreMenu.js";
 import { authorName, plainReply, relTime } from "../feed/format.js";
 import { NotSentLine } from "../shell/NotSent.js";
@@ -54,7 +54,7 @@ export function ReplyTree({
   channel: ChannelView | null;
   now: number;
 }) {
-  const { writer, signedOut, signIn } = useFeedViewer();
+  const { writer, signedOut, signIn, frozen } = useFeedViewer();
   const ui = useThreadUi(thread.id);
   const toggleCollapsed = useThreadUiStore((state) => state.toggleCollapsed);
   const toggle = useThreadUiStore((state) => state.toggle);
@@ -170,19 +170,23 @@ export function ReplyTree({
           composer={replyBox(selectedRow.reply.id, selectedRow.reply.u)}
         />
       ) : null}
-      <div className="rfoot">
-        {writer ? (
-          <button type="button" className="tlink" onClick={toggleTop}>
-            {composer?.parent === null ? "Close reply" : "Reply at root"}
-          </button>
-        ) : signedOut ? (
-          <button type="button" className="tlink" onClick={signIn}>
-            Sign in to reply
-          </button>
-        ) : (
-          <span className="rnote">Replying opens once you have an invite</span>
-        )}
-      </div>
+      {/* in a frozen channel the banner gives the reason, so the footer is
+          left out */}
+      {frozen !== null && !signedOut ? null : (
+        <div className="rfoot">
+          {writer ? (
+            <button type="button" className="tlink" onClick={toggleTop}>
+              {composer?.parent === null ? "Close reply" : "Reply at root"}
+            </button>
+          ) : signedOut ? (
+            <button type="button" className="tlink" onClick={signIn}>
+              Sign in to reply
+            </button>
+          ) : (
+            <span className="rnote">Replying opens once you have an invite</span>
+          )}
+        </div>
+      )}
       {replyBox(null, author)}
     </div>
   );
@@ -238,7 +242,10 @@ function ReplyCard({
         ) : null}
       </div>
       {reply.del ? (
-        <p className="modln">[deleted]</p>
+        // the same body text as a reply's, not the fainter moderation line
+        <div className="rtext">
+          <p>{DELETED_BY_AUTHOR}</p>
+        </div>
       ) : (
         <>
           <ModerationNote mod={reply.mod} />

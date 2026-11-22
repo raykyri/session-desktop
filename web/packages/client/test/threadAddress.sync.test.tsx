@@ -1,7 +1,7 @@
 // A thread that no longer exists, opened on the sync replica over the sync
 // routes (`syncFake.ts`). A thread its author deleted before anyone replied
 // is kept as a `gone` record that lists leave out: its address and its
-// notification say "This thread is not available." (02 §2.1, W2.6). A
+// notification say "This thread is no longer available." (02 §2.1, W2.6). A
 // thread its channel's owner removed keeps its placeholder in the feed, and
 // its address shows that.
 
@@ -87,7 +87,7 @@ test.serial("the address of a thread the owner removed shows its placeholder", a
   await waitUntil(t, () => card(kept) !== null, "the feed renders");
   await waitUntil(
     t,
-    () => card(removed)?.textContent?.includes("Removed by @olga") === true,
+    () => card(removed)?.textContent?.includes("Removed by the channel owner") === true,
     "the placeholder",
   );
   t.not(currentToast(), THREAD_UNAVAILABLE);

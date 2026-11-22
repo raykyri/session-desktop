@@ -50,7 +50,8 @@ function SettingsRow({ label, children }: { label: string; children: ReactNode }
  * the default model is a site setting (W8.2), and the face is Inter (§11).
  * "Require ⌘↵ to send" and "Show keyboard shortcut hints" are gone too:
  * every composer sends on ⌘↵ (Ctrl↵) with Enter as a newline (§5), and
- * the app has no shortcut hints to show.
+ * the app has no shortcut hints to show. The Notifications row is gone: nothing
+ * reads its setting.
  */
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -59,15 +60,6 @@ export function SettingsPage() {
   return (
     <PageFrame title="Settings" narrow>
       <div className="mt-4 flex flex-col gap-5">
-        <Checkbox
-          label="Notifications"
-          description="Show popup notifications for background server events."
-          checked={settings.showNotifications}
-          onCheckedChange={(checked) => set("showNotifications", checked)}
-        />
-
-        <div className="border-border-faint border-t" role="separator" />
-
         <SettingsRow label="Appearance">
           <Select
             label="Appearance"

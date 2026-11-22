@@ -10,6 +10,7 @@
 
 import { Link, useRouter } from "@tanstack/react-router";
 
+import { UPGRADE_MESSAGE } from "../replica/upgrade.js";
 import { ControlButton } from "../ui/Button.js";
 import { QueryState } from "../ui/QueryState.js";
 
@@ -25,17 +26,31 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/** Whether a route failed because a lazily loaded chunk is gone: the tab
+ * runs an older build than the server now serves. The browsers word the
+ * failed dynamic import differently. */
+export function isStaleChunkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /dynamically imported module|module script failed/i.test(message);
+}
+
+/** The panel's sentence: the upgrade notice's wording when the tab's build is
+ * out of date, else one fixed sentence. The exception's own message is never
+ * shown. */
+export function routeErrorText(error: unknown): string {
+  return isStaleChunkError(error)
+    ? UPGRADE_MESSAGE
+    : "Something went wrong on this page. Try again, or reload the page.";
+}
+
 /**
- * Error boundary component displaying the exception message and providing two recovery options: retry route loaders or reload the window.
+ * Error boundary component with two recovery options: retry route loaders or reload the window.
  */
 export function RouteErrorPanel({ error }: { error: unknown }) {
   const router = useRouter();
-  const message = error instanceof Error ? error.message : "";
   return (
-    <Panel title="Unable to load this page">
-      <p className="text-fg-secondary m-0 text-sm">
-        {message || "Something went wrong while rendering this page."}
-      </p>
+    <Panel title="Couldn't load this page">
+      <p className="text-fg-secondary m-0 text-sm">{routeErrorText(error)}</p>
       <div className="flex gap-2">
         <ControlButton
           size="sm"
@@ -46,7 +61,7 @@ export function RouteErrorPanel({ error }: { error: unknown }) {
           Try again
         </ControlButton>
         <ControlButton size="sm" onClick={() => window.location.reload()}>
-          Reload the page
+          Reload
         </ControlButton>
       </div>
     </Panel>
@@ -68,7 +83,9 @@ export function RoutePendingPanel() {
 export function RouteNotFoundPanel() {
   return (
     <Panel title="Not found">
-      <p className="text-fg-secondary m-0 text-sm">This page does not exist, or it was removed.</p>
+      <p className="text-fg-secondary m-0 text-sm">
+        This page doesn't exist, or you don't have access to it.
+      </p>
       <Link to="/" className="text-accent-fg text-sm underline">
         Go to Home
       </Link>

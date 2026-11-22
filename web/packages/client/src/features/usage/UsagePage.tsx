@@ -312,7 +312,12 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
   } else if (stored && confirming) {
     body = (
       <div className="kconfirm">
-        <span>Remove the {info.name} key? Asks billed to it will stop.</span>
+        {/* no model bills to an OpenAI key, so no asks stop with it */}
+        <span>
+          {provider === "openai"
+            ? "Remove the OpenAI key?"
+            : `Remove the ${info.name} key? Asks billed to it will stop.`}
+        </span>
         <span className="grow" />
         <button ref={keep} type="button" className="btn2 sm" onClick={keepKey}>
           Keep

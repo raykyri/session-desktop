@@ -194,7 +194,7 @@ export const usageProcedures = {
       if (input.mode === "key" && !hasValidAnthropicKey(ctx, ctx.user.id)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Add a working Anthropic key to continue on it.",
+          message: "Add a working Anthropic key below to use this option.",
         });
       }
       return { billing: billingRepo.set(ctx.db, ctx.user.id, input.mode) };

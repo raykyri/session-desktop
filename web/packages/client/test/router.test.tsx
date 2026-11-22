@@ -34,7 +34,10 @@ test.serial("each path renders its screen", async (t) => {
   for (const path of feeds) {
     const app = await renderApp(path, { user: member });
     t.truthy(document.querySelector(".feed-inner"), `${path} is a feed`);
-    t.truthy(screen.getByRole("status", { name: "Loading" }), `${path} has its placeholder row`);
+    t.truthy(
+      screen.getByRole("status", { name: "Loading threads" }),
+      `${path} has its placeholder row`,
+    );
     app.unmount();
   }
   const pages: [string, string][] = [
@@ -267,7 +270,7 @@ test.serial("the sign-in page shows the server's refusal", async (t) => {
   await renderApp("/login?error=too_many_accounts", { user: null });
   t.is(
     screen.getByRole("alert").textContent,
-    "Too many new accounts were made from your network today. Try again tomorrow.",
+    "Too many new accounts from your network today. Try again tomorrow.",
   );
   t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
   t.truthy(screen.getByRole("button", { name: "Sign in with X" }));

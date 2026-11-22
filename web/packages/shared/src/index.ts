@@ -55,6 +55,7 @@ export * from "./types/sharing.js";
  * `spaces` (from `./schemas/index.js`). */
 export type * as Spaces from "./types/spaces.js";
 
+export * from "./util/retryWait.js";
 export * from "./util/sha256.js";
 export * from "./util/tokenEstimate.js";
 

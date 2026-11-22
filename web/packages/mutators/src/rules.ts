@@ -39,11 +39,12 @@ export const bad = (path: string, expected: string) =>
 /** The one answer for a missing target and for a target the actor may not read. */
 export const notFound = () => refuse("NOT_FOUND");
 export const stale = () => refuse("STALE");
-export const removed = () => refuse("PRECONDITION_FAILED", "This item was removed.");
-export const deleted = () => refuse("PRECONDITION_FAILED", "This item was deleted.");
+export const removed = () => refuse("PRECONDITION_FAILED", "This thread is no longer available.");
+export const deleted = () => refuse("PRECONDITION_FAILED", "This was deleted by its author.");
 /** A write under a thread its author deleted while nothing was under it
  * (`gone`): nothing more is added to it (M1b review 10). */
-export const threadDeleted = () => refuse("PRECONDITION_FAILED", "This thread was deleted.");
+export const threadDeleted = () =>
+  refuse("PRECONDITION_FAILED", "This thread is no longer available.");
 export function notGone(p: ThreadRec): void {
   if (p.gone) throw threadDeleted();
 }

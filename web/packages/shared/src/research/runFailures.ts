@@ -23,13 +23,12 @@ export const RUN_ERROR_COPY: Readonly<Record<RunErrorCopyClass, string>> = {
   rate_limited: "The model provider is rate limiting this deployment. The run will retry shortly.",
   auth: "Provider authentication failed for this model. Please contact an administrator.",
   content_filter:
-    "The model declined to answer this question. Rephrase the question or select another model.",
+    "The model's content filter blocked this answer. Rephrase the question or choose another model.",
   context_too_long: "Context window limit exceeded. Please start a new thread for this question.",
   provider_unavailable:
-    "No zero-retention provider is available for this model. Try again or select another model.",
+    "This model isn't available right now. Try again in a few minutes, or choose another model.",
   network: "The connection to the model provider was interrupted before the answer finished.",
-  timeout:
-    "The run exceeded the maximum duration allowed by this Session instance and was stopped.",
+  timeout: "Stopped: exceeded maximum duration.",
   unknown: "The model provider returned an error.",
 };
 

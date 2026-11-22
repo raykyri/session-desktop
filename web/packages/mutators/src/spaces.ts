@@ -2,7 +2,7 @@
 // C14, C18; `04` B1-B3, B6).
 
 import { isClosed, isOwnerOf, roleIn } from "./access.js";
-import { refuse } from "./errors.js";
+import { INVITE_LINK_DEAD, refuse } from "./errors.js";
 import { memberKey } from "./records.js";
 import { M, addMember, bad, needSpace, refreshSpace, ulidS, within } from "./rules.js";
 import { isoToMs } from "./time.js";
@@ -82,7 +82,7 @@ export const SPACES = {
         link.sp === s.id &&
         link.dead === null &&
         isoToMs(link.expiresAt) > isoToMs(tx.now);
-      if (!live) throw refuse("FORBIDDEN", "This invite link has expired or was already used.");
+      if (!live) throw refuse("FORBIDDEN", INVITE_LINK_DEAD);
     },
     // 60 joins an hour per person (`04` Z1)
     pre: (ctx) => (within(ctx, "spaces.join"), {}),
@@ -109,7 +109,7 @@ export const SPACES = {
     space: (_tx, i) => i.space,
     can: (tx, i) => {
       if (isOwnerOf(tx, i.space, tx.me))
-        throw refuse("PRECONDITION_FAILED", "You own this channel: the owner can’t leave it.");
+        throw refuse("PRECONDITION_FAILED", "You own this channel, so you can't leave it.");
     },
     run: (tx, i) => {
       if (!tx.byKey(memberKey(i.space, tx.me))) return null;

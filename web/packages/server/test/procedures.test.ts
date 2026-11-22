@@ -35,7 +35,9 @@ test("returns health status and runtime config for unauthenticated requests", as
   t.is(config.limits.weeklyTokens, 2_000_000);
   t.deepEqual(config.features, { webSearch: true, searchVendor: "parallel" });
   t.is(await anonymous.auth.me(), null);
-  await t.throwsAsync(harness.caller(null).settings.get(), { message: /sign in/ });
+  await t.throwsAsync(harness.caller(null).settings.get(), {
+    message: /^Your sign-in expired\. Sign in again\.$/,
+  });
 });
 
 test("selects available search vendor based on configured API keys", (t) => {
@@ -72,7 +74,9 @@ test("the admin surface is gated on is_admin", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("plain");
   const admin = harness.addUser("chief", { isAdmin: true });
-  await t.throwsAsync(harness.caller(user).admin.models.list(), { message: /administrator/ });
+  await t.throwsAsync(harness.caller(user).admin.models.list(), {
+    message: /^Only site admins can change these settings\.$/,
+  });
   t.like(await harness.caller(admin).admin.models.list(), { defaultModel: "gemini-flash" });
 });
 

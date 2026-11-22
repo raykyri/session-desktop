@@ -43,18 +43,18 @@ export interface ApiError {
 export const MESSAGES: Record<ErrorCode, string> = {
   BAD_REQUEST: "The server didn’t accept this change: some of its data is missing or not valid.",
   UNAUTHORIZED: "Your sign-in expired. Sign in again.",
-  FORBIDDEN: "You don’t have permission to do this.",
-  NOT_FOUND: "The server has no record of this item. Someone may have deleted it.",
+  FORBIDDEN: "You don't have permission to do this.",
+  NOT_FOUND: "This no longer exists. Someone may have deleted it.",
   METHOD_NOT_SUPPORTED: "The server doesn’t support this request.",
   CONFLICT: "Someone else changed this item first.",
   PRECONDITION_FAILED: "This change isn’t possible in the item’s current state.",
-  TOO_MANY_REQUESTS: "Too many requests from your account. Try again in a minute.",
-  INTERNAL_SERVER_ERROR: "The server had an error and didn’t save the change.",
-  SERVICE_UNAVAILABLE: "The server is unavailable.",
+  TOO_MANY_REQUESTS: "Too many requests from your account. Try again in a few minutes.",
+  INTERNAL_SERVER_ERROR: "Something went wrong. Try again.",
+  SERVICE_UNAVAILABLE: "Session is unavailable right now. Try again in a few minutes.",
   UPGRADE_REQUIRED: "Update Session.",
-  STALE: "This item changed after you saw it. Look at it again.",
+  STALE: "This changed after you opened it. Check it and try again.",
   CLOCK_SKEW: "Your device’s clock is off.",
-  EXPIRED: "This change waited too long to be sent, and wasn’t saved.",
+  EXPIRED: "This change waited too long to be sent and wasn't saved.",
   OUT_OF_ORDER: "This change arrived out of order.",
   WRONG_CLIENT: "This device isn’t signed in to your account.",
   TOO_LARGE: "This change is too large to send.",
@@ -90,3 +90,20 @@ export class Refusal extends Error {
 
 export const refuse = (code: ErrorCode, message?: string, issues?: string[]) =>
   new Refusal(code, message, issues);
+
+/** A channel invite link that does not work: unknown, used, revoked or
+ * expired, or its channel frozen (`04` §9, B5). */
+export const INVITE_LINK_DEAD =
+  "This invite link no longer works. Ask the channel owner for a new one.";
+
+/** The message of an input its schema refused (`04` §10): a text over its
+ * bound names the bound; any other fault keeps BAD_REQUEST's default. */
+export function inputMessage(
+  issues: readonly { code: string; origin?: unknown; maximum?: unknown }[],
+): string | undefined {
+  const long = issues.find((x) => x.code === "too_big" && x.origin === "string");
+  if (long === undefined) return undefined;
+  // thousands grouped by hand: the package uses no locale formatting (U1)
+  const max = String(long.maximum).replace(/\B(?=(\d{3})+$)/g, ",");
+  return `This text is too long. Keep it to ${max} characters or fewer.`;
+}

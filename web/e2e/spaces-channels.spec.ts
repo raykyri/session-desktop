@@ -249,7 +249,7 @@ test("B4: a private channel's link admits one person; the same link is refused t
   await signIn(latePage, { login: "e2e-channels-late" });
   await latePage.goto(link);
   await expect(toast(latePage, "alert")).toHaveText(
-    "This invite link has expired or was already used.",
+    "This invite link no longer works. Ask the channel owner for a new one.",
   );
   await expect(latePage.locator(".sphead").getByText("Members only")).toBeVisible();
   await expect(card(latePage, "Notes for the members of the private channel")).toHaveCount(0);
@@ -380,7 +380,7 @@ test("§6.6: a removal with a reason reaches the member, their notifications and
   await dialog.getByRole("button", { name: "Remove" }).click();
   await expect(toast(page)).toHaveText("Removed.");
   const placeholder = page.locator(`#card-${m.removed}`);
-  await expect(placeholder).toContainText(`Removed by @${me}`);
+  await expect(placeholder).toContainText("Removed by the channel owner");
   await page.getByRole("button", { name: "About this channel" }).click();
   await page
     .getByRole("dialog", { name: `#${w.own}` })
@@ -396,9 +396,9 @@ test("§6.6: a removal with a reason reaches the member, their notifications and
   const theirs = member.locator(`#card-${m.removed}`);
   for (const reload of [false, true]) {
     if (reload) await member.reload();
-    await expect(theirs).toContainText(`Removed by @${me}`);
+    await expect(theirs).toContainText("Removed by the channel owner");
     await expect(theirs).toContainText(`Reason: “${REASON}”`);
-    await expect(theirs).toContainText(`Post by [deleted] in #${w.own}`);
+    await expect(theirs).toContainText(`Post in #${w.own}`);
     await expect(theirs).not.toContainText(REMOVED_POST);
   }
   // and the member's notifications list the removal with the reason

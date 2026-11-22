@@ -121,7 +121,7 @@ test.serial(
     const app = await openInvites({
       "admin.invites.lookup": mira(0, 0, 0),
       "admin.invites.grant": () => {
-        if (refuse) throw trpcRefusal("this is an administrator action", "FORBIDDEN");
+        if (refuse) throw trpcRefusal("Only site admins can change these settings.", "FORBIDDEN");
         return mira(1, 0, 0);
       },
     });
@@ -137,7 +137,11 @@ test.serial(
 
     fireEvent.change(count, { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: "Give invites" }));
-    await waitUntil(t, () => invitesError() === "this is an administrator action", "the refusal");
+    await waitUntil(
+      t,
+      () => invitesError() === "Only site admins can change these settings.",
+      "the refusal",
+    );
     t.truthy(screen.getByText("@mira_k: 3 of 3 invites left (0 used)"));
     refuse = false;
     fireEvent.click(screen.getByRole("button", { name: "Give invites" }));

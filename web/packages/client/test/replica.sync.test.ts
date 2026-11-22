@@ -541,7 +541,7 @@ test("notifications about an open channel the viewer was banned from fetch their
     Object.fromEntries(notificationsOf(r).map((row) => [row.type, notifText(row)]));
   t.is(r.get(threadKey(replied)), UNKNOWN);
   t.is(texts()["removed"], "@olga removed your thread: “Off topic”", "the kind is not guessed");
-  t.is(texts()["reply"], "@olga replied to your post “a thread”");
+  t.is(texts()["reply"], "@olga replied to your post a thread");
 
   const stop = fetchNotificationThreads(r);
   t.teardown(stop);

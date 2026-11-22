@@ -94,6 +94,10 @@ export function onWordBoundaries(phrase: string, quote: string): boolean {
 export const LOOKUP_PROMPT_V1 = (phrase: string) =>
   `Look up "${phrase}" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.`;
 
+/** A look-up's question as readers see it once it is opened as its own
+ * thread (`03` G5): the phrase, without the instructions to the model. */
+export const lookUpTitle = (phrase: string) => `Look up "${phrase}"`;
+
 /** The handles a text mentions (`@handle`), once each, in order. Trailing
  * `.`, `_` and `-` are punctuation, not part of the handle ("@mona_",
  * "@otto-": M1b review 15). */

@@ -400,7 +400,7 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
   loads, the thread route shows the page's own placeholder
   (`features/thread/ThreadPending.tsx`: the thread's header with the title a
   cache holds and "Loading research…", the same component the page shows
-  while the detail loads), the others `RoutePendingPanel` ("Loading…"). On
+  while the detail loads), the others `RoutePendingPanel` ("Loading"). On
   a first load it shows at once; on a navigation the previous page stays
   until the router's `pendingMs`. A feed card starts loading the thread
   chunk on pointer enter and focus (`FeedCard` `onIntent`), and links

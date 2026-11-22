@@ -251,7 +251,11 @@ function remap(v: unknown, map: ReadonlyMap<string, string>): unknown {
  * server. */
 const noAnswer = (now: number): ApplyResult => ({
   ok: false,
-  error: { code: "SERVICE_UNAVAILABLE", message: "No answer from the server.", serverTime: now },
+  error: {
+    code: "SERVICE_UNAVAILABLE",
+    message: "Couldn't reach Session. Check your connection and try again.",
+    serverTime: now,
+  },
 });
 
 /** The most envelopes and answers the client keeps for inspection
@@ -484,7 +488,7 @@ export class SyncClient {
   private otherUserError(): ApiError & { serverTime: number } {
     return {
       code: "UNAUTHORIZED",
-      message: "This tab is now signed in as another person.",
+      message: "This tab is now signed in to another account. Reload to continue.",
       serverTime: this.now(),
     };
   }
@@ -630,7 +634,7 @@ export class SyncClient {
   /** Open a thread (R3): a summary thread's full records are fetched with a
    * `threads` snapshot, in turn with the log's other reads, and kept for the
    * life of the tab. `unavailable` when the fetch fails (offline): the
-   * summary is shown, "Available when online". With `log`, the space log a
+   * summary is shown with "Couldn't load the rest of this thread." With `log`, the space log a
    * thread's address names (`/c/<name>?t=<id>`, `02` §2.1): a thread the
    * replica does not hold (older than the window) is fetched from that log
    * the same way when the replica holds the log. Without one, such a thread

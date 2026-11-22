@@ -153,10 +153,10 @@ test.serial("a thread address waits for an unloaded thread instead of a toast", 
   await renderApp(`/?t=${FIRST}`);
   await waitUntil(t, () => document.querySelector(".tcard") !== null, "the feed renders");
   t.is(cardOf(FIRST), null);
-  t.not(currentToast(), "This thread is not available.");
+  t.not(currentToast(), "This thread is no longer available.");
   replicaOf().load({ th: FIRST });
   await waitUntil(t, () => cardOf(FIRST) !== null, "the thread renders once loaded");
-  t.not(currentToast(), "This thread is not available.");
+  t.not(currentToast(), "This thread is no longer available.");
 });
 
 test.serial("a run is refused before it is sent while the queue is full", async (t) => {

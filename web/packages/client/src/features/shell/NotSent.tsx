@@ -80,7 +80,7 @@ export function NotSentLine({ item }: { item: string }) {
   const limit = limitMessage(unsent);
   return (
     <div className="notsent" data-not-sent="">
-      <span>{limit ? `Not sent: ${limit}` : "Not sent"}</span>
+      <span>{limit ? `Not sent. ${limit}` : "Not sent"}</span>
       <span aria-hidden="true">·</span>
       <button type="button" className="tlink" onClick={() => void retryAll(source, unsent)}>
         Retry

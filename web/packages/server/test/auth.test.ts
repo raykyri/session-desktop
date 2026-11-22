@@ -396,7 +396,7 @@ test("the allowlist keeps a GitHub account from being created", async (t) => {
   t.is(users.listUsers(harness.db).length, 0);
 });
 
-test("a provider without credentials answers 503", async (t) => {
+test("a provider without credentials answers 503 to the start, and sends a page to sign-in", async (t) => {
   const harness = createHarness(t);
   const response = await harness.request("/auth/x/start", {
     method: "POST",
@@ -404,8 +404,18 @@ test("a provider without credentials answers 503", async (t) => {
     body: "{}",
   });
   t.is(response.status, 503);
-  t.is((await harness.request("/auth/x")).status, 503);
-  t.is((await harness.request("/auth/mastodon")).status, 404);
+  const page = await harness.request("/auth/x");
+  t.is(page.status, 302);
+  t.true(page.headers.get("location")?.endsWith("/login?error=unavailable&provider=x"));
+  // an unknown provider name goes to the app's Not found page
+  const unknown = await harness.request("/auth/mastodon");
+  t.is(unknown.status, 302);
+  t.true(unknown.headers.get("location")?.endsWith("/not-found"));
+  t.true(
+    (await harness.request("/auth/mastodon/callback")).headers
+      .get("location")
+      ?.endsWith("/not-found"),
+  );
 });
 
 test("test-login signs in without a provider, and logout clears the session", async (t) => {
@@ -445,11 +455,12 @@ test("test-login is outside the per-address sign-in budget; provider sign-in is 
     });
     t.is(response.status, 200, `sign-in ${index + 1}`);
   }
-  const statuses: number[] = [];
+  const pages: string[] = [];
   for (let index = 0; index <= budget; index += 1) {
-    statuses.push((await harness.request("/auth/x")).status);
+    pages.push((await harness.request("/auth/x")).headers.get("location") ?? "");
   }
-  t.is(statuses.at(-1), 429);
+  t.true(pages.at(0)?.startsWith("https://x.com/i/oauth2/authorize"));
+  t.true(pages.at(-1)?.includes("error=rate_limited"));
 });
 
 test("test-login is absent unless SESSION_TEST_AUTH is set", async (t) => {

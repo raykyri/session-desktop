@@ -4,7 +4,7 @@
 
 import type { SessionDatabase } from "@session/db";
 import type { ModelEntry, User } from "@session/shared";
-import { MODEL_REGISTRY } from "@session/shared";
+import { MODEL_REGISTRY, retryWaitText } from "@session/shared";
 import { TRPCError, initTRPC } from "@trpc/server";
 
 import { hashClientIp } from "../auth/session.js";
@@ -116,10 +116,17 @@ export function tooManyRequests(
   return new TRPCError({ code: "TOO_MANY_REQUESTS", message });
 }
 
-/** Takes one token from `bucket` under `key`, or throws the refusal. */
-export function takeOrRefuse(ctx: AppContext, bucket: AbuseBucket, key: string): void {
+/** Takes one token from `bucket` under `key`, or throws the refusal:
+ * `message` of the wait in words when given, else the default. */
+export function takeOrRefuse(
+  ctx: AppContext,
+  bucket: AbuseBucket,
+  key: string,
+  message?: (wait: string) => string,
+): void {
   const spec = abuseBuckets(ctx.config.abuse)[bucket];
-  if (!ctx.limiter.take(`${bucket}:${key}`, spec).allowed) throw tooManyRequests();
+  const result = ctx.limiter.take(`${bucket}:${key}`, spec);
+  if (!result.allowed) throw tooManyRequests(message?.(retryWaitText(result.retryAfter)));
 }
 
 /** 60 mutations a minute per account (`06` §8, `04` Z1 "Replicated
@@ -132,7 +139,7 @@ const mutationBudget = t.middleware(({ ctx, type, next }) => {
     if (!result.allowed) {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
-        message: "too many changes at once; try again in a moment",
+        message: "Too many changes. Try again in a minute.",
       });
     }
   }
@@ -143,21 +150,29 @@ const mutationBudget = t.middleware(({ ctx, type, next }) => {
  * A per-IP or per-user bucket on a procedure (04 Z1). `ip` keys on the
  * hashed IP key; `user` on the signed-in account; `userOrIp` on the account
  * when there is one. `auth` is the bucket the `/auth/*` routes share.
+ * `message` words the refusal from the wait (`takeOrRefuse`).
  */
-export function limit(bucket: AbuseBucket, by: "ip" | "user" | "userOrIp") {
+export function limit(
+  bucket: AbuseBucket,
+  by: "ip" | "user" | "userOrIp",
+  message?: (wait: string) => string,
+) {
   return t.middleware(({ ctx, next }) => {
     const key =
       by === "ip" || (by === "userOrIp" && ctx.user === null)
         ? `ip:${ctx.ipKey}`
         : `user:${ctx.user?.id ?? "anonymous"}`;
-    takeOrRefuse(ctx, bucket, key);
+    takeOrRefuse(ctx, bucket, key, message);
     return next();
   });
 }
 
+/** The refusal of a call that needs a session the request does not have. */
+export const SIGNED_OUT_MESSAGE = "Your sign-in expired. Sign in again.";
+
 const requireUser = t.middleware(({ ctx, next }) => {
   if (ctx.user === null) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to continue" });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: SIGNED_OUT_MESSAGE });
   }
   return next({ ctx: { ...ctx, user: ctx.user, userId: ctx.user.id, isAdmin: ctx.user.isAdmin } });
 });
@@ -165,7 +180,7 @@ const requireUser = t.middleware(({ ctx, next }) => {
 /** An active account: a waiting one has no handle and cannot write. */
 const requireMember = t.middleware(({ ctx, next }) => {
   if (ctx.user === null) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to continue" });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: SIGNED_OUT_MESSAGE });
   }
   if (ctx.user.status !== "active") {
     throw new TRPCError({
@@ -178,10 +193,13 @@ const requireMember = t.middleware(({ ctx, next }) => {
 
 const requireAdmin = t.middleware(({ ctx, next }) => {
   if (ctx.user === null) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to continue" });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: SIGNED_OUT_MESSAGE });
   }
   if (!ctx.user.isAdmin || ctx.user.status !== "active") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "this is an administrator action" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only site admins can change these settings.",
+    });
   }
   return next({ ctx: { ...ctx, user: ctx.user, userId: ctx.user.id, isAdmin: true } });
 });

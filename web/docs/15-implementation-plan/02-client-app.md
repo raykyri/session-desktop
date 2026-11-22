@@ -271,7 +271,7 @@ replica's, clipped at 64 characters, in quotes (`titleOf`):
   prints the code; the record stores none (04 I1).
 
 A thread the replica has no text for is quoted as “a deleted thread”, and
-one it has not loaded as “a thread”. While the page is open it fetches the
+one it has not loaded reads a thread, unquoted. While the page is open it fetches the
 threads it has not loaded, reading the log of each such thread's channel
 the replica does not read (an open channel the viewer left or was banned
 from) as a channel view does. An actor whose account was deleted
@@ -339,9 +339,10 @@ first paint does not wait for the replica (ADR-20). Empty states:
   threads" and the button "Go to Home";
 - Home: "Join a few channels to fill Home." followed by the inline link
   "Browse channels";
-- a channel without threads: "No threads here yet. Ask the first question.";
-- a private channel the viewer is not in: "This channel is private. Ask
-  @owner to add you."
+- a channel without threads: "No threads here yet. Ask the first question.",
+  or "No threads here yet." in a frozen channel, which takes no asks;
+- a private channel the viewer is not in: "This channel is private. You need
+  an invite link to join."
 
 **W3.1 `FeedPage`, `FeedRow`.** Grid utilities keyed on `data-layout`; rows
 virtualised with `@tanstack/react-virtual` past 60 rows, measured after the side
@@ -385,10 +386,12 @@ same account applies it.
   addition; the mock's thread menu has only Remove…); for anyone else no
   menu.
 - **Removed thread** (`card.removed`, 01 C12, 04 §6.2): a removal icon,
-  "Removed by @owner", "Reason: “…”" when given, and "Ask by [deleted] in
-  #name" or "Post by [deleted] in #name" for every reader, the author
-  included (the mock prints the author's handle; 05 §6 P5 decided
-  "[deleted]"); no prose, footer or side column. The author's "…" menu keeps
+  "Removed by the channel owner", "Reason: “…”" when given, and "Ask in
+  #name" or "Post in #name" for every reader, the author included (the mock
+  prints the author's handle; 05 §6 P5 withholds it, and the line names
+  neither the author nor the remover); no prose, footer or side column. A
+  thread, branch, reply or comment its author deleted reads "Deleted by its
+  author"; a deleted reply's line is styled as reply text. The author's "…" menu keeps
   Delete (04 §6.2).
 - **Hidden thread** (04 §6.3): the author and the owner see the text under
   "Hidden by the channel owner"; others see the placeholder. No Hide command
@@ -417,8 +420,8 @@ cards:
 |---|---|
 | `queued` | "Queued" |
 | `running` | "Researching · Step N of 4" (`step` 0-3, 03 E3) with a pulsing dot, replaced by streamed text as it arrives (ADR-22) |
-| `complete` | the answer, then the run record's `note` when it has one (03 §1, E5): "Stopped at the run's token limit." (per-run cap, L1) or "Stopped: this week's included tokens ran out." (the member's overdraft limit, K9) |
-| `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`'s `resetAt` in the viewer's time zone, while nothing can pay now, else "This ask did not run: included tokens had run out. Run again to start it."; `key` by `fail.detail`; `rate`, `access`, `error`). A reader who is not the asker reads the author's failure ("This ask did not run: its author had no included tokens left.", "This run stopped: its author's API key could not be used.") |
+| `complete` | the answer, then the run record's `note` when it has one (03 §1, E5): "Stopped: reached token limit for a single run." (per-run cap, L1) or "Stopped: out of tokens." (the member's overdraft limit, K9) |
+| `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`'s `resetAt` in the viewer's time zone, while nothing can pay now, else "This ask did not run: included tokens had run out. Run again to start it."; `key` by `fail.detail`; `rate`, `access`, `error`). A reader who is not the asker reads the author's failure ("This ask did not run: its author had no included tokens left.", "Stopped: author's API key could not be used.", "Stopped: rate limited by model provider.") |
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
 While `queued` or `running` the asker gets Stop (`research.cancelNode`; a plan
@@ -506,7 +509,8 @@ none by others under them; confirmed by "Delete this reply and your replies
 under it?" / "This can't be undone."), `>` quotes and member `@mentions`, and
 a Reply / Close reply toggle; the reply composer's placeholder is "Reply to
 @handle". Below the tree "Reply at root" (signed out "Sign in to reply", no
-invite "Replying opens once you have an invite"). The footer's Reply opens the
+invite "Replying opens once you have an invite"; nothing in a frozen channel,
+whose banner gives the reason). The footer's Reply opens the
 root composer and scrolls to it (§4.5). When a sent post, reply or comment
 mentions handles, the toast lists the result the server returns with the
 confirmation (N16): "Notified @a, @b." and "@c isn't a member." ("@c, @d
@@ -730,7 +734,7 @@ numbers and dashes.") checked against `^[a-z0-9][a-z0-9-]{1,29}$` by the
 shared validator (04 §4.2; error "Use 2 to 30 lowercase letters, numbers or
 dashes."); "What is it for?" (placeholder "One or two sentences shown at the
 top of the channel"); radios "Open" ("Anyone can read and join.") and
-"Private" ("Only people you add can read or post."); Cancel and "Create
+"Private" ("Only people invited with a link can read or post."); Cancel and "Create
 channel". Creating a space is online-only (`AGENTS.md`): "Create channel" is
 disabled while the sync connection is down with "Creating a channel needs a
 connection." (a plan addition); busy state until the server answers;
@@ -757,12 +761,12 @@ offers no Leave.
 
 **W6.9 Channel invite links** (04 §5; a plan addition): the owner of a private
 channel opens "Invite to #name": a one-use link with Copy (`lib/clipboard.ts`, toast "Link copied."),
-Revoke and Undo (`invites.create { days: 7 }`, `invites.revoke`,
-`invites.restore`). Opening a link signed in calls `spaces.join { space,
+Revoke and Restore (`invites.create { days: 7 }`, `invites.revoke`,
+`invites.restore`; toast "Invite link restored."). Opening a link signed in calls `spaces.join { space,
 invite }`; signed out or without an invite, the auth flow (W7.2) runs first
-with the code kept in memory. An unusable link shows "This invite link has
-expired or was already used." Acceptance: component test for create, copy,
-revoke and undo; `spaces-channels.spec.ts` covers the join (04 B4).
+with the code kept in memory. An unusable link shows "This invite link no
+longer works. Ask the channel owner for a new one." Acceptance: component
+test for create, copy, revoke and restore; `spaces-channels.spec.ts` covers the join (04 B4).
 
 **W6.10 Frozen and refused states** (04 §8, §9): a channel the viewer was
 removed or banned from is dropped from the replica at the resync that
@@ -772,7 +776,8 @@ voluntary Leave either, decision P8). Refusals of queued writes show the 04 §9 
 unavailable because its owner's account is deactivated.", the expired-link
 message) and restore composer text. A frozen channel (04 §4.5, `frozen` on
 the space record) shows the banner "#name is unavailable because its owner's
-account is deactivated. You can read it and delete your own posts.", gives
+account is deactivated.", reads "Unavailable" in place of its owner in Browse
+and in the info dialog's "Channel by", gives
 its disabled follow-up and Reply buttons the title "#name is unavailable",
 offers only Delete
 on the viewer's own items and Leave, and is left out of the composer's
@@ -832,9 +837,10 @@ Steps, with the mock's copy:
   unknown code from a used one); on success "Invite from <Name>" with @handle
   and "Sign up with X" / "Sign up with GitHub";
 - provider explainer: "Sign in with X", "Session uses your name, handle and
-  profile picture from X for your profile. It cannot post or read your
-  messages.", "Continue to X" (for GitHub the same with "GitHub"); the plan
-  adds "Use the same account each time you sign in.";
+  profile picture from X for your profile. It can't post or change anything
+  on X.", "Continue to X" (for GitHub the same with "GitHub"); the plan adds
+  "Use the same X account each time. Signing in with a different one starts
+  a new Session account.";
 - no account for this identity: "No Session account for @x", "Session is
   invite-only. Ask a member for an invite code, then sign up with it. If you
   already have a code, enter it now.", "Enter an invite code", "Continue
@@ -1319,7 +1325,8 @@ replica (§9.6) and do not wait on N1-N16.
 3. **Thread addresses.** Decided (P9): `/c/$name?t=&sel=` opens the thread in
    its channel feed scrolled into view; a thread outside the loaded feed is
    fetched and inserted (§2.1).
-4. **Removal placeholder author.** Decided (P5): "[deleted]" (04 §6.2).
+4. **Removal placeholder author.** Decided (P5): withheld; the placeholder
+   reads "Ask in #name" or "Post in #name" (04 §6.2).
 5. **Notifications inbox.** Decided (P10): a notifications page in the
    account menu and an unread dot on the account avatar (W2.6); no push
    notifications.

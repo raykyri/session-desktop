@@ -704,7 +704,7 @@ bound; a client test drops a turn change for a summary-tier thread.
 **R3. Promotion.** Opening a summary-tier thread fetches its full records
 through `snapshot(log, { threads: [id] })` and keeps them for the life of the
 tab. Acceptance: a client opening a summary-tier thread while offline shows
-the summary and an "Available when online" state.
+the summary and the line "Couldn't load the rest of this thread."
 
 **R4. Closed spaces.** A client replicates the closed spaces its user belongs
 to and nothing else of any closed space (AGENTS.md). The server keeps the
@@ -926,7 +926,8 @@ Account invites and the tree are online-only tRPC (`accountInvites.*`,
 §3.3.
 
 **C9. Visibility: open or private.** The mockup creates a channel as Open
-("Anyone can read and join") or Private ("Only people you add can read or
+("Anyone can read and join") or Private (the mockup's "Only people you add
+can read or post"; the app says "Only people invited with a link can read or
 post"); private channels are not listed to non-members (`allVisible`). The
 schema has `vis: open | listed | unlisted` with `policy: request | invite` and
 request questions. Change: the wire carries `vis: "open" | "private"`; private
@@ -952,7 +953,7 @@ edits. Admin and moderator roles are removed (C18).
 
 **C12. Remove with a free-text reason; the moderation log; no reporting.**
 `rmDlg` takes an optional reason. A removal's reason is shown to readers on
-the placeholder ("Removed by @x", "Reason: …"). There is no reporting at
+the placeholder ("Removed by the channel owner", "Reason: …"). There is no reporting at
 all (05 §6 P6); the mockup's moderation log ("Moderation log") lists only
 the owner's removals and bans. The schema's `reports.create` requires a
 `why` category plus an optional `note`, and `moderation.decide` has no
@@ -965,7 +966,7 @@ reason. Change:
   keeps `id`, `s`, its kind (ask or post), `u` (author), `createdAt`, `mod`,
   `modBy` and `modNote`, and nothing else of the removed content. `u` is
   served to the author only; every other reader gets `u: null` and the client
-  prints "[deleted]" (product decision; the stored and served table is in
+  names no author (product decision; the stored and served table is in
   04 §6.2). This is a change to replica-proto's `erase`/`redact` (U6).
 - A `modlog` record kind in the space log, readable by the owner only: `{ id, sp,
   kind: "remove" | "ban" | "unban", item, by, author, note, at }`; for `ban`
@@ -1037,8 +1038,7 @@ notified of one's own action" and the coalescing rule; a test that a
 **C17. Runs streamed.** The mock API's note "Answers are not streamed" is
 superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
 03 §1, with `model`, `effort` and an optional `note` (the stop note of
-a run that ends `complete` early, such as "Stopped: this week's included
-tokens ran out.", 03 E5). The run record with status `queued` is the run
+a run that ends `complete` early, such as "Stopped: out of tokens.", 03 E5). The run record with status `queued` is the run
 queue; the dispatcher claims it with a compare-and-set (03 E2).
 
 **C18. Channel roles: owner and member.** Product decision (00, "Decisions

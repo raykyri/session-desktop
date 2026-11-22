@@ -49,7 +49,7 @@ client security), so that `05-delivery.md` (M4 and M6) can schedule them.
 | Reporting | None: no Report… item, and the moderation log lists removals and bans only | Not built: no `reports.*`, no report notifications, no report part of the moderation log, no report limits | Agrees with the mockup (`05` §6 P6). The owner's Remove stays; Ban is a plan addition (Ban row). |
 | Abuse contact | Site footer "Session · Report abuse: abuse@session.dev" on every feed and page | No site footer: the mailbox `abuse@<host>`, where `<host>` is the hostname of `SESSION_PUBLIC_ORIGIN`, exists and the site admins read it, but the app no longer links it (`05` §6 Q10) | The only way to reach site admins about abuse (§13). |
 | Session-wide sanction | None | None: no suspension. Site admins delete an account or a channel by operator job (§8, §4.5) and use the invite tree (§3.3) | Product decision (`05` §6 P3). |
-| Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | The author shows as "[deleted]" (product decision); §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
+| Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | The author is withheld: "Removed by the channel owner", "Ask in #channel" (product decision); §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
 | Moderation log excerpt | Quotes a removed thread's title | No text of a removed item | `AGENTS.md`: removed content is erased and never served again (`01` C12 agrees). |
 | Channel rules | Removed | Client never sends `rules`; no default rule is stored | Overview product decision. |
 | Visibility | Open or Private | Wire `vis: "open" \| "private"`; private is closed, unlisted and invite-only (`01` C9) | Matches the product; the closed-space rules of phase 0 apply unchanged. |
@@ -311,7 +311,8 @@ a site admin who deletes the account with the account-deletion operator job
 
 Visibility is set at creation (`01` C11); there is no control to change it.
 The New channel dialog's help texts are the mockup's: Open "Anyone can read
-and join.", Private "Only people you add can read or post." The help text
+and join."; Private reads "Only people invited with a link can read or
+post.", where the mockup has "Only people you add can read or post." The help text
 does not say that a private channel's name, About and owner stay visible to
 anyone with its link or name (§3.5, §13).
 
@@ -352,7 +353,7 @@ transferable and there are no admins or moderators. Site admins
 Work items:
 - Channel info gains a Members row opening the member list (the owner, then
   members by `joinedAt`). The owner gets a per-row menu on every other
-  member: Ban, and in private channels Remove from channel. This control is
+  member: Ban, and in private channels "Remove from #name". This control is
   an addition to the mockup.
 - `members.remove` carries `base.adm` and answers STALE when the admission
   id changed (`AGENTS.md`; `R1b`). `members.setRole` does not exist.
@@ -415,7 +416,8 @@ is no suspension (§3.6).
   is the state's name in the code and the record (`frozen`). The
   composer's channel picker omits the channel.
 - The space record keeps `owner`; for a deleted account the client shows
-  "Channel by Deleted account" (the handle stays reserved, §8).
+  "Channel by Unavailable", and Browse "Unavailable · N members" (the handle
+  stays reserved, §8).
 - A site admin may delete a frozen channel with the channel-deletion
   operator job (§1). This is the existing site-admin action, not a new
   channel power. A deleted owner's channels stay frozen and readable
@@ -435,7 +437,7 @@ channel) and to a member (private channel); a client test of the banner.
   name, `01` C14; in production `https://session.dev/c/<name>#<code>`); the
   client route clears the fragment as in §3.2. Expiry 7 days (`invites.create { days: 7
   }`); the server refuses `days: null` and more than 30 days with
-  `BAD_REQUEST`. Revoke and Undo use `invites.revoke` and `invites.restore`.
+  `BAD_REQUEST`. Revoke and Restore use `invites.revoke` and `invites.restore`.
 - The server makes the code in `pre` (`inv4` "invite codes are made by the
   server"): 128 bits from a CSPRNG, base32, independent of the link id (the
   mock derives it from the id, which a reader of the id could predict).
@@ -507,8 +509,8 @@ one unread notification for the owner.
   mutator's `notify` stage).
 - `removed`, `hidden` and `members.ban` apply to the record as it
   is, without `base` (`AGENTS.md`; `H1`). Removing an item that is already
-  removed answers `PRECONDITION_FAILED` ("This item was removed.", as
-  replica-proto does); the client treats it as done.
+  removed answers `PRECONDITION_FAILED` ("This thread is no longer
+  available."); the client treats it as done.
 - A run in progress ends and writes nothing after the removal
   (`03-agents-and-research.md`). Not reversible: the content no longer
   exists. The author may still delete a removed thread (`R11`), which
@@ -528,10 +530,10 @@ What the removal commit leaves, and who gets it:
 | `modlog` entry | `kind`, `item`, `by`, `author`, `note`, `at` | the owner only; deleted after 180 days |
 | `usage_events` of its runs | kept, no text (`03` K1) | the payer |
 
-The client renders the placeholder as "Removed by @owner", "Reason: “…”" when
-a note exists, and "Ask by [deleted] in #name" or "Post by [deleted] in
-#name" for every reader, the author and the owner included (product
-decision; the mockup prints "@author" there). The author's replica still
+The client renders the placeholder as "Removed by the channel owner",
+"Reason: “…”" when a note exists, and "Ask in #name" or "Post in #name" for
+every reader, the author and the owner included (product decision; the
+mockup prints "@author" there). The author's replica still
 receives `u`, so the author's "…" menu keeps Delete.
 
 Who learns the author of a removed thread: the placeholder names nobody, to
@@ -546,8 +548,8 @@ the moderation log is the one exception, and only for the owner.
 Acceptance: a server test that every reader other than the author, the owner
 included, receives `u: null` on a removed thread in snapshot and pull, and
 that only the owner receives the `modlog` entry with `author`; a client test
-that the placeholder prints "[deleted]" for the author, the owner and
-another reader.
+that the placeholder names no author for the author, the owner and another
+reader.
 
 Deleting saves of a removed thread is a change to replica-proto's `erase`
 (`01` U6), which today keeps them.
@@ -589,7 +591,7 @@ Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
   the moderation log, which only the owner reads). The banned person's
   client tells them "You are banned from #name." when that record arrives,
   and not for a membership that ends any other way (a Leave in another tab).
-- Remove from channel is offered only in private channels. In open channels it
+- "Remove from #name" is offered only in private channels. In open channels it
   would be STALE after the person leaves and rejoins (`AGENTS.md`), so Ban is
   the tool there.
 - Ban and unban write `modlog` entries (§6.5).
@@ -888,8 +890,8 @@ none of them.
 - **Name probing through CONFLICT.** Uniqueness across all channels lets
   anyone learn that a private channel with a given name exists, and then read
   its landing (§3.5). Accepted (`AGENTS.md`, `R10`). The Private option's
-  help text is the mockup's ("Only people you add can read or post.") and
-  does not mention this (§4.1).
+  help text ("Only people invited with a link can read or post.") does not
+  mention this (§4.1).
 - **Invite code enumeration.** `auth.checkInvite` reveals an inviter's name
   for a valid code. Mitigations: one answer for every failure, the per-IP and
   per-user limits, and an alert on failed checks above 100 per hour (`05`
@@ -915,8 +917,9 @@ none of them.
   such a message with the tools they have: deleting the account or the
   channel by operator job, and the invite tree to find who invited the
   account.
-- **Owner exposure.** "Removed by @owner" names the owner to every reader,
-  as the mockup decides; the owner can ban members who harass them.
+- **Owner exposure.** The removal placeholder says "Removed by the channel
+  owner"; the channel's info dialog names the owner to every reader, and the
+  owner can ban members who harass them.
 - **Abusive or absent owner.** Nobody can ban an owner or take over a
   channel. A site admin either deletes the channel by operator job or
   deletes the owner's account by operator job, which freezes every channel
@@ -965,7 +968,7 @@ none of them.
 
 ## 15. Open questions
 
-1. Decided: the removal placeholder shows "[deleted]" for the author; `u` is
+1. Decided: the removal placeholder names no author; `u` is
    served to the author only (§6.2). replica-proto's `erase` and `redact`
    serve `u` to every reader today; `01` U6 changes that.
 2. Decided (P5): a removal placeholder stays until the author deletes it.

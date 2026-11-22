@@ -646,7 +646,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "U6-12 the owner may leave their space",
     file: "../mutators/src/spaces.ts",
-    from: '      if (isOwnerOf(tx, i.space, tx.me))\n        throw refuse("PRECONDITION_FAILED", "You own this channel: the owner can’t leave it.");\n',
+    from: '      if (isOwnerOf(tx, i.space, tx.me))\n        throw refuse("PRECONDITION_FAILED", "You own this channel, so you can\'t leave it.");\n',
     to: "",
   },
   {
@@ -1538,8 +1538,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-C28 (C4) a missing title is not quoted",
     file: "../client/src/features/notifications/notifications.ts",
-    from: "quote: titleOf(row), reason: false });",
-    to: "quote: row.title ?? null, reason: false });",
+    from: "quote: titleOf(row), reason: false };",
+    to: "quote: row.title ?? null, reason: false };",
     packageOnly: true,
     files: ["test/membership.screens.test.tsx"],
   },

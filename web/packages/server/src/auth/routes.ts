@@ -77,9 +77,17 @@ export function safeReturnTo(value: string | null | undefined): string | null {
  * required" page, which opens the "No Session account" step. */
 export const NEW_WAITING_PATH = "/welcome?new=1";
 
-/** The sign-in error page: `/login?error=<reason>`. */
-function signInError(publicOrigin: string, reason: string): string {
-  return `${publicOrigin}/login?error=${encodeURIComponent(reason)}`;
+/** The sign-in error page, `/login?error=<reason>`, with what the reason's
+ * message names: the provider, or the wait in seconds of `rate_limited`. */
+function signInError(
+  publicOrigin: string,
+  reason: string,
+  extra: { provider?: SignInProvider; wait?: number } = {},
+): string {
+  const search = new URLSearchParams({ error: reason });
+  if (extra.provider !== undefined) search.set("provider", extra.provider);
+  if (extra.wait !== undefined) search.set("wait", String(extra.wait));
+  return `${publicOrigin}/login?${search.toString()}`;
 }
 
 /**
@@ -125,7 +133,14 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
     ? fixtureOAuthFetch(config)
     : (deps.fetch ?? globalThis.fetch);
 
-  const authLimit = rateLimitByIp(limiter, "auth", abuseBuckets(config.abuse).auth);
+  // A page the browser navigated to (the start's GET, the provider's
+  // redirect back) goes to the sign-in page with the wait; the start's
+  // fetch gets the JSON 429 and reads `Retry-After`.
+  const authLimit = rateLimitByIp(limiter, "auth", abuseBuckets(config.abuse).auth, (c, wait) =>
+    c.req.method === "GET"
+      ? c.redirect(signInError(config.publicOrigin, "rate_limited", { wait }), 302)
+      : null,
+  );
   // The test sign-in and the fixture provider's consent page are outside the
   // budget: an end-to-end run signs in dozens of accounts from one address.
   const authBudget: MiddlewareHandler<AppEnv> = (c, next) =>
@@ -167,7 +182,16 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
   };
 
   const notConfigured = (provider: SignInProvider) =>
-    `${PROVIDER_LABELS[provider]} sign-in is not configured on this deployment\n`;
+    `${PROVIDER_LABELS[provider]} sign-in is not configured on this deployment`;
+  /** A page for a provider without credentials: the sign-in page says the
+   * provider is not available; the missing setting goes to the log. */
+  const unavailable = (c: Context<AppEnv>, provider: SignInProvider) => {
+    c.get("logger").warn({ provider }, notConfigured(provider));
+    return c.redirect(signInError(config.publicOrigin, "unavailable", { provider }), 302);
+  };
+  /** A page under `/auth/` for a provider name that is not one: the app's
+   * own Not found page. */
+  const notFoundPage = (c: Context<AppEnv>) => c.redirect(`${config.publicOrigin}/not-found`, 302);
 
   app.post("/auth/:provider/start", async (c) => {
     const provider = c.req.param("provider");
@@ -178,24 +202,24 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
       returnTo: safeReturnTo(typeof body.returnTo === "string" ? body.returnTo : null),
       codeHash: code === null ? null : accountInvites.hashOfInput(code),
     });
-    if (url === null) return c.json({ error: notConfigured(provider).trim() }, 503);
+    if (url === null) return c.json({ error: notConfigured(provider) }, 503);
     return c.json({ url: url.href });
   });
 
   app.get("/auth/:provider", (c) => {
     const provider = c.req.param("provider");
-    if (!isProvider(provider)) return c.notFound();
+    if (!isProvider(provider)) return notFoundPage(c);
     const url = begin(c, provider, {
       returnTo: safeReturnTo(c.req.query("return_to")),
       codeHash: null,
     });
-    if (url === null) return c.text(notConfigured(provider), 503);
+    if (url === null) return unavailable(c, provider);
     return c.redirect(url.href, 302);
   });
 
   app.get("/auth/:provider/callback", async (c) => {
     const provider = c.req.param("provider");
-    if (!isProvider(provider)) return c.notFound();
+    if (!isProvider(provider)) return notFoundPage(c);
     const code = c.req.query("code");
     const state = c.req.query("state");
     const cookieState = getCookie(c, OAUTH_STATE_COOKIE) ?? null;
@@ -205,7 +229,8 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
       secure: config.isProduction,
       sameSite: "Lax",
     });
-    if (!state) return c.redirect(signInError(config.publicOrigin, "missing_code"), 302);
+    if (!state)
+      return c.redirect(signInError(config.publicOrigin, "missing_code", { provider }), 302);
     // Single use: the row is deleted as it is read, so a replayed callback
     // URL matches nothing (`06` §2). Consumed before any other check, so a
     // denied consent also ends the handshake.
@@ -220,10 +245,10 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
     }
     if (!code) {
       const reason = c.req.query("error") === "access_denied" ? "cancelled" : "missing_code";
-      return c.redirect(signInError(config.publicOrigin, reason), 302);
+      return c.redirect(signInError(config.publicOrigin, reason, { provider }), 302);
     }
     const credentials = credentialsFor(config, provider);
-    if (credentials === null) return c.text(notConfigured(provider), 503);
+    if (credentials === null) return unavailable(c, provider);
     const returnTo = safeReturnTo(stored.returnTo);
     const ipKey = c.get("ipKey");
 
@@ -241,7 +266,7 @@ export function authRoutes(options: AuthRoutesOptions): Hono<AppEnv> {
     } catch (error) {
       const reason = error instanceof ProviderError ? error.reason : "profile_failed";
       c.get("logger").warn({ provider, reason, err: error }, "oauth sign-in failed");
-      return c.redirect(signInError(config.publicOrigin, reason), 302);
+      return c.redirect(signInError(config.publicOrigin, reason, { provider }), 302);
     }
 
     if (provider === "github" && blockedByAllowlist(identity.login, config.allowedGithubLogins)) {
