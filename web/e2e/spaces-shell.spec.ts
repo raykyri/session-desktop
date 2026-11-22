@@ -14,6 +14,8 @@ import { signIn } from "./helpers.js";
 import { channelName, person, ulid } from "./world.js";
 
 const LOGIN = "e2e-shell";
+/** A member of many channels, so the strip scrolls at narrow widths. */
+const STRIP_LOGIN = "e2e-shell-strip";
 const lounge = { name: "", id: "" };
 const lab = { name: "" };
 
@@ -25,6 +27,11 @@ test.beforeAll(async ({ browser }) => {
   lab.name = channelName("shell-lab");
   await olga.channel(lab.name, { vis: "private" });
   await me.join(lounge.id);
+  const many = await person(browser, STRIP_LOGIN);
+  await many.join(lounge.id);
+  for (let i = 1; i <= 8; i++) {
+    await many.join(await olga.channel(channelName(`shell-strip-${i}`)));
+  }
   // enough rows to scroll the feed
   await olga.all(
     Array.from(
@@ -314,6 +321,40 @@ test.describe("signed in", () => {
     await expect(bar.getByRole("button", { name: /^Account/ })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Sign in" })).toHaveCount(0);
   });
+});
+
+test.describe("narrow widths", () => {
+  test("the current chip is scrolled into the strip", async ({ page }) => {
+    await signIn(page, { login: STRIP_LOGIN });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openHome(page);
+    const strip = page.locator(".channel-strip");
+    const names = await strip.getByRole("link").allTextContents();
+    expect(names.length).toBeGreaterThanOrEqual(9);
+    const last = (names.at(-1) ?? "").replace(/^#/, "");
+    for (const width of [700, 600, 520]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/c/${last}`);
+      const chip = strip.locator('[aria-current="page"]');
+      await expect(chip).toHaveText(`#${last}`);
+      // The chip lies inside the strip's box once the scroll has settled.
+      await expect
+        .poll(
+          () =>
+            chip.evaluate((el) => {
+              const own = el.getBoundingClientRect();
+              const box = el.closest(".channel-strip")?.getBoundingClientRect();
+              if (!box) return "no strip";
+              return own.left >= box.left - 0.5 && own.right <= box.right + 0.5
+                ? "inside"
+                : `chip ${own.left}-${own.right}, strip ${box.left}-${box.right}`;
+            }),
+          { message: `at ${width} px` },
+        )
+        .toBe("inside");
+    }
+  });
+
 });
 
 test.describe("signed out", () => {

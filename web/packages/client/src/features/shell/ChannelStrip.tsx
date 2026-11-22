@@ -32,6 +32,19 @@ export function stripFades(el: { scrollLeft: number; clientWidth: number; scroll
   };
 }
 
+/** The strip's `scrollLeft` that centres a chip at `chip.left` (measured
+ * from the start of the strip's content) when the chip lies within
+ * `STRIP_EDGE` of either edge; null when it needs no scroll. */
+export function centredScrollLeft(
+  el: { scrollLeft: number; clientWidth: number },
+  chip: { left: number; width: number },
+): number | null {
+  const nearRight = chip.left + chip.width > el.scrollLeft + el.clientWidth - STRIP_EDGE;
+  const nearLeft = chip.left < el.scrollLeft + STRIP_EDGE;
+  if (!nearRight && !nearLeft) return null;
+  return chip.left - el.clientWidth / 2 + chip.width / 2;
+}
+
 export function emptyStripLine(scope: ChannelScope): string {
   return scope === "yours" ? "You have not made a channel yet." : "Nothing here yet.";
 }
@@ -82,19 +95,21 @@ export function ChannelStrip({
     };
   }, [channels]);
 
-  // The current chip is brought to the centre when it is near an edge.
+  // The current chip is brought to the centre when it is near an edge. Its
+  // place is measured from the strip's scrolled content: `offsetLeft` would
+  // count from the chip's offset parent, the bar, and so include the brand
+  // and the scope picker.
   useLayoutEffect(() => {
     const el = strip.current;
     const chip = el?.querySelector<HTMLElement>('[aria-current="page"]');
     if (!el || !chip) return;
-    const nearRight =
-      chip.offsetLeft + chip.offsetWidth > el.scrollLeft + el.clientWidth - STRIP_EDGE;
-    const nearLeft = chip.offsetLeft < el.scrollLeft + STRIP_EDGE;
-    if (!nearRight && !nearLeft) return;
-    el.scrollTo({
-      left: chip.offsetLeft - el.clientWidth / 2 + chip.offsetWidth / 2,
-      behavior: prefersReducedMotion() ? "instant" : "smooth",
-    });
+    const left = chip.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+    const target = centredScrollLeft(
+      { scrollLeft: el.scrollLeft, clientWidth: el.clientWidth },
+      { left, width: chip.offsetWidth },
+    );
+    if (target === null) return;
+    el.scrollTo({ left: target, behavior: prefersReducedMotion() ? "instant" : "smooth" });
   }, [current, channels]);
 
   return (
