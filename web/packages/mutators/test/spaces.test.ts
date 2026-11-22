@@ -2,6 +2,8 @@
 
 import test from "ava";
 
+import { INVITE_LINK_DEAD } from "../src/index.js";
+
 import { DAY, World, admit, cast, ok, refused } from "./world.js";
 
 test("names are unique across all spaces, and the CONFLICT names only the name sent", (t) => {
@@ -51,7 +53,7 @@ test("a private space admits through a link, once, until it expires", (t) => {
     w.apply("mel", "spaces.join", { space: closed, invite: late.code }),
     "FORBIDDEN",
   );
-  t.is(e?.message, "This invite link has expired or was already used.");
+  t.is(e?.message, INVITE_LINK_DEAD);
 });
 
 test("a link stops admitting at its expiry time exactly", (t) => {

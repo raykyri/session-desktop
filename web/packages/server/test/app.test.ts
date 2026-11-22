@@ -231,14 +231,23 @@ test("fixture providers are refused in production", (t) => {
 
 test("the auth routes are rate limited per address", async (t) => {
   const harness = createHarness(t);
-  let last = 200;
+  let last: Response | null = null;
   for (let attempt = 0; attempt < 21; attempt += 1) {
-    const response = await harness.request("/auth/github", {
+    last = await harness.request("/auth/github", {
       headers: { "Fly-Client-IP": "1.2.3.4" },
     });
-    last = response.status;
   }
-  t.is(last, 429);
+  // a page the browser navigated to goes to the sign-in page with the wait
+  t.is(last?.status, 302);
+  t.regex(last?.headers.get("location") ?? "", /\/login\?error=rate_limited&wait=\d+$/);
+  // the start's fetch gets the JSON 429
+  const start = await harness.request("/auth/github/start", {
+    method: "POST",
+    headers: { "Fly-Client-IP": "1.2.3.4", "Content-Type": "application/json" },
+    body: "{}",
+  });
+  t.is(start.status, 429);
+  t.truthy(start.headers.get("Retry-After"));
   // A different address still has its own bucket.
   const other = await harness.request("/auth/github", { headers: { "Fly-Client-IP": "5.6.7.8" } });
   t.is(other.status, 302);
@@ -280,7 +289,9 @@ test("the mutation budget is per account", async (t) => {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     await caller.settings.update({});
   }
-  await t.throwsAsync(caller.settings.update({}), { message: /too many changes/ });
+  await t.throwsAsync(caller.settings.update({}), {
+    message: /^Too many changes\. Try again in a minute\.$/,
+  });
   // A second account is unaffected.
   await t.notThrowsAsync(harness.caller(harness.addUser("budget2")).settings.update({}));
 });

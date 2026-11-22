@@ -59,10 +59,14 @@ export function validateFeedSearch(search: Record<string, unknown>): FeedSearch 
   return { t: parsed.t, sel: parsed.sel };
 }
 
-/** Search parameters for /login: the authentication error code (`error`),
+/** Search parameters for /login: the authentication error code (`error`)
+ * with the provider or the wait its message names (`provider`, `wait`),
  * where to return (`redirect`), and a sign-up code (`signup` or `invite`). */
 const loginSearchSchema = z.object({
   error: z.string().optional(),
+  provider: z.string().optional().catch(undefined),
+  // the router reads a number-like value as a number
+  wait: z.number().int().nonnegative().optional().catch(undefined),
   signup: z.string().optional(),
   invite: z.string().optional(),
   redirect: z.string().optional(),

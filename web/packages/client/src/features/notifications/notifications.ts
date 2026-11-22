@@ -2,8 +2,8 @@
 // of the viewer's user log as rows, newest first, and the text of each row.
 // A record carries ids and no item text; the thread's title is the
 // replica's, clipped at 64 characters, in quotes (the mock's `titleOf`):
-// “a deleted thread” when it has no text left, “a thread” while it is not
-// loaded. A removed thread has no text left, so a removal names no title; it
+// “a deleted thread” when it has no text left, and a thread, unquoted, while
+// it is not loaded. A removed thread has no text left, so a removal names no title; it
 // names the thread's kind (ask or post) from the thread's record, and "your
 // thread" while the replica holds no record of it.
 //
@@ -184,7 +184,11 @@ export function notifParts(row: NotifRow): NotifParts {
   // an actor whose account was deleted is null (`04` P2)
   const actor = row.actor === null ? DELETED_ACCOUNT : `@${row.actor}`;
   const who = `${actor}${row.others ? " and others" : ""}`;
-  const on = (text: string) => ({ who, text: `${text} `, quote: titleOf(row), reason: false });
+  // a thread not loaded yet has no title to quote
+  const on = (text: string) =>
+    row.title === undefined
+      ? { who, text: `${text} a thread`, quote: null, reason: false }
+      : { who, text: `${text} `, quote: titleOf(row), reason: false };
   switch (row.type) {
     case "mention":
       return on(` mentioned you in a ${row.where} on`);

@@ -2,8 +2,11 @@
 // (02 W7.1-W7.3; plan 04 I2-I4). Online-only tRPC, read through TanStack
 // Query; nothing here is replicated.
 
-import type { InviteCheck, SignInProvider } from "@session/shared";
+import { retryWaitText, type InviteCheck, type SignInProvider } from "@session/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { UNREACHABLE_MESSAGE } from "../lib/toast.js";
+import { parseRetryAfter } from "../replica/http.js";
 
 import { queryKeys } from "./account.js";
 import { REQUESTED_WITH_HEADERS, trpc } from "./trpc.js";
@@ -32,7 +35,8 @@ export function createAccount(input: { name: string; handle: string }) {
 /**
  * Starts a sign-in (04 I4): `POST /auth/<provider>/start` with the invite
  * code in the body, never in a URL, then the whole page goes to the
- * provider. Resolves only if the server refuses.
+ * provider. Resolves only if the server refuses; the error's message is
+ * for the reader (the limit's wait from `Retry-After`, or no connection).
  */
 export async function startSignIn(
   provider: SignInProvider,
@@ -47,14 +51,20 @@ export async function startSignIn(
       ...(input.code ? { code: input.code } : {}),
       ...(input.returnTo ? { returnTo: input.returnTo } : {}),
     }),
+  }).catch(() => {
+    throw new Error(UNREACHABLE_MESSAGE);
   });
   const body = (await response.json().catch(() => null)) as { url?: unknown } | null;
   if (!response.ok || typeof body?.url !== "string") {
-    throw new Error(
-      response.status === 429
-        ? "Too many sign-in attempts. Try again in a minute."
-        : "Sign-in is not available right now. Try again later.",
-    );
+    if (response.status === 429) {
+      const ms = parseRetryAfter(response.headers.get("Retry-After"));
+      throw new Error(
+        `Too many sign-in attempts. Try again in ${
+          ms === undefined ? "a few minutes" : retryWaitText(ms / 1000)
+        }.`,
+      );
+    }
+    throw new Error("Sign-in is not available right now. Try again later.");
   }
   navigate(body.url);
 }

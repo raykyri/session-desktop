@@ -55,7 +55,7 @@ async function continueWith(page: Page, provider: "GitHub" | "X") {
   await expect(dialog.getByRole("heading", { name: `Sign in with ${provider}` })).toBeVisible();
   await expect(
     dialog.getByText(
-      `Session uses your name, handle and profile picture from ${provider} for your profile. It cannot post or read your messages.`,
+      `Session uses your name, handle and profile picture from ${provider} for your profile. It can't post or change anything on ${provider}.`,
     ),
   ).toBeVisible();
   await dialog.getByRole("button", { name: `Continue to ${provider}` }).click();

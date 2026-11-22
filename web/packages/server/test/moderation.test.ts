@@ -129,7 +129,10 @@ test("B4: a used link admits nobody else; a banned person cannot join with a lin
   await eve.ok("spaces.join", { space: closed, invite: link.code });
   t.like(await ann.write("spaces.join", { space: closed, invite: link.code }), {
     ok: false,
-    error: { code: "FORBIDDEN", message: "This invite link has expired or was already used." },
+    error: {
+      code: "FORBIDDEN",
+      message: "This invite link no longer works. Ask the channel owner for a new one.",
+    },
   });
   await olga.ok("members.ban", { space: closed, user: "ann" });
   const fresh = (await olga.ok("invites.create", { id: newId(), space: closed, days: 7 })) as {

@@ -25,7 +25,7 @@ import {
   useCreateAccount,
 } from "../../api/membership.js";
 import { keepChannelInviteForSignIn, pendingInviteChannel } from "../../lib/pendingInvite.js";
-import { trpcErrorCode } from "../../lib/toast.js";
+import { UNREACHABLE_MESSAGE, refusalMessage, trpcErrorCode } from "../../lib/toast.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { GitHubMark } from "../../ui/GitHubMark.js";
 import { CloseIcon } from "../feed/icons.js";
@@ -41,7 +41,8 @@ const PROVIDER_NAME: Record<SignInProvider, string> = { x: "X", github: "GitHub"
 const PROVIDERS: readonly SignInProvider[] = ["x", "github"];
 
 export const EMPTY_CODE_MESSAGE = "Enter the code from your invite.";
-const RATE_MESSAGE = "Too many attempts. Wait a while and try again.";
+const RATE_MESSAGE = "Too many attempts. Try again in a few minutes.";
+const UNEXPECTED_MESSAGE = "Something went wrong. Try again.";
 const NAME_MESSAGE = "Enter a name.";
 const HANDLE_MESSAGE = "Handles use 3 to 20 lowercase letters, numbers, dots or underscores.";
 const takenMessage = (handle: string) => `@${handle} is taken. Try another.`;
@@ -97,9 +98,14 @@ function InviterCard({ inviter, title }: { inviter: Inviter; title: string }) {
   );
 }
 
-/** The error message for a failed check or redeem. */
+/** The error message for a failed check or redeem: a code the input
+ * schema refuses reads as one that does not work; a failure of the server
+ * or of the connection says so instead. */
 function checkErrorMessage(error: unknown): string {
-  return trpcErrorCode(error) === "TOO_MANY_REQUESTS" ? RATE_MESSAGE : UNUSABLE_INVITE_MESSAGE;
+  const code = trpcErrorCode(error);
+  if (code === "TOO_MANY_REQUESTS") return RATE_MESSAGE;
+  if (code === "BAD_REQUEST") return UNUSABLE_INVITE_MESSAGE;
+  return code === null ? UNREACHABLE_MESSAGE : UNEXPECTED_MESSAGE;
 }
 
 /** The steps' content; the dialog and the sign-in page both render it. */
@@ -398,10 +404,13 @@ function ExplainStep({
         Sign in with {name}
       </h2>
       <p>
-        Session uses your name, handle and profile picture from {name} for your profile. It cannot
-        post or read your messages.
+        Session uses your name, handle and profile picture from {name} for your profile. It
+        can&apos;t post or change anything on {name}.
       </p>
-      <p>Use the same account each time you sign in.</p>
+      <p>
+        Use the same {name} account each time. Signing in with a different one starts a new Session
+        account.
+      </p>
       <div className="auth-acts">
         <button
           type="button"
@@ -416,7 +425,9 @@ function ExplainStep({
             startSignIn(state.provider, { code, returnTo: safeReturn(returnTo) }).catch(
               (failure: unknown) => {
                 setPending(false);
-                setError(failure instanceof Error ? failure.message : String(failure));
+                // `startSignIn`'s own messages; the browser's text for a
+                // failed request is never shown
+                setError(failure instanceof Error ? failure.message : UNREACHABLE_MESSAGE);
               },
             );
           }}
@@ -498,7 +509,9 @@ function ProfileStep({ headingId }: { headingId: string }) {
           } else if (code === "TOO_MANY_REQUESTS") {
             setError(RATE_MESSAGE);
           } else {
-            setError(failure.message);
+            // the server's message for a refusal (an expired sign-in, an
+            // account already active), else no connection
+            setError(refusalMessage(failure));
           }
         },
       },

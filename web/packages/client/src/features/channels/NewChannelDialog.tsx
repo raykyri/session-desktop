@@ -64,10 +64,14 @@ export function NewChannelDialog({ online = true }: { online?: boolean }) {
     const outcome = await writes.createChannel({ name: checked.name, desc: desc.trim(), vis });
     setBusy(false);
     if (!outcome.ok) {
+      // the server's message for a refusal with a cause (a limit); a
+      // request that got no answer says the channel was not created
       setError(
         outcome.error.code === "CONFLICT"
           ? `#${checked.name} already exists.`
-          : outcome.error.message,
+          : outcome.error.code === "SERVICE_UNAVAILABLE"
+            ? `Couldn't create #${checked.name}. Check your connection and try again.`
+            : outcome.error.message,
       );
       nameField.current?.focus();
       return;
@@ -127,7 +131,7 @@ export function NewChannelDialog({ online = true }: { online?: boolean }) {
           {(
             [
               ["open", "Open", "Anyone can read and join."],
-              ["private", "Private", "Only people you add can read or post."],
+              ["private", "Private", "Only people invited with a link can read or post."],
             ] as const
           ).map(([value, label, hint]) => (
             <label key={value} className="radio">

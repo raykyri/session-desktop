@@ -170,10 +170,10 @@ test("the text of each notification kind, and of a coalesced one", (t) => {
   t.is(notifText({ ...base, others: true }), "@lettie and others replied to your post “A post”");
   // a thread without text, and one not loaded, are quoted as the mock does
   t.is(notifText({ ...base, title: null }), "@lettie replied to your post “a deleted thread”");
-  t.is(notifText({ ...base, title: undefined }), "@lettie replied to your post “a thread”");
+  t.is(notifText({ ...base, title: undefined }), "@lettie replied to your post a thread");
   t.is(
     notifText({ ...base, type: "branch", title: undefined }),
-    "@lettie branched from your ask “a thread”",
+    "@lettie branched from your ask a thread",
   );
 });
 
@@ -271,7 +271,7 @@ test.serial(
     );
     fireEvent.click(rowEl as HTMLElement);
     t.deepEqual(calls[0], ["notifications.markRead", { id: n?.id }]);
-    await waitUntil(t, () => currentToast() === "This thread is not available.", "the toast");
+    await waitUntil(t, () => currentToast() === "This thread is no longer available.", "the toast");
     t.is(app.router.state.location.pathname, "/notifications");
   },
 );
@@ -450,7 +450,7 @@ test("the member list's order and each viewer's menu items", (t) => {
   t.deepEqual(memberActions(open, m("a", "member", ""), "o"), ["Ban from #lounge"]);
   t.deepEqual(memberActions({ ...open, private: true }, m("a", "member", ""), "o"), [
     "Ban from #lounge",
-    "Remove from channel",
+    "Remove from #lounge",
   ]);
   // nobody acts on the owner, nor on themselves; a member has no menu
   t.deepEqual(memberActions(open, m("o", "owner", ""), "o"), []);
@@ -495,7 +495,7 @@ test.serial(
     fireEvent.click(within(other).getByRole("button", { name: "More" }));
     const menu = await screen.findByRole("menu");
     t.truthy(within(menu).getByRole("menuitem", { name: "Ban from #sci-fi" }));
-    t.is(within(menu).queryByRole("menuitem", { name: "Remove from channel" }), null);
+    t.is(within(menu).queryByRole("menuitem", { name: "Remove from #sci-fi" }), null);
     fireEvent.keyDown(menu, { key: "Escape" });
     const banned = within(dialog).getByRole("list", { name: "Banned" });
     const ban = within(banned).getAllByRole("listitem")[0] as HTMLElement;
@@ -546,7 +546,9 @@ test.serial(
     let confirm = await choose();
     t.regex(
       confirm.textContent ?? "",
-      new RegExp(`@${user.replace(".", "\\.")} stops being a member of #sci-fi`),
+      new RegExp(
+        `@${user.replace(".", "\\.")} can no longer write in #sci-fi or join it\\. Anyone can still read an open channel\\.`,
+      ),
     );
     t.is(within(confirm).queryByRole("textbox"), null, "no reason field");
     fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
@@ -617,10 +619,13 @@ test.serial(
       .adm;
     const calls = recordWrites(replica, () => ({
       ok: false,
-      error: { code: "STALE", message: "This item changed after you saw it. Look at it again." },
+      error: {
+        code: "STALE",
+        message: "This changed after you opened it. Check it and try again.",
+      },
     }));
     fireEvent.click(within(other).getByRole("button", { name: "More" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove from channel" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove from #sci-fi" }));
     const confirm = await screen.findByRole("alertdialog", {
       name: `Remove @${user} from #sci-fi?`,
     });
@@ -634,7 +639,7 @@ test.serial(
     // STALE: the toast says so, and the row shows the member as they are now
     await waitUntil(
       t,
-      () => currentToast() === "This item changed after you saw it. Look at it again.",
+      () => currentToast() === "This changed after you opened it. Check it and try again.",
       "the STALE toast",
     );
     t.truthy(document.querySelector(`[data-member="${user}"]`));
@@ -656,7 +661,7 @@ test.serial(
     const remove = async (row: HTMLElement) => {
       const user = row.getAttribute("data-member") ?? "";
       fireEvent.click(within(row).getByRole("button", { name: "More" }));
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove from channel" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove from #sci-fi" }));
       const confirm = await screen.findByRole("alertdialog", {
         name: `Remove @${user} from #sci-fi?`,
       });
@@ -727,10 +732,10 @@ test.serial("Invite to #name: create, copy, revoke and undo", async (t) => {
   await waitUntil(t, () => calls.some(([n]) => n === "invites.revoke"), "the revoke");
   await waitUntil(
     t,
-    () => within(dialog).queryByRole("button", { name: /^Undo revoking link 1/ }) !== null,
+    () => within(dialog).queryByRole("button", { name: /^Restore link 1/ }) !== null,
     "Undo on the revoked link",
   );
-  fireEvent.click(within(dialog).getByRole("button", { name: /^Undo revoking link 1/ }));
+  fireEvent.click(within(dialog).getByRole("button", { name: /^Restore link 1/ }));
   await waitUntil(t, () => calls.some(([n]) => n === "invites.restore"), "the restore");
   await waitUntil(
     t,
@@ -799,7 +804,7 @@ test.serial(
     t.truthy(within(used).getByText("Used by @priya.n"));
     t.is(within(used).queryByRole("button"), null, "no Undo, Copy or Revoke on a used link");
     const revoked = item("01M7HWGZJGT7JTFFVSYPX0L004") as HTMLElement;
-    t.truthy(within(revoked).getByRole("button", { name: /^Undo revoking link \d, expires / }));
+    t.truthy(within(revoked).getByRole("button", { name: /^Restore link \d, expires / }));
     const lapsed = item("01M7HWGZJGT7JTFFVSYPX0L005") as HTMLElement;
     t.truthy(within(lapsed).getByText("Revoked"));
     t.is(within(lapsed).queryByRole("button"), null, "no Undo past the expiry");
@@ -808,7 +813,7 @@ test.serial(
       .getAllByRole("button")
       .map((b) => b.getAttribute("aria-label") ?? "");
     t.is(new Set(names).size, names.length);
-    t.true(names.every((n) => /^(Copy|Revoke|Undo revoking) link \d, expires \w+ \d+$/.test(n)));
+    t.true(names.every((n) => /^(Copy|Revoke|Restore) link \d, expires \w+ \d+$/.test(n)));
   },
 );
 
@@ -1067,7 +1072,7 @@ test.serial("a frozen channel: the banner, no composer, no new replies", async (
   prepare = (replica) => rewrite(replica, space(replica, "public"), { frozen: true });
   await renderApp("/c/public");
   const banner = await screen.findByText(
-    "#public is unavailable because its owner's account is deactivated. You can read it and delete your own posts.",
+    "#public is unavailable because its owner's account is deactivated.",
   );
   t.truthy(banner);
   t.is(screen.queryByRole("textbox", { name: "Ask or post" }), null);
@@ -1076,7 +1081,7 @@ test.serial("a frozen channel: the banner, no composer, no new replies", async (
   t.is(follow?.title, "#public is unavailable");
   fireEvent.click(screen.getByRole("button", { name: "About this channel" }));
   const info = await screen.findByRole("dialog", { name: "#public" });
-  t.truthy(within(info).getByText("Deleted account"));
+  t.truthy(within(info).getByText("Unavailable"));
   t.truthy(within(info).getByText(/^#public is unavailable because/));
 });
 
@@ -1135,6 +1140,46 @@ test.serial(
     const reply = side(SEED_POST).querySelector(".preview .rtext")?.closest(".preview");
     fireEvent.click(within(reply as HTMLElement).getByRole("button", { name: "More" }));
     t.truthy(await screen.findByRole("menuitem", { name: "Delete reply" }));
+  },
+);
+
+test.serial(
+  "a reply its author deleted reads “Deleted by its author” as reply text, in the tree and its card",
+  async (t) => {
+    prepare = (replica) => {
+      const ml = space(replica, "ml-papers");
+      replica.write([
+        {
+          kind: "reply",
+          id: OWN_REPLY,
+          th: SEED_POST,
+          s: ml.kind === "space" ? ml.id : "",
+          u: "ines.v",
+          t: "",
+          parent: null,
+          edited: false,
+          del: true,
+          mod: null,
+          createdAt: "2026-11-16T09:30:00Z",
+        },
+      ]);
+    };
+    await renderApp("/c/ml-papers");
+    await waitUntil(t, () => document.getElementById(`card-${SEED_POST}`) !== null, "the post");
+    const row = await within(side(SEED_POST)).findByRole("treeitem", {
+      name: /Deleted by its author/,
+    });
+    fireEvent.click(row);
+    await waitUntil(
+      t,
+      () => side(SEED_POST).querySelector(".preview .rtext") !== null,
+      "the reply's card renders",
+    );
+    // the reply body's element, not the fainter moderation line
+    const body = side(SEED_POST).querySelector(".preview .rtext");
+    t.is(body?.textContent, "Deleted by its author");
+    t.is(side(SEED_POST).querySelector(".preview .modln"), null);
+    t.false(side(SEED_POST).textContent?.includes("[deleted]") ?? true);
   },
 );
 
@@ -1436,7 +1481,7 @@ test.serial("the strip under All offers no Join on a frozen channel", async (t) 
   t.is(within(strip()).queryByRole("button", { name: `Join #${channel.name}` }), null);
 });
 
-test.serial("Browse: a frozen channel is by Deleted account and has no Join (04 B6)", async (t) => {
+test.serial("Browse: a frozen channel reads Unavailable and has no Join (04 B6)", async (t) => {
   const channel = unjoinedChannel();
   const card = async () =>
     (await screen.findByText(`#${channel.name}`, { selector: "b" })).closest(
@@ -1450,7 +1495,7 @@ test.serial("Browse: a frozen channel is by Deleted account and has no Join (04 
   prepare = (replica) => rewrite(replica, space(replica, channel.name), { frozen: true });
   await renderApp("/browse");
   const frozen = await card();
-  t.regex(frozen.textContent ?? "", /by Deleted account · \d+ members?/);
+  t.regex(frozen.textContent ?? "", /Unavailable · \d+ members?/);
   t.notRegex(frozen.textContent ?? "", /by @/);
   t.is(within(frozen).queryByRole("button", { name: "Join" }), null);
 });
@@ -1507,10 +1552,12 @@ test.serial(
     for (const [who, id] of cards)
       await waitUntil(t, () => document.getElementById(`card-${id}`) !== null, `${who}'s card`);
     const text = (id: string) => document.getElementById(`card-${id}`)?.textContent ?? "";
-    t.regex(text(ids.author), /Post by \[deleted\] in #ml-papers/);
+    t.regex(text(ids.author), /Removed by the channel owner/);
+    t.regex(text(ids.author), /Post in #ml-papers/);
     t.false(text(ids.author).includes("@ines.v"), "the author's own handle is not shown");
-    t.regex(text(ids.owner), /Post by \[deleted\] in #sci-fi/);
-    t.regex(text(ids.reader), /Post by \[deleted\] in #public/);
+    t.regex(text(ids.owner), /Post in #sci-fi/);
+    t.regex(text(ids.reader), /Post in #public/);
+    for (const id of Object.values(ids)) t.false(text(id).includes("[deleted]"), id);
     // the author keeps Delete on the placeholder
     const own = document.getElementById(`card-${ids.author}`) as HTMLElement;
     t.truthy(within(own).getByRole("button", { name: "More" }));

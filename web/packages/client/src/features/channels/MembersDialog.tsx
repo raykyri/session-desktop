@@ -1,7 +1,7 @@
 // The member list (02 W6.8, 04 §4.3, §6.4; a plan addition), stacked over
 // the channel's info dialog: the owner, then members by the date they
 // joined. The owner gets a "…" menu on every other member: "Ban from
-// #name", and in a private channel "Remove from channel", each confirmed
+// #name", and in a private channel "Remove from #name", each confirmed
 // first in a dialog that names the person and the channel. A removal sends
 // `members.remove` with the admission id the owner saw: a person let in
 // again since answers STALE, the toast says so and the row shows the member
@@ -52,7 +52,7 @@ export function memberActions(
 ): string[] {
   if (!channel.owned || channel.frozen || member.u === me || member.role === "owner") return [];
   return channel.private
-    ? [`Ban from #${channel.name}`, "Remove from channel"]
+    ? [`Ban from #${channel.name}`, `Remove from #${channel.name}`]
     : [`Ban from #${channel.name}`];
 }
 
@@ -121,7 +121,7 @@ export function MembersDialog({
   };
   const actionsOf = (m: MemberRec): MoreAction[] =>
     memberActions(channel, m, me).map((label) =>
-      label === "Remove from channel"
+      label === `Remove from #${channel.name}`
         ? { label, danger: true, onSelect: () => ask("remove", m) }
         : { label, danger: true, onSelect: () => ask("ban", m) },
     );

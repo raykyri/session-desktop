@@ -162,7 +162,11 @@ test.serial("Continue to GitHub posts the code to the start route, not a URL", a
       /Session uses your name, handle and profile picture from GitHub/,
     ),
   );
-  t.truthy(within(dialog()).getByText("Use the same account each time you sign in."));
+  t.truthy(
+    within(dialog()).getByText(
+      "Use the same GitHub account each time. Signing in with a different one starts a new Session account.",
+    ),
+  );
   fireEvent.click(within(dialog()).getByRole("button", { name: "Continue to GitHub" }));
   t.truthy(await within(dialog()).findByRole("alert"));
   t.is(posted[0]?.url, "/auth/github/start");

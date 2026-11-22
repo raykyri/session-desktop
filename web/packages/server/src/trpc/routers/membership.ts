@@ -140,7 +140,7 @@ const requireWaiting = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.status !== "waiting") {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Your account is already active.",
+      message: "Your account is already active. Reload to continue.",
     });
   }
   return next();
@@ -255,7 +255,10 @@ export const accountInvitesRouter = router({
 
   revoke: memberProcedure.input(z.object({ id: z.string().max(64) })).mutation(({ ctx, input }) => {
     if (!accountInvites.revoke(ctx.db, ctx.user.id, input.id)) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "This invite link is not open." });
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "This invite link was already used or revoked.",
+      });
     }
     return { ok: true };
   }),
@@ -325,7 +328,7 @@ export const accountRouter = router({
         }
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Your account is already active.",
+          message: "Your account is already active. Reload to continue.",
         });
       }
       ctx.logger.info({ userId: result.user.id, inviteId: result.inviteId }, "account activated");

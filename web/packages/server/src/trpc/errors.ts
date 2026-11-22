@@ -92,7 +92,7 @@ const UNCLASSIFIED: Code = "INTERNAL_SERVER_ERROR";
 /** What a client is told about a failure that was not meant to happen. The
  * real message goes to the log with the request id, not over the wire: a
  * driver error names tables and columns. */
-export const INTERNAL_MESSAGE = "An internal server error occurred. Please try again.";
+export const INTERNAL_MESSAGE = "Something went wrong. Try again.";
 
 /**
  * Errors thrown by the runtime or the driver rather than by a repository's own

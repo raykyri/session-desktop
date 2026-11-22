@@ -1,10 +1,10 @@
 // "Invite to #name" (02 W6.9, 04 B4; a plan addition), stacked over the info
 // dialog of a private channel, for its owner: one-use links that expire in 7
-// days, `<origin>/c/<name>#<code>`, with Copy and Revoke, and Undo on a
+// days, `<origin>/c/<name>#<code>`, with Copy and Revoke, and Restore on a
 // revoked one. The server makes each code (`invites.create`, `pre`); the
 // owner's replica holds the link records, the codes included, and no other
 // reader gets them. A used link names who used it, so the owner can remove
-// or ban that person.
+// or ban that person; "Used" alone once that account is deleted.
 
 import { Dialog } from "@base-ui/react/dialog";
 import { isoToMs, type InviteRec } from "@session/mutators";
@@ -94,7 +94,7 @@ export function InviteLinksDialog({
   };
   const restore = async (id: string) => {
     const o = await writes.send("invites.restore", { id });
-    if (o.ok && !o.unsent) showToast("Link restored.");
+    if (o.ok && !o.unsent) showToast("Invite link restored.");
   };
 
   return (
@@ -116,7 +116,7 @@ export function InviteLinksDialog({
       </div>
       <div className="cebody">
         <p className="cefine">
-          A private channel admits people only by invite link. Each link works for one person and
+          People join a private channel only with an invite link. Each link works for one person and
           expires after {CHANNEL_LINK_DAYS} days.
         </p>
         {list.length ? (
@@ -136,7 +136,9 @@ export function InviteLinksDialog({
                     </code>
                     <small>
                       {state === "used"
-                        ? `Used by @${l.usedBy ?? ""}`
+                        ? l.usedBy
+                          ? `Used by @${l.usedBy}`
+                          : "Used"
                         : state === "revoked"
                           ? "Revoked"
                           : `Expires ${expiryDate(l)}`}
@@ -166,10 +168,10 @@ export function InviteLinksDialog({
                     <button
                       type="button"
                       className="btn2 sm"
-                      aria-label={`Undo revoking ${which}`}
+                      aria-label={`Restore ${which}`}
                       onClick={() => void restore(l.id)}
                     >
-                      Undo
+                      Restore
                     </button>
                   ) : null}
                 </li>
