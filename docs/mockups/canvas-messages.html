@@ -1,0 +1,737 @@
+<!doctype html>
+<!--
+Session canvas mock, variant "messages"
+=======================================
+A design exploration, not app code. Concept: docs/canvas/messages-concept.md. One self-contained file; the only
+external request is the Inter font from Google Fonts (the system font is the fallback). Nothing calls a model:
+answers are canned, and a run takes about two seconds.
+
+Model (all in memory; a reload starts over)
+- Part { id, canvas, by (person handle) | model (model name), text | html, prev, pos, to?, saw?, code?, k }.
+  - pos: 'next' (continues prev's series), 'inline' (an interjection drawn between prev and prev's next part),
+    { beside: {dx, dy} } (a branch, offset from prev), { at: {x, y} } (a stack on the canvas).
+    A part whose pos is beside or at is a head: it starts a stack.
+  - to: present on an ask. [] means "the part above" (prev), or the canvas when there is no prev. Explicit entries are
+    part ids, passage addresses ("id#start-end") or several ids (a selection). A part without `to` is a post part.
+  - A part by a model is the reply to its prev (an ask). saw: the context ids resolved when the ask was sent.
+  - code: { ask | context | place: source }, small handlers. k: the order key among inline siblings.
+- Canvas { id, name, code }: the channel, root of handler lookup.
+- Lookup of a handler for part P: P, P's head, the head of the part that head is anchored to, ..., the canvas, the
+  default.
+- Messages: ask (sent by a person submitting an ask part; offered to each receiver in order; the first handler that
+  returns a reply answers, otherwise one model call runs on the union of the receivers' contexts), context (sent by
+  the system to each receiver), place (sent by the system to the ask part, for where the reply goes).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Canvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --page: #e9e6e1; --chrome: #f4f2ef; --canvas: #f3f0ec; --card: #ffffff; --inset: #f5f2ee; --field: #ffffff;
+  --control: #efece8; --control-hover: #e6e2dc; --control-border: #e0dbd4; --divider: #ebe7e2; --border-strong: #d8d2ca;
+  --dot: rgba(60,40,20,.10); --fill-hover: rgba(0,0,0,.05);
+  --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff;
+  --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e; --t-faint: #686e6b; --t-dim: #9aa19d;
+  --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --bad: #c0563f; --saw: #2f8a4d;
+  --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
+  --code-bg: #f6f4f1; --code-fg: #2b3133;
+  --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.06);
+  --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --w: 290px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #121110; --chrome: #171716; --canvas: #161514; --card: #211f1e; --inset: #181716; --field: #232220;
+  --control: #282827; --control-hover: #313130; --control-border: #3d3d3c; --divider: #2d2d2c; --border-strong: #42403d;
+  --dot: rgba(255,255,255,.07); --fill-hover: rgba(255,255,255,.06);
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #1c6fb3; --on-accent: #ffffff;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994; --t-faint: #828b86; --t-dim: #5a615e;
+  --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d; --saw: #81c784;
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --code-bg: #1a1918; --code-fg: #d9ddd9;
+  --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+} }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121110; --chrome: #171716; --canvas: #161514; --card: #211f1e; --inset: #181716; --field: #232220;
+  --control: #282827; --control-hover: #313130; --control-border: #3d3d3c; --divider: #2d2d2c; --border-strong: #42403d;
+  --dot: rgba(255,255,255,.07); --fill-hover: rgba(255,255,255,.06);
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #1c6fb3; --on-accent: #ffffff;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994; --t-faint: #828b86; --t-dim: #5a615e;
+  --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d; --saw: #81c784;
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --code-bg: #1a1918; --code-fg: #d9ddd9;
+  --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--t-primary); font: 400 13px/1.5 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+[hidden] { display: none !important; }
+
+/* ---- the canvas: a dot grid that pans with the content ---- */
+#view { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.2px); background-size: 22px 22px; }
+#view.panning { cursor: grabbing; }
+#world { position: absolute; left: 0; top: 0; width: 1px; height: 1px; transform-origin: 0 0; }
+#wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+#wires path { fill: none; stroke: color-mix(in srgb, var(--accent) 55%, transparent); stroke-width: 1.5; }
+#wires path.reply { stroke-dasharray: 4 3; }
+#wires circle { fill: var(--canvas); stroke: color-mix(in srgb, var(--accent) 70%, transparent); stroke-width: 1.5; }
+#wires .lbl rect { fill: var(--canvas); stroke: color-mix(in srgb, var(--accent) 40%, transparent); }
+#wires .lbl text { fill: var(--accent); font: 600 10px var(--mono); }
+
+/* ---- the two buttons at the top left ---- */
+#tools { position: fixed; z-index: 20; top: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: none; }
+#tools > * { pointer-events: auto; }
+.tb { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--card); box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.06); color: var(--t-heading); font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.tb:hover { background: var(--control); }
+.chan { height: 30px; display: inline-flex; align-items: center; padding: 0 4px 0 10px; border-radius: 15px; background: var(--canvas); box-shadow: 0 0 0 1px var(--divider); color: var(--t-faint); font-size: 12.5px; font-weight: 500; }
+.chan button { color: var(--t-faint); padding: 2px 6px; border-radius: 6px; font-family: var(--mono); font-size: 11.5px; }
+.chan button:hover { background: var(--fill-hover); color: var(--t-heading); }
+.selnote { height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-radius: 15px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 500; }
+.selnote button { height: 22px; padding: 0 8px; border-radius: 11px; font-weight: 600; }
+.selnote button:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* ---- stacks and parts ---- */
+.stack { position: absolute; width: var(--w); display: flex; flex-direction: column; }
+.part { position: relative; background: var(--card); border-radius: 10px; box-shadow: var(--shadow); padding: 9px 12px 10px; transition: box-shadow .15s; }
+.part.is-ask { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, transparent), var(--shadow); }
+.part.is-reply { background: color-mix(in srgb, var(--card) 70%, var(--inset)); }
+.part.sel { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.part.is-ask.sel { box-shadow: inset 3px 0 0 var(--accent), 0 0 0 2px var(--accent); }
+.part.saw::after { content: ""; position: absolute; inset: -4px; border-radius: 13px; border: 1.5px dashed var(--saw); pointer-events: none; }
+.part.insp { box-shadow: 0 0 0 2px color-mix(in srgb, var(--t-heading) 60%, transparent), var(--shadow); }
+.ph { display: flex; align-items: center; gap: 6px; min-height: 20px; margin-bottom: 4px; font-size: 11.5px; color: var(--t-faint); }
+.ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; }
+.ph .to { color: var(--accent); font-family: var(--mono); font-size: 10.5px; }
+.ph .grow { flex: 1; }
+.ph > span:not(.acts):not(.grow):not(.av):not(.mk) { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph > b { white-space: nowrap; }
+.acts { flex: none; }
+.av { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; color: var(--av-fg); font-size: 7.5px; font-weight: 600; }
+.mk { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent); }
+.mk svg { width: 11px; height: 11px; }
+.acts { display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.part:hover .acts, .part:focus-within .acts, .part.sel .acts, .part.insp .acts { opacity: 1; }
+@media (hover: none) { .acts { opacity: 1; } }
+.act { height: 20px; padding: 0 6px; border-radius: 5px; color: var(--t-muted); font-size: 11px; font-weight: 500; }
+.act:hover, .act[aria-pressed="true"] { background: var(--fill-hover); color: var(--t-heading); }
+.act.code { font-family: var(--mono); }
+.act.code.has { color: var(--accent); }
+.ptext { color: var(--t-body); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.is-ask .ptext { color: var(--t-heading); font-size: 14px; }
+.quote { margin: 2px 0 6px; padding: 4px 8px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--inset); border-radius: 0 5px 5px 0; color: var(--t-secondary); font-size: 11.5px; }
+.prose { color: var(--t-body); font-size: 12.5px; line-height: 1.55; overflow-wrap: anywhere; }
+.prose > :first-child { margin-top: 0; } .prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 .6em; } .prose ul, .prose ol { margin: 0 0 .6em; padding-left: 1.2em; } .prose li { margin: .15em 0; }
+.prose h4 { margin: .9em 0 .3em; font-size: 12.5px; color: var(--t-heading); }
+.prose table { border-collapse: collapse; font-size: 11.5px; margin: 0 0 .6em; display: block; overflow-x: auto; }
+.prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
+.prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; }
+.prose ul.saw-list { list-style: none; padding: 0; }
+.prose ul.saw-list li { padding-left: 0; }
+.prose code { font-family: var(--mono); font-size: 11px; }
+.clamp { max-height: 168px; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+.more { margin-top: 2px; color: var(--accent); font-size: 11.5px; font-weight: 500; }
+.more:hover { text-decoration: underline; }
+.pf { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--t-faint); }
+.sawbtn { color: var(--saw); font-weight: 500; }
+.sawbtn:hover { text-decoration: underline; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--warn); }
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.fadein { animation: fadein .25s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .status::before, .fadein { animation: none; } }
+
+/* the gap between two parts: "Ask here" inserts an interjection (pos inline); at the end of a series, Continue */
+.gap { position: relative; height: 12px; display: flex; align-items: center; justify-content: center; }
+.gap button { position: relative; z-index: 2; height: 18px; padding: 0 8px; border-radius: 9px; font-size: 10.5px; font-weight: 600; color: var(--t-faint); background: var(--canvas); box-shadow: inset 0 0 0 1px var(--border-strong); opacity: 0; transition: opacity .12s; }
+.gap:hover button, .gap button:focus-visible, .stack:hover .gap.end button { opacity: 1; }
+.gap button:hover { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+@media (hover: none) { .gap button { opacity: .8; } }
+.gap.end { height: 22px; align-items: flex-end; justify-content: flex-start; padding-left: 4px; }
+/* an interjection is drawn indented, with a rule: the parts under it do not see it */
+.inl { margin: 6px 0 0 12px; padding-left: 8px; border-left: 2px solid var(--border-strong); display: flex; flex-direction: column; }
+.inl > .gap.end { display: none; }
+.inl:hover > .gap.end, .inl:focus-within > .gap.end { display: flex; }
+.inlmore { align-self: flex-start; margin: 6px 0 0 12px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--control); color: var(--t-muted); font-size: 11px; font-weight: 500; }
+.inlmore:hover { color: var(--t-heading); }
+
+/* drafts: the part being written */
+.part.draft { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-pop); }
+.part.draft textarea { display: block; width: 100%; min-height: 40px; resize: none; border: 0; outline: none; background: none; padding: 2px 0; font-size: 14px; line-height: 1.45; color: var(--t-heading); }
+.part.draft textarea::placeholder { color: var(--placeholder); }
+.drow { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.drow .hint { flex: 1; font-size: 11px; color: var(--t-faint); }
+.b1, .b2 { height: 26px; padding: 0 11px; border-radius: 13px; font-size: 12px; font-weight: 600; }
+.b1 { background: var(--accent-strong); color: var(--on-accent); }
+.b1:disabled { opacity: .45; cursor: default; }
+.b2 { background: var(--control); color: var(--t-heading); }
+.b2:hover { background: var(--control-hover); }
+.b3 { height: 26px; padding: 0 8px; border-radius: 13px; font-size: 12px; color: var(--t-muted); }
+.b3:hover { background: var(--fill-hover); color: var(--t-heading); }
+
+/* the floating "Ask about this" button on a text selection */
+#selask { position: absolute; z-index: 30; height: 26px; padding: 0 10px; border-radius: 13px; background: var(--t-heading); color: var(--canvas); font-size: 11.5px; font-weight: 600; box-shadow: var(--shadow-pop); }
+
+/* ---- the inspector: an object's fields, its messages and its handlers ---- */
+#insp { position: fixed; z-index: 25; top: 12px; right: 12px; bottom: 12px; width: 392px; display: flex; flex-direction: column; background: var(--card); border-radius: 12px; box-shadow: var(--shadow), var(--shadow-pop); overflow: hidden; }
+#insp header { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--divider); }
+#insp header h2 { margin: 0; flex: 1; min-width: 0; font-size: 13.5px; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#insp header h2 small { font-weight: 500; color: var(--t-faint); font-family: var(--mono); font-size: 11px; margin-left: 4px; }
+.x { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; color: var(--t-muted); }
+.x:hover { background: var(--fill-hover); color: var(--t-heading); }
+.x svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; }
+.ib { flex: 1; overflow-y: auto; padding: 4px 14px 16px; }
+.ib h3 { margin: 14px 0 6px; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); font-weight: 600; }
+.kv { display: grid; grid-template-columns: 64px 1fr; gap: 3px 10px; font-family: var(--mono); font-size: 11.5px; }
+.kv dt { color: var(--t-faint); }
+.kv dd { margin: 0; color: var(--t-primary); overflow-wrap: anywhere; }
+.ref { color: var(--accent); font-family: var(--mono); font-size: 11.5px; }
+.ref:hover { text-decoration: underline; }
+.hd { margin: 0 0 10px; border: 1px solid var(--divider); border-radius: 8px; overflow: hidden; }
+.hd-h { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; background: var(--inset); font-size: 11.5px; }
+.hd-h b { font-family: var(--mono); color: var(--t-heading); font-weight: 600; }
+.from { color: var(--t-faint); }
+.from.own { color: var(--accent); }
+.hd-h .grow { flex: 1; }
+.lnk { color: var(--accent); font-size: 11.5px; font-weight: 500; }
+.lnk:hover { text-decoration: underline; }
+.hd pre, .hd textarea { display: block; width: 100%; margin: 0; padding: 8px 10px; border: 0; background: var(--code-bg); color: var(--code-fg); font: 11.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.hd textarea { resize: vertical; min-height: 110px; outline: none; }
+.hd textarea:focus { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.hd-f { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-top: 1px solid var(--divider); }
+.err { color: var(--bad); font-size: 11.5px; font-family: var(--mono); padding: 6px 10px; border-top: 1px solid var(--divider); }
+.pv { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--saw) 9%, transparent); font-size: 12px; color: var(--t-secondary); }
+.pv ol { margin: 4px 0 0; padding-left: 18px; }
+.pv li { margin: 1px 0; }
+.pv .ref { font-size: 11px; }
+.note { font-size: 11.5px; color: var(--t-faint); margin: 4px 0 0; }
+.msgs { margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.msgs li { padding: 3px 0; color: var(--t-secondary); }
+.msgs code { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+@media (max-width: 640px) {
+  #insp { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 58vh; }
+}
+.toast { position: fixed; z-index: 40; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 8px; background: var(--t-heading); color: var(--card); font-size: 12.5px; box-shadow: var(--shadow-pop); }
+</style>
+</head>
+<body>
+<div id="tools"></div>
+<div id="view"><div id="world"><svg id="wires" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></div></div>
+<aside id="insp" hidden aria-label="Inspector"></aside>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script>
+'use strict';
+/* Seed content: taken from the handoff mock (docs/mockups/session-handoff.html on claude/session-web): the asks'
+   typed questions, answers and follow-ups, one post with its replies, and one post split into two parts. */
+const SEED = {"dagen":{"q":"dagen h logistics. signage, the overnight changeover, accident stats before/after","a":"<p>Sweden switched from left-hand to right-hand traffic at 05:00 on Sunday 3 September 1967. Four years of planning by a state commission led up to the switch, and non-essential traffic was stopped from 01:00 to 06:00 so that it could happen. Accident numbers fell after the change and then returned to their earlier trend within roughly two years.<\/p>\n\n<h4>Why Sweden switched<\/h4>\n<p>Sweden drove on the left even though its land neighbours, Norway and Finland, drove on the right. Most Swedish cars were already left-hand drive, because they were imported or built to the same layout as cars in right-hand-traffic countries. Overtaking on two-lane roads was therefore harder, since the driver sat on the kerb side. In a 1955 referendum a large majority, commonly reported as about 83 percent, voted to keep left-hand traffic. The Riksdag passed the change anyway in 1963, and the switch date was set for 1967. <sup class=\"cite\">1<\/sup><sup class=\"cite\">2<\/sup><\/p>\n\n<h4>Planning and public information<\/h4>\n<p>The Riksdag created a dedicated body, Statens högertrafikkommission (the State Commission for Right-Hand Traffic), to run the transition. Its work included: <sup class=\"cite\">3<\/sup><\/p>\n<ul>\n<li>A public information campaign that ran for several years. It used a logo of the letter H with an arrow, printed on items ranging from milk cartons to underwear. <sup class=\"cite\">4<\/sup><\/li>\n<li>A song competition. Its best-known entry was \"Håll dig till höger, Svensson\" (\"Keep to the right, Svensson\"). <sup class=\"cite\">4<\/sup><\/li>\n<li>Extra traffic police and military personnel posted on the roads during the changeover period.<\/li>\n<li>Rebuilding or replacing public transport vehicles. Buses had doors on the left side, so many were converted or replaced. Stockholm moved some tram lines to buses rather than rebuild them.<\/li>\n<\/ul>\n\n<h4>Signage and road layout<\/h4>\n<p>Road signs, junction layouts and lane markings had to be changed throughout the country. Commonly cited figures put the number of signs at several hundred thousand. New signs were installed in advance on the right-hand side of the road, wrapped or covered, and uncovered during the changeover night. Lane markings in white were painted ahead of time and covered with tape, and the tape was removed during the changeover. <sup class=\"cite\">1<\/sup><\/p>\n\n<h4>The changeover itself<\/h4>\n<ol>\n<li>From 01:00 to 06:00 on 3 September, all non-essential vehicle traffic was banned on public roads.<\/li>\n<li>At 04:50 the vehicles still on the road came to a halt.<\/li>\n<li>Drivers moved carefully across to the right-hand side and waited.<\/li>\n<li>At 05:00 traffic resumed on the right. <sup class=\"cite\">1<\/sup><\/li>\n<\/ol>\n<p>Stockholm and Malmö had much longer traffic bans, covering a large part of the weekend, so that crews could rebuild intersections and move bus stops. Temporary lower speed limits remained in force for some time after the switch.<\/p>\n\n<h4>Accident statistics<\/h4>\n<p>Contemporary reports and later summaries agree on the overall pattern, though the exact figures differ between sources:<\/p>\n<ul>\n<li>The number of accidents reported on the first Monday after the switch was at or below a normal Monday.<\/li>\n<li>Injury and fatal accidents stayed noticeably below the expected level for several months. Insurance claims also fell over the same period.<\/li>\n<li>By around 1969 accident rates had returned to the long-term trend line. <sup class=\"cite\">5<\/sup><\/li>\n<\/ul>\n<p>The usual explanation is risk compensation. Drivers in an unfamiliar situation drove more slowly and paid closer attention, and the effect wore off as the new rules became routine. Temporary speed limits and heavy police presence probably added to the early fall.<\/p>\n\n<h4>What the sources disagree on<\/h4>\n<ul>\n<li><b>Accident figures.<\/b> Sources count different things: police reports, insurance claims or fatalities. Short-term percentage drops therefore differ between accounts and are hard to compare.<\/li>\n<li><b>Cause of the dip.<\/b> Risk compensation is the most common explanation. Few sources separate it from the effect of the temporary speed limits.<\/li>\n<li><b>Total cost.<\/b> Totals vary depending on whether vehicle conversions and replacements brought forward from later years are included.<\/li>\n<\/ul>\n<p>Iceland made the same switch on 26 May 1968 with a similar plan, and its accident numbers followed a similar short-term pattern. <sup class=\"cite\">6<\/sup><\/p>","f":[{"u":"hal_b","q":"why was the referendum result ignored","a":"<p>The 1955 referendum was consultative, so the result did not bind the Riksdag. Several factors led parliament to legislate the change in 1963:<\/p>\n<ul>\n<li>Car ownership was rising quickly, so every year of delay meant more vehicles, signs and junctions to convert later.<\/li>\n<li>Most cars in Sweden were already left-hand drive, which made overtaking on the left-hand side of the road harder.<\/li>\n<li>Cross-border traffic with Norway and Finland was increasing, and both countries drove on the right.<\/li>\n<\/ul>\n<p>The decision received cross-party support. Parties that favoured the change argued that safety and cost justified going against the referendum. Accounts disagree on how much public opinion had changed by 1967, and the information campaign was partly a response to that uncertainty.<\/p>"},{"u":"lettie","q":"what happened w buses and trams","a":"<p>Public transport accounted for much of the cost of the switch.<\/p>\n<ul>\n<li><b>Buses.<\/b> Doors were on the left, the kerb side under left-hand traffic. Operators converted many buses by moving the doors, and replaced others with new right-hand-door vehicles that were ordered in advance.<\/li>\n<li><b>Trams.<\/b> Single-ended trams with doors on one side could not easily be converted. Stockholm closed most of its tram network around the time of the switch and replaced it with buses or the expanding metro. Gothenburg and Norrköping kept their trams and adapted them.<\/li>\n<li><b>Stops and terminals.<\/b> Bus stops and platforms had to move to the opposite side of the street, which was one reason city traffic bans lasted longer than the national one.<\/li>\n<\/ul>\n<p>The precise number of buses converted versus replaced differs between sources.<\/p>"}]},"intent":{"q":"scan sci-fi + adjacent writing for intention marketplaces / intention networks. go broad, give me a list of examples","a":"<p>Science fiction rarely uses the term \"intention marketplace\", but many works describe systems that make what people want, plan or believe visible to others and then price, rank or match it. The examples fall into four mechanisms: reputation ledgers, prediction and decision markets, attention auctions, and agent-brokered matching. The list below covers the clearest cases; the full scan found 31 works published between 1953 and 2024. <sup class=\"cite\">5<\/sup><\/p>\n\n<h4>Reputation ledgers<\/h4>\n<p>In these systems, a public score records how others regard a person's past actions and stated aims. The score works as a currency, or replaces one, but it is earned rather than transferred.<\/p>\n<ul>\n<li><i>Down and Out in the Magic Kingdom<\/i> (Cory Doctorow, 2003). Whuffie is a continuously updated esteem score that replaces money in the post-scarcity Bitchun Society. People can see it but cannot spend it directly. <sup class=\"cite\">1<\/sup><\/li>\n<li><i>Accelerando<\/i> (Charles Stross, 2005). Reputation markets and agent-run economies come before \"Economics 2.0\", a later phase that unaugmented humans cannot follow. <sup class=\"cite\">2<\/sup><\/li>\n<li><i>Daemon<\/i> (2006) and <i>Freedom<\/i> (2010) by Daniel Suarez. A darknet assigns levels and reputation scores, and tasks are given out according to rank.<\/li>\n<li>\"Nosedive\" (<i>Black Mirror<\/i>, 2016). Peer ratings decide access to housing, travel and social standing. It is a satire of rating platforms more than an economic model.<\/li>\n<\/ul>\n\n<h4>Prediction and decision markets<\/h4>\n<p>These works pool beliefs about future events by having people bet on them. Some of them then make decisions from the resulting prices.<\/p>\n<ul>\n<li><i>The Shockwave Rider<\/i> (John Brunner, 1975). \"Delphi pools\" collect public wagers on questions and serve as a forecasting tool. The novel treats them as open to manipulation. <sup class=\"cite\">3<\/sup><\/li>\n<li><i>Infomocracy<\/i> (Malka Older, 2016). This novel is about micro-democracy and a global information utility rather than a betting market. It is included because voter preferences become a contested, aggregated signal.<\/li>\n<li>Robin Hanson's futarchy proposal (\"Shall We Vote on Values, But Bet on Beliefs?\") is non-fiction. It is often cited next to these works as the clearest statement of a decision market. <sup class=\"cite\">4<\/sup><\/li>\n<\/ul>\n\n<h4>Attention auctions and advertising<\/h4>\n<p>The earliest examples are satires in which advertisers buy, shape or require consumer intent.<\/p>\n<ul>\n<li><i>The Space Merchants<\/i> (Frederik Pohl and C. M. Kornbluth, 1953 in book form). Advertising agencies run the world's political economy. <sup class=\"cite\">5<\/sup><\/li>\n<li>\"The Midas Plague\" (Frederik Pohl, 1954). Rationed consumption is a legal duty, which reverses the usual direction of demand.<\/li>\n<li><i>The Circle<\/i> (Dave Eggers, 2013). Total transparency and engagement metrics turn personal preference into platform inventory.<\/li>\n<\/ul>\n\n<h4>Agent-brokered matching<\/h4>\n<p>Here a networked system or a personal agent reads what people need and routes favours, tasks or trades between them.<\/p>\n<ul>\n<li>\"Maneki Neko\" (Bruce Sterling, 1998). A pocket device instructs its owner to do small favours for strangers and receives favours in return from a hidden gift-economy network. This story is the closest match to an intention network in the strict sense. <sup class=\"cite\">6<\/sup><\/li>\n<li><i>Rainbows End<\/i> (Vernor Vinge, 2006). Characters take paid micro-tasks from distributed, partly anonymous employers through wearable computing.<\/li>\n<li><i>The Quantum Thief<\/i> (Hannu Rajaniemi, 2010). In the Oubliette, Time is a currency, and gevulot controls what each person shares with others.<\/li>\n<li><i>Walkaway<\/i> (Cory Doctorow, 2017). Coordination software matches volunteers to work in a post-scarcity commons without prices.<\/li>\n<\/ul>\n\n<h4>Where the term comes from<\/h4>\n<p>\"Intention economy\" comes from Doc Searls, who used it in a 2006 essay and later in <i>The Intention Economy<\/i> (2012). He described a market in which buyers announce their intentions and vendors respond, the reverse of attention-based advertising. <sup class=\"cite\">7<\/sup> Most of the fiction above predates the term or does not use it, so the grouping here is by mechanism and not by vocabulary.<\/p>\n\n<h4>Limits<\/h4>\n<ul>\n<li>The scan covered English-language works and works widely available in English translation.<\/li>\n<li>Some inclusions are judgment calls. <i>Infomocracy<\/i> and <i>The Circle<\/i> deal with aggregated preference but have no market in the strict sense.<\/li>\n<li>Short fiction from magazines and anthologies is under-represented compared with novels.<\/li>\n<\/ul>","f":[{"u":"hal_b","q":"which of these actually let you trade intentions vs just make them visible","a":"<p>Few of these works go past visibility to actual trade. Three treat intentions or commitments as things that can be exchanged:<\/p>\n<ul>\n<li><i>Accelerando<\/i>: software agents negotiate and contract with each other for their principals, and late in the book whole corporate entities trade in ways that humans cannot follow.<\/li>\n<li><i>Daemon<\/i> and <i>Freedom<\/i>: participants take on tasks and receive credits and rank for completing them, which works as a labour market for stated goals.<\/li>\n<li><i>The Shockwave Rider<\/i>: Delphi pools price beliefs about the future, and those prices are used to make decisions.<\/li>\n<\/ul>\n<p>In <i>Down and Out in the Magic Kingdom<\/i>, Whuffie shows esteem but cannot be transferred, so it records intentions rather than trading them. \"Maneki Neko\" falls between the two: favours are routed and reciprocated, but no prices or balances are shown.<\/p>"},{"u":"jun.park","q":"any non english ones","a":"<p>The scan was limited to English-language works and widely available translations. A few candidates for a second pass:<\/p>\n<ul>\n<li>Stanisław Lem's satirical fiction, which often treats institutions and economies as systems running on their own logic.<\/li>\n<li>Hannu Rajaniemi wrote <i>The Quantum Thief<\/i> in English, but its setting draws on Finnish and Russian sources. It is listed above already.<\/li>\n<li>Chinese science fiction in translation, such as the anthologies edited by Ken Liu, includes several stories about platform labour and rating systems.<\/li>\n<\/ul>\n<p>A proper pass would also search French and German SF databases, which list many works that have never been translated.<\/p>"},{"u":"ines.v","q":"group by decade instead","a":"<p>Grouped by decade, the 31 works show the focus moving from advertising, to reputation and agents, to platforms:<\/p>\n<ul>\n<li><b>1950s to 1980s (4 works).<\/b> Mostly satires of advertising and consumption, such as <i>The Space Merchants<\/i> and \"The Midas Plague\". <i>The Shockwave Rider<\/i> is the main exception, with a working forecasting market.<\/li>\n<li><b>1990s and 2000s (15).<\/b> Reputation currencies and software agents dominate, as in \"Maneki Neko\", <i>Down and Out in the Magic Kingdom<\/i>, <i>Accelerando<\/i>, <i>Daemon<\/i> and <i>Rainbows End<\/i>.<\/li>\n<li><b>2010s and 2020s (12).<\/b> Platform ratings, engagement metrics and prediction markets, as in <i>The Circle<\/i>, \"Nosedive\", <i>Infomocracy<\/i> and <i>Walkaway<\/i>.<\/li>\n<\/ul>\n<p>The shift follows real technology closely: early web reputation systems in the late 1990s, then smartphone platforms and public betting markets from the 2010s on.<\/p>"}],"g1":{"u":"ines.v","q":"how does the darknet in daemon decide who gets which task","a":"<p>Tasks are posted to the darknet with a required level. Members see only tasks at or below their level, and they claim them in a shared interface. Completing tasks raises a member's level and reputation score; other members can rate the work, and low ratings lower the score.<\/p>\n<p>The novels do not describe a price for a task. Allocation runs on rank and self-selection rather than bids.<\/p>"},"h1":{"u":"hal_b","q":"so closer to a labour market or a reputation ledger","a":"<p>Closer to a reputation ledger with a task board attached. Members do not set prices or negotiate, and rank is the main reward, as with Whuffie. It works like a labour market only in that tasks are matched to people who choose to take them.<\/p>"}},"bt":{"q":"explain banach-tarski and show exactly where the axiom of choice gets used in the proof","a":"<p>The Banach–Tarski paradox states that a solid ball in three-dimensional space can be split into finitely many disjoint pieces, and those pieces can be moved by rotations and translations to form two balls, each the same size as the original. The axiom of choice enters at one step: selecting one point from each of uncountably many orbits of a group action on the sphere. Without that selection, the pieces cannot be shown to exist.<\/p>\n\n<h4>The statement, precisely<\/h4>\n<p>Two subsets A and B of ℝ³ are <i>equidecomposable<\/i> if A can be partitioned into finitely many sets A₁, …, Aₙ, and B into sets B₁, …, Bₙ, such that each Aᵢ is congruent to Bᵢ by an isometry. The theorem, published by Banach and Tarski in 1924, says that the unit ball is equidecomposable with two disjoint copies of itself. <sup class=\"cite\">3<\/sup> Five pieces suffice, and Raphael Robinson showed that five is the minimum. <sup class=\"cite\">2<\/sup><\/p>\n<p>The result does not contradict measure theory. The pieces are not Lebesgue measurable, so they have no assigned volume, and the additivity of volume says nothing about them.<\/p>\n\n<h4>Step 1: a paradoxical free group<\/h4>\n<p>Let F₂ be the free group on two generators a and b. Write S(x) for the set of reduced words that begin with the letter x. Then F₂ is the disjoint union of {e}, S(a), S(a⁻¹), S(b) and S(b⁻¹). Two further identities hold:<\/p>\n<ul>\n<li>F₂ = S(a) ∪ a·S(a⁻¹)<\/li>\n<li>F₂ = S(b) ∪ b·S(b⁻¹)<\/li>\n<\/ul>\n<p>So two of the four pieces, after translation within the group, rebuild the whole group, and the other two do the same. This is a paradoxical decomposition of F₂, and it uses no choice at all. <sup class=\"cite\">1<\/sup><\/p>\n\n<h4>Step 2: embedding F₂ in the rotation group<\/h4>\n<p>SO(3) contains a free subgroup of rank two. A standard choice uses two rotations by arccos(1/3) about perpendicular axes, an idea that goes back to Hausdorff's 1914 work. <sup class=\"cite\">4<\/sup> This subgroup acts on the unit sphere S². Each non-identity rotation fixes exactly two points, so the set D of points fixed by some non-identity element is countable. On S² minus D the action is free: distinct group elements move each point to distinct places.<\/p>\n\n<h4>Step 3: where choice enters<\/h4>\n<p>The action divides S² minus D into orbits. Each orbit is countable, because F₂ is countable, so there are uncountably many orbits. The axiom of choice provides a set M containing exactly one point from each orbit. Then:<\/p>\n<ol>\n<li>Every point of S² minus D can be written uniquely as g·m with g in F₂ and m in M.<\/li>\n<li>The paradoxical decomposition of F₂ therefore carries over to S² minus D. The piece built from S(a), for example, is the set S(a)·M.<\/li>\n<li>So S² minus D is equidecomposable with two copies of itself.<\/li>\n<\/ol>\n<p>This is the only use of choice. No explicit rule is known that picks a representative from each orbit, and as explained below, none can be proved to exist in ZF alone.<\/p>\n\n<h4>Step 4: from the sphere to the ball<\/h4>\n<ul>\n<li><b>Removing D.<\/b> D is countable, so some rotation moves D to sets that are pairwise disjoint from one another. A standard absorption argument then shows that S² is equidecomposable with S² minus D, which needs no choice.<\/li>\n<li><b>Radial extension.<\/b> Each point of the sphere is replaced by the radius segment from just above the centre to the surface. This turns the sphere result into a result for the ball minus its centre.<\/li>\n<li><b>The centre.<\/b> A circle passing through the centre, inside the ball, can absorb the centre using a rotation of infinite order.<\/li>\n<\/ul>\n\n<h4>Why choice cannot be removed<\/h4>\n<p>Solovay (1970) constructed a model of ZF plus dependent choice, assuming the consistency of an inaccessible cardinal, in which every set of reals is Lebesgue measurable. Measurable pieces cannot double volume, so the Banach–Tarski decomposition fails in that model. <sup class=\"cite\">5<\/sup> Full choice is more than the proof needs, however. Pawlikowski (1991) showed that the Hahn–Banach theorem, which is strictly weaker than choice, is sufficient. <sup class=\"cite\">6<\/sup><\/p>\n\n<h4>Open questions and limits<\/h4>\n<ul>\n<li>The paradox fails in one and two dimensions. The isometry groups there are amenable, which allows finitely additive invariant measures on all sets. This is the starting point of von Neumann's theory of amenable groups. <sup class=\"cite\">7<\/sup><\/li>\n<li>Work on how many pieces are needed, and on related results such as Laczkovich's circle-squaring (1990), is still active.<\/li>\n<\/ul>","f":[{"u":"tomasz","q":"why 3d but not 2d","a":"<p>The answer depends on the structure of the isometry group in each dimension.<\/p>\n<ul>\n<li><b>Three dimensions.<\/b> SO(3) contains a free subgroup on two generators. Free groups are not amenable, and that allows the paradoxical decomposition.<\/li>\n<li><b>One and two dimensions.<\/b> The isometry groups are solvable. Solvable groups are amenable, and amenability guarantees a finitely additive, isometry-invariant measure defined on all bounded subsets that gives the unit square measure 1. Banach proved this for the line and the plane in 1923. Such a measure rules out any doubling of the square or disc.<\/li>\n<\/ul>\n<p>The planar version of the paradox is false, although the plane still has related results. The plane does allow a paradox if area-preserving affine maps are used instead of isometries, because that group contains free subgroups.<\/p>"},{"u":"mira_k","q":"is there a version w/o choice","a":"<p>For doubling the ball, no. Any proof needs some non-constructive principle. Solovay's model shows that ZF plus dependent choice cannot prove the paradox, assuming that an inaccessible cardinal is consistent.<\/p>\n<p>Related results show how much choice each statement actually needs:<\/p>\n<ul>\n<li><b>Pawlikowski (1991).<\/b> The Hahn–Banach theorem is enough. It is strictly weaker than the full axiom of choice.<\/li>\n<li><b>Laczkovich (1990).<\/b> A disc and a square of equal area are equidecomposable by translations alone, which solves Tarski's circle-squaring problem. The original proof used choice.<\/li>\n<li><b>Marks and Unger (2017).<\/b> Circle-squaring can be done with Borel pieces, which needs no choice. Later work showed that the pieces can be made even better behaved.<\/li>\n<\/ul>\n<p>The difference is that circle-squaring preserves area, while Banach–Tarski doubles volume. Doubling requires non-measurable pieces.<\/p>"}]},"hal":{"q":"Is anyone else seeing the follow-up count lag on long threads? Mine says 3 but the thread has 7 branches.","rp":[{"u":"oduya","createdAt":"2026-11-16T09:47:30Z","t":"Same here. The count seems to include direct follow-ups only, not branches of branches."},{"u":"sol","createdAt":"2026-11-16T09:50:30Z","t":"Confirmed, it is on the alpha known-issues page. A fix is in review.","kids":[{"u":"hal_b","createdAt":"2026-11-16T09:53:30Z","t":"Thanks, I will watch the changelog."}]}]},"sol":"Opened #urbanism for transit and zoning threads. The wiki has a short start-here page."};
+
+/* ---- people and models ---- */
+const ME = 'ines.v';
+const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
+const MODEL = 'Gemini 3.8 Flash';
+const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const strip = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const clip = (s, n) => (s = String(s || '')).length > n ? s.slice(0, n - 1).replace(/[\s,;:.]+\S*$/, '') + '…' : s;
+const av = u => `<span class="av" style="background:var(--av${USERS[u] || 1})" aria-hidden="true">${initials(u)}</span>`;
+const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
+const XI = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+
+/* ---- the store: parts and the canvas ---- */
+const P = {};          // id -> part
+let K = 0;             // creation order; also the default order key
+const CANVAS = { id: 'public', name: 'public', code: {} };
+function add(p) { p.k ??= ++K; p.t = ++K; p.canvas = CANVAS.id; P[p.id] = p; return p; }
+let idSeq = 0; const newId = pre => pre + (++idSeq);
+
+/* ---- structure ---- */
+const isHead = p => typeof p.pos === 'object';
+const kids = id => Object.values(P).filter(c => c.prev === id);
+const nextOf = id => kids(id).find(c => c.pos === 'next');
+const inlineOf = id => kids(id).filter(c => c.pos === 'inline').sort((a, b) => a.k - b.k);
+const besideOf = id => kids(id).filter(c => c.pos?.beside);
+const headOf = id => { let p = P[id]; while (p && !isHead(p) && p.prev) p = P[p.prev]; return p; };
+/* everything above a part: its prev chain, through branch anchors, root first */
+const ancestorIds = id => { const out = []; let p = P[id]; while (p) { out.unshift(p.id); p = P[p.prev]; } return out; };
+/* the parts of one stack drawn from a head, in drawing order (not entering branches) */
+function stackIds(id) { const out = []; const walk = q => { out.push(q.id); inlineOf(q.id).forEach(walk); const n = nextOf(q.id); if (n) walk(n); }; const h = headOf(id); if (h) walk(h); return out; }
+const base = addr => String(addr).split('#')[0];
+const isAsk = p => Array.isArray(p.to);
+const receivers = p => !isAsk(p) ? [] : p.to.length ? p.to : p.prev ? [p.prev] : ['canvas'];
+const plain = p => p.text != null ? p.text : strip(p.html);
+const who = p => p.model ? p.model : p.by;
+
+/* ---- handlers: lookup, compile, call ----
+   Lookup for part X: X, X's head, the head of the part that head hangs from, ..., the canvas, the default. Each
+   level that defines the selector is tried in turn; a handler that throws is reported and the next level runs. */
+const DEFAULTS = {
+  ask: 'ask(msg) {\n  return model(msg);   // no handler on the way: the model answers\n}',
+  context: 'context(msg) {\n  return ancestors(this.id);   // this part and everything above it\n}',
+  place: "place(reply, msg) {\n  return 'next';   // directly under the ask\n}",
+};
+const SELECTORS = ['ask', 'context', 'place'];
+function chain(id) {
+  const out = []; let p = P[id];
+  if (p) out.push({ owner: p.id, from: 'own' });
+  while (p) { const h = headOf(p.id); if (h) out.push({ owner: h.id, from: 'head' }); p = h && h.prev ? P[h.prev] : null; }
+  out.push({ owner: 'canvas', from: 'canvas' }, { owner: null, from: 'default' });
+  const seen = new Set(); return out.filter(x => !seen.has(x.owner) && seen.add(x.owner));
+}
+const codeOf = owner => owner === 'canvas' ? CANVAS.code : owner ? (P[owner].code || {}) : null;
+function lookupAll(id, sel) {
+  return chain(id).filter(x => x.owner === null || codeOf(x.owner)[sel] != null)
+    .map(x => ({ ...x, src: x.owner === null ? DEFAULTS[sel] : codeOf(x.owner)[sel] }));
+}
+const ERR = {};    // 'owner:sel' -> message from the last failure
+function compile(src, sel) {
+  const f = new Function('ancestors', 'part', 'stack', 'reply', 'model', `"use strict"; return ({ ${src} });`);
+  const o = f(ancestorIds, view, stackIds, text => ({ reply: String(text) }), () => ({ model: true }));
+  if (typeof o[sel] !== 'function') throw new Error(`no ${sel}(...) method in this code`);
+  return o[sel];
+}
+/* what a handler sees as `this` and from part(id): a read-only copy */
+function view(id) {
+  if (id === 'canvas') return Object.freeze({ id: 'canvas', name: CANVAS.name });
+  const p = P[base(id)]; if (!p) return null;
+  return Object.freeze({ id: p.id, head: headOf(p.id).id, prev: p.prev || null, text: plain(p), by: Object.freeze({ name: who(p), model: !!p.model }), isAsk: isAsk(p) });
+}
+function call(id, sel, args, thisId = id) {
+  for (const h of lookupAll(id, sel)) {
+    try { const r = compile(h.src, sel).apply(view(thisId), args); delete ERR[h.owner + ':' + sel]; return { value: r, from: h }; }
+    catch (e) { ERR[h.owner + ':' + sel] = e.message; }
+  }
+  return { value: null, from: null };
+}
+/* the canvas as a receiver (an ask with no part above it): canvas handler, else the default (which sees nothing) */
+function callCanvas(sel, args) {
+  if (CANVAS.code[sel] != null) { try { return { value: compile(CANVAS.code[sel], sel).apply(view('canvas'), args), from: { owner: 'canvas', from: 'canvas' } }; } catch (e) { ERR['canvas:' + sel] = e.message; } }
+  return { value: sel === 'context' ? [] : sel === 'ask' ? { model: true } : 'next', from: { owner: null, from: 'default' } };
+}
+const callOn = (r, sel, args) => r === 'canvas' ? callCanvas(sel, args) : call(base(r), sel, args);
+const validIds = v => Array.isArray(v) ? v.map(base).filter(x => P[x]) : [];
+
+/* ---- sending an ask ----
+   1 context: sent to each receiver; the union is what the model sees (saw, stored on the ask).
+   2 ask: offered to each receiver in order; the first that returns reply(...) answers; else one model call.
+   3 place: sent to the ask part; the reply is placed there. */
+function resolve(a, extra = null) {
+  const msg = { id: a.id, text: plain(a), to: receivers(a).slice() };
+  const saw = new Set();
+  for (const r of msg.to) validIds(callOn(r, 'context', [msg]).value).forEach(x => saw.add(x));
+  saw.delete(a.id); if (extra) for (const x of extra) saw.delete(x);
+  msg.context = [...saw];
+  return msg;
+}
+function send(askId) {
+  const a = P[askId], msg = resolve(a); a.saw = msg.context;
+  let answer = null;
+  for (const r of msg.to) { const res = callOn(r, 'ask', [msg]).value; if (res && typeof res.reply === 'string') { answer = { text: res.reply, via: r === 'canvas' ? 'canvas' : headOf(base(r)).id }; break; } }
+  let pos = call(a.id, 'place', [{ by: answer ? 'code' : MODEL }, msg]).value;
+  pos = normPos(pos, a.id);
+  const rep = add({ id: newId('r'), prev: a.id, pos, to: undefined });
+  if (answer) { const owner = answer.via === 'canvas' ? null : P[answer.via]; Object.assign(rep, { by: owner ? owner.by : ME, via: answer.via, text: answer.text }); }
+  else { Object.assign(rep, { model: MODEL, html: '', run: { status: 'queued', step: 0 } }); runModel(rep.id, a, msg); }
+  return rep;
+}
+/* one `next` per part: a second Continue on the same part becomes a branch beside it */
+function normPos(pos, prevId) {
+  if (pos === 'inline') return 'inline';
+  if (pos && typeof pos === 'object' && pos.beside) return { beside: { dx: +pos.beside.dx || 314, dy: +pos.beside.dy || 0 } };
+  if (nextOf(prevId)) return { beside: { dx: 314, dy: 0 } };
+  return 'next';
+}
+function runModel(id, a, msg) {
+  const r = P[id];
+  const tick = () => {
+    if (!P[id]) return;
+    if (r.run.status === 'queued') r.run.status = 'running';
+    else if (r.run.step < 3) r.run.step++;
+    else { r.run = null; r.html = canned(a, msg); render(); return; }
+    render(); setTimeout(tick, 450);
+  };
+  setTimeout(tick, 500);
+}
+function canned(a, msg) {
+  const list = msg.context.map(id => P[id]).filter(Boolean);
+  const li = list.slice(0, 6).map(p => `<li>${esc(who(p))}: “${esc(clip(plain(p), 60))}”</li>`).join('');
+  return `<p>Mock answer to “${esc(clip(plain(a), 90))}”. In the app the model researches the question and its reply is written here, with citations.</p>`
+    + `<p>This run received ${list.length === 1 ? '1 object' : list.length + ' objects'} as context:</p><ul class="saw-list">${li || '<li>nothing: the ask was sent to the canvas</li>'}${list.length > 6 ? `<li>and ${list.length - 6} more</li>` : ''}</ul>`;
+}
+
+/* ---- seed ---- */
+function seed() {
+  const S = SEED;
+  /* a post with replies: replies are person parts placed inline under what they answer */
+  add({ id: 'h0', by: 'hal_b', text: S.hal.q, pos: { at: { x: 24, y: 64 } } });
+  add({ id: 'h1', by: S.hal.rp[0].u, text: S.hal.rp[0].t, prev: 'h0', pos: 'inline' });
+  add({ id: 'h2', by: S.hal.rp[1].u, text: S.hal.rp[1].t, prev: 'h0', pos: 'inline' });
+  add({ id: 'h3', by: S.hal.rp[1].kids[0].u, text: S.hal.rp[1].kids[0].t, prev: 'h2', pos: 'next' });
+  /* Dagen H: an ask, its answer and two follow-ups continuing the series. The head's context handler keeps the
+     other follow-up answers out of what each follow-up sees. */
+  add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 330 } }, code: { context:
+`context(msg) {
+  // Follow-ups see the people's questions and the first
+  // answer, not the answers to other follow-ups.
+  return ancestors(this.id).filter(id =>
+    !part(id).by.model || part(id).prev === this.head);
+}` } });
+  add({ id: 'd1', model: MODEL, html: S.dagen.a, prev: 'd0', pos: 'next' });
+  add({ id: 'd2', by: S.dagen.f[0].u, text: S.dagen.f[0].q, to: [], prev: 'd1', pos: 'next' });
+  add({ id: 'd3', model: MODEL, html: S.dagen.f[0].a, prev: 'd2', pos: 'next' });
+  add({ id: 'd4', by: S.dagen.f[1].u, text: S.dagen.f[1].q, to: [], prev: 'd3', pos: 'next' });
+  add({ id: 'd5', model: MODEL, html: S.dagen.f[1].a, prev: 'd4', pos: 'next' });
+  /* intention marketplaces: the series, and one branch beside the answer with its own follow-ups */
+  add({ id: 'i0', by: 'ines.v', text: S.intent.q, to: [], pos: { at: { x: 338, y: 64 } } });
+  add({ id: 'i1', model: MODEL, html: S.intent.a, prev: 'i0', pos: 'next' });
+  add({ id: 'i2', by: S.intent.f[1].u, text: S.intent.f[1].q, to: [], prev: 'i1', pos: 'next' });
+  add({ id: 'i3', model: MODEL, html: S.intent.f[1].a, prev: 'i2', pos: 'next' });
+  add({ id: 'i4', by: S.intent.f[2].u, text: S.intent.f[2].q, to: [], prev: 'i3', pos: 'next' });
+  add({ id: 'i5', model: MODEL, html: S.intent.f[2].a, prev: 'i4', pos: 'next' });
+  add({ id: 'b0', by: S.intent.f[0].u, text: S.intent.f[0].q, to: [], prev: 'i1', pos: { beside: { dx: 314, dy: 0 } } });
+  add({ id: 'b1', model: MODEL, html: S.intent.f[0].a, prev: 'b0', pos: 'next' });
+  add({ id: 'b2', by: S.intent.g1.u, text: S.intent.g1.q, to: [], prev: 'b1', pos: 'next' });
+  add({ id: 'b3', model: MODEL, html: S.intent.g1.a, prev: 'b2', pos: 'next' });
+  add({ id: 'b4', by: S.intent.h1.u, text: S.intent.h1.q, to: [], prev: 'b3', pos: 'next' });
+  add({ id: 'b5', model: MODEL, html: S.intent.h1.a, prev: 'b4', pos: 'next' });
+  /* a post in two parts */
+  const [s1, s2] = S.sol.split(/(?<=\.) /);
+  add({ id: 's0', by: 'sol', text: s1, pos: { at: { x: 966, y: 64 } } });
+  add({ id: 's1', by: 'sol', text: s2, prev: 's0', pos: 'next' });
+  /* the Glossary: a card whose ask handler answers "define <term>" from its own lines */
+  add({ id: 'g0', by: 'lettie', text: 'Glossary for #public. Ask this card “define <term>” and it answers from the lines below, without a model. Other questions go to the model as usual.', pos: { at: { x: 966, y: 250 } }, code: { ask:
+`ask(msg) {
+  const m = msg.text.match(/^(?:define|look up)\\s+(.+?)[?.]*$/i);
+  if (!m) return model(msg);
+  const term = m[1].toLowerCase();
+  const line = stack(this.id)
+    .flatMap(id => part(id).text.split('\\n'))
+    .find(l => l.toLowerCase().startsWith(term + ' —'));
+  return line ? reply(line) : model(msg);
+}` } });
+  add({ id: 'g1', by: 'lettie', text: 'axiom of choice — for any collection of non-empty sets, a set containing one element of each exists.\nfree group — the group of reduced words in its generators, with no relations between them.\namenable — a group is amenable if it has a finitely additive, translation-invariant mean. The isometry groups of the line and the plane are amenable.\nrisk compensation — people adjust how they behave to the risk they perceive, for example driving more carefully under unfamiliar rules.', prev: 'g0', pos: 'next' });
+  /* Banach–Tarski */
+  add({ id: 't0', by: 'lettie', text: S.bt.q, to: [], pos: { at: { x: 966, y: 560 } } });
+  add({ id: 't1', model: MODEL, html: S.bt.a, prev: 't0', pos: 'next' });
+  add({ id: 't2', by: S.bt.f[0].u, text: S.bt.f[0].q, to: [], prev: 't1', pos: 'next' });
+  add({ id: 't3', model: MODEL, html: S.bt.f[0].a, prev: 't2', pos: 'next' });
+  /* the canvas: every ask in #public also sees the Glossary (a head's own context handler, as on Dagen H, wins) */
+  CANVAS.code.context =
+`context(msg) {
+  // Every ask in #public also sees the Glossary card.
+  return [...ancestors(this.id), ...stack('g0')];
+}`;
+  for (const p of Object.values(P)) if (isAsk(p)) p.saw = resolve(p).context;
+}
+
+/* ---- view state ---- */
+const st = { pan: { x: 0, y: 0 }, sel: new Set(), draft: null, insp: null, open: {}, inlOpen: {}, boxes: [], hl: null };
+
+/* ---- render ---- */
+const $ = s => document.querySelector(s);
+const stacksEl = $('#stacks'), world = $('#world'), wires = $('#wires'), view_ = $('#view');
+function partHtml(p) {
+  const ask = isAsk(p), rep = !!p.model || !!p.via, run = p.run;
+  const addr = ask && p.to.length ? p.to.map(t => t === 'canvas' ? 'canvas' : t.includes('#') ? 'passage of ' + base(t) : t).join(', ') : '';
+  const authorHead = p.model ? `${MARK}<b>${esc(p.model.split(' ')[0])}</b><span>reply</span>` : p.via ? `${av(p.by)}<b>${esc(p.by)}</b><span>reply from code on ${esc(p.via)}</span>` : `${av(p.by)}<b>${esc(p.by)}</b>`;
+  const kind = ask ? `<span class="to" title="An ask: a message sent to ${esc(receivers(p).join(', '))}">ask →${addr ? ' ' + esc(addr) : !p.prev ? ' #' + esc(CANVAS.name) : ''}</span>` : '';
+  const hasCode = p.code && Object.keys(p.code).length;
+  const acts = `<span class="acts"><button class="act" data-a="branch" data-id="${p.id}" title="Ask a question beside this part, with this part and everything above it as context">Branch</button><button class="act" data-a="select" data-id="${p.id}" aria-pressed="${st.sel.has(p.id)}" title="Add to the selection (or Shift+click)">Select</button><button class="act code${hasCode ? ' has' : ''}" data-a="inspect" data-id="${p.id}" title="Inspect: fields, messages and handlers">{ }</button></span>`;
+  let body;
+  if (run) body = `<div class="status" role="status">${run.status === 'queued' ? 'Queued' : `Researching · step ${run.step + 1} of 4`}</div>`;
+  else if (p.html != null) { const long = strip(p.html).length > 420, open = st.open[p.id]; body = `<div class="prose${long && !open ? ' clamp' : ''}">${p.html}</div>${long ? `<button class="more" data-a="more" data-id="${p.id}">${open ? 'Show less' : 'Show all'}</button>` : ''}`; }
+  else body = `${p.quote ? `<div class="quote">${esc(clip(p.quote, 160))}</div>` : ''}<div class="ptext">${esc(p.text)}</div>`;
+  const foot = ask && p.saw ? `<div class="pf"><button class="sawbtn" data-a="saw" data-id="${p.id}" title="Highlight what this ask sent as context">saw ${p.saw.length}</button></div>` : '';
+  const cls = ['part', ask ? 'is-ask' : '', rep ? 'is-reply' : '', st.sel.has(p.id) ? 'sel' : '', st.insp === p.id ? 'insp' : '', p.fresh ? 'fadein' : ''].filter(Boolean).join(' ');
+  p.fresh = false;
+  return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}</div>`;
+}
+function draftHtml() {
+  const d = st.draft, ask = d.mode === 'ask';
+  const ph = ask ? (d.quote ? 'Ask about this passage' : d.prev || d.to?.length ? 'Ask, with the parts above as context' : 'Ask anything') : d.prev ? 'Add another part, or press Done' : 'Write a post';
+  return `<div class="part draft" data-part="__draft">${d.quote ? `<div class="quote">${esc(clip(d.quote, 160))}</div>` : ''}<textarea id="draft" rows="2" placeholder="${esc(ph)}" aria-label="${ask ? 'Ask' : 'Post'}">${esc(d.text || '')}</textarea>
+    <div class="drow"><span class="hint">${d.to?.length ? 'to ' + esc(d.to.map(t => t.includes('#') ? 'passage of ' + base(t) : t).join(', ')) : d.pos === 'inline' ? 'interjection' : d.pos?.beside ? 'branch' : ''}</span>
+    <button class="b3" data-a="dcancel">${d.cont ? 'Done' : 'Cancel'}</button>
+    <button class="${ask ? 'b2' : 'b1'}" data-a="dpost" ${d.text?.trim() ? '' : 'disabled'} title="Post: a part that sends nothing">Post</button>
+    <button class="${ask ? 'b1' : 'b2'}" data-a="dask" ${d.text?.trim() ? '' : 'disabled'} title="Ask: a part that sends ask to the part above (or the selection), and gets a reply">Ask</button></div></div>`;
+}
+const draftAt = (prev, pos) => st.draft && st.draft.prev === prev && (pos === 'any' || st.draft.pos === pos);
+/* one stack, from its head: each part, its interjections, then the part that continues it */
+function chainHtml(p) {
+  let h = partHtml(p);
+  const inl = inlineOf(p.id), open = st.inlOpen[p.id], shown = open || inl.length <= 2 ? inl : inl.slice(0, 1);
+  for (const c of shown) h += `<div class="inl">${chainHtml(c)}</div>`;
+  if (shown.length < inl.length) h += `<button class="inlmore" data-a="inlmore" data-id="${p.id}">${inl.length - shown.length} more under this part</button>`;
+  if (draftAt(p.id, 'inline')) h += `<div class="inl">${draftHtml()}</div>`;
+  const n = nextOf(p.id);
+  if (n) h += `<div class="gap"><button data-a="here" data-id="${p.id}" title="Insert an ask between these two parts. The parts below do not see it.">Ask here</button></div>` + chainHtml(n);
+  else if (draftAt(p.id, 'next')) h += `<div class="gap"></div>${draftHtml()}`;
+  else if (!p.run && !(st.draft && st.draft.prev === p.id)) h += `<div class="gap end"><button data-a="cont" data-id="${p.id}" title="Continue this series: a new part under this one">+ Continue</button></div>`;
+  return h;
+}
+function render() {
+  const ae = document.activeElement, keep = ae && ae.id === 'draft' ? [ae.selectionStart, ae.selectionEnd] : null;
+  const roots = Object.values(P).filter(isHead).sort((a, b) => a.t - b.t);
+  const draftRoot = st.draft && (st.draft.pos?.at || st.draft.pos?.beside);
+  stacksEl.innerHTML = roots.map(r => `<div class="stack" data-root="${r.id}">${chainHtml(r)}</div>`).join('') + (draftRoot ? `<div class="stack" data-root="__draft">${draftHtml()}</div>` : '');
+  layout();
+  renderTools();
+  const ta = $('#draft'); if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; if (keep) { ta.focus({ preventScroll: true }); ta.setSelectionRange(...keep); } }
+  highlight();
+}
+/* positions: heads with `at` go where they were put; branches go at their offset from the part they hang from,
+   once that part is placed; a stack that would overlap one placed before it moves down. */
+const elOf = id => stacksEl.querySelector(`[data-part="${CSS.escape(id)}"]`);
+const boxOf = el => { const w = world.getBoundingClientRect(), r = el.getBoundingClientRect(); return { x: r.left - w.left, y: r.top - w.top, w: r.width, h: r.height }; };
+function layout() {
+  const els = [...stacksEl.children], placed = [], todo = els.slice();
+  const posOf = el => { const id = el.dataset.root; return id === '__draft' ? st.draft.pos : P[id].pos; };
+  const anchorOf = el => { const id = el.dataset.root; return id === '__draft' ? st.draft.prev : P[id].prev; };
+  for (let guard = 0; todo.length && guard < 200; guard++) {
+    const el = todo.shift(), pos = posOf(el);
+    let x, y;
+    if (pos.at) { x = pos.at.x; y = pos.at.y; }
+    else { const a = elOf(anchorOf(el)), ar = a && placed.includes(a.closest('.stack')) ? boxOf(a) : null; if (!ar) { todo.push(el); continue; } x = ar.x + pos.beside.dx; y = ar.y + pos.beside.dy; }
+    const h = el.offsetHeight, w = el.offsetWidth;
+    for (let moved = true, n = 0; moved && n < 50; n++) { moved = false;
+      for (const o of placed) { const b = o._box; if (x < b.x + b.w && x + w > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y) { y = b.y + b.h + 24; moved = true; } } }
+    el.style.left = x + 'px'; el.style.top = y + 'px'; el._box = { x, y, w, h }; placed.push(el);
+  }
+  st.boxes = placed.map(e => e._box);
+  drawWires();
+}
+/* connectors: a branch, a reply placed beside its ask, an ask sent to a passage or to parts that are not right above
+   it. A part sent to the part above it, or inline, needs no line: its position shows the relation. */
+function drawWires() {
+  let out = '';
+  const line = (aEl, bEl, label, cls = '') => {
+    if (!aEl || !bEl) return;
+    const a = boxOf(aEl), b = boxOf(bEl);
+    const right = b.x >= a.x + a.w - 4, x1 = right ? a.x + a.w : a.x, y1 = a.y + 16, x2 = right ? b.x : b.x + b.w, y2 = b.y + 16;
+    const dx = Math.max(30, Math.abs(x2 - x1) / 2) * (right ? 1 : -1);
+    out += `<path class="${cls}" d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}"/><circle cx="${x1}" cy="${y1}" r="3"/>`;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, tw = label.length * 6.2 + 10;
+    if (Math.hypot(x2 - x1, y2 - y1) > tw + 40) out += `<g class="lbl"><rect x="${mx - tw / 2}" y="${my - 8}" width="${tw}" height="16" rx="8"/><text x="${mx}" y="${my + 3.5}" text-anchor="middle">${esc(label)}</text></g>`;
+  };
+  for (const p of Object.values(P)) {
+    if (isAsk(p) && p.to.length) for (const t of p.to) { if (t === 'canvas') continue; line(elOf(base(t)), elOf(p.id), t.includes('#') ? 'ask · passage' : 'ask'); }
+    else if (isAsk(p) && p.pos?.beside) line(elOf(p.prev), elOf(p.id), 'ask');
+    else if (p.pos?.beside && !isAsk(p)) line(elOf(p.prev), elOf(p.id), p.model || p.via ? 'reply' : 'post', p.model || p.via ? 'reply' : '');
+  }
+  const d = st.draft;
+  if (d && d.to?.length) for (const t of d.to) line(elOf(base(t)), elOf('__draft'), t.includes('#') ? 'ask · passage' : 'ask');
+  else if (d && d.pos?.beside) line(elOf(d.prev), elOf('__draft'), 'ask');
+  wires.innerHTML = out;
+}
+function applyPan() { world.style.transform = `translate(${st.pan.x}px, ${st.pan.y}px)`; view_.style.backgroundPosition = `${st.pan.x}px ${st.pan.y}px`; }
+function renderTools() {
+  const n = st.sel.size;
+  $('#tools').innerHTML = `<button class="tb" data-a="addpost">+ Add post</button><button class="tb" data-a="addask">+ Add ask</button>`
+    + (n ? `<span class="selnote">${n} selected · + Add ask sends to ${n === 1 ? 'it' : 'them'}<button data-a="selclear">Clear</button></span>` : `<span class="chan">#public<button data-a="inspect" data-id="canvas" title="Inspect the canvas and its handlers">{ }</button></span>`);
+}
+/* highlight: the context of an ask (hover "saw", or the inspector's preview) */
+function highlight() {
+  stacksEl.querySelectorAll('.part.saw').forEach(e => e.classList.remove('saw'));
+  const ids = st.hl || []; ids.forEach(id => elOf(id)?.classList.add('saw'));
+}
+
+/* ---- the inspector ---- */
+const INSP = { edit: {} };   // 'owner:sel' -> text being edited
+function inspect(id) { st.insp = id; INSP.edit = {}; render(); renderInsp(); }
+function previewFor(id) {
+  /* a hypothetical ask sent to this part: what context resolves to, and where the reply would land */
+  if (id === 'canvas') return null;
+  const fake = { id: '__preview', to: [], prev: id, text: '' };
+  P.__preview = Object.assign(fake, { pos: 'inline', t: 1e9, k: 1e9 });
+  try {
+    const msg = resolve(fake, ['__preview']);
+    const pl = call('__preview', 'place', [{ by: MODEL }, msg]);
+    return { saw: msg.context, place: pl.value, placeFrom: pl.from };
+  } finally { delete P.__preview; }
+}
+const fromLabel = h => !h ? 'none' : h.from === 'own' ? 'own' : h.from === 'head' ? `head ${h.owner}` : h.from;
+function renderInsp() {
+  const el = $('#insp'), id = st.insp;
+  if (!id) { el.hidden = true; st.hl = null; highlight(); return; }
+  el.hidden = false;
+  const isC = id === 'canvas', p = isC ? null : P[id];
+  if (!isC && !p) { st.insp = null; renderInsp(); return; }
+  const ref = x => `<button class="ref" data-a="inspect" data-id="${esc(base(x))}">${esc(x)}</button>`;
+  let fields = '';
+  if (isC) fields = `<dl class="kv"><dt>id</dt><dd>${CANVAS.id}</dd><dt>name</dt><dd>#${CANVAS.name}</dd><dt>stacks</dt><dd>${Object.values(P).filter(isHead).length}</dd></dl>`;
+  else {
+    const pos = typeof p.pos === 'string' ? p.pos : p.pos.at ? `at {x:${Math.round(p.pos.at.x)}, y:${Math.round(p.pos.at.y)}}` : `beside {dx:${p.pos.beside.dx}, dy:${p.pos.beside.dy}}`;
+    fields = `<dl class="kv"><dt>id</dt><dd>${p.id}</dd><dt>by</dt><dd>${p.model ? 'model ' + esc(p.model) : esc(p.by)}${p.via ? ' (code on ' + ref(p.via) + ')' : ''}</dd><dt>prev</dt><dd>${p.prev ? ref(p.prev) : '—'}</dd><dt>pos</dt><dd>${esc(pos)}</dd><dt>head</dt><dd>${ref(headOf(p.id).id)}</dd>${isAsk(p) ? `<dt>to</dt><dd>${p.to.length ? p.to.map(ref).join(', ') : '[] (the part above' + (p.prev ? ': ' + ref(p.prev) : ', none: the canvas') + ')'}</dd><dt>saw</dt><dd>${(p.saw || []).map(ref).join(', ') || '—'}</dd>` : ''}</dl>`;
+  }
+  /* messages: what this object sent and what was sent to it */
+  let msgs = '';
+  if (!isC) {
+    const sent = isAsk(p) ? [`<li><code>ask</code> → ${receivers(p).map(r => r === 'canvas' ? 'canvas' : ref(r)).join(', ')}${kids(p.id).find(c => c.model || c.via) ? ' · reply ' + ref(kids(p.id).find(c => c.model || c.via).id) : ''}</li>`] : [];
+    const recv = Object.values(P).filter(q => isAsk(q) && receivers(q).some(r => base(r) === p.id)).map(q => `<li><code>ask</code> ← ${ref(q.id)} “${esc(clip(plain(q), 50))}”</li>`);
+    const seen = Object.values(P).filter(q => q.saw?.includes(p.id)).length;
+    msgs = `<h3>Messages</h3><ul class="msgs">${sent.join('')}${recv.join('')}${!sent.length && !recv.length ? `<li>${p.model || p.via ? 'A reply: it sends nothing.' : 'A post part: it sends nothing and nothing was sent to it.'}</li>` : ''}<li class="note">In the context of ${seen} ${seen === 1 ? 'ask' : 'asks'}.</li></ul>`;
+  }
+  /* handlers: each selector, resolved through the lookup chain */
+  const hs = SELECTORS.map(sel => {
+    const own = isC ? CANVAS.code[sel] : p.code?.[sel];
+    const res = isC ? (own != null ? { owner: 'canvas', from: 'canvas', src: own } : { owner: null, from: 'default', src: DEFAULTS[sel] }) : lookupAll(id, sel)[0];
+    const key = (isC ? 'canvas' : id) + ':' + sel, editing = INSP.edit[key] != null, err = ERR[(res.owner ?? 'default') + ':' + sel];
+    const mine = res.from === 'own' || (isC && res.from === 'canvas');
+    const head = `<div class="hd-h"><b>${sel}</b><span class="from${mine ? ' own' : ''}">${mine ? 'defined here' : 'from ' + fromLabel(res)}</span><span class="grow"></span>`
+      + (editing ? '' : mine ? `<button class="lnk" data-a="hedit" data-k="${key}">Edit</button>` : `${res.owner && res.owner !== 'canvas' ? `<button class="lnk" data-a="inspect" data-id="${res.owner}">Open ${res.owner}</button>` : res.owner === 'canvas' && !isC ? `<button class="lnk" data-a="inspect" data-id="canvas">Open canvas</button>` : ''}<button class="lnk" data-a="hedit" data-k="${key}">Override here</button>`) + '</div>';
+    const bodyH = editing ? `<textarea id="ed-${key}" data-k="${key}" spellcheck="false" aria-label="${sel} handler">${esc(INSP.edit[key])}</textarea><div class="hd-f"><button class="b1" data-a="happly" data-k="${key}">Apply</button><button class="b3" data-a="hcancel" data-k="${key}">Cancel</button><span class="grow"></span>${mine ? `<button class="b3" data-a="hremove" data-k="${key}">Remove</button>` : ''}</div>` : `<pre>${esc(res.src)}</pre>`;
+    return `<div class="hd">${head}${bodyH}${err ? `<div class="err">${esc(err)}</div>` : ''}</div>`;
+  }).join('');
+  const pv = previewFor(id);
+  st.hl = pv ? pv.saw : null; highlight();
+  const placeTxt = pv ? (pv.place === 'inline' ? 'inline, under the ask' : pv.place && pv.place.beside ? `beside the ask (dx ${pv.place.beside.dx}, dy ${pv.place.beside.dy})` : 'next, directly under the ask') : '';
+  const pvH = pv ? `<h3>Next ask sent to this part</h3><div class="pv">The model would see ${pv.saw.length} ${pv.saw.length === 1 ? 'object' : 'objects'} (dashed on the canvas):<ol>${pv.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol><p class="note">The reply would land ${placeTxt} (place from ${fromLabel(pv.placeFrom)}).</p></div>` : `<h3>Canvas</h3><p class="note">Handlers here apply to every part in #public that has none of its own and whose heads have none. Editing one changes the preview of every part at once.</p>`;
+  const title = isC ? `Canvas <small>#${CANVAS.name}</small>` : `${isAsk(p) ? 'Ask' : p.model || p.via ? 'Reply' : 'Post part'} <small>${p.id}</small>`;
+  el.innerHTML = `<header><h2>${title}</h2><button class="x" data-a="iclose" aria-label="Close inspector" title="Close (Esc)">${XI}</button></header><div class="ib"><h3>Fields</h3>${fields}${msgs}${pvH}<h3>Handlers</h3>${hs}<p class="note">Lookup: this part, its head, the head of the part that head hangs from, the canvas, the default. Handlers run once when an ask is sent; the result is stored as <code>saw</code> and is not recomputed.</p></div>`;
+}
+/* edits to a handler: compiled before saving; a syntax error stays in the editor */
+function applyHandler(key) {
+  const [owner, sel] = key.split(':'), ta = document.getElementById('ed-' + key), src = ta.value;
+  try { compile(src, sel); } catch (e) { ERR[owner + ':' + sel] = e.message; renderInsp(); return; }
+  const target = owner === 'canvas' ? CANVAS.code : (P[owner].code ||= {});
+  target[sel] = src; delete ERR[owner + ':' + sel]; delete INSP.edit[key];
+  toast(`${sel} handler saved on ${owner === 'canvas' ? 'the canvas' : owner}. The next ask uses it; earlier answers keep what they saw.`);
+  render(); renderInsp();
+}
+
+/* ---- drafts ---- */
+function openDraft(d) { st.draft = { text: '', ...d }; render(); focusDraft(); }
+function focusDraft() { const ta = $('#draft'); if (!ta) return; ta.focus({ preventScroll: true }); ensureVisible(ta.closest('.part')); }
+function ensureVisible(el) {
+  if (!el) return; const r = el.getBoundingClientRect(), vw = innerWidth, vh = innerHeight, ins = $('#insp').hidden ? 0 : (vw > 640 ? 404 : 0), bottom = vw <= 640 && !$('#insp').hidden ? vh * .58 + 8 : 0;
+  let dx = 0, dy = 0;
+  if (r.right > vw - ins - 16) dx = vw - ins - 16 - r.right; if (r.left + dx < 16) dx = 16 - r.left;
+  if (r.bottom > vh - bottom - 16) dy = vh - bottom - 16 - r.bottom; if (r.top + dy < 56) dy = 56 - r.top;
+  if (dx || dy) { st.pan.x += dx; st.pan.y += dy; applyPan(); }
+}
+/* a free spot for a new stack inside the visible area: scan a grid against the placed stacks */
+function freeSpot(h = 170) {
+  const x0 = -st.pan.x + 24, y0 = -st.pan.y + 64, W = innerWidth - ($('#insp').hidden || innerWidth <= 640 ? 0 : 404);
+  for (let y = y0; y < y0 + 2000; y += 30) for (let x = x0; x + 290 < x0 + Math.max(320, W - 40); x += 314) {
+    if (!st.boxes.some(b => x < b.x + b.w + 20 && x + 290 + 20 > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y)) return { x, y };
+  }
+  return { x: x0, y: y0 };
+}
+function commitDraft(asAsk) {
+  const d = st.draft, text = ($('#draft')?.value || d.text || '').trim(); if (!text) return;
+  const p = add({ id: newId(asAsk ? 'a' : 'p'), by: ME, text, prev: d.prev, pos: d.pos, quote: d.quote, fresh: true, k: d.k });
+  if (asAsk) p.to = d.to ? d.to.slice() : [];
+  st.draft = null;
+  if (asAsk) { const rep = send(p.id); rep.fresh = true; st.sel.clear(); render(); ensureVisible(elOf(rep.id)); return; }
+  /* a post part: keep writing under it (a multi-part post); Done closes the draft */
+  st.draft = { prev: p.id, pos: 'next', mode: 'post', text: '', cont: true };
+  render(); focusDraft();
+}
+
+/* ---- events ---- */
+let toastT; function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 4200); }
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]');
+  if (!t) {
+    /* Shift+click on a part selects it */
+    const part = e.target.closest('.part[data-part]');
+    if (part && (e.shiftKey || e.metaKey || e.ctrlKey) && part.dataset.part !== '__draft') { toggleSel(part.dataset.part); }
+    return;
+  }
+  const a = t.dataset.a, id = t.dataset.id;
+  if (a === 'addpost' || a === 'addask') {
+    if (st.sel.size && a === 'addask') {
+      /* an ask to the selection: a new stack beside the selection's bounding box, a connector from each receiver */
+      const bs = [...st.sel].map(x => boxOf(elOf(x))), x = Math.max(...bs.map(b => b.x + b.w)) + 40, y = Math.min(...bs.map(b => b.y));
+      openDraft({ mode: 'ask', pos: { at: { x, y } }, to: [...st.sel] }); return;
+    }
+    openDraft({ mode: a === 'addask' ? 'ask' : 'post', pos: { at: freeSpot() } }); return;
+  }
+  if (a === 'here') { const ks = inlineOf(id).map(c => c.k); openDraft({ mode: 'ask', prev: id, pos: 'inline', k: (ks.length ? Math.max(...ks) : 0) + 1 }); return; }
+  if (a === 'cont') { openDraft({ mode: isAsk(P[id]) || P[id].model ? 'ask' : 'post', prev: id, pos: 'next' }); return; }
+  if (a === 'branch') { openDraft({ mode: 'ask', prev: id, pos: { beside: { dx: 314, dy: 0 } } }); return; }
+  if (a === 'select') { toggleSel(id); return; }
+  if (a === 'selclear') { st.sel.clear(); render(); return; }
+  if (a === 'dcancel') { st.draft = null; render(); return; }
+  if (a === 'dpost') { commitDraft(false); return; }
+  if (a === 'dask') { commitDraft(true); return; }
+  if (a === 'more') { st.open[id] = !st.open[id]; render(); return; }
+  if (a === 'inlmore') { st.inlOpen[id] = true; render(); return; }
+  if (a === 'saw') { const ids = P[id].saw || []; st.hl = st.hl && st.hlFrom === id ? null : ids; st.hlFrom = st.hl ? id : null; highlight(); return; }
+  if (a === 'inspect') { inspect(id); return; }
+  if (a === 'iclose') { st.insp = null; render(); renderInsp(); return; }
+  if (a === 'hedit') { const [owner, sel] = t.dataset.k.split(':'); const own = owner === 'canvas' ? CANVAS.code[sel] : P[owner]?.code?.[sel]; INSP.edit[t.dataset.k] = own ?? (owner === 'canvas' ? DEFAULTS[sel] : lookupAll(owner, sel)[0].src); renderInsp(); document.getElementById('ed-' + t.dataset.k)?.focus(); return; }
+  if (a === 'hcancel') { delete INSP.edit[t.dataset.k]; renderInsp(); return; }
+  if (a === 'happly') { applyHandler(t.dataset.k); return; }
+  if (a === 'hremove') { const [owner, sel] = t.dataset.k.split(':'); if (owner === 'canvas') delete CANVAS.code[sel]; else delete P[owner].code[sel]; delete INSP.edit[t.dataset.k]; delete ERR[owner + ':' + sel]; render(); renderInsp(); return; }
+  if (a === 'selask') { const s = st.selAsk; $('#selask')?.remove(); getSelection()?.removeAllRanges(); openDraft({ mode: 'ask', prev: s.id, pos: { beside: { dx: 314, dy: 0 } }, to: [`${s.id}#${s.s}-${s.e}`], quote: s.text }); return; }
+});
+function toggleSel(id) { if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id); render(); }
+document.addEventListener('input', e => {
+  if (e.target.id === 'draft') { st.draft.text = e.target.value; e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px';
+    e.target.closest('.part').querySelectorAll('[data-a="dpost"], [data-a="dask"]').forEach(b => { b.disabled = !e.target.value.trim(); }); layout(); }
+  if (e.target.dataset.k && e.target.tagName === 'TEXTAREA') INSP.edit[e.target.dataset.k] = e.target.value;
+});
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'draft' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitDraft(st.draft.mode === 'ask'); return; }
+  if (e.key === 'Escape') { if ($('#selask')) { $('#selask').remove(); return; } if (st.draft) { st.draft = null; render(); return; } if (st.insp) { st.insp = null; render(); renderInsp(); } }
+});
+/* hover an ask or a reply: dashed outlines on what that ask saw */
+document.addEventListener('mouseover', e => {
+  if (st.insp) return;
+  const el = e.target.closest?.('.part[data-part]'), p = el && P[el.dataset.part]; let ids = null;
+  if (p && isAsk(p)) ids = p.saw; else if (p && (p.model || p.via) && P[p.prev]) ids = P[p.prev].saw;
+  if (!st.hlFrom) { st.hl = ids || null; highlight(); }
+});
+/* select text in a part: "Ask about this" sends an ask to that passage */
+document.addEventListener('mouseup', e => setTimeout(() => {
+  if (e.target.closest?.('#selask')) return;
+  $('#selask')?.remove();
+  const sel = getSelection(); if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+  const text = sel.toString().replace(/\s+/g, ' ').trim(); if (text.length < 3) return;
+  const range = sel.getRangeAt(0), host = (range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement).closest('.ptext, .prose');
+  const partEl = host?.closest('.part[data-part]'); if (!partEl || partEl.dataset.part === '__draft') return;
+  const pre = document.createRange(); pre.selectNodeContents(host); pre.setEnd(range.startContainer, range.startOffset);
+  const s = pre.toString().length; st.selAsk = { id: partEl.dataset.part, s, e: s + range.toString().length, text };
+  const r = range.getBoundingClientRect();
+  const b = document.createElement('button'); b.id = 'selask'; b.dataset.a = 'selask'; b.textContent = 'Ask about this';
+  const wr = world.getBoundingClientRect(); b.style.left = (r.left - wr.left) + 'px'; b.style.top = (r.bottom - wr.top + 6) + 'px'; world.appendChild(b);
+}));
+/* pan: drag the background (or drag anywhere with a finger); the wheel pans too */
+let drag = null;
+view_.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const onBg = !e.target.closest('.part, button, textarea, #selask');
+  if (!onBg && e.pointerType === 'mouse') return;
+  if (e.target.closest('button, textarea')) return;
+  drag = { x: e.clientX, y: e.clientY, px: st.pan.x, py: st.pan.y, moved: false, id: e.pointerId, bg: onBg };
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+  if (!drag.moved) { drag.moved = true; view_.classList.add('panning'); try { view_.setPointerCapture(e.pointerId); } catch {} }
+  st.pan.x = drag.px + dx; st.pan.y = drag.py + dy; applyPan();
+});
+window.addEventListener('pointerup', () => { if (drag?.moved) { view_.classList.remove('panning'); } drag = null; });
+view_.addEventListener('wheel', e => { if (e.target.closest('textarea')) return; e.preventDefault(); st.pan.x -= e.deltaX; st.pan.y -= e.deltaY; applyPan(); $('#selask')?.remove(); }, { passive: false });
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
+
+seed();
+render();
+applyPan();
+document.fonts?.ready.then(() => render());
+</script>
+</body>
+</html>
