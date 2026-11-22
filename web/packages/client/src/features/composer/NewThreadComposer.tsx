@@ -10,9 +10,10 @@
 import { Menu } from "@base-ui/react/menu";
 import { useNavigate } from "@tanstack/react-router";
 import type { MouseEvent, RefObject } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { useMediaQuery } from "../../lib/media.js";
 import { useOnlineData } from "../../replica/ReplicaProvider.js";
 import {
   composerModel,
@@ -39,20 +40,6 @@ export type Mode = "ask" | "post";
 
 const MENU_POPUP = `${SHELL_MENU_POPUP} fpop-menu`;
 
-function useNarrow(width: number): boolean {
-  const query = `(max-width: ${width}px)`;
-  const get = () => typeof window.matchMedia === "function" && window.matchMedia(query).matches;
-  const [narrow, setNarrow] = useState(get);
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const list = window.matchMedia(query);
-    const on = () => setNarrow(list.matches);
-    list.addEventListener("change", on);
-    return () => list.removeEventListener("change", on);
-  }, [query]);
-  return narrow;
-}
-
 /** The channel picker (title "Channel"): the joined channels as radio items. */
 function ChannelPicker({
   channels,
@@ -65,7 +52,7 @@ function ChannelPicker({
   onChange: (id: string) => void;
   field: RefObject<HTMLTextAreaElement | null>;
 }) {
-  const narrow = useNarrow(600);
+  const narrow = useMediaQuery("(max-width: 600px)");
   return (
     <Menu.Root>
       <Menu.Trigger className="pick" title="Channel">
@@ -130,7 +117,7 @@ export function ModelPicker({
   onChange: (choice: { model: string; effort: Effort }) => void;
   field: RefObject<HTMLTextAreaElement | null>;
 }) {
-  const narrow = useNarrow(600);
+  const narrow = useMediaQuery("(max-width: 600px)");
   const navigate = useNavigate();
   return (
     <Menu.Root>
@@ -241,9 +228,9 @@ export function ModelPicker({
   );
 }
 
-/** The split send button: the send arrow in both modes ("Ask" or "Post"),
- * disabled while the field is empty; the chevron ("Ask or post") opens the
- * mode menu. */
+/** The split send button: the send arrow for "Ask" and the pencil for
+ * "Post" (the icons of the mode menu's rows), disabled while the field is
+ * empty; the chevron ("Ask or post") opens the mode menu. */
 function SendSplitButton({
   mode,
   empty,
@@ -265,7 +252,7 @@ function SendSplitButton({
         aria-label={label}
         title={label}
       >
-        <SendArrowIcon />
+        {mode === "post" ? <PencilIcon /> : <SendArrowIcon />}
       </button>
       <Menu.Root>
         <Menu.Trigger className="split-more" aria-label="Ask or post">
@@ -347,6 +334,12 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
   }, []);
 
   const empty = !text.trim();
+  // Any text, whitespace included, puts the controls on their own row; the
+  // field's height is measured again at its new width.
+  const open = text !== "";
+  useLayoutEffect(() => {
+    if (field.current && open) growField(field.current);
+  }, [open]);
   const placeholder = signedOut
     ? "Sign in to ask or post"
     : mode === "ask"
@@ -404,7 +397,7 @@ export function NewThreadComposer({ channel, joined, onCreated }: NewThreadCompo
     // the form is reachable from the keyboard.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <form
-      className={cn("nb", !empty && "has-text")}
+      className={cn("nb", !empty && "has-text", open && "open")}
       onSubmit={(event) => {
         event.preventDefault();
         void send();

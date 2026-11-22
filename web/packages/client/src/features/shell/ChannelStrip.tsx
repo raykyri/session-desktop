@@ -4,7 +4,8 @@
 // the scope's empty line. No scrollbar: the edges fade 40 px only while chips
 // are hidden past them, and the current chip is scrolled to the centre when
 // it lies within 40 px of an edge. Until the replica has the channels the
-// strip has no chips and no empty line (02 W9.1).
+// strip has no chips and no empty line (02 W9.1). At 520 px and below the
+// strip is not shown; the scope picker's menu lists its channels (02 W2.5).
 
 import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef } from "react";
@@ -119,7 +120,7 @@ export function ChannelStrip({
     <nav
       aria-label="Channels"
       aria-busy={channels === null ? true : undefined}
-      className="flex min-w-0 flex-1"
+      className="phone:hidden flex min-w-0 flex-1"
     >
       <div
         ref={strip}

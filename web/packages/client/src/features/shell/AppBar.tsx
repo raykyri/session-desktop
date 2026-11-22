@@ -1,5 +1,6 @@
 // The app bar (02 §2.2; `appbar`, `appbarOut`), left to right: the name as
-// the home button, the scope picker and channel strip, then the usage ring,
+// the home button, the scope picker and channel strip (at 520 px and below
+// the strip folds into the picker's menu, 02 W2.5), then the usage ring,
 // Saved, the layout toggle (feeds only) and the account menu. Accounts
 // without an invite get no ring, Saved or layout toggle. Signed out it is
 // the name, the strip of open channels, "Join with invite" and "Sign in".
@@ -9,6 +10,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { cn } from "../../lib/cn.js";
+import { PHONE_QUERY, useMediaQuery } from "../../lib/media.js";
 import type { ChannelScope, FeedLayout } from "../../stores/navigation.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 
@@ -79,16 +81,27 @@ export interface AppBarProps {
 export function AppBar(props: AppBarProps) {
   const { viewer } = props;
   const writer = canWrite(viewer);
+  const phone = useMediaQuery(PHONE_QUERY);
   return (
-    <header className="app-bar bg-surface-header border-border-divider phone:gap-2 flex h-12 items-center border-b">
+    <header className="app-bar bg-surface-header border-border-divider flex h-12 items-center border-b">
       <BrandButton />
-      <div className="phone:ml-0 ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5">
+      <div className="phone:-ml-0.5 ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5">
         {props.showStrip ? (
           <>
             <ScopePicker
               scopes={props.scopes}
               scope={props.scope}
               onScopeChange={props.onScopeChange}
+              fold={
+                phone
+                  ? {
+                      channels: props.channels,
+                      current: props.currentChannel,
+                      canWrite: writer,
+                      onNewChannel: props.onNewChannel,
+                    }
+                  : null
+              }
               {...(props.onMenuOpenChange ? { onOpenChange: props.onMenuOpenChange } : {})}
             />
             <ChannelStrip

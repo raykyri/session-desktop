@@ -129,7 +129,7 @@ test.describe("in UTC", () => {
     await test.step("the Usage page reads the spend", async () => {
       await page.goto("/usage");
       await expect(page.locator(".usent")).toHaveText(
-        /^You have 0% of usage left this week\. Next reset on Fri, in (\d+d )?\d+h\.$/,
+        /^0% of usage left this week\. Next reset Friday, in (\d+d )?\d+h\.$/,
       );
       await expect(page.getByRole("img", { name: "0% left" })).toBeVisible();
       const runs = page.getByRole("region", { name: "Recent runs" });

@@ -1,6 +1,6 @@
 // The app shell end to end (02 §2.2, W2.2, W2.3, W2.7; 05 M4): the app bar
 // spanning the window in both layouts and at every width, the bar hiding on
-// scroll without moving the page, the site footer on feeds and pages, the
+// scroll without moving the page, no site footer on feeds and pages, the
 // signed-out bar, and the tab's client id across a reload and in a
 // duplicated tab (01 Y3).
 //
@@ -256,11 +256,11 @@ test.describe("signed in", () => {
     expect(await place()).toEqual(up);
   });
 
-  test("the site footer ends every feed and page", async ({ page }) => {
+  test("no feed or page has a site footer", async ({ page }) => {
     for (const [path, screen] of screens()) {
       await page.goto(path);
       await expectScreen(page, path, screen);
-      await expectSiteFooter(page, path);
+      await expectNoSiteFooter(page, path);
     }
   });
 
@@ -399,6 +399,136 @@ test.describe("narrow widths", () => {
   });
 });
 
+/** The left and right edges of the bar's controls, in px from the window's
+ * left: the brand, the scope menu button, the ring, Saved, the layout toggle
+ * and the account menu. */
+async function barControls(page: Page) {
+  const bar = page.getByRole("banner");
+  const edges = async (locator: ReturnType<Page["locator"]>) => {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error("not rendered");
+    return { left: box.x, right: box.x + box.width };
+  };
+  return {
+    bar: await edges(bar),
+    brand: await edges(bar.getByRole("link", { name: "Session home" })),
+    scope: await edges(bar.locator('button[aria-haspopup="menu"]').first()),
+    ring: await edges(bar.getByRole("link", { name: /included tokens left/ })),
+    saved: await edges(bar.getByRole("link", { name: /^Saved/ })),
+    layout: await edges(bar.getByRole("button", { name: /^(Expand|Collapse)$/ })),
+    account: await edges(bar.getByRole("button", { name: /^Account/ })),
+  };
+}
+
+test.describe("phone widths", () => {
+  test("at 400 px the strip folds into the scope menu", async ({ page }) => {
+    await signIn(page, { login: STRIP_LOGIN });
+    await page.setViewportSize({ width: 521, height: 900 });
+    await openHome(page);
+    const bar = page.getByRole("banner");
+    const strip = bar.getByRole("navigation", { name: "Channels" });
+    await expect(strip).toBeVisible();
+    const names = await strip.getByRole("link").allTextContents();
+    expect(names.length).toBeGreaterThanOrEqual(9);
+
+    await page.setViewportSize({ width: 400, height: 900 });
+    await expect(strip).toBeHidden();
+    const scope = bar.getByRole("button", { name: "Joined" });
+    await scope.click();
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitemradio")).toHaveText([
+      "Joined",
+      "Channels you manage",
+      "All",
+      ...names,
+    ]);
+    await expect(menu.getByRole("menuitemradio", { name: "Joined" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(menu.getByRole("menuitem", { name: "New channel" })).toBeVisible();
+
+    // Choosing a channel opens it, closes the menu and returns focus to the
+    // button, which now names the channel.
+    const target = names[2] ?? "";
+    await menu.getByRole("menuitemradio", { name: target, exact: true }).click();
+    await expect(page).toHaveURL(`${APP_ORIGIN}/c/${target.slice(1)}`);
+    await expect(menu).toBeHidden();
+    const named = bar.getByRole("button", { name: target, exact: true });
+    await expect(named).toBeFocused();
+    await expect(bar.getByRole("button", { name: "Expand" })).toBeVisible();
+    await named.click();
+    await expect(menu.getByRole("menuitemradio", { name: target, exact: true })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(named).toBeFocused();
+
+    // The spacing (px): 4 left of the scope button, 6 between the ring,
+    // Saved, the layout toggle and the account menu, 11 right of the account
+    // menu.
+    const at = await barControls(page);
+    const gaps = {
+      brandToScope: at.scope.left - at.brand.right,
+      ringToSaved: at.saved.left - at.ring.right,
+      savedToLayout: at.layout.left - at.saved.right,
+      layoutToAccount: at.account.left - at.layout.right,
+      accountToEdge: at.bar.right - at.account.right,
+    };
+    for (const [name, value] of Object.entries(gaps))
+      gaps[name as keyof typeof gaps] = Math.round(value * 10) / 10;
+    expect(gaps).toEqual({
+      brandToScope: 4,
+      ringToSaved: 6,
+      savedToLayout: 6,
+      layoutToAccount: 6,
+      accountToEdge: 11,
+    });
+    // The positions the members mock has at 400 px.
+    expect([at.brand.right, at.scope.left, at.ring.left, at.saved.left, at.layout.left]).toEqual([
+      42, 46, 235, 271, 307,
+    ]);
+    expect([at.account.left, at.account.right]).toEqual([343, 389]);
+
+    // Nothing overflows the bar.
+    const overflow = await bar.evaluate((header) => {
+      const box = header.getBoundingClientRect();
+      const out = [...header.querySelectorAll<HTMLElement>("a, button")]
+        .filter((el) => el.offsetParent !== null)
+        .filter((el) => {
+          const own = el.getBoundingClientRect();
+          return own.left < box.left - 0.5 || own.right > box.right + 0.5;
+        })
+        .map((el) => el.getAttribute("aria-label") ?? el.textContent);
+      return { out, scroll: header.scrollWidth - header.clientWidth };
+    });
+    expect(overflow).toEqual({ out: [], scroll: 0 });
+  });
+
+  test("at 521 and 860 px the strip shows and the menu lists scopes only", async ({ page }) => {
+    await signIn(page, { login: STRIP_LOGIN });
+    await page.setViewportSize({ width: 521, height: 900 });
+    await openHome(page);
+    const bar = page.getByRole("banner");
+    for (const width of [521, 860]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(bar.getByRole("navigation", { name: "Channels" }), `${width}`).toBeVisible();
+      await bar.getByRole("button", { name: "Joined" }).click();
+      const menu = page.getByRole("menu");
+      await expect(menu.getByRole("menuitemradio"), `${width}`).toHaveText([
+        "Joined",
+        "Channels you manage",
+        "All",
+      ]);
+      await expect(menu.getByRole("menuitem", { name: "New channel" })).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+    }
+  });
+});
+
 test.describe("signed out", () => {
   test("the bar has the name, the strip, Join with invite and Sign in", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 900 });
@@ -430,27 +560,25 @@ test.describe("signed out", () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test("the site footer ends the feeds and Browse", async ({ page }) => {
+  test("the feeds and Browse have no site footer", async ({ page }) => {
     // Usage needs an account: signed out it goes to the sign-in page.
     for (const [path, screen] of screens().filter(([target]) => target !== "/usage")) {
       await page.goto(path);
       await expectScreen(page, path, screen);
-      await expectSiteFooter(page, path);
+      await expectNoSiteFooter(page, path);
     }
   });
 });
 
-/** "Session · Report abuse: abuse@<host>" with a mailto link, as the last
- * thing in the screen's column. */
-async function expectSiteFooter(page: Page, path: string) {
-  const footer = page.getByRole("contentinfo");
-  await expect(footer, path).toHaveText(`Session · Report abuse: ${ABUSE_ADDRESS}`);
-  await expect(footer.getByRole("link", { name: ABUSE_ADDRESS }), path).toHaveAttribute(
-    "href",
-    `mailto:${ABUSE_ADDRESS}`,
-  );
-  expect(
-    await footer.evaluate((element) => element.parentElement?.lastElementChild === element),
-    `${path}: the footer ends the column`,
-  ).toBe(true);
+/** No footer and no link to the abuse mailbox (02 W2.7); the column ends
+ * with its own bottom padding. */
+async function expectNoSiteFooter(page: Page, path: string) {
+  await expect(page.getByRole("contentinfo"), path).toHaveCount(0);
+  await expect(page.locator(`a[href="mailto:${ABUSE_ADDRESS}"]`), path).toHaveCount(0);
+  await expect(page.getByText("Report abuse"), path).toHaveCount(0);
+  const bottom = await page
+    .locator(".feed-inner, .page-inner")
+    .first()
+    .evaluate((el) => getComputedStyle(el).paddingBottom);
+  expect(bottom, `${path}: the column's bottom padding`).toBe("60px");
 }

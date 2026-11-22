@@ -62,8 +62,7 @@ New code:
 
 ```
 src/replica/              ReplicaProvider, adapters/, queries.ts, writes.ts, viewer.ts, runStream.ts, fixtureReplica.ts
-src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide,
-                          SiteFooter
+src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide
 src/features/feed/        FeedPage, FeedRow, ThreadCard, TitleRow, AnswerProse, CardFooter, RunStatus, RemovedCard, BranchedFrom
 src/features/branches/    BranchTree, BranchCard, BranchActions, BranchComments, SelectionActions, lookPhrase.ts, geometry.ts
 src/features/replies/     ReplyTree, ReplyCard
@@ -130,7 +129,8 @@ Left to right (`appbar`):
    icon; channels the viewer owns, only for accounts that can write) and All
    (compass icon; 01 C7). The scope chooses which channels the strip lists;
    Home always shows joined channels. With one scope (signed out, where Joined
-   would equal All) no picker is drawn.
+   would equal All) no picker is drawn above 520 px; at 520 px and below it
+   carries the strip (W2.5) and is drawn with one scope too.
 3. **Channel strip**: horizontally scrolling `#name` chips with
    `aria-current="page"` on the current one, a join "+" (title "Join") on
    unjoined chips under All, a trailing New channel button (label "New
@@ -139,7 +139,8 @@ Left to right (`appbar`):
    scrollbar; a mask fades 40 px at an edge only while content is hidden past
    it (`--fl`, `--fr`). The current chip is scrolled to the centre when it
    lies within 40 px of an edge. Shown on the feed routes, Browse, Invites,
-   Usage, Notifications and Site Admin; not on `/welcome`.
+   Usage, Notifications and Site Admin; not on `/welcome`. Not shown at 520 px
+   and below, where the scope picker's menu lists its channels (W2.5).
 4. **Usage ring** (`meter`): an 18 px ring only, at every width (no "Nk left"
    text and no track bar): an arc for the share used over a full-circle
    track; tone `ok` below 80 % used, `warn` from 80 %, `bad` from 95 %
@@ -174,7 +175,8 @@ Items 4-6 are not rendered for accounts without an invite.
 page's layout or scroll position; the feed and every page reserve its height
 with 49 px of top padding (and `scroll-padding-top: 49px` on pages). It spans
 the window in both layouts, at every width and on every screen, with the
-`.app-bar` insets (16 px left, 14 px right, 12 px gap), a 1 px divider at its
+`.app-bar` insets (16 px left, 14 px right, 12 px gap; at 520 px and below
+11 px right and 6 px gap, W2.5), a 1 px divider at its
 bottom and no rounded corners. The mock's column-aligned floating card in
 layout `centred` above 860 px (`alignBar`) is not built.
 
@@ -217,7 +219,26 @@ inset are not built (removed: web-only build). Acceptance: no
 `requestFullscreen` in the client.
 
 **W2.5 Narrow widths.** ≤ 520 px: brand word hidden, composer controls wrap to
-a second row under the text (`ncw`). ≤ 600 px: the composer's menus are
+a second row under the text (`ncw`). The channel strip is not shown and folds
+into the scope picker's menu: the scope items as above, the current one
+checked; below a separator the current scope's channels in the strip's order
+as `menuitemradio` items, the open channel checked (the scope's empty line
+instead when it has none; nothing while the channels load); and, for accounts
+that can write, a separator and a last item "New channel" in place of the
+strip's trailing button. The Join "+" of unjoined channels under All is not in
+the menu: the channel's header carries Join. Choosing a channel opens it,
+closes the menu and returns focus to the button. The button names where the
+viewer is: the open channel ("#name"), otherwise the scope. The menu keeps the
+menu keyboard (arrows, Home and End, first letter, matched without the `#`,
+Escape, and Tab to close) and scrolls past `min(460px, 62vh)`. Signed out the
+button is drawn too, with All as its one scope. The bar's spacing: 4 px
+between the brand and the scope button, 6 px between the ring, Saved, the
+layout toggle and the account menu, 11 px after the account menu. Acceptance:
+a component test with a `matchMedia` stub (the menu lists the strip's channels;
+choosing one navigates and checks it); Playwright at 400 px (strip hidden, the
+menu's channels, opening one, the button's name, the spacing, nothing past the
+bar's edges) and at 521 and 860 px (the strip shows, the menu has the scopes
+only). ≤ 600 px: the composer's menus are
 right-anchored and capped at `100vw - 40px`, and the Effort submenu is drawn
 inline under its row instead of flying out to the side. ≤ 860 px: feed rows,
 Invites and Usage stack to one column, the side column is not sticky, and the
@@ -227,10 +248,9 @@ and that the open Effort submenu lies inside the viewport.
 
 **W2.6 Notifications page** (`/notifications`, `notifPage`, reached from the
 account menu; decision P10). Heading "Notifications" with "Mark all as read"
-(disabled while nothing is unread). Under it, while the list is not empty, the
-summary line "N unread notifications." (or "1 unread notification.", or "All
-caught up.") followed by "Mentions, replies to your posts, branches and
-comments on your asks, removals, and invites people used." The list is the
+(disabled while nothing is unread). There is no summary line under the
+heading: unread rows carry their dot, and the account button its count. The
+list is the
 notification records of the user log (01 C16), newest first, in a box; each
 row shows the actor's avatar with a kind badge (`N_KIND`), the text, and a
 sub-line "#channel · 3h" ("Invites · 3h" for an invite), and unread rows are
@@ -281,17 +301,14 @@ appearing, staying after the page is opened, and clearing after the last
 reply; the flash class removed after 1.6 s; a test that a mention in a
 private channel the viewer left is not listed.
 
-**W2.7 Site footer** (`siteFoot`, 05 §6 Q10). Every feed (after the last row)
-and every page (`/saved`, Browse, Invites, Usage, Notifications, Site Admin,
-`/welcome`, `/settings`) ends with a centred footer: "Session · Report abuse:
-abuse@<host>", the address a `mailto:` link, where `<host>` is the hostname of
-`SESSION_PUBLIC_ORIGIN` (in production `abuse@session.dev`); 40 px above it,
-a 1 px divider rule on top, extra-small faint text. The address comes from
-the client's build-time config of the public origin, not from a literal.
-Signed-out readers see it too. Scheduled in M4. Acceptance: a component test
-that the address follows the configured origin; `spaces-shell.spec.ts` finds
-the footer at the end of Home, a channel, Browse and Usage, signed in and
-signed out.
+**W2.7 No site footer** (05 §6 Q10). Feeds and pages have no site footer
+and no abuse link: a feed ends after its last row with the feed's bottom
+padding (60 px, 30 px at 860 px and below), a page with the page's (60 px).
+The abuse mailbox, abuse@<host> (`abuse@session.dev` in production), still
+exists and is read by the site admins, but is no longer linked from the app.
+Acceptance: a component test and `spaces-shell.spec.ts` find no
+`contentinfo` and no `mailto:` link on Home, a channel, Browse and Usage,
+signed in and signed out.
 
 ## 3. Feed
 
@@ -302,7 +319,7 @@ have an invite yet. You can read every open channel. Asking, posting and
 replying open once you enter an invite code.", button "Enter a code"), the
 channel header (W6.1), the frozen-channel banner (W6.10), the composer (§5;
 not rendered in a channel the signed-in viewer has not joined), the empty
-state, one row `[card | side column]` per thread, and the site footer (W2.7).
+state, and one row `[card | side column]` per thread (no site footer, W2.7).
 
 - **`centred`** (mock layout A, `pl-a`): above 1320 px a grid
   `1fr | 600px | 1fr` (at most 1340 px wide), card in the middle track, side
@@ -318,10 +335,8 @@ state, one row `[card | side column]` per thread, and the site footer (W2.7).
 The layout is the `prefs` record in the user log (01 C13, written with
 `prefs.set`), default `centred`; `navigation` holds the applied value so the
 first paint does not wait for the replica (ADR-20). Empty states:
-- Saved (`savedEmpty`): a box with a bookmark icon, "Nothing saved yet",
-  "Threads you save appear here, newest first. Save one with the bookmark at
-  the bottom of the thread; saving again removes it." and the button "Go to
-  Home";
+- Saved (`savedEmpty`): a box with a bookmark icon, the heading "No saved
+  threads" and the button "Go to Home";
 - Home: "Join a few channels to fill Home." followed by the inline link
   "Browse channels";
 - a channel without threads: "No threads here yet. Ask the first question.";
@@ -343,15 +358,14 @@ same account applies it.
   branch selected.
 - **Title row** (`titleRow`), drawn as a tree row: an 11 px hollow node centred
   on the first line; the title in regular weight at the title size (16.5 px in
-  the mock); on the right a post's channel (`#name`, extra-small, faint), then
-  the author's 20 px avatar with the tooltip "handle · 3h", then the "…" menu.
-  An ask's title is the question as typed; an ask's channel is in the footer
-  meta, not the title row.
+  the mock); on the right the author's 20 px avatar with the tooltip "handle ·
+  3h", then the "…" menu. An ask's title is the question as typed. The
+  channel of an ask or a post is in the footer meta, not the title row.
 - **Answer prose** (asks, §4.4).
-- **Footer** (`card-f`): on the left, for an ask, the meta
-  "N sources · Nk tokens · #channel" (`fmeta`; "1 source", tokens as
-  `ktok`: "41k tokens", or the exact number below 1,000), omitting empty
-  parts; then the follow-up button (reply-arrow icon, label and title "Ask a
+- **Footer** (`card-f`): on the left the meta (`fmeta`), for an ask
+  "N sources · Nk tokens · #channel" ("1 source", tokens as `ktok`: "41k
+  tokens", or the exact number below 1,000), omitting empty parts, and for a
+  post "#channel"; then the follow-up button (reply-arrow icon, label and title "Ask a
   follow-up", `aria-label` "Ask a follow-up, N branches") with the total
   branch count for an ask (hidden while the root answer runs), or Reply
   (label "Reply, N replies") with the total reply count for a post; then Save
@@ -583,11 +597,22 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   xhigh < max (every registry model accepts low); the same rule applies when
   the composer starts on the default model and default effort. At 600 px and below the submenu is drawn inline under its row
   (W2.5). No cost estimate is shown for high efforts (decision P13);
-- split send button: the main part shows the send arrow in both modes, with
-  label and title "Ask" or "Post", disabled while empty; the chevron part
+- split send button: the main part shows the icon of the chosen mode, the
+  send arrow for Ask and the pencil for Post, padded 9 px before the icon and
+  6 px after it, with label and title "Ask" or "Post", disabled while empty; the chevron part
   (label "Ask or post") opens Ask (arrow) / Post (pencil) with descriptions
   ("Agent researches and answers", "A message to people in the channel")
   and a check;
+- the rows: empty, the composer is one row holding the avatar, the field and
+  its controls; holding any text (whitespace included; `.open`) the field
+  takes the whole first row after the avatar and the controls (channel
+  picker, model picker, split send button) wrap onto their own row under the
+  text, indented to the text with the send button at the row's end; emptied,
+  it is one row again. Typing keeps focus, the caret and the selection, the
+  change does not scroll the page, and there is no transition (so none under
+  reduced motion). The field grows with its text to
+  `min(480px, calc(100vh - 80px))` (was 240 px) and scrolls past it. At
+  520 px and below the controls row may wrap further;
 - ⌘↵ (Ctrl↵ elsewhere, `formatChord`) sends, Enter is a newline; a pointer-down
   on the composer outside a control keeps the caret in the field; choosing
   in any of its menus returns focus to the field;
@@ -615,12 +640,19 @@ Inline composers (asks on a thread, comments, replies) are one `InlineComposer`
 with a text submit ("Ask", "Comment", "Reply") and a Close button (label
 "Close"), with the placeholders "Ask about the answer", "Ask about this
 passage", "Continue ask", "Ask beside this", "Comment here", "Reply" and
-"Reply to @handle" (§4).
+"Reply to @handle" (§4). Holding any text, the field takes the whole first
+row and Close and the submit button move to a row under it, at its end;
+emptied, the composer is one row again. The field grows to
+`min(320px, calc(100vh - 80px))` (was 160 px) and scrolls past it.
 
 **W5.1** Replace `features/composer/*` (`ResearchQueryComposer`, `AskNoteSwitch`
 deleted). Drafts persist per composer key in `stores/drafts`. Acceptance: tests
 for mode switching (label, placeholder, model picker hidden for Post, the
-send arrow in both modes), the empty-text state, the member's avatar at the
+send arrow for Ask and the pencil for Post), the empty-text state, the
+controls' own row once the field holds text and one row when it is cleared
+(new-thread and inline composers; Playwright at 1440 px reads the field's
+box across the row and the controls under it, and the 480 px cap after 60
+lines), the member's avatar at the
 start, the signed-out cover, out-of-tokens refusal for each run-starting
 write and not for Post, reply or comment, the queue-full pre-check and the
 rollback on a `queue_full` refusal with the text restored, draft restore
@@ -712,8 +744,14 @@ other member: "Ban from #name", and in private channels "Remove from
 channel"; the owner sees a Banned list with Unban. Writes `members.ban`,
 `members.unban` and `members.remove` (with `base.adm`; STALE reloads the
 row). The whole list is a plan addition; the mock has none. There are no role
-controls: a channel has only its owner and members (01 C18).
-Acceptance: menu items for a member and for the owner; a STALE answer to
+controls: a channel has only its owner and members (01 C18). Each row is the
+avatar and "@handle", then its badges as chips at the row's end: "You" on the
+viewer's own row, "Owner" on the owner's, both ("You" then "Owner") when the
+owner views their own channel; then the "…" menu where there is one. When any
+row has a menu, a row without one keeps the menu's 24 px empty, so the badges
+end at the same edge on every row.
+Acceptance: menu items for a member and for the owner; the badges and the
+kept place of the menu; a STALE answer to
 `members.remove` reloads the row and shows the toast; the owner's header
 offers no Leave.
 
@@ -731,10 +769,12 @@ removed or banned from is dropped from the replica at the resync that
 follows, with the toast "You are no longer a member of #name."; the
 desktop's frozen copy is not built (removed: web-only build; no copy after a
 voluntary Leave either, decision P8). Refusals of queued writes show the 04 §9 messages (the ban message, "#name is
-frozen because its owner's account is not active.", the expired-link
+unavailable because its owner's account is deactivated.", the expired-link
 message) and restore composer text. A frozen channel (04 §4.5, `frozen` on
-the space record) shows the banner "#name is frozen: its owner's account is
-not active. You can read it and delete your own posts.", offers only Delete
+the space record) shows the banner "#name is unavailable because its owner's
+account is deactivated. You can read it and delete your own posts.", gives
+its disabled follow-up and Reply buttons the title "#name is unavailable",
+offers only Delete
 on the viewer's own items and Leave, and is left out of the composer's
 channel picker. Acceptance: fixture-replica tests for each message, the
 restored text, the removed-member toast and the frozen-channel banner.
@@ -831,7 +871,8 @@ without an invite.
 
 **W8.1 Usage page** (`usagePage`, 03 §6): heading "Usage and API keys", then
 boxes:
-- "You have N% of usage left this week. Next reset on Fri, in 2d 5h." with a
+- "N% of usage left this week. Next reset Friday, in 2d 5h." (the share in
+  bold, the weekday in full in the viewer's zone) with a
   bar (`role="img"`, "N% left") in the ring's tones;
 - "Recent runs" (`usage.listRuns`): question clipped at 90, or "Removed" /
   "No longer available" without text (03 K5); the share of the weekly
@@ -840,7 +881,7 @@ boxes:
   week." when empty;
 - "When included tokens run out": "Pause my asks until the reset" ("You can
   still read, post and reply.") and "Continue on my Anthropic key" ("Asks
-  bill to your Anthropic key until the reset."; disabled without a valid
+  use your Anthropic key until the reset."; disabled without a valid
   Anthropic key, with "Add a key below to turn this on." or, with only an
   OpenAI key, "Needs an Anthropic key. Your OpenAI key only runs GPT-6.1
   Sol."), written with `usage.setBilling`; toasts "Asks will continue on
@@ -864,8 +905,9 @@ boxes:
   toast "<Provider> key works." shows; a refusal saves nothing, reopens the
   form with the text kept, and shows "That key was rejected by <Provider>."
   or "Couldn't reach <Provider> to check the key. Try again." under the
-  field. Next to each key the 03 K14 note that calls on a personal key fall
-  under the person's agreement with the provider (a plan addition).
+  field. Next to each key, in every state of its row (Not set, Checking…,
+  Valid, Invalid), the 03 K14 note "Asks on this key go to <Provider>
+  directly." (a plan addition).
 
 All online-only (ADR-19), read through TanStack Query; the ring reads the same
 `usage.get` query, with a 30 s stale time, and refetches when one of the
@@ -1102,8 +1144,7 @@ Tab order follows DOM order: the app bar (home, scope picker, strip chips,
 New channel, ring, Saved, layout toggle, account menu), then the main column:
 banner, channel header, composer, then each row as card (Branched from,
 the title row's "…", citations and passage count buttons, footer: follow-up or Reply, Save) followed by its side column (each
-branch tree, the open card's controls, its composer), and last the site
-footer's address link. A branch or reply
+branch tree, the open card's controls, its composer). A branch or reply
 tree is one tab stop with a roving `tabindex`. Opening a menu, dialog or
 composer moves focus as follows:
 
@@ -1192,7 +1233,7 @@ in the four theme × appearance combinations.
 
 **W11.2 Contrast.** A unit test resolves token values from `tokens.css` for
 each of the four theme × appearance combinations and checks: body, title,
-footer meta, site footer, tree-row and chip text against `--workspace-bg`, `--content-card-bg`
+footer meta, tree-row and chip text against `--workspace-bg`, `--content-card-bg`
 and `--popover-bg`, and against `--passage-mark` and the `qsel` tint
 composited over the workspace background, at least 4.5:1;
 tree rail, dots, the hollow title node, the ring arc and track, the Saved pill
@@ -1206,8 +1247,7 @@ test passes in CI and names the failing pair when it does not.
 
 AVA, jsdom and Testing Library under `packages/client/test/`, on the fixture
 replica: `lookPhrase`, `railGeometry`, `placePins`, `useBarAutoHide`,
-count and footer-meta formatting, notification text, the site
-footer address, viewer fields, scope lists, invite-code parsing, run states,
+count and footer-meta formatting, notification text, viewer fields, scope lists, invite-code parsing, run states,
 focus table, Escape stack, contrast pairs, one-composer rule, write rollback,
 stream gaps, "Not sent" states, the upgrade reload timer, client id
 storage, and each screen's viewer states. Tests of the deleted features go
@@ -1221,7 +1261,7 @@ delivers them.
 
 | Spec (`web/e2e/`) | Milestone | Drives |
 |---|---|---|
-| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the site footer (W2.7) on feeds and pages, signed in and out |
+| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the strip folded into the scope menu at 400 px (W2.5), no site footer (W2.7) on feeds and pages, signed in and out |
 | `spaces-feed.spec.ts` | M4, M5a | post, save and the Saved count, the footer meta and no model or effort text, a second context seeing a post without a reload, delete, the removed placeholder; the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload); from M5a, an ask streaming with a reload mid-stream, the queue-full refusal |
 | `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions and the mention toast |
 | `spaces-signed-out.spec.ts` | M4 | signed-out reading of a thread, its branches and replies (§9.5); write controls open the auth dialog |

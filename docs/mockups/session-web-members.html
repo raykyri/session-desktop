@@ -134,14 +134,18 @@ a.tlink, a.btn1, a.btn2 { text-decoration: none; }
 .composer { display: flex; gap: 8px; align-items: flex-end; background: var(--field); border: 1px solid var(--control-border);
   border-radius: 20px; padding: 4px 4px 4px 15px; }
 .composer:focus-within { border-color: var(--accent); }
-.composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: 160px; }
+.composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: min(320px, calc(100vh - 80px)); }
+/* an inline composer holding any text: the field takes the first row, Close and the submit button a row under it */
+.composer.open { flex-wrap: wrap; row-gap: 4px; }
+.composer.open textarea { flex: 1 1 100%; }
+.composer.open textarea + * { margin-left: auto; }
 .composer textarea::placeholder { color: var(--placeholder); }
 .row.new-row { padding: 15px 0 0; }
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
 .nb { min-width: 0; }
 .nb-dock > .av, .nb-dock > textarea { position: relative; top: -1px; }
-.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
+.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: min(480px, calc(100vh - 80px)); }
 .nb textarea::placeholder { color: var(--placeholder); }
 .nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .pick { position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 22px 0 9px; border-radius: 13px; background: var(--control); flex: none; }
@@ -218,7 +222,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .nb > .mpick.split { margin-right: 2px; }
 .split :is(.split-main, .split-more) { transition: background .15s, color .15s, opacity .15s, box-shadow .15s; }
 .split-main svg.i { width: 14px; height: 14px; display: block; }
-.split-main { height: 26px; padding: 0 7px 0 10px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
+.split-main { height: 26px; padding: 0 6px 0 9px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
 .split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 16%, transparent); }
 .split-main:disabled { cursor: default; }
 .split-more svg.i { width: 13px; height: 13px; }
@@ -268,8 +272,6 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .ttn { flex: none; width: 11px; height: 11px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 11px) / 2); border-radius: 50%; border: 1.5px solid var(--t-dim); background: var(--card); position: relative; z-index: 1; }
 .ttav { flex: none; display: inline-flex; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 20px) / 2); }
 .tt .more { margin-left: -4px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 24px) / 2); align-self: flex-start; }
-.ttm { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
-.tt > .ttm { margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 16px) / 2); line-height: 16px; }
 /* the title reads as a tree row: regular weight, the tree's text colour */
 .card.tt-c .tt > .ask, .card.tt-c .tt > .post { font-weight: 400; color: var(--t-primary); }
 .card.tt-c .byline, .card.tt-c > .prose { margin-left: 21px; }
@@ -445,6 +447,12 @@ a.hsv-e, a.hsv-b, a.hsv-d, a.hsaved { text-decoration: none; }
 .hlay:hover { background: var(--control); color: var(--t-heading); }
 .hlay svg.i { width: 15px; height: 15px; }
 @media (max-width: 520px) { .ncw .nb-dock { flex-wrap: wrap; row-gap: 6px; } .ncw .nb-dock > textarea { flex: 1 1 calc(100% - 40px); } .ncw .nb-dock > textarea + * { margin-left: 28px; } .ncw .nb-dock > .split { margin-left: auto; } }
+/* the new-thread composer holding any text (.open): the field takes the first row after the avatar and the controls
+   wrap onto their own row under the text, the send button at its end; emptied, it is one row again. No transition. */
+.ncw .nb-dock.open { flex-wrap: wrap; row-gap: 6px; }
+.ncw .nb-dock.open > textarea { flex: 1 1 calc(100% - 28px); }
+.ncw .nb-dock.open > textarea + * { margin-left: 28px; }
+.ncw .nb-dock.open > .split { margin-left: auto; }
 .rtext p { margin: 2px 0; }
 .rtext blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--t-faint); }
 .mention { color: var(--accent); font-weight: 500; }
@@ -465,8 +473,8 @@ a.hsv-e, a.hsv-b, a.hsv-d, a.hsaved { text-decoration: none; }
 .prose .nw { white-space: nowrap; }
 /* the usage ring's track, so it reads as a gauge */
 .m-ring circle:not(.arc) { stroke: var(--border-strong); }
-/* phones: the app name hides so the channel strip has room */
-@media (max-width: 520px) { .appbar .brand b { display: none; } .appbar { gap: 8px; } .hsp { margin-left: 0; } }
+/* phones: the app name hides (the bar's spacing at this width is set after the .appbar rule) */
+@media (max-width: 520px) { .appbar .brand b { display: none; } }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
 .preview .rtext { margin: 6px 0 2px; }
@@ -641,7 +649,7 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 /* moderation log */
 .mlist { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .mlist li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.4; }
-.mlist li > span:not(.mlkind):not(.acts):not(.av):not(.chip):not(.mpick) { flex: 1; min-width: 0; }
+.mlist li > span:not(.mlkind):not(.acts):not(.av):not(.chip):not(.mpick):not(.mlbadges):not(.mlmore) { flex: 1; min-width: 0; }
 .mlist li b { color: var(--t-heading); font-weight: 500; }
 .mlist li small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
 .mlist .acts { display: flex; gap: 6px; flex: none; }
@@ -669,6 +677,14 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 @media (max-width: 1080px) { .sd-d > .sside { display: none; } .sd-d .tabs.sp-mob { display: block; } }
 @media (max-width: 860px) { .sd-c > .srail { display: none; } .spv-c3 > .mg { margin-left: 0; } .sd-c .tabs.sp-mob { display: block; } }
 .appbar { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--divider); background: var(--chrome); }
+/* phones: the channel strip folds into the scope menu (headerSpaces); 4px between the brand and the scope button,
+   6px between the controls on the right, 11px after the account menu */
+@media (max-width: 520px) { .appbar { gap: 6px; padding-right: 11px; } .hsp { margin-left: -2px; } .hsp .tabs { display: none; } .hsp > .mpick { flex: 0 1 auto; min-width: 0; } }
+.hsdd { max-width: 100%; min-width: 0; }
+.hsdd > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu.hsmenu { max-height: min(460px, 62vh); max-width: calc(100vw - 32px); overflow-y: auto; }
+.hsmenu .mi > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hsmenu .mi-note { padding: 6px 10px; font-size: var(--fs-sm); }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--t-heading); font-size: var(--fs-md); }
 /* simplification variants */
 .rchips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1084,6 +1100,12 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .tog:disabled { opacity: .55; cursor: default; }
 .page-in.awide { max-width: 940px; }
 .adm h4 { margin: 18px 0 2px; font-size: var(--fs-sm); color: var(--t-heading); }
+/* Site Admin, Invites: a handle field and Look up, the member's line, a count and Give invites */
+.adm .kform + .kform, .adm .admline + .kform { margin-top: 8px; }
+.adm .kform .hwrap { flex: 1; min-width: 0; height: 34px; }
+.adm .kform .hwrap input { flex: 1; min-width: 0; height: 32px; border: 0; box-shadow: none; padding: 0 12px 0 2px; background: none; }
+.adm .kform input.admn { flex: none; width: 90px; }
+.admline { margin: 10px 0 0; font-size: var(--fs-sm); color: var(--t-secondary); }
 /* the admin page: two radio groups */
 .adm + .adm { margin-top: 12px; }
 .adm h3 { margin: 0 0 10px; font-size: var(--fs-md); color: var(--t-heading); }
@@ -1093,10 +1115,6 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .amrow > .radio { flex: 1; min-width: 0; }
 .amrow .radio b small { font-weight: 400; color: var(--t-faint); margin-left: 4px; }
 .amrow.on .radio b small { color: var(--accent); }
-/* site footer */
-.sfoot { display: block; margin: 40px 0 0; padding-top: 14px; border-top: 1px solid var(--divider); color: var(--t-faint); font-size: var(--fs-xs); text-align: center; }
-.sfoot a { color: var(--t-muted); }
-.sfoot a:hover { color: var(--t-heading); }
 /* ---- runs: the status line, Stop and Run again, streamed text, stop notes ---- */
 .card h3.ask, .card h3.post { margin: 0; font-weight: inherit; }
 .status.ended { color: var(--t-faint); }
@@ -1134,6 +1152,8 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 /* ---- members and invite links of a channel ---- */
 .mbdlg .mlist li, .ildlg .mlist li { align-items: center; }
 .mbdlg .mlist li > .mpick.more { margin-left: 0; }
+.mbdlg .mlbadges { display: inline-flex; flex: none; gap: 4px; }
+.mbdlg .mlmore { flex: none; width: 24px; }
 .mbdlg h4.mbhead { margin: 10px 0 0; }
 .mlist.ilist { grid-template-columns: minmax(0, 1fr); }
 .ilist code.ilink { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); color: var(--t-heading); }
@@ -1595,9 +1615,9 @@ function card(p) {
   const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) && !p.del ? moreMenu('t:' + p.id, !active && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, active ? 'Available when the answer finishes' : undefined) : '';
   /* the post title drawn like a row of the branch tree: a hollow node, the title in the tree's regular
      weight, the author's avatar on the right (name and time in its tooltip). An ask's source count, token
-     count and channel sit on the left of the footer; a plain post shows its channel beside the avatar. */
+     count and channel sit on the left of the footer; a plain post's channel sits there too. */
   const ttAv = `<span class="ttav" title="${esc(authorName(p.u))} · ${rel(p.createdAt)}">${av(p.u, 'sm')}</span>`;
-  const titleRow = (cls, text) => `${p.hidden && !hid ? '<p class="hiddenln">Hidden by the channel owner</p>' : ''}<div class="tt"><span class="ttn" aria-hidden="true"></span><h3 class="${cls}" id="title-${p.id}">${p.del ? '[deleted]' : hid ? 'Hidden by the channel owner' : text}</h3>${cls === 'post' ? `<span class="ttm">${spName(p.s)}</span>` : ''}${ttAv}${more}</div>`;
+  const titleRow = (cls, text) => `${p.hidden && !hid ? '<p class="hiddenln">Hidden by the channel owner</p>' : ''}<div class="tt"><span class="ttn" aria-hidden="true"></span><h3 class="${cls}" id="title-${p.id}">${p.del ? '[deleted]' : hid ? 'Hidden by the channel owner' : text}</h3>${ttAv}${more}</div>`;
   const head = '', lead = '';
   const count = c => `<span class="notes">${c}</span>`;
   const tail = '';
@@ -1608,11 +1628,11 @@ function card(p) {
   const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}${showN ? `, saved by ${ns}` : ''}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${showN ? `<span>${ns}</span>` : ''}</button>`;
   /* reply / follow-up button carries its count, like the like button */
   /* in a frozen channel nothing new can be added: Reply and the follow-up button are disabled; Save stays */
-  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${fz ? `disabled title="${esc(spName(p.s))} is frozen"` : canWrite() ? `${attrs} title="${label}"` : st.auth === 'out' ? `data-ma="openauth" title="${label}"` : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
+  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${fz ? `disabled title="${esc(spName(p.s))} is unavailable"` : canWrite() ? `${attrs} title="${label}"` : st.auth === 'out' ? `data-ma="openauth" title="${label}"` : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   const art = `<article class="${cls}${st.flash === p.id ? ' flash' : ''}" id="card-${p.id}" aria-labelledby="title-${p.id}" tabindex="-1">`, unsent = p.unsent ? notSentLine(p.unsent) : '';
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `${art}${head}${titleRow('post', esc(p.q))}<div class="card-f">${lead}${count('')}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div>${unsent}</article>`;
+    return `${art}${head}${titleRow('post', esc(p.q))}<div class="card-f">${lead}${count(`<span class="fmeta">${spName(p.s)}</span>`)}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div>${unsent}</article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
@@ -1654,6 +1674,7 @@ function place(margin, items) {
   margin.style.minHeight = y + 'px';
 }
 const narrow = () => matchMedia('(max-width: 860px)').matches;
+const phone = () => matchMedia('(max-width: 520px)').matches;
 const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', `<button type="button" class="anc" data-a="grpopen" data-id="${pid}" data-bi="${bi}" title="Open the branches on this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Open the first">${ARROW_REPLY}${total}</button>`); };
 const onPath = (p, T) => { const s = st.sel[p.id]; return new Set(s && T.nodes[s] ? T.path(s).map(n => n.id) : []); };
 const inGroup = (T, ns, id) => !!id && T.nodes[id] && ns.some(n => T.path(id).some(x => x.id === n.id));
@@ -1819,7 +1840,7 @@ const newSpaceId = () => st.space === 'home' || st.space === 'saved' ? st.newSpa
 const draft = (ph, extra = '') => `<textarea id="in-new" rows="1" placeholder="${esc(ph)}" aria-label="Ask or post"${extra}>${esc(st.draft)}</textarea>`;
 const sendBtn = (val, label) => `<button type="submit" value="${val}" class="send" data-enter aria-label="${label}" title="${label}">${I.up}</button>`;
 const modeSeg = () => `<span class="modes" role="group" aria-label="Ask or post">${['ask', 'post'].map(m => `<button type="button" data-a="mode" data-m="${m}" aria-pressed="${st.newMode === m}">${m === 'ask' ? 'Ask' : 'Post'}</button>`).join('')}</span>`;
-const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}`;
+const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}${st.draft !== '' ? ' open' : ''}`;
 /* Custom model menu: models first, then Effort at the bottom as a submenu (opens on hover or focus). */
 const cap1 = x => x[0].toUpperCase() + x.slice(1);
 const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
@@ -1836,12 +1857,13 @@ const isAsk = () => st.newMode === 'ask';
 const ph = () => st.auth === 'out' ? 'Sign in to ask or post' : isAsk() ? 'Ask anything' : 'Write a post';
 const modeSend = () => sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post');
 const COMPOSERS = {
-  /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. */
+  /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. The main part shows
+     the icon of the chosen row: the send arrow for Ask, the pencil for Post. */
   split: (extra = '', face = true) => {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span class="mi-ic">${m === 'ask' ? ARROW_SEND : PENCIL}</span><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
     return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
-      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${ARROW_SEND}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
+      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${isAsk() ? ARROW_SEND : PENCIL}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'Agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
@@ -1911,7 +1933,7 @@ const memberCount = id => (MEMBERSHIP[id] || []).length;
 /* a frozen channel (its owner's account is not active) can be read; its members can only delete their own posts */
 const isFrozen = id => !!metaOf(id).frozen;
 const canWriteIn = s => canWrite() && !isFrozen(s);
-const frozenBanner = id => `<p class="frozen-banner" role="note">${esc(spName(id))} is frozen: its owner’s account is not active. You can read it and delete your own posts.</p>`;
+const frozenBanner = id => `<p class="frozen-banner" role="note">${esc(spName(id))} is unavailable because its owner's account is deactivated. You can read it and delete your own posts.</p>`;
 const unread = id => isJoined(id) && !SEEN[(st.user || '') + ':' + id] && st.space !== id ? hashN(id + 'u', 6) : 0;
 const navSpaces = () => st.auth === 'out' ? spaceList().filter(x => !isPrivate(x.id)) : spaceList().filter(x => isJoined(x.id));
 const postable = () => navSpaces().filter(x => !isFrozen(x.id));  /* the composer's channel picker leaves out frozen channels */
@@ -1960,7 +1982,13 @@ function headerSpaces() {
   const add = canWrite() ? `<button class="tadd" id="k-newch" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
   const empty = list.length || loading ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
   const open = st.menu === 'hscope';
-  return `<div class="hsp">${SCOPES().length > 1 ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu" aria-label="Channels to show">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>` : ''}<nav class="tabs" aria-label="Channels"><div class="tabs-s" id="k-tabs">${list.map(x => `<span class="tchip">${chipBtn(x.id, esc(spName(x.id)))}${join(x)}</span>`).join('')}${empty}${add}</div></nav></div>`;
+  /* at 520px and below the strip is not shown: the scope menu lists the scope's channels (the open one checked), the
+     empty line, and New channel for writers; the button names the open channel, else the scope. The Join "+" stays
+     out of the menu (the channel's header has Join). The menu is drawn there with one scope too. */
+  const fold = phone(), here = st.screen === 'network' && SP[st.space] && SPACE_META[st.space] ? st.space : null;
+  const label = fold && here ? esc(spName(here)) : SCOPES().find(x => x[0] === sc)[1];
+  const chans = !fold ? '' : `${loading ? '' : `<div class="msep"></div>${list.length ? list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${here === x.id}" data-a="space" data-id="${x.id}"><span>${esc(spName(x.id))}</span>${here === x.id ? CHECK : ''}</button>`).join('') : `<div class="mi-note">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</div>`}`}${canWrite() ? `<div class="msep"></div><button type="button" class="mi" role="menuitem" data-a="newspace">${PLUS2}<span>New channel</span></button>` : ''}`;
+  return `<div class="hsp">${SCOPES().length > 1 || fold ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}"><span>${label}</span>${I.down}</button>${open ? `<div class="menu${fold ? ' hsmenu' : ''}" role="menu" aria-label="Channels to show">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}${chans}</div>` : ''}</span>` : ''}<nav class="tabs" aria-label="Channels"><div class="tabs-s" id="k-tabs">${list.map(x => `<span class="tchip">${chipBtn(x.id, esc(spName(x.id)))}${join(x)}</span>`).join('')}${empty}${add}</div></nav></div>`;
 }
 /* ---- B: a dropdown ---- */
 function navDropTop() {
@@ -2033,7 +2061,10 @@ function membersDlg(x) {
   const nm = esc(spName(x.id)), own = isMod(x.id);
   const list = (MEMBERSHIP[x.id] || []).slice().sort((a, b) => (b.role === 'owner') - (a.role === 'owner') || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0) || (a.u < b.u ? -1 : 1));
   const act = (k, u, label) => `<button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="${k}" data-id="${esc(u)}" data-sp="${x.id}"><span>${label}</span></button>`;
-  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}${m.u === me() ? '<small>You</small>' : ''}</span>${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : ''}</li>`;
+  /* the badges ("You", "Owner") sit at the row's end, before the "…" menu; a row without a menu keeps its place
+     empty when other rows have one, so every row's badges end at the same edge */
+  const badges = m => m.u === me() || m.role === 'owner' ? `<span class="mlbadges">${m.u === me() ? '<span class="chip">You</span>' : ''}${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}</span>` : '';
+  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}</span>${badges(m)}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : own ? '<span class="mlmore" aria-hidden="true"></span>' : ''}</li>`;
   const bans = (BANS[x.id] || []).slice().sort((a, b) => b.at - a.at);
   return `<div class="scrim ce-scrim" data-a="membersclose"></div><div class="dialog chdlg cedlg mbdlg" role="dialog" aria-modal="true" aria-labelledby="mb-h" tabindex="-1">
     <div class="chdlg-h">${glyph(x)}<h3 id="mb-h">Members of ${nm}</h3><button class="iconbtn" data-a="membersclose" aria-label="Close">${I.x}</button></div>
@@ -2171,7 +2202,7 @@ function renderNetwork() {
   const noComposer = locked || (SP[st.space] && ((!isJoined(st.space) && st.auth === 'in') || isFrozen(st.space))) || ((st.space === 'home' || st.space === 'saved') && !postable().length);
   $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${SP[st.space] && isFrozen(st.space) ? `<div class="row new-row">${frozenBanner(st.space)}<div></div></div>` : ''}${noComposer ? '' : composerOrLock(v)}
-    ${empty}${loading ? '<div class="row"><div class="card skel" id="k-feedload" role="status" aria-label="Loading" aria-busy="true"><span></span><span></span><span></span></div><div></div></div>' : ''}${(loading ? [] : posts).map(p => `<div class="row">${card(p)}<aside class="mgn">${p.summary && st.loadingSummaries ? '' : p.summary && st.offline && p.k === 'post' ? '<div class="stick" role="status"><p class="empty">Available when online.</p></div>' : p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}${siteFoot()}</div></div></div>`;
+    ${empty}${loading ? '<div class="row"><div class="card skel" id="k-feedload" role="status" aria-label="Loading" aria-busy="true"><span></span><span></span><span></span></div><div></div></div>' : ''}${(loading ? [] : posts).map(p => `<div class="row">${card(p)}<aside class="mgn">${p.summary && st.loadingSummaries ? '' : p.summary && st.offline && p.k === 'post' ? '<div class="stick" role="status"><p class="empty">Available when online.</p></div>' : p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
@@ -2212,12 +2243,12 @@ app.addEventListener('click', e => {
   /* links (channel chips, Saved, Go to Home, Browse channels) open in the page; a modified click is left to the browser */
   if (t.tagName === 'A') { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return; e.preventDefault(); }
   const a = t.dataset.a, d = t.dataset;
-  if (a === 'space') { st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; st.spq = '';
+  if (a === 'space') { const fromScope = !!t.closest('.hsmenu'); st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; st.spq = '';
     if (SP[d.id] && st.auth === 'in') { const v = (VISITS[st.user] ||= []); v.splice(v.indexOf(d.id) >>> 0, v.includes(d.id) ? 1 : 0); v.unshift(d.id); SEEN[st.user + ':' + d.id] = true; }
-    render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
+    render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); if (fromScope) app.querySelector('[data-m="hscope"]')?.focus({ preventScroll: true }); return; }
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinChannel(d.id); render(); return; }
   if (a === 'leave') { const id = d.id, u = st.user; dropMember(id, u); if (sendOrHold({ kind: 'leave', undo: () => addMember(id, u) })) toast(`Left ${spName(id)}.`); if (isPrivate(id)) st.space = 'home'; render(); return; }
-  if (a === 'newspace') { st.menu = null; st.creatingFrom = sigOf(t); st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
+  if (a === 'newspace') { st.menu = null; st.creatingFrom = sigOf(t.closest('.hsmenu') ? app.querySelector('[data-m="hscope"]') : t); st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
   if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { id: x.id, desc: x.desc || '', err: '' }; render(); $('#ce-desc')?.focus(); return; }
   if (a === 'cecancel') { closeChEdit(); return; }
   if (a === 'modlog') { st.modlog = true; render(); app.querySelector('.mldlg .iconbtn')?.focus(); return; }
@@ -2453,7 +2484,7 @@ document.addEventListener('keydown', e => {
   const inMenu = st.menu && ae?.closest?.('#app .mpick .menu');
   if (inMenu && (e.key === 'Home' || e.key === 'End')) { const items = menuItems(); if (!items.length) return; e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); return; }
   if (inMenu && e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    const items = menuItems(), i = items.indexOf(ae.closest('.mi')), label = x => (x.querySelector('span:not(.glyph):not(.mi-ic)')?.textContent || x.textContent).trim().toLowerCase();
+    const items = menuItems(), i = items.indexOf(ae.closest('.mi')), label = x => (x.querySelector('span:not(.glyph):not(.mi-ic)')?.textContent || x.textContent).trim().toLowerCase().replace(/^#/, '');
     const to = [...items.slice(i + 1), ...items.slice(0, i + 1)].find(x => label(x).startsWith(e.key.toLowerCase()));
     if (to) { e.preventDefault(); to.focus(); } return;
   }
@@ -2485,6 +2516,8 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
+  /* a composer holding any text puts its controls on a row under the field (.open), before its height is measured */
+  if (t.tagName === 'TEXTAREA' && t.form?.matches('.composer, .nb')) t.form.classList.toggle('open', t.value !== '');
   /* editing the invite code after a check drops its result: the inviter and the sign-up buttons go until Continue */
   if (t.id === 'in-code') { if (t.value !== (st.codeTyped ?? st.code)) { st.code = t.value; st.codeTyped = null; app.querySelectorAll('.authdlg .code-f ~ .inviter, .authdlg .code-f ~ .auth-acts').forEach(x => x.remove()); } return; }
   if (t.dataset.ce === 'desc' && st.chEdit) { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; }
@@ -2503,8 +2536,11 @@ let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTime
 const ALLOWANCE = 2_000_000;                       /* included tokens per member per week */
 const RESET = Date.parse('2026-11-20T00:00:00Z');  /* weekly reset: Fridays 00:00 UTC, shown in the viewer's zone (Thursday west of UTC) */
 const WEEK = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'], TODAY = 3;
+/* Invites are a lifetime grant: each member gets SLOTS in total, plus any extra a site admin gives (INVITE_EXTRA).
+   A used link spends one, an open link holds one, and revoking an unused link (or one expiring unused) gives it
+   back: left = total - used - open. Site admins are not limited. */
 const SLOTS = 3;
-const OPEN_INVITES = SLOTS;
+const INVITE_EXTRA = { 'ines.v': 3 };
 const day = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const addDays = (iso, n) => new Date(Date.parse(iso) + n * 864e5).toISOString();
 /* `down`: the amount left is rounded down ("1.99M", "999k"); a value that would read 1000k reads "1M" */
@@ -2535,6 +2571,12 @@ const INVITES = [
   { code: 'SESS-K8CM-3T', by: 'sol', created: '2026-11-16T08:00:00Z', used: null },
   /* an open link whose stored code the server cannot decrypt (its secret key changed): "Code unavailable", no Copy */
   { code: 'SESS-QZ5R-7N', by: 'ines.v', created: '2026-11-12T10:00:00Z', used: null, unreadable: true },
+  /* the links the earlier members came in by (used links spend an invite), and one that expired unused (given back) */
+  { code: 'SESS-J7PK-2D', by: 'ines.v', created: '2026-10-01T10:00:00Z', used: 'jun.park' },
+  { code: 'SESS-L3TM-8W', by: 'ines.v', created: '2026-10-10T10:00:00Z', used: 'lettie' },
+  { code: 'SESS-X4VE-9H', by: 'ines.v', created: '2026-10-20T10:00:00Z', used: null, expires: '2026-10-27T10:00:00Z' },
+  { code: 'SESS-0D8Y-4F', by: 'hal_b', created: '2026-09-28T10:00:00Z', used: 'oduya' },
+  { code: 'SESS-M1RK-6C', by: 'hal_b', created: '2026-10-03T10:00:00Z', used: 'mira_k' },
 ];
 const X_ACCOUNTS = [
   { x: 'ines_v', name: 'Ines V.', note: 'Has a Session account' },
@@ -2647,9 +2689,14 @@ const ancestors = u => { const out = []; let m = member(u); while (m && m.invite
 const activeSince = m => m.activated || addDays(m.joined, 2);
 const canInvite = m => m?.status === 'active';
 const myInvites = () => INVITES.filter(i => i.by === st.user);
-const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : 'open';
-const openCount = () => myInvites().filter(i => inviteState(i) === 'open').length;
-const slotsUsed = () => openCount();
+const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : i.expires && Date.parse(i.expires) <= NOW ? 'expired' : 'open';
+const invitesOf = u => INVITES.filter(i => i.by === u);
+const inviteTotal = u => SLOTS + (INVITE_EXTRA[u] || 0);
+const invitesUsed = u => invitesOf(u).filter(i => inviteState(i) === 'used').length;
+const invitesOpen = u => invitesOf(u).filter(i => inviteState(i) === 'open').length;
+const invitesLeft = u => Math.max(0, inviteTotal(u) - invitesUsed(u) - invitesOpen(u));
+const openCount = () => invitesOpen(st.user);
+const canCreate = () => isAdmin() || invitesLeft(st.user) > 0;
 function newCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = n => Array.from({ length: n }, () => a[Math.floor(Math.random() * a.length)]).join(''); return `SESS-${r(4)}-${r(2)}`; }
 const usage = () => (USAGE[st.user] ||= [0, 0, 0, 0, 0, 0, 0]);
 const used = () => usage().reduce((a, b) => a + b, 0);
@@ -2761,7 +2808,7 @@ function paintNotices() {
 /* join: refused when banned or frozen; with a limit reached the join shows as done until Discard */
 function joinChannel(id) {
   if (isBanned(id, st.user)) { toast(`You are banned from ${spName(id)}.`, { alert: true }); return false; }
-  if (isFrozen(id)) { toast(`${spName(id)} is frozen because its owner’s account is not active.`, { alert: true }); return false; }
+  if (isFrozen(id)) { toast(`${spName(id)} is unavailable because its owner's account is deactivated.`, { alert: true }); return false; }
   const u = st.user; addMember(id, u); SEEN[u + ':' + id] = true;
   if (sendOrHold({ kind: 'join', undo: () => dropMember(id, u), send: () => toast(`Joined ${spName(id)}.`) })) return true;
   return false;
@@ -2931,7 +2978,7 @@ function treeA() {
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
    layout: A two columns · B one column */
 /* explanation above the invite tree */
-const TREE_COPY = [`Session is invite-only. You can have ${SLOTS} open invite links at a time. Each link works for one person. A slot frees when a link is used or revoked.`];
+const TREE_COPY = [`Session is invite-only. Each user starts with ${SLOTS} invites which they can use to add other members.`];
 function treeSection() {
   st.treeScope = 'all';
   /* the heading and the explanation stay while the tree loads or after its read failed */
@@ -2946,13 +2993,13 @@ function invSection() {
   /* while the invites load, or after their read failed, the box holds only that line */
   if (st.reads === 'loading') return '<section class="box invc">Loading…</section>';
   if (st.reads === 'invites') return '<section class="box invc"><p class="ferr">Your invites could not be loaded.</p></section>';
-  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = isAdmin() || used < SLOTS;
-  const why = `You have ${SLOTS} open invites. One frees when it is used or revoked.`;
+  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), can = canCreate(), total = inviteTotal(st.user);
+  const why = `You have used your ${total} invites. An admin can give you more.`;
   const open = inv.filter(i => inviteState(i) === 'open'), L = x => inviteLink(x.code);
   /* deleted accounts are left out here; they stay in the invite tree as "Deleted account" */
   const ppl = MEMBERS.filter(m => m.inviter === st.user && !gone(m.u)).sort((a, b) => a.joined < b.joined ? 1 : -1);
   const revokeBtn = x => `<button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button>`;
-  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${SLOTS - used} of ${SLOTS} left`}</small></div>
+  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${invitesLeft(st.user)} of ${total} left`}</small></div>
     ${open.map(x => x.unreadable ? `<div class="ilink"><code>Code unavailable</code>${revokeBtn(x)}</div>` : `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button>${revokeBtn(x)}</div>`).join('')}
     ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
     ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
@@ -2982,7 +3029,7 @@ function keysSection() {
       : k ? `<div class="kstate"><b class="kname">${P.name}</b>${mask(P, k)}${kStatus(k)}<span class="grow"></span>${k.status === 'checking' ? '' : kRemove(id)}</div>`
       : `<div class="kstate"><b class="kname">${P.name}</b><small>Not set</small><span class="grow"></span>${kAdd(id)}</div>`;
     const live = k && st.keyForm !== id ? `${P.name} key: ${k.status === 'checking' ? 'Checking…' : k.status === 'invalid' ? 'Invalid' : 'Valid'}` : '';
-    return `<div class="krow one"><span class="sr" aria-live="polite">${live}</span><div class="kb">${body}<p class="knote">Asks on this key go to ${P.name} directly. OpenRouter's zero-data-retention routing does not apply to them; they fall under your own agreement with ${P.name}.</p></div></div>`;
+    return `<div class="krow one"><span class="sr" aria-live="polite">${live}</span><div class="kb">${body}<p class="knote">Asks on this key go to ${P.name} directly.</p></div></div>`;
   };
   return `<section class="box keys-sec"><h3>API keys</h3>${['anthropic', 'openai'].map(row).join('')}</section>`;
 }
@@ -2999,7 +3046,7 @@ function usageRuns() {
 }
 function usageTop() {
   const pct = Math.min(1, used() / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok', lp = Math.round((1 - pct) * 100);
-  return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of usage left this week. Next reset on ${weekdayOf(RESET, true)}, in ${resetShort()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
+  return `<section class="box"><p class="usent ${tone}"><b>${lp}%</b> of usage left this week. Next reset ${weekdayOf(RESET)}, in ${resetShort()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
 }
 function usageRunsSection() {
   /* each row: the question, then the share of the weekly allowance it used and the date */
@@ -3016,7 +3063,7 @@ function usagePage() {
     ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
-      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label>${st.billErr ? `<p class="ferr" role="alert">${esc(st.billErr)}</p>` : ''}</section>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks use your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label>${st.billErr ? `<p class="ferr" role="alert">${esc(st.billErr)}</p>` : ''}</section>
     ${keysSection()}</div></div>`;
 }
 
@@ -3046,8 +3093,8 @@ function notifText(n) {
 /* ---- empty states: an icon, a heading, one sentence on what appears here and a next step ---- */
 const EMPTY_SAVE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5h7v11l-3.5-2.6-3.5 2.6Z"/></svg>';
 const EMPTY_BELL = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7.25a4 4 0 0 1 8 0v4.25l1 1.25H3Z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg>';
-const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3><p>${p}</p>${cta || ''}</div>`;
-const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.', '<a class="btn2 sm" href="#home" data-a="space" data-id="home">Go to Home</a>')}</div>`;
+const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3>${p ? `<p>${p}</p>` : ''}${cta || ''}</div>`;
+const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'No saved threads', '', '<a class="btn2 sm" href="#home" data-a="space" data-id="home">Go to Home</a>')}</div>`;
 const notifEmpty = () => emptyBox(EMPTY_BELL, 'No notifications yet', 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.', '<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>');
 function notifPage() {
   if (st.reads === 'loading') return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall" disabled>Mark all as read</button></div><p class="sub" role="status" aria-busy="true">Loading notifications…</p></div></div>`;
@@ -3056,7 +3103,6 @@ function notifPage() {
     return `<li><button class="nrow${n.read ? '' : ' unread'}" data-a="notif" data-id="${n.id}"><span class="nav-av">${av(n.by)}<span class="nk nk-${n.k}" aria-hidden="true">${N_KIND[n.k]}</span></span>
       <span class="ntx">${notifText(n)}<small>${n.k === 'invite_used' ? 'Invites · ' : p || n.s ? esc(spName(p ? p.s : n.s)) + ' · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" role="img" aria-label="Unread"></span>'}</button></li>`; };
   return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall"${un ? '' : ' disabled'}>Mark all as read</button></div>
-    ${!list.length ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
     ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : notifEmpty()}</div></div>`;
 }
 /* opening a row marks it read; an invite_used row goes to Invites; a row whose thread is gone marks it read and says
@@ -3109,7 +3155,17 @@ function adminPage() {
   if (st.reads === 'loading') return '<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p><p class="page-empty" role="status" aria-label="Loading" aria-busy="true"></p></div></div>';
   return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p>
     <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div>${err('def')}</section>
-    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section></div></div>`;
+    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section>
+    ${adminInvites(err)}</div></div>`;
+}
+/* Invites on Site Admin: look a member up by handle, see what they have left, and give more (1-100). Giving raises the
+   member's total, so their Invites page shows it. A deleted or unknown handle: "No account with that handle." */
+function adminInvites(err) {
+  const a = st.admInv || { h: '', n: '1', found: null }, u = a.found;
+  const line = u ? `@${esc(u)}: ${invitesLeft(u)} of ${inviteTotal(u)} invites left (${invitesUsed(u)} used${invitesOpen(u) ? `, ${invitesOpen(u)} open` : ''})` : '';
+  return `<section class="box adm"><h3>Invites</h3><p class="sub">Each member starts with ${SLOTS} invites. Give more to a member who has used theirs.</p>
+    <form class="kform" data-mform="admlook"><span class="hwrap"><span aria-hidden="true">@</span><input id="adm-h" value="${esc(a.h)}" placeholder="handle" autocomplete="off" spellcheck="false" aria-label="Handle"></span><button type="submit" class="btn2 sm">Look up</button></form>
+    ${line ? `<p class="admline" id="adm-line" role="status">${line}</p><form class="kform" data-mform="admgive" novalidate><input id="adm-n" class="admn" type="number" min="1" max="100" step="1" value="${esc(a.n)}" aria-label="Invites to give"><button type="submit" class="btn1 sm">Give invites</button></form>` : ''}${err('inv')}</section>`;
 }
 
 
@@ -3338,9 +3394,9 @@ const mockSig = el => { if (!el?.closest?.('#mock')) return null; if (el.id) ret
   const parts = ['mx', 'x', 'mt', 'mp', 'mo', 'mkx'].filter(k => el.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`); return parts.length ? parts.join('') : null; };
 const findMock = sig => sig ? document.querySelector('#mock ' + sig) : null;
 function renderMock() {
-  const base = ['sol', 'ines.v', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
+  const base = ['sol', 'ines.v', 'hal_b', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
   /* a person with a change waiting for them (banned, removed) gets a persona button so the change can be seen */
-  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`]), ...Object.keys(PENDING).filter(waiting).map(u => [u, '@' + u])];
+  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['hal_b', 'Member, no invites left'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`]), ...Object.keys(PENDING).filter(waiting).map(u => [u, '@' + u])];
   (st.extraPersonas || []).forEach(u => { if (!personas.some(([k]) => k === u)) personas.push([u, '@' + u]); });
   const cur = st.auth === 'out' ? 'out' : st.user;
   const sw = (k, label, opts) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${opts.map(([v, l]) => `<button data-mx="${k}" data-x="${v}" aria-pressed="${String(st[k]) === v}">${l}</button>`).join('')}</span></span>`;
@@ -3379,8 +3435,8 @@ function renderOnce() {
   const focusSig = sigOf(document.activeElement), drafts = {};
   app.querySelectorAll('#page textarea').forEach(t => { if (t.id && t.id !== 'in-new' && !t.id.startsWith('ce-') && t.value) drafts[t.id] = t.value; });
   renderInner();
-  for (const id in drafts) { const t = document.getElementById(id); if (t && !t.value) { t.value = drafts[id]; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
-  if (st.restore) { const t = document.getElementById(st.restore.id); if (t) { t.value = st.restore.text; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; t.focus({ preventScroll: true }); } st.restore = null; return; }
+  for (const id in drafts) { const t = document.getElementById(id); if (t && !t.value) { t.value = drafts[id]; t.form?.classList.add('open'); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
+  if (st.restore) { const t = document.getElementById(st.restore.id); if (t) { t.value = st.restore.text; t.form?.classList.toggle('open', t.value !== ''); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; t.focus({ preventScroll: true }); } st.restore = null; return; }
   if (focusSig && (document.activeElement === document.body || !document.activeElement)) { const el = findSig(focusSig); if (el) { el.focus({ preventScroll: true }); if (el.tagName === 'TEXTAREA') el.setSelectionRange(el.value.length, el.value.length); } }
   const dlg = $('.authdlg');
   if (dlg && st.flow !== lastFlow) { const h = dlg.querySelector('h2'); h?.setAttribute('tabindex', '-1'); (dlg.querySelector('input:not([type="checkbox"])') || h)?.focus({ preventScroll: true }); }
@@ -3403,7 +3459,7 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' ? (isAdmin() ? adminPage() : notFoundPage()) : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page .page-in')?.insertAdjacentHTML('beforeend', siteFoot()); $('#k-page').scrollTop = keep; }
+  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' ? (isAdmin() ? adminPage() : notFoundPage()) : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selwrap, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   paintNotices();
@@ -3415,7 +3471,6 @@ function renderInner() {
   if (st.memberAct) app.insertAdjacentHTML('beforeend', memberActDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : k0 === 'c' ? 'this comment and your replies under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
-const siteFoot = () => '<footer class="sfoot">Session · Report abuse: <a href="mailto:abuse@session.dev">abuse@session.dev</a></footer>';
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
@@ -3537,10 +3592,10 @@ app.addEventListener('click', e => {
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
   if (a === 'waitlist') { st.authOpen = false; st.flow = 'landing'; st.screen = 'network'; st.space = 'home'; render(); return; }
   /* the server allows 10 new links a day (mock bar: Limits, Reached); the button stays, since only the 3-open cap hides it */
-  if (a === 'newinvite') { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return;
+  if (a === 'newinvite') { if (!canCreate() || !canInvite(meM())) return;
     if (st.ml === 'reached') { toast('You can make 10 invite links a day. Try again in 9 hours.', { alert: true }); render(); return; }
     const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
-  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if ((!isAdmin() && slotsUsed() >= SLOTS) || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = inviteLink(i.code); try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
+  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if (!canCreate() || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = inviteLink(i.code); try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
   if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; st.keyDraft = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
@@ -3592,6 +3647,15 @@ app.addEventListener('submit', e => {
       if (from === 'welcome') { toast(`You're in. ${nameOf(inv.by)} invited you.`); signIn(m0.u); } else { signIn(m0.u); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); } return; }
     MEMBERS.push({ created: true, u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'active' });
     st.code = ''; signIn(pf.handle); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); return;
+  }
+  if (kind === 'admlook' || kind === 'admgive') {
+    const a = (st.admInv ||= { h: '', n: '1', found: null }); st.admErr = null;
+    if (kind === 'admlook') { a.h = $('#adm-h').value.trim().replace(/^@/, '').toLowerCase(); const m = member(a.h); a.found = m && !gone(m.u) ? m.u : null;
+      if (!a.found) st.admErr = { inv: 'No account with that handle.' }; render(); $(a.found ? '#adm-n' : '#adm-h')?.focus(); return; }
+    a.n = $('#adm-n').value.trim(); const n = Number(a.n);
+    if (!Number.isInteger(n) || n < 1 || n > 100) { st.admErr = { inv: 'Give between 1 and 100 invites.' }; render(); $('#adm-n')?.focus(); return; }
+    if (admRefused('inv')) return;
+    INVITE_EXTRA[a.found] = (INVITE_EXTRA[a.found] || 0) + n; toast(`Gave @${a.found} ${n} more ${n === 1 ? 'invite' : 'invites'}.`); render(); $('#adm-n')?.focus(); return;
   }
   if (kind.startsWith('key:')) {
     const id = kind.slice(4), P = PROVIDERS[id], v = f.querySelector('input').value.trim(); st.keyForm = id;

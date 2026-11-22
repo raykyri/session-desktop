@@ -29,7 +29,7 @@ import { MembersDialog } from "./MembersDialog.js";
 
 /** The banner of a frozen channel (04 B6, 02 W6.10). */
 export function frozenBanner(name: string): string {
-  return `#${name} is frozen: its owner’s account is not active. You can read it and delete your own posts.`;
+  return `#${name} is unavailable because its owner's account is deactivated. You can read it and delete your own posts.`;
 }
 
 export function FrozenBanner({ name }: { name: string }) {

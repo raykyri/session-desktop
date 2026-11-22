@@ -60,7 +60,7 @@ test("the usage sentence, the run charge and a run without its question", (t) =>
       now,
       "UTC",
     ),
-    { percent: 75, weekday: "Fri", resetIn: "2d 5h" },
+    { percent: 75, weekday: "Friday", resetIn: "2d 5h" },
   );
   t.is(runCharge({ bill: "included", share: 0.004 }), "<1%");
   // the cut-off is 0.5 %, which itself rounds to 1 % (03 K5)
@@ -113,7 +113,11 @@ test.serial("the usage line and bar in the ring's tones, and the recent runs", a
   // the bar's fill is what is left, not what was used
   // (the page writes "15.0%"; the style reads it back as "15%")
   t.is(bar.querySelector("span")?.style.width, "15%");
-  t.regex(document.querySelector(".usent")?.textContent ?? "", /^You have 15% of usage left/);
+  t.regex(
+    document.querySelector(".usent")?.textContent ?? "",
+    /^15% of usage left this week\. Next reset [A-Z][a-z]+day, in /,
+  );
+  t.is(document.querySelector(".usent b")?.textContent, "15%", "the share is bold");
   const runs = within(screen.getByRole("region", { name: "Recent runs" }));
   t.truthy(await runs.findByText("How do bloom filters trade memory for false positives?"));
   t.truthy(runs.getByText("2% · Nov 23"));
@@ -168,7 +172,7 @@ test.serial("billing: the two settings with their toasts", async (t) => {
   });
   const keyRadio = await screen.findByRole("radio", { name: /Continue on my Anthropic key/ });
   t.false(input(keyRadio).disabled);
-  t.truthy(screen.getByText("Asks bill to your Anthropic key until the reset."));
+  t.truthy(screen.getByText("Asks use your Anthropic key until the reset."));
   fireEvent.click(keyRadio);
   await waitUntil(t, () => currentToast() === "Asks will continue on your API key.", "key toast");
   t.deepEqual(app.trpc.calls.find((call) => call.path === "usage.setBilling")?.input, {
@@ -217,7 +221,7 @@ test.serial(
     await waitUntil(t, () => currentToast() === "Anthropic key works.", "the toast");
     await waitUntil(t, () => keyRow("anthropic").queryByText("Valid") !== null, "the Valid chip");
     t.truthy(keyRow("anthropic").getByText("sk-ant-••••a1f9"));
-    t.truthy(keyRow("anthropic").getByText(/fall under your own agreement with/));
+    t.truthy(keyRow("anthropic").getByText("Asks on this key go to Anthropic directly."));
   },
 );
 

@@ -27,7 +27,8 @@ export function weekdayOf(at: number, short = false, timeZone?: string): string 
   });
 }
 
-/** "You have N% of usage left this week. Next reset on Fri, in 2d 5h." */
+/** "N% of usage left this week. Next reset Friday, in 2d 5h.", the weekday
+ * in full in the viewer's zone. */
 export function usageSentence(
   reading: { used: number; allowance: number; resetAt: number },
   now: number,
@@ -35,7 +36,7 @@ export function usageSentence(
 ): { percent: number; weekday: string; resetIn: string } {
   return {
     percent: percentLeft(reading.used, reading.allowance),
-    weekday: weekdayOf(reading.resetAt, true, timeZone),
+    weekday: weekdayOf(reading.resetAt, false, timeZone),
     resetIn: resetShort(reading.resetAt - now),
   };
 }

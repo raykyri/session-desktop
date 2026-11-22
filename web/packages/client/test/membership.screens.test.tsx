@@ -20,7 +20,6 @@ import {
   notifText,
   notificationsOf,
   unloadedThreads,
-  unreadLine,
   type NotifRow,
 } from "../src/features/notifications/notifications.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
@@ -178,17 +177,11 @@ test("the text of each notification kind, and of a coalesced one", (t) => {
   );
 });
 
-test("the summary line for 0, 1 and 3 unread", (t) => {
-  t.is(unreadLine(0), "All caught up.");
-  t.is(unreadLine(1), "1 unread notification.");
-  t.is(unreadLine(3), "3 unread notifications.");
-});
-
-test.serial("the page lists every kind, newest first, with the summary line", async (t) => {
+test.serial("the page lists every kind, newest first, with no summary line", async (t) => {
   await renderApp("/notifications");
   await screen.findByRole("heading", { name: "Notifications" });
   await waitUntil(t, () => row("mention") !== null, "the rows render");
-  t.truthy(screen.getByText(/^3 unread notifications\. Mentions, replies to your posts/));
+  t.is(screen.queryByText(/unread notification|All caught up|Mentions, replies/), null);
   t.regex(rowsOf("mention")[0] ?? "", /^@jun\.park mentioned you in a reply on “.+”#ml-papers · /);
   t.regex(rowsOf("branch")[0] ?? "", /^@hal_b branched from your ask “.+”#public · /);
   t.regex(
@@ -223,7 +216,8 @@ test.serial(
     );
     await waitUntil(t, () => document.querySelector("[data-unread-dot]") === null, "no dot");
     t.truthy(screen.getByRole("button", { name: "Account" }));
-    t.truthy(screen.getByText(/^All caught up\./));
+    t.is(screen.queryByText(/All caught up|unread notification/), null, "no summary line");
+    t.is(screen.queryAllByRole("img", { name: "Unread" }).length, 0, "no unread dots");
     t.true(screen.getByRole("button", { name: "Mark all as read" }).hasAttribute("disabled"));
   },
 );
@@ -485,8 +479,18 @@ test.serial(
     const list = within(dialog).getByRole("list", { name: "Members" });
     const rows = within(list).getAllByRole("listitem");
     t.is(rows[0]?.getAttribute("data-member"), "ines.v");
-    t.truthy(within(rows[0] as HTMLElement).getByText("Owner"));
-    t.is(within(rows[0] as HTMLElement).queryByRole("button", { name: "More" }), null);
+    // the owner viewing their own row: "You" then "Owner", both chips, at
+    // the row's end; the menu's place is kept so the badges end where the
+    // other rows' menus start
+    const own = rows[0] as HTMLElement;
+    t.deepEqual(
+      [...own.querySelectorAll(".mlbadges > .chip")].map((c) => c.textContent),
+      ["You", "Owner"],
+    );
+    t.is(own.querySelector(".mltext")?.textContent, "@ines.v", "no You after the handle");
+    t.is(own.lastElementChild?.className, "mlmore");
+    t.is(within(own).queryByRole("button", { name: "More" }), null);
+    t.is((rows[1] as HTMLElement).lastElementChild?.classList.contains("more"), true);
     const other = rows[1] as HTMLElement;
     fireEvent.click(within(other).getByRole("button", { name: "More" }));
     const menu = await screen.findByRole("menu");
@@ -510,6 +514,15 @@ test.serial(
 test.serial("a member's list has no menus and no Banned section", async (t) => {
   const dialog = await openMembers("/c/public", "public");
   t.is(within(dialog).queryByRole("button", { name: "More" }), null);
+  // "You" is a chip at the row's end, as "Owner" on the owner's row; with no
+  // menus there is no kept place
+  const mine = dialog.querySelector('[data-member="ines.v"]') as HTMLElement;
+  t.deepEqual(
+    [...mine.querySelectorAll(".mlbadges > .chip")].map((c) => c.textContent),
+    ["You"],
+  );
+  t.is(mine.lastElementChild?.className, "mlbadges");
+  t.is(dialog.querySelector(".mlmore"), null);
   t.is(within(dialog).queryByRole("list", { name: "Banned" }), null);
   t.is(within(dialog).queryByRole("heading", { name: "Banned" }), null);
   t.is(within(dialog).queryByText(/^Nobody is banned/), null);
@@ -1054,17 +1067,17 @@ test.serial("a frozen channel: the banner, no composer, no new replies", async (
   prepare = (replica) => rewrite(replica, space(replica, "public"), { frozen: true });
   await renderApp("/c/public");
   const banner = await screen.findByText(
-    "#public is frozen: its owner’s account is not active. You can read it and delete your own posts.",
+    "#public is unavailable because its owner's account is deactivated. You can read it and delete your own posts.",
   );
   t.truthy(banner);
   t.is(screen.queryByRole("textbox", { name: "Ask or post" }), null);
   const follow = document.querySelector<HTMLButtonElement>(".tcard .rcount");
   t.true(follow?.disabled ?? false);
-  t.is(follow?.title, "#public is frozen");
+  t.is(follow?.title, "#public is unavailable");
   fireEvent.click(screen.getByRole("button", { name: "About this channel" }));
   const info = await screen.findByRole("dialog", { name: "#public" });
   t.truthy(within(info).getByText("Deleted account"));
-  t.truthy(within(info).getByText(/^#public is frozen:/));
+  t.truthy(within(info).getByText(/^#public is unavailable because/));
 });
 
 /** @ines.v's post in #ml (owned by @jun.park), with others' replies. */
@@ -1396,7 +1409,7 @@ test.serial("a non-member sees Join on an open channel, and none once it is froz
   app.unmount();
   prepare = (replica) => rewrite(replica, space(replica, channel.name), { frozen: true });
   await renderApp(`/c/${channel.name}`);
-  await screen.findByText(new RegExp(`^#${channel.name} is frozen:`));
+  await screen.findByText(new RegExp(`^#${channel.name} is unavailable because`));
   t.is(screen.queryByRole("button", { name: "Join" }), null);
 });
 
@@ -1606,7 +1619,7 @@ test.serial("a moderation log entry of a removal shows no title of the item", as
  * server's message and leaves the text in the composer. */
 for (const [why, message] of [
   ["a ban", "You are banned from #public."],
-  ["a frozen channel", "#public is frozen because its owner’s account is not active."],
+  ["a frozen channel", "#public is unavailable because its owner's account is deactivated."],
 ] as const)
   test.serial(`a post refused for ${why} shows the message and keeps the text`, async (t) => {
     await renderApp("/c/public");

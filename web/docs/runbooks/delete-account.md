@@ -124,8 +124,8 @@ row; the job runs 90 seconds after its last heartbeat.
    Litestream replicates the changed database from the first write after
    it starts.
 5. Check: signed out, open a channel the person owned; it shows the banner
-   "#name is frozen: its owner's account is not active. You can read it and
-   delete your own posts." and "Channel by Deleted account".
+   "#name is unavailable because its owner's account is deactivated. You can
+   read it and delete your own posts." and "Channel by Deleted account".
 
 ## Deleting a frozen channel
 

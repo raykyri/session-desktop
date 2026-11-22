@@ -56,7 +56,7 @@ async function holdKeyChecks(page: Page): Promise<() => void> {
 test("the week's usage and no runs yet", async ({ page }) => {
   await openUsage(page, "e2e-usage-read");
   await expect(page.locator(".usent")).toHaveText(
-    /^You have 100% of usage left this week\. Next reset on Fri, in (\d+d )?\d+h\.$/,
+    /^100% of usage left this week\. Next reset Friday, in (\d+d )?\d+h\.$/,
   );
   await expect(page.getByRole("img", { name: "100% left" })).toBeVisible();
   await expect(page.getByText("No runs yet this week.")).toBeVisible();

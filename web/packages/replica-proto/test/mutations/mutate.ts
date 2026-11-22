@@ -1886,10 +1886,10 @@ const MUTATIONS: Mutation[] = [
     files: ["test/billing.review.test.tsx"],
   },
   {
-    name: "M5b-CD3a (CD3) the key note omits the zero-data-retention routing",
+    name: "M5b-CD3a (CD3) the key note does not say the asks go to the provider directly",
     file: "../client/src/features/usage/UsagePage.tsx",
-    from: "      Asks on this key go to {info.name} directly. OpenRouter&apos;s zero-data-retention routing\n      does not apply to them; they fall under your own agreement with {info.name}.",
-    to: "      Asks on this key go to {info.name} directly and fall under your own agreement with {info.name}\n      .",
+    from: '<p className="knote">Asks on this key go to {info.name} directly.</p>',
+    to: '<p className="knote">Asks on this key go to {info.name}.</p>',
     packageOnly: true,
     files: ["test/billing.review.test.tsx"],
   },

@@ -411,6 +411,10 @@ test.serial("Invites: the tree, the open links, and no create button at 0 left",
   t.truthy(within(tree).getByText('<img src=x onerror="alert(1)">'));
   t.is(document.querySelector("img"), null);
   t.truthy(screen.getByText("0 of 3 left"));
+  t.is(
+    document.querySelector(".tcopy")?.textContent,
+    "Session is invite-only. Each user starts with 3 invites which they can use to add other members.",
+  );
   t.is(screen.queryByRole("button", { name: /Create/ }), null);
   t.truthy(screen.getByText("You have used your 3 invites. An admin can give you more."));
   t.is(screen.getAllByRole("button", { name: "Revoke this link" }).length, 3);

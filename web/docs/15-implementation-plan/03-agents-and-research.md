@@ -440,8 +440,8 @@ messages and the third saves `valid`; a test per format refusal.
 
 **K5. Usage read.** tRPC `usage.get` returns `{ allowance, used, resetAt,
 billing, keys }`, with `used` counting open ledger rows (K1). The page's
-first line reads "You have N% of usage left this week. Next reset on Fri, in
-2d 5h." (`usageTop()`), above a bar of what is left. `usage.listRuns`
+first line reads "N% of usage left this week. Next reset Friday, in 2d 5h."
+(`usageTop()`; the weekday in full, in the viewer's zone), above a bar of what is left. `usage.listRuns`
 returns the person's owned runs of the current week, newest first, paged (the
 page shows 6): question (clipped at 90 characters on the client), the share
 of the allowance ("<1%" below 0.5%) or, when not `included`, the payer label
@@ -468,7 +468,7 @@ meter updates within one second of the run record turning `complete`.
 
 The Usage page offers two settings (`usagePage()`): "Pause my asks until the
 reset" (default; "You can still read, post and reply.") and "Continue on my
-Anthropic key" ("Asks bill to your Anthropic key until the reset."), enabled
+Anthropic key" ("Asks use your Anthropic key until the reset."), enabled
 only with a valid Anthropic key; without one it reads "Add a key below to
 turn this on.", or "Needs an Anthropic key. Your OpenAI key only runs GPT-6.1
 Sol." when only an OpenAI key is set.
@@ -605,7 +605,9 @@ not in the registry, or an effort the model does not accept, answers
 **K14. Key-run privacy.** OpenRouter's zero-data-retention routing
 (`04-agent-runtime.md` §1) does not apply to calls made with a person's own
 Anthropic or OpenAI key; those calls fall under the person's own agreement
-with the provider. The Usage page says so next to each key.
+with the provider. The Usage page notes it next to each key, in every state
+of the key's row, with "Asks on this key go to <Provider> directly." (for
+Anthropic, OpenAI and any other provider listed).
 
 **K15. Default model and default effort (site admin).** Decided (P11): a
 site admin (`users.is_admin`) sets at runtime, on the Site Admin page (`02`

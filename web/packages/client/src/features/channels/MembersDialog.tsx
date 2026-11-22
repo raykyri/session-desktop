@@ -126,6 +126,8 @@ export function MembersDialog({
         : { label, danger: true, onSelect: () => ask("ban", m) },
     );
 
+  const menus = members !== UNKNOWN && members.some((m) => actionsOf(m).length > 0);
+
   return (
     <FeedDialog
       open={open}
@@ -150,17 +152,28 @@ export function MembersDialog({
           </p>
         ) : (
           <ul className="mlist mblist" aria-label="Members">
-            {members.map((m) => (
-              <li key={m.u} data-member={m.u}>
-                <Avatar handle={m.u} size="sm" />
-                <span className="mltext">
-                  @{m.u}
-                  {m.u === me ? <small>You</small> : null}
-                </span>
-                {m.role === "owner" ? <span className="chip">Owner</span> : null}
-                <MoreMenu actions={actionsOf(m)} inDialog />
-              </li>
-            ))}
+            {members.map((m) => {
+              // the badges end where the "…" menu starts: a row without a
+              // menu keeps its place empty when other rows have one
+              const actions = actionsOf(m);
+              return (
+                <li key={m.u} data-member={m.u}>
+                  <Avatar handle={m.u} size="sm" />
+                  <span className="mltext">@{m.u}</span>
+                  {m.u === me || m.role === "owner" ? (
+                    <span className="mlbadges">
+                      {m.u === me ? <span className="chip">You</span> : null}
+                      {m.role === "owner" ? <span className="chip">Owner</span> : null}
+                    </span>
+                  ) : null}
+                  {actions.length > 0 ? (
+                    <MoreMenu actions={actions} inDialog />
+                  ) : menus ? (
+                    <span className="mlmore" aria-hidden="true" />
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
         {channel.owned && bans !== UNKNOWN ? (

@@ -378,10 +378,10 @@ test.serial("C3: after the reset the asker's tokens copy is in the past tense", 
 // ------------------------------------------------------------ C4
 
 test("C4: the weekday and dates are the viewer's zone's", (t) => {
-  t.is(usageSentence({ used: 0, allowance: SPENT, resetAt: RESET }, RESET - 1).weekday, "Thu");
+  t.is(usageSentence({ used: 0, allowance: SPENT, resetAt: RESET }, RESET - 1).weekday, "Thursday");
   t.is(
     usageSentence({ used: 0, allowance: SPENT, resetAt: RESET }, RESET - 1, "UTC").weekday,
-    "Fri",
+    "Friday",
   );
   t.is(runDay(Date.UTC(2026, 10, 21, 3)), "Nov 20", "03:00 UTC is the evening before here");
   t.is(runDay(Date.UTC(2026, 10, 21, 3), "UTC"), "Nov 21");
@@ -413,7 +413,7 @@ test.serial("C4: the Usage page names Thursday and dates its runs here", async (
     },
   });
   await screen.findByRole("img", { name: "75% left" });
-  t.regex(document.querySelector(".usent")?.textContent ?? "", /Next reset on Thu, in /);
+  t.regex(document.querySelector(".usent")?.textContent ?? "", /Next reset Thursday, in /);
   t.truthy(await screen.findByText("2% · Nov 20"));
 });
 
@@ -601,8 +601,7 @@ test.serial("C9: a request that fails without a refusal shows fixed copy", async
 // ------------------------------------------------------------ CD3
 
 test.serial("CD3: the K14 note is beside each key in every state", async (t) => {
-  const note = (provider: string) =>
-    `Asks on this key go to ${provider} directly. OpenRouter's zero-data-retention routing does not apply to them; they fall under your own agreement with ${provider}.`;
+  const note = (provider: string) => `Asks on this key go to ${provider} directly.`;
   const saved = { provider: "anthropic", last4: "a1f9", status: "valid", addedAt: 1 };
   let keys: unknown[] = [];
   let release: () => void = () => undefined;
@@ -635,4 +634,12 @@ test.serial("CD3: the K14 note is beside each key in every state", async (t) => 
   release();
   await row.findByText("Valid");
   t.truthy(row.getByText(note("Anthropic")), "Valid");
+  cleanup();
+  await renderApp("/usage", {
+    responses: {
+      "usage.get": () => testWeeklyUsage({ keys: [{ ...saved, status: "invalid" }] }),
+    },
+  });
+  const invalid = within((await screen.findByText("Invalid")).closest("[data-key]") as HTMLElement);
+  t.truthy(invalid.getByText(note("Anthropic")), "Invalid");
 });

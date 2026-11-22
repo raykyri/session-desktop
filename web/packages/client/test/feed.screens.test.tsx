@@ -4,9 +4,13 @@
 // preference. That a write re-renders one row only is in
 // `feed.states.test.tsx`.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
+import { InlineComposer } from "../src/features/composer/InlineComposer.js";
 import { currentToast } from "../src/features/shell/Toast.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
 import { fixtureReplicaConfig, type FixtureReplica } from "../src/replica/fixtureReplica.js";
@@ -14,7 +18,7 @@ import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
-import { renderApp, waitUntil, waitingTestUser } from "./helpers.js";
+import { renderApp, renderInRouter, waitUntil, waitingTestUser } from "./helpers.js";
 
 const FIRST = "01M7HWGZJGT7JTFFVSYPX055KV";
 const waiting = () => waitingTestUser();
@@ -38,6 +42,9 @@ test.afterEach.always(() => {
   configureReplica(null);
 });
 
+/** The first stroke of the pencil icon (`PencilIcon`, the mock's `PENCIL`). */
+const PENCIL_PATH = "M10.8 2.7a1.6 1.6 0 0 1 2.3 2.3L5.6 12.5 2.5 13.5l1-3.1Z";
+
 const firstCard = () => document.getElementById(`card-${FIRST}`) as HTMLElement;
 
 test.serial("a member's footer: counts, the follow-up and Save with its toasts", async (t) => {
@@ -57,6 +64,25 @@ test.serial("a member's footer: counts, the follow-up and Save with its toasts",
   fireEvent.click(card.getByRole("button", { name: "Saved, saved by 27" }));
   await waitUntil(t, () => currentToast() === "Removed from saved.", "the unsave toast");
 });
+
+test.serial(
+  "a post's channel is in its footer, as an ask's is, not beside its title",
+  async (t) => {
+    await renderApp("/");
+    await waitUntil(t, () => document.querySelector(".tcard") !== null, "threads render");
+    const cards = [...document.querySelectorAll<HTMLElement>(".tcard")];
+    const post = cards.find((c) => within(c).queryByRole("button", { name: /^Reply/ }) !== null);
+    const ask = cards.find((c) => within(c).queryByRole("button", { name: /^Ask a follow-up/ }));
+    if (!post || !ask) throw new Error("no post or ask card");
+    t.regex(post.querySelector(".card-f .fmeta")?.textContent ?? "", /^#[a-z0-9-]+$/);
+    t.regex(ask.querySelector(".card-f .fmeta")?.textContent ?? "", / · #[a-z0-9-]+$/);
+    t.is(
+      post.querySelector(".tt")?.textContent?.includes("#"),
+      false,
+      "no channel in the title row",
+    );
+  },
+);
 
 test.serial("without an invite: the banner, no composer, disabled write controls", async (t) => {
   await renderApp("/", { user: waiting() });
@@ -87,6 +113,7 @@ test.serial(
     t.is(field.getAttribute("placeholder"), "Ask anything");
     const send = screen.getByRole("button", { name: "Ask" });
     t.true((send as HTMLButtonElement).disabled);
+    t.is(send.querySelector("path")?.getAttribute("d"), "M3 8h10", "the send arrow for Ask");
     t.truthy(screen.getByTitle("Model and effort"));
     t.truthy(screen.getByTitle("Channel"));
     // The member's avatar at the start.
@@ -95,15 +122,72 @@ test.serial(
     fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Post/ }));
     await waitUntil(t, () => field.getAttribute("placeholder") === "Write a post", "post mode");
     t.is(screen.queryByTitle("Model and effort"), null);
+    // The main action shows the pencil of the Post row, not the send arrow.
+    const post = screen.getByRole("button", { name: "Post" });
+    t.is(post.querySelector("path")?.getAttribute("d"), PENCIL_PATH);
     fireEvent.change(field, { target: { value: "hello" } });
     t.false(screen.getByRole("button", { name: "Post" }).hasAttribute("disabled"));
     t.is(useDraftsStore.getState().byKey["new"]?.text, "hello");
   },
 );
 
+/** The declarations of the last top-level rule for `selector` in
+ * `spaces.css`, whitespace collapsed. */
+function spacesRule(selector: string): string {
+  const css = readFileSync(join(import.meta.dirname, "..", "src", "styles", "spaces.css"), "utf8");
+  const at = css.lastIndexOf(`\n${selector} {`);
+  if (at < 0) return "";
+  return css.slice(at, css.indexOf("}", at)).replace(/\s+/g, " ");
+}
+
+test.serial(
+  "the composer: with text its controls take a row under the field; cleared, one row",
+  async (t) => {
+    await renderApp("/");
+    const field = await screen.findByRole("textbox", { name: "Ask or post" });
+    const form = field.closest("form") as HTMLFormElement;
+    t.false(form.classList.contains("open"), "empty: one row");
+    field.focus();
+    fireEvent.change(field, { target: { value: " " } });
+    t.true(form.classList.contains("open"), "any text, whitespace too");
+    t.is(document.activeElement, field, "focus stays in the field");
+    // the stylesheet wraps the open composer: the field fills the row after
+    // the avatar, so the controls go to the next one
+    t.regex(spacesRule(".nb.open"), /flex-wrap: wrap/);
+    t.regex(spacesRule(".nb.open > textarea"), /flex: 1 1 calc\(100% - 28px\)/);
+    t.regex(spacesRule(".nb > textarea"), /max-height: min\(480px, calc\(100vh - 80px\)\)/);
+    fireEvent.change(field, { target: { value: "" } });
+    t.false(form.classList.contains("open"), "cleared: one row again");
+  },
+);
+
+test.serial("an inline composer: with text Close and its button go under the field", async (t) => {
+  await renderInRouter(
+    <InlineComposer
+      draftKey="test:inline"
+      placeholder="Reply"
+      submitLabel="Reply"
+      onSubmit={() => Promise.resolve(true)}
+      onClose={() => {}}
+      focusOnOpen={false}
+    />,
+  );
+  const field = screen.getByRole("textbox", { name: "Reply" });
+  const form = field.closest("form") as HTMLFormElement;
+  t.false(form.classList.contains("open"));
+  fireEvent.change(field, { target: { value: "a" } });
+  t.true(form.classList.contains("open"));
+  t.regex(spacesRule(".icomp.open"), /flex-wrap: wrap/);
+  t.regex(spacesRule(".icomp.open textarea"), /flex: 1 1 100%/);
+  t.regex(spacesRule(".icomp textarea"), /max-height: min\(320px, calc\(100vh - 80px\)\)/);
+  fireEvent.change(field, { target: { value: "" } });
+  t.false(form.classList.contains("open"));
+});
+
 test.serial("empty states: Saved, and a channel without threads", async (t) => {
   await renderApp("/saved");
-  t.truthy(await screen.findByRole("heading", { name: "Nothing saved yet" }));
+  const heading = await screen.findByRole("heading", { name: "No saved threads" });
+  t.is(heading.parentElement?.querySelector("p"), null, "no explanation");
   t.truthy(screen.getByRole("link", { name: "Go to Home" }));
   const replica = made[made.length - 1];
   if (!replica) throw new Error("no replica");

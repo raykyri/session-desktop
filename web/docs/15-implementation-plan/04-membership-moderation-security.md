@@ -47,7 +47,7 @@ client security), so that `05-delivery.md` (M4 and M6) can schedule them.
 | Ban | Not offered (ban entries appear only in the moderation log's fixtures) | Offered to the owner, with unban and a Banned list; a plan addition | `AGENTS.md`: removal in an open space is STALE after leave and rejoin; "the UI offers ban as the tool there". |
 | Removal text | One optional free-text field | `moderation.decide { …, note? }` (`01` C12) | Overview product decision. |
 | Reporting | None: no Report… item, and the moderation log lists removals and bans only | Not built: no `reports.*`, no report notifications, no report part of the moderation log, no report limits | Agrees with the mockup (`05` §6 P6). The owner's Remove stays; Ban is a plan addition (Ban row). |
-| Abuse contact | Site footer "Session · Report abuse: abuse@session.dev" on every feed and page | The same footer; the address is `abuse@<host>`, where `<host>` is the hostname of `SESSION_PUBLIC_ORIGIN` (`05` §6 Q10) | The only way to reach site admins about abuse (§13). |
+| Abuse contact | Site footer "Session · Report abuse: abuse@session.dev" on every feed and page | No site footer: the mailbox `abuse@<host>`, where `<host>` is the hostname of `SESSION_PUBLIC_ORIGIN`, exists and the site admins read it, but the app no longer links it (`05` §6 Q10) | The only way to reach site admins about abuse (§13). |
 | Session-wide sanction | None | None: no suspension. Site admins delete an account or a channel by operator job (§8, §4.5) and use the invite tree (§3.3) | Product decision (`05` §6 P3). |
 | Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | The author shows as "[deleted]" (product decision); §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
 | Moderation log excerpt | Quotes a removed thread's title | No text of a removed item | `AGENTS.md`: removed content is erased and never served again (`01` C12 agrees). |
@@ -404,13 +404,16 @@ is no suspension (§3.6).
 - A frozen channel stays readable as before: an open channel by anyone, a
   private channel by its members.
 - Every write in a frozen channel is refused at apply time with
-  `FORBIDDEN`, recorded ("#name is frozen because its owner's account is
-  not active."), except a person deleting their own threads, follow-ups,
+  `FORBIDDEN`, recorded ("#name is unavailable because its owner's account
+  is deactivated."), except a person deleting their own threads, follow-ups,
   replies and comments, and leaving. Joins and channel invite links are
   refused too. Saves are user-log records and are unaffected.
-- Channel info and the header show the banner "#name is frozen: its
-  owner's account is not active. You can read it and delete your own
-  posts." The composer's channel picker omits the channel.
+- Channel info and the header show the banner "#name is unavailable
+  because its owner's account is deactivated. You can read it and delete
+  your own posts." The disabled follow-up and Reply buttons have the title
+  "#name is unavailable". The user-facing copy says "unavailable"; "frozen"
+  is the state's name in the code and the record (`frozen`). The
+  composer's channel picker omits the channel.
 - The space record keeps `owner`; for a deleted account the client shows
   "Channel by Deleted account" (the handle stays reserved, §8).
 - A site admin may delete a frozen channel with the channel-deletion
@@ -717,8 +720,8 @@ rolled back. The client renders:
 
 - a removed or banned member's queued post: refused, with the
   composer text restored from the outbox entry;
-- a queued write in a channel that froze (§4.5): "#name is frozen because its
-  owner's account is not active.", with the composer text restored;
+- a queued write in a channel that froze (§4.5): "#name is unavailable
+  because its owner's account is deactivated.", with the composer text restored;
 - a link to a frozen channel: the expired-link message;
 - STALE on a member removal or `shown`: the target is reloaded and the
   person acts again.
@@ -904,10 +907,11 @@ none of them.
 - **No reporting.** Members cannot flag content to the owner or to site
   admins in the app (`05` §6 P6). An owner sees their channel's content
   directly; abuse by an owner, or in a channel its owner does not watch,
-  reaches site admins only outside the app, by email to the abuse address
-  in the site footer, "Session · Report abuse: abuse@<host>" with `<host>`
-  the hostname of `SESSION_PUBLIC_ORIGIN` (abuse@session.dev in production;
-  `05` §6 Q10). The mailbox must exist before launch. Site admins act on
+  reaches site admins only outside the app, by email to the abuse mailbox
+  abuse@<host>, with `<host>` the hostname of `SESSION_PUBLIC_ORIGIN`
+  (abuse@session.dev in production; `05` §6 Q10). The mailbox must exist
+  before launch and the site admins read it; the app no longer links it
+  (there is no site footer). Site admins act on
   such a message with the tools they have: deleting the account or the
   channel by operator job, and the invite tree to find who invited the
   account.

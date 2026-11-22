@@ -1,15 +1,13 @@
 // The two kinds of screen inside the shell's scroll container (02 §2, §3.1):
 // a feed (rows of `[card | side column]` in the layout's grid) and a page
-// (one centred column). Both reserve the app bar's height at the top and end
-// with the site footer (W2.7).
+// (one centred column). Both reserve the app bar's height at the top; there
+// is no site footer (W2.7).
 
 import { useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 import { useNavigationStore } from "../../stores/navigation.js";
-
-import { SiteFooter } from "./SiteFooter.js";
 
 /** A feed: the rows go in `children`, each a `FeedRow`. A channel feed
  * passes `channel` (its rows sit 2 px closer, as the mock's `.chfeed`). */
@@ -24,7 +22,6 @@ export function FeedFrame({
   return (
     <div className="feed-inner" data-layout={layout} data-channel={channel ? "" : undefined}>
       {children}
-      <SiteFooter />
     </div>
   );
 }
@@ -140,7 +137,6 @@ export function PageFrame({
         h2
       )}
       {children}
-      <SiteFooter />
     </div>
   );
 }

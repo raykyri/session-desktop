@@ -11,6 +11,7 @@
 import type { FormEvent, KeyboardEvent } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { cn } from "../../lib/cn.js";
 import { scrollIntoPadded } from "../../lib/motion.js";
 import type { DraftRef } from "../../replica/source.js";
 import { useDraftsStore } from "../../stores/drafts.js";
@@ -97,6 +98,13 @@ export function InlineComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Any text puts Close and the submit button on a row under the field; its
+  // height is measured again at its new width.
+  const open = text !== "";
+  useLayoutEffect(() => {
+    if (field.current && open) growField(field.current);
+  }, [open]);
+
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     const value = text.trim();
@@ -123,7 +131,7 @@ export function InlineComposer({
 
   return (
     <form
-      className="icomp"
+      className={cn("icomp", open && "open")}
       onSubmit={(event) => void submit(event)}
       ref={form}
       onFocus={enter}

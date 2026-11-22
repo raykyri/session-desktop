@@ -59,7 +59,7 @@ test("an ask's branches read signed out", async ({ page }) => {
 });
 
 test("private channels are not read; their address shows the landing", async ({ page }) => {
-  await expect(page.locator(".ttm", { hasText: `#${w.lab}` })).toHaveCount(0);
+  await expect(page.locator(".fmeta", { hasText: `#${w.lab}` })).toHaveCount(0);
   await expect(page.getByText("Not for readers outside the channel")).toHaveCount(0);
   await page.goto(`/c/${w.lab}`);
   await expect(

@@ -283,16 +283,29 @@ test("at 400px wide the member list's avatars keep their 20 px circle", async ({
   const info = page.getByRole("dialog", { name: `#${w.own}` });
   await info.getByRole("button", { name: /^Members, \d+$/ }).click();
   const members = page.getByRole("dialog", { name: `Members of #${w.own}` });
-  const avatars = members.locator('.mlist li > span[aria-hidden="true"]');
+  const avatars = members.locator('.mlist li > span[aria-hidden="true"]:first-child');
   await expect(avatars).toHaveCount(3);
   for (const avatar of await avatars.all()) {
     const box = await avatar.boundingBox();
     expect(box?.width).toBeCloseTo(20, 0);
     expect(box?.height).toBeCloseTo(20, 0);
   }
-  // the Owner chip keeps its width too: it is not stretched across the row
-  const chip = members.locator(".mlist li .chip");
-  expect((await chip.boundingBox())?.width ?? 0).toBeLessThan(80);
+  // the badges keep their width too: they are not stretched across the row
+  const chips = members.locator(".mlist li .chip");
+  await expect(chips).toHaveText(["You", "Owner"]);
+  for (const chip of await chips.all()) {
+    expect((await chip.boundingBox())?.width ?? 0).toBeLessThan(80);
+  }
+  // the owner's badges end at the row's end, before the place of the "…"
+  // menu the other rows have: the same edge on every row
+  const kept = await members.locator(".mlist li .mlmore").boundingBox();
+  const menus = members.locator(".mlist li .more-btn");
+  await expect(menus).toHaveCount(2);
+  for (const menu of await menus.all()) {
+    expect((await menu.boundingBox())?.x).toBeCloseTo(kept?.x ?? -1, 0);
+  }
+  const badges = await members.locator(".mlist li .mlbadges").boundingBox();
+  expect((badges?.x ?? 0) + (badges?.width ?? 0)).toBeCloseTo((kept?.x ?? 0) - 10, 0);
 });
 
 test("at 400px wide an invite link is cut off inside its row and Copy and Revoke stay in the dialog", async ({
