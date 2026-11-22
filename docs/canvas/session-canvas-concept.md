@@ -74,7 +74,8 @@ compaction was used and which parts it covered. The mock doesn't implement this.
   hover. Both items read the same context (the part and everything above it); each item's second line says where the
   result goes:
   - "Ask about this paragraph" (on an answer's paragraph): a new stack in the next lane that targets that paragraph
-    (`fork.block`). Its connector starts at the paragraph, which keeps a small mark, and the fork's header quotes it.
+    (`fork.block`). Its connector starts at the paragraph, which keeps a small mark, and the fork's header reads
+    "From paragraph" above the quoted paragraph. A branch from a whole part reads "From answer" (question, post).
     While the menu is open, the paragraph is tinted. With text selected, the item reads "Ask about the selection".
   - "Branch from this answer / question / post": a new stack in the next lane, about the whole part.
   Every fork is a lane fork; there are no inline forks. Hovering a fork highlights its anchor (part or paragraph).
@@ -86,7 +87,7 @@ compaction was used and which parts it covered. The mock doesn't implement this.
   - Units are packed in columns by last activity.
   - A collapsed unit shows its first part and "n parts · m forks".
   - Below 50% zoom, each stack shows one headline at a constant screen size.
-  - "Next new" jumps to the next unit with unread parts.
+  - A bell at the top right lists the parts new to the viewer, newest first; choosing one opens its group and selects its stack, and "Mark all as read" clears the list.
 
 ## Mapping from today's records
 

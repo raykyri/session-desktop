@@ -89,7 +89,19 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .br button .lc { width: 15px; height: 15px; }
 .br { position: fixed; right: 12px; top: 12px; display: flex; gap: 6px; z-index: 20; align-items: center; }
 .br .zv { min-width: 52px; justify-content: center; font-variant-numeric: tabular-nums; }
-.br .nn b { color: var(--new); }
+.br .nn { position: relative; }
+.br .nn b { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--page); }
+.br .nn b:empty { display: none; }
+#nmenu { position: fixed; z-index: 35; width: 340px; max-width: calc(100vw - 16px); max-height: min(70vh, 520px); overflow-y: auto; padding: 4px; border-radius: 10px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
+#nmenu .nhd { display: flex; align-items: center; padding: 8px 10px 6px; font-size: 12px; font-weight: 600; color: var(--t-heading); }
+#nmenu .nhd button { margin-left: auto; font-weight: 500; color: var(--accent); font-size: 12px; }
+#nmenu .nrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 9px; width: 100%; padding: 8px 10px; border-radius: 6px; text-align: left; align-items: start; }
+#nmenu .nrow:hover, #nmenu .nrow:focus-visible { background: var(--control); outline: none; }
+#nmenu .nrow .av { width: 20px; height: 20px; font-size: 8px; } #nmenu .nrow .mk { width: 21px; height: 21px; border-radius: 6px; } #nmenu .nrow .mk svg { width: 13px; height: 13px; }
+#nmenu .nh { display: block; font-size: 12px; color: var(--t-faint); } #nmenu .nh b { color: var(--t-heading); font-weight: 600; }
+#nmenu .ns { display: block; margin-top: 1px; font-size: 12.5px; color: var(--t-secondary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+#nmenu .nw { font-size: 11px; color: var(--t-faint); padding-top: 1px; }
+#nmenu .nempty { padding: 14px 10px 16px; font-size: 12.5px; color: var(--t-faint); }
 .hint { position: fixed; left: 352px; top: 12px; height: 32px; line-height: 32px; padding: 0 12px; border-radius: 8px; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(4px); z-index: 19; font-size: 11.5px; color: var(--t-faint); max-width: calc(100vw - 260px); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1100px) { .hint { display: none; } }
 .hint { max-width: calc(100vw - 700px); }
@@ -104,6 +116,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stack.sel > .sbody { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-pop); }
 .stack.fresh { z-index: 4; }
 .sbody { background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
+.sbody > :first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
+.sbody > :last-child:not(.draft) { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+.sbody > .fq:last-child { border-bottom: 0; }
 .sh { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 12px; font-size: 11.5px; color: var(--t-faint);
   border-bottom: 1px solid var(--divider); cursor: grab; user-select: none; touch-action: none; }
 .sh .ch { font-weight: 600; color: var(--t-secondary); }
@@ -113,7 +128,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .sh .ib .lc { width: 15px; height: 15px; }
 .sh .ib:hover { background: var(--control); color: var(--t-heading); }
 .fq { padding: 7px 12px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: 10px 10px 0 0; }
-.fq i { font-style: normal; color: var(--t-faint); }
+.fq i { display: block; font-style: normal; color: var(--t-faint); margin-bottom: 1px; }
 .fq .old { color: var(--warn); }
 .cmeta { display: flex; gap: 9px; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
 
@@ -149,7 +164,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .prose table { border-collapse: collapse; font-size: 12.5px; margin: 0 0 .65em; display: block; overflow-x: auto; }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
 .prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; padding: 0 1px; }
-.part:not(.m) .prose { color: var(--t-heading); font-size: 14px; }
+.part:not(.m) .prose { color: var(--t-heading); font-size: 14px; line-height: calc(1.58em - 1px); }
 .prose .anc { box-shadow: -8px 0 0 -5px var(--link); }
 .clamp { max-height: 236px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
 .more { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
@@ -190,7 +205,10 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #bmenu button .mi .lc { width: 15px; height: 15px; }
 #bmenu button .mt { display: grid; gap: 1px; line-height: 18px; }
 /* the paragraph a part menu would ask about: the earlier tint, 40% weaker */
-.prose > .menu-on { --menu-tint: color-mix(in srgb, var(--accent-soft) 60%, transparent); background: var(--menu-tint); border-radius: 3px; box-shadow: 0 0 0 3px var(--menu-tint); }
+/* one highlight for selected text and for the paragraph a part menu is about */
+:root { --hl: color-mix(in srgb, var(--accent) 19%, transparent); }
+::selection { background: var(--hl); }
+.prose > .menu-on { background: var(--hl); border-radius: 3px; box-shadow: 0 0 0 3px var(--hl); }
 #bmenu button small { font-size: 11px; line-height: 14px; color: var(--t-faint); }
 .sbody > .draft:first-child { border-top: 0; border-radius: 10px 10px 0 0; }
 .draft .dp { position: relative; }
@@ -242,7 +260,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 
 <div id="vp" aria-label="Canvas"><div id="world"><svg id="links" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></div></div>
 <div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
-<div class="br"><button class="nn" id="nextnew" type="button" title="Go to the next stack with new parts">Next new <b id="nncount"></b></button><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button">Fit</button></div>
+<div class="br"><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button">Fit</button></div>
 <div class="hint" id="hint">Click a stack, then + between two parts to insert. Double-click the canvas to write. Drag the canvas to move; Ctrl+scroll or pinch to zoom.</div>
 
 <script>
@@ -265,7 +283,7 @@ const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
 const av = u => `<span class="av" style="background:var(--av${AVN[u] || (u.length % 6) + 1})" aria-hidden="true">${initials(u)}</span>`;
 /* Lucide icons (lucide.dev, ISC licence), inlined */
-const LUCIDE = { 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>' };
+const LUCIDE = { 'bell': '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>' };
 const icon = (n, cls = '') => `<svg class="lc${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]}</svg>`;
 const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -351,6 +369,8 @@ function partHTML(p, s, selected, first = false) {
     <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${hd.gut}<div class="pb">${proseHTML(p, s, selected)}${hd.meta}</div>${hd.acts}</div>`;
 }
 /* a question and the answer it prompted are read as one: no seam between them (Fork here covers that position) */
+/* what a part is, in words: an answer, a question (a person's part answered right under it), or a post */
+const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
 const pairedWith = (p, next) => !isModel(p) && next && isModel(next) && next.run.by === p.by.u;
 const seam = (sid, after) => `<div class="seam"><span class="hz"></span><button class="sp" data-a="seam" data-st="${sid}" data-after="${after}" title="Insert a part here" aria-label="Insert a part here">${icon('plus')}</button></div>`;
 function draftHTML() {
@@ -366,7 +386,7 @@ function stackHTML(s) {
   if (isRoot) { const n = unitNew(s);
     h += `<div class="sh" data-a="grip" data-id="${s.id}"><span class="ov" aria-hidden="true">#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}</span><span class="ch">#${esc(CH[s.ch] || s.ch)}</span>${s.fork ? '<span>· opened from a fork</span>' : ''}<span class="grow"></span>${n ? `<span class="newc">${n} new</span>` : ''}
       <button class="ib" data-a="collapse" data-id="${s.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button></div>`; }
-  if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : ''; h += `<div class="fq"><i>From</i> ${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
+  if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : ''; h += `<div class="fq"><i>From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
   if (collapsed) {
     const u = unitStacks(s), np = u.reduce((n, x) => n + partsOf(x.id).length, 0);
     h += ps[0] ? partHTML(ps[0], s, false, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') : '';
@@ -554,15 +574,18 @@ function freeSpot(w = W(), h = 220, at = null) {
 }
 
 /* ---- drafts ---- */
-function openDraft(st, after, mode = 'post') { hideHint();
+function openDraft(st, after, mode = 'post') { if (!leaveDraft()) return; hideHint();
   V.draft = { st, after, mode, texts: [''] }; V.sel = rootLane(S[st]).id;
   render({ focus: '.draft textarea' });
 }
-function cancelDraft() {
-  const d = V.draft; if (!d) return; V.draft = null;
-  if (!partsOf(d.st).length) { delete S[d.st]; delete POS[d.st]; }
-  render();
+/* leaving a draft: an empty one is dropped, with its stack if the stack has no parts yet; one with text asks first */
+function leaveDraft() {
+  const d = V.draft; if (!d) return true;
+  if (d.texts.some(t => t.trim()) && !confirm('Discard this draft?')) return false;
+  V.draft = null; if (!partsOf(d.st).length) { delete S[d.st]; delete POS[d.st]; }
+  return true;
 }
+function cancelDraft() { if (leaveDraft()) render(); }
 function keyAfter(st, after) {
   const list = partsOf(st), i = list.findIndex(p => p.id === after);
   const a = i >= 0 ? list[i].key : (list[0] ? list[0].key - 1 : 0), b = list[i + 1] ? list[i + 1].key : a + 2;
@@ -609,19 +632,51 @@ document.addEventListener('input', e => {
   const before = t.offsetHeight; requestAnimationFrame(() => { layout(); drawLinks(); });
 });
 
-/* ---- next new ---- */
-function updateNext() { const n = roots().filter(r => unitNew(r) > 0).length; $('#nncount').textContent = n ? n : ''; $('#nextnew').disabled = !n; $('#nextnew').style.opacity = n ? 1 : .5; }
-function nextNew() {
-  const rs = roots().filter(r => unitNew(r) > 0).sort((a, b) => (POS[a.id]?.y ?? 0) - (POS[b.id]?.y ?? 0) || a.x - b.x); if (!rs.length) return;
-  const r = rs[0]; V.collapsed.delete(r.id); V.sel = r.id; render({ noAnim: true }); centerOn(r.id);
-  for (const s of unitStacks(r)) for (const p of partsOf(s.id)) V.seen.add(p.id);
-  setTimeout(() => render(), 900);
+/* ---- new: a notifications menu of the parts that are new to this viewer ---- */
+const newParts = () => Object.values(P).filter(p => isNew(p) && S[p.st]).sort((a, b) => b.at.localeCompare(a.at));
+function updateNext() { const n = newParts().length; $('#nncount').textContent = n ? (n > 99 ? '99+' : n) : ''; $('#nextnew').setAttribute('aria-label', n ? `New: ${n}` : 'New'); }
+function noteLine(p) {
+  const s = S[p.st], ch = '#' + esc(CH[s.ch] || s.ch), first = partsOf(s.id)[0]?.id === p.id;
+  if (isModel(p)) return `<b>Answer</b> in ${ch}`;
+  const who = `<b>${esc(NAMES[p.by.u] || p.by.u)}</b>`;
+  return first && s.fork ? `${who} branched in ${ch}` : first ? `${who} posted in ${ch}` : `${who} continued in ${ch}`;
 }
-$('#nextnew').onclick = nextNew;
+function closeNotes() { $('#nmenu')?.remove(); $('#nextnew').setAttribute('aria-expanded', 'false'); }
+function openNotes() {
+  closeNotes(); const list = newParts(), btn = $('#nextnew'), r = btn.getBoundingClientRect();
+  const m = document.createElement('div'); m.id = 'nmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'New');
+  m.innerHTML = `<div class="nhd">New${list.length ? `<button type="button" data-nall>Mark all as read</button>` : ''}</div>` + (list.length
+    ? list.slice(0, 40).map(p => `<button class="nrow" role="menuitem" data-note="${p.id}">${isModel(p) ? MARK : av(p.by.u)}<span><span class="nh">${noteLine(p)}</span><span class="ns">${esc(clip(strip(p.text), 140))}</span></span><span class="nw">${rel(p.at)}</span></button>`).join('')
+    : '<div class="nempty">Nothing new.</div>');
+  document.body.append(m); btn.setAttribute('aria-expanded', 'true');
+  m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px';
+  m.querySelector('button')?.focus();
+}
+/* go to a new part: open its group, select its stack, bring it into view */
+function goToNote(id) {
+  const p = P[id]; if (!p) return; const s = S[p.st], r = rootOf(s);
+  V.collapsed.delete(r.id); V.sel = rootLane(s).id; V.seen.add(id);
+  render({ noAnim: true }); centerOn(s.id);
+  const el = document.querySelector(`[data-part="${id}"]`); el?.animate([{ boxShadow: 'inset 3px 0 0 var(--new)' }, { boxShadow: 'inset 3px 0 0 transparent' }], 1600);
+}
+$('#nextnew').onclick = e => { e.stopPropagation(); $('#nmenu') ? closeNotes() : openNotes(); };
+document.addEventListener('click', e => {
+  const m = $('#nmenu'); if (!m) return;
+  const row = e.target.closest?.('#nmenu [data-note]');
+  if (row) { e.stopPropagation(); closeNotes(); goToNote(row.dataset.note); return; }
+  if (e.target.closest?.('#nmenu [data-nall]')) { e.stopPropagation(); for (const p of newParts()) V.seen.add(p.id); closeNotes(); render({ noAnim: true }); return; }
+  if (!e.target.closest('#nmenu, #nextnew')) closeNotes();
+}, true);
+document.addEventListener('keydown', e => {
+  const m = $('#nmenu'); if (!m) return;
+  if (e.key === 'Escape') { e.stopPropagation(); closeNotes(); $('#nextnew').focus(); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const bs = [...m.querySelectorAll('.nrow')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1) + bs.length) % bs.length]?.focus(); }
+}, true);
 
 /* ---- clicks ---- */
 function toast(t) { document.querySelector('.toast')?.remove(); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600); }
 function newRoot(mode) {
+  if (!leaveDraft()) return;
   const { x, y } = freeSpot(); const id = 's' + (++seq);
   S[id] = { id, ch: 'public', fork: null, x, y };
   V.draft = { st: id, after: '', mode, texts: [''] }; V.sel = id; hideHint();
@@ -634,6 +689,7 @@ function hideHint() { $('#hint').hidden = true; }
 $('#add-post').onclick = () => newRoot('post');
 $('#add-ask').onclick = () => newRoot('ask');
 function newFork(pid, { block = null, quote = null } = {}) {
+  if (!leaveDraft()) return;
   const fp = P[pid], id = 's' + (++seq);
   S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) } };
   const r = rootOf(S[id]); V.collapsed.delete(r.id);
@@ -666,7 +722,7 @@ document.addEventListener('click', e => {
 });
 vp.addEventListener('dblclick', e => {
   if (e.target.closest('.stack')) return;
-  if (V.draft) cancelDraft();
+  if (!leaveDraft()) return;
   const { x, y } = freeSpot(W(), 140, { x: Math.round((e.clientX - V.x) / V.z), y: Math.round((e.clientY - V.y) / V.z) }), id = 's' + (++seq);
   S[id] = { id, ch: 'public', fork: null, x, y };
   V.draft = { st: id, after: '', mode: 'post', texts: [''] }; V.sel = id; render({ noAnim: true, focus: '.draft textarea' });
@@ -716,7 +772,7 @@ function openPartMenu(target, x, y) {
   closeBmenu();
   const p = P[partEl.dataset.part]; if (!p) return false;
   const list = partsOf(p.st), next = list[list.indexOf(p) + 1];
-  const kind = isModel(p) ? 'answer' : pairedWith(p, next) ? 'question' : 'post';
+  const kind = partKind(p);
   const blk = target.closest('.part.m > .pb > .prose[data-p] > *');
   const ok = blk && !/^H\d/.test(blk.tagName);
   const selText = getSelection()?.toString().replace(/\s+/g, ' ').trim();
@@ -725,9 +781,9 @@ function openPartMenu(target, x, y) {
   if (ok) { blk.classList.add('menu-on');
     const pr = blk.parentElement, i = blocksOf(pr).indexOf(blk);
     items.push(selText && partEl.contains(getSelection().anchorNode)
-      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, icon('arrow-right'), 'Ask about the selection', 'New stack, from this paragraph')
-      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, icon('arrow-right'), 'Ask about this paragraph', 'New stack, from this paragraph')); }
-  items.push(item(`data-a="fork" data-id="${p.id}"`, icon('arrow-right'), `Branch from this ${kind}`, `New stack, from the whole ${kind}`));
+      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, icon('corner-up-right'), 'Ask about the selection', 'New stack, from this paragraph')
+      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, icon('corner-up-right'), 'Ask about this paragraph', 'New stack, from this paragraph')); }
+  items.push(item(`data-a="fork" data-id="${p.id}"`, icon('corner-up-right'), `Branch from this ${kind}`, `New stack, from the whole ${kind}`));
   const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Part actions');
   m.innerHTML = items.join(''); m.dataset.sel = selText || ''; document.body.append(m);
   m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
