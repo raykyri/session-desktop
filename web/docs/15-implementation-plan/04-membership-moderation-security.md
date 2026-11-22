@@ -376,13 +376,16 @@ is no suspension (§3.6).
 - A frozen channel stays readable as before: an open channel by anyone, a
   private channel by its members.
 - Every write in a frozen channel is refused at apply time with
-  `FORBIDDEN`, recorded ("#name is frozen because its owner's account is
-  not active."), except a person deleting their own threads, follow-ups,
+  `FORBIDDEN`, recorded ("#name is unavailable because its owner's account
+  is deactivated."), except a person deleting their own threads, follow-ups,
   replies and comments, and leaving. Joins and channel invite links are
   refused too. Saves are user-log records and are unaffected.
-- Channel info and the header show the banner "#name is frozen: its
-  owner's account is not active. You can read it and delete your own
-  posts." The composer's channel picker omits the channel.
+- Channel info and the header show the banner "#name is unavailable
+  because its owner's account is deactivated. You can read it and delete
+  your own posts." The disabled follow-up and Reply buttons have the title
+  "#name is unavailable". The user-facing copy says "unavailable"; "frozen"
+  is the state's name in the code and the record (`frozen`). The
+  composer's channel picker omits the channel.
 - The space record keeps `owner`; for a deleted account the client shows
   "Channel by Deleted account" (the handle stays reserved, §8).
 - A site admin may delete a frozen channel with the channel-deletion
@@ -689,8 +692,8 @@ rolled back. The client renders:
 
 - a removed or banned member's queued post: refused, with the
   composer text restored from the outbox entry;
-- a queued write in a channel that froze (§4.5): "#name is frozen because its
-  owner's account is not active.", with the composer text restored;
+- a queued write in a channel that froze (§4.5): "#name is unavailable
+  because its owner's account is deactivated.", with the composer text restored;
 - a link to a frozen channel: the expired-link message;
 - STALE on a member removal or `shown`: the target is reloaded and the
   person acts again.

@@ -1626,7 +1626,7 @@ function card(p) {
   const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}${showN ? `, saved by ${ns}` : ''}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${showN ? `<span>${ns}</span>` : ''}</button>`;
   /* reply / follow-up button carries its count, like the like button */
   /* in a frozen channel nothing new can be added: Reply and the follow-up button are disabled; Save stays */
-  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${fz ? `disabled title="${esc(spName(p.s))} is frozen"` : canWrite() ? `${attrs} title="${label}"` : st.auth === 'out' ? `data-ma="openauth" title="${label}"` : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
+  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${fz ? `disabled title="${esc(spName(p.s))} is unavailable"` : canWrite() ? `${attrs} title="${label}"` : st.auth === 'out' ? `data-ma="openauth" title="${label}"` : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   const art = `<article class="${cls}${st.flash === p.id ? ' flash' : ''}" id="card-${p.id}" aria-labelledby="title-${p.id}" tabindex="-1">`, unsent = p.unsent ? notSentLine(p.unsent) : '';
   if (p.k === 'post') {
     const n = replyCount(p);
@@ -1931,7 +1931,7 @@ const memberCount = id => (MEMBERSHIP[id] || []).length;
 /* a frozen channel (its owner's account is not active) can be read; its members can only delete their own posts */
 const isFrozen = id => !!metaOf(id).frozen;
 const canWriteIn = s => canWrite() && !isFrozen(s);
-const frozenBanner = id => `<p class="frozen-banner" role="note">${esc(spName(id))} is frozen: its owner’s account is not active. You can read it and delete your own posts.</p>`;
+const frozenBanner = id => `<p class="frozen-banner" role="note">${esc(spName(id))} is unavailable because its owner's account is deactivated. You can read it and delete your own posts.</p>`;
 const unread = id => isJoined(id) && !SEEN[(st.user || '') + ':' + id] && st.space !== id ? hashN(id + 'u', 6) : 0;
 const navSpaces = () => st.auth === 'out' ? spaceList().filter(x => !isPrivate(x.id)) : spaceList().filter(x => isJoined(x.id));
 const postable = () => navSpaces().filter(x => !isFrozen(x.id));  /* the composer's channel picker leaves out frozen channels */
@@ -2792,7 +2792,7 @@ function paintNotices() {
 /* join: refused when banned or frozen; with a limit reached the join shows as done until Discard */
 function joinChannel(id) {
   if (isBanned(id, st.user)) { toast(`You are banned from ${spName(id)}.`, { alert: true }); return false; }
-  if (isFrozen(id)) { toast(`${spName(id)} is frozen because its owner’s account is not active.`, { alert: true }); return false; }
+  if (isFrozen(id)) { toast(`${spName(id)} is unavailable because its owner's account is deactivated.`, { alert: true }); return false; }
   const u = st.user; addMember(id, u); SEEN[u + ':' + id] = true;
   if (sendOrHold({ kind: 'join', undo: () => dropMember(id, u), send: () => toast(`Joined ${spName(id)}.`) })) return true;
   return false;

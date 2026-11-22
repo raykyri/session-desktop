@@ -776,10 +776,12 @@ removed or banned from is dropped from the replica at the resync that
 follows, with the toast "You are no longer a member of #name."; the
 desktop's frozen copy is not built (removed: web-only build; no copy after a
 voluntary Leave either, decision P8). Refusals of queued writes show the 04 §9 messages (the ban message, "#name is
-frozen because its owner's account is not active.", the expired-link
+unavailable because its owner's account is deactivated.", the expired-link
 message) and restore composer text. A frozen channel (04 §4.5, `frozen` on
-the space record) shows the banner "#name is frozen: its owner's account is
-not active. You can read it and delete your own posts.", offers only Delete
+the space record) shows the banner "#name is unavailable because its owner's
+account is deactivated. You can read it and delete your own posts.", gives
+its disabled follow-up and Reply buttons the title "#name is unavailable",
+offers only Delete
 on the viewer's own items and Leave, and is left out of the composer's
 channel picker. Acceptance: fixture-replica tests for each message, the
 restored text, the removed-member toast and the frozen-channel banner.

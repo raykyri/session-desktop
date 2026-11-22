@@ -195,7 +195,7 @@ export const define = <I>(def: MutatorDef<I>) => def as unknown as AnyMutator;
 
 /** The message of a write refused in a frozen space (`04` B6). */
 export const frozenMessage = (name: string) =>
-  `#${name} is frozen because its owner’s account is not active.`;
+  `#${name} is unavailable because its owner's account is deactivated.`;
 
 /** The ban check, the frozen-space check, the `who` check and `can` (the
  * mock's `authorize`). */

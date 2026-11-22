@@ -393,7 +393,7 @@ function ThreadCard({
     : writer
       ? { onClick: followUp }
       : frozen !== null
-        ? { disabled: true, title: `#${frozen} is frozen` }
+        ? { disabled: true, title: `#${frozen} is unavailable` }
         : { disabled: true, title: `${label} opens once you have an invite` };
 
   // a save is the viewer's own record: a frozen channel allows it (04 B6)

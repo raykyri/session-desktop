@@ -1073,17 +1073,17 @@ test.serial("a frozen channel: the banner, no composer, no new replies", async (
   prepare = (replica) => rewrite(replica, space(replica, "public"), { frozen: true });
   await renderApp("/c/public");
   const banner = await screen.findByText(
-    "#public is frozen: its owner’s account is not active. You can read it and delete your own posts.",
+    "#public is unavailable because its owner's account is deactivated. You can read it and delete your own posts.",
   );
   t.truthy(banner);
   t.is(screen.queryByRole("textbox", { name: "Ask or post" }), null);
   const follow = document.querySelector<HTMLButtonElement>(".tcard .rcount");
   t.true(follow?.disabled ?? false);
-  t.is(follow?.title, "#public is frozen");
+  t.is(follow?.title, "#public is unavailable");
   fireEvent.click(screen.getByRole("button", { name: "About this channel" }));
   const info = await screen.findByRole("dialog", { name: "#public" });
   t.truthy(within(info).getByText("Deleted account"));
-  t.truthy(within(info).getByText(/^#public is frozen:/));
+  t.truthy(within(info).getByText(/^#public is unavailable because/));
 });
 
 /** @ines.v's post in #ml (owned by @jun.park), with others' replies. */
@@ -1415,7 +1415,7 @@ test.serial("a non-member sees Join on an open channel, and none once it is froz
   app.unmount();
   prepare = (replica) => rewrite(replica, space(replica, channel.name), { frozen: true });
   await renderApp(`/c/${channel.name}`);
-  await screen.findByText(new RegExp(`^#${channel.name} is frozen:`));
+  await screen.findByText(new RegExp(`^#${channel.name} is unavailable because`));
   t.is(screen.queryByRole("button", { name: "Join" }), null);
 });
 
@@ -1625,7 +1625,7 @@ test.serial("a moderation log entry of a removal shows no title of the item", as
  * server's message and leaves the text in the composer. */
 for (const [why, message] of [
   ["a ban", "You are banned from #public."],
-  ["a frozen channel", "#public is frozen because its owner’s account is not active."],
+  ["a frozen channel", "#public is unavailable because its owner's account is deactivated."],
 ] as const)
   test.serial(`a post refused for ${why} shows the message and keeps the text`, async (t) => {
     await renderApp("/c/public");
