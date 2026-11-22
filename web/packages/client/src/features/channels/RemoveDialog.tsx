@@ -37,7 +37,10 @@ export function RemoveDialog({
   const remove = async () => {
     const reason = note.trim();
     if (reason.length > NOTE_MAX) {
+      // as the app's other forms: the error is announced and focus goes back
+      // to the field it is about
       setError(`Keep the reason under ${NOTE_MAX} characters.`);
+      field.current?.focus();
       return;
     }
     if (busy.current) return;
@@ -86,6 +89,8 @@ export function RemoveDialog({
             ref={field}
             rows={2}
             placeholder="Optional"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "rm-note-err" : undefined}
             value={note}
             onChange={(event) => {
               setNote(event.target.value);
@@ -97,7 +102,11 @@ export function RemoveDialog({
           Readers see that it was removed. Branches and replies under it go with it. @{author} is
           notified, with the reason.
         </p>
-        {error ? <p className="ferr">{error}</p> : null}
+        {error ? (
+          <p id="rm-note-err" className="ferr" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="dacts">
           <button type="button" className="btn2" onClick={() => onOpenChange(false)}>
             Cancel

@@ -266,6 +266,32 @@ test.serial("the owner's menu: Remove… opens the dialog once per click; Ban", 
   t.deepEqual(calls, ["moderation.decide"]);
 });
 
+test.serial(
+  "Remove…: a reason over 300 characters is announced and focus goes back to the field",
+  async (t) => {
+    let thread: StoredRecord | null = null;
+    prepare = (replica) => (thread = othersThread(replica, "sci-fi"));
+    await renderApp("/c/sci-fi");
+    const id = (thread as unknown as { id: string } | null)?.id ?? "";
+    await waitUntil(t, () => cardOf(id) !== null, "the thread renders");
+    const menu = await openMore(cardOf(id) as HTMLElement);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Remove…" }));
+    const dialog = await screen.findByRole("dialog", { name: /^Remove @/ });
+    const field = within(dialog).getByRole("textbox", { name: /Reason/ });
+    fireEvent.change(field, { target: { value: "x".repeat(301) } });
+    const { calls } = gateMutations(replicaOf());
+    const remove = within(dialog).getByRole("button", { name: "Remove" });
+    remove.focus();
+    fireEvent.click(remove);
+    const alert = await within(dialog).findByRole("alert");
+    t.is(alert.textContent, "Keep the reason under 300 characters.");
+    t.is(document.activeElement, field);
+    t.is(field.getAttribute("aria-invalid"), "true");
+    t.is(field.getAttribute("aria-describedby"), alert.id);
+    t.deepEqual(calls, []);
+  },
+);
+
 test.serial("the owner's own thread has no Remove… and no Ban (04 O4)", async (t) => {
   let id = "";
   prepare = (replica) => {
