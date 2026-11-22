@@ -82,6 +82,10 @@ when it is selected. After a re-run, "Show previous" brings back the answer befo
 - **Branch from mid-thread** (Branch on a card, or "Ask about this" on a selected passage) opens a column to the right
   at that card's height. It reads the thread up to the fork. Further branches nearby stack below.
 - **Fold** shows a column as one line per card, keeping stale marks.
+- **Connectors** (as in variant B): one curve from the parent column's right edge at the exact anchor (the card, or the
+  passage for "Ask about this", clamped to the visible answer) to 16px down the branch's left edge, with a dot at the
+  anchor. Neutral at .55 opacity; accent for the hovered or selected column's unit, whose anchor is also marked; dashed
+  once dragged away. Reference edges appear only on selection, dotted and accent.
 
 ## Mapping from the handoff model
 

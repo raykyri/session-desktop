@@ -39,7 +39,7 @@ model: only the column's author continues it or inserts into it; everyone else b
   --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
   --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --warn-soft: rgba(176,122,20,.12);
   --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
-  --edge: #b9b2a8; --dot: rgba(60,40,20,.10);
+  --edge: #b9b2a8; --dot: rgba(60,40,20,.10); --link: #a9b4bd;
   --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.06);
   --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -55,7 +55,7 @@ model: only the column's author continues it or inserts into it; everyone else b
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #9aa29d;
   --t-faint: #868f8a; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --warn-soft: rgba(215,168,79,.14);
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
-  --edge: #57524c; --dot: rgba(255,255,255,.06);
+  --edge: #57524c; --dot: rgba(255,255,255,.06); --link: #4a5156;
   --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 } }
 :root[data-theme="dark"] {
@@ -66,7 +66,7 @@ model: only the column's author continues it or inserts into it; everyone else b
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #9aa29d;
   --t-faint: #868f8a; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --warn-soft: rgba(215,168,79,.14);
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
-  --edge: #57524c; --dot: rgba(255,255,255,.06);
+  --edge: #57524c; --dot: rgba(255,255,255,.06); --link: #4a5156;
   --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 }
 * { box-sizing: border-box; }
@@ -84,11 +84,15 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #vp.panning { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 #edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-#edges path { fill: none; stroke: var(--edge); stroke-width: 1.5; }
-#edges path.ref { stroke-dasharray: 4 4; stroke-width: 1.2; opacity: .55; }
-#edges path.ref.hot { opacity: 1; }
-#edges path.hot { stroke: var(--accent); stroke-width: 2; }
-#edges circle { fill: var(--edge); } #edges circle.hot { fill: var(--accent); }
+#edges path { fill: none; stroke: var(--link); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .55; }
+#edges circle { fill: var(--link); opacity: .55; }
+#edges .hot { opacity: 1; }
+#edges circle.hot { fill: var(--accent); }
+#edges path.hot { stroke: var(--accent); stroke-width: 1.75; }
+#edges path.det { stroke-dasharray: 4 4; }
+#edges path.ref { stroke-dasharray: 0 4.5; stroke-linecap: round; stroke-width: 2; }
+.card.anchor-hot { box-shadow: var(--shadow), inset 3px 0 0 var(--accent); }
+.prose .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* ---- top-left controls (the only chrome) ---- */
 #tl { position: fixed; left: 16px; top: 14px; z-index: 30; display: flex; gap: 6px; align-items: center; }
@@ -511,6 +515,9 @@ function seed() {
   A('aq', 'mira_k', '09:19:30', null, TXT.agentsQ); R('aa', '09:19:40', 'aq', TXT.agents, 'mira_k');
   A('bq', 'mira_k', '09:25:00', 'aa', TXT.backforthQ); R('ba', '09:25:10', 'bq', TXT.backforth, 'mira_k');
   A('oq', 'mira_k', '09:30:00', 'ba', TXT.liableQ); R('oa', '09:30:10', 'oq', TXT.liable, 'mira_k');
+  // ines.v asks about one passage of mira_k's answer ("Ask about this"): a branch with the full context, focused on @aa#3
+  A('pq', 'ines.v', '09:45:00', 'aa', '@aa#3 is this the earliest example in the list?');
+  R('pa', '09:45:10', 'pq', PASSAGE, 'ines.v');
   const x = (i) => 24 + i * (W + GAPX);
   places.iq = { x: x(0), y: 64, abs: true };
   places.nq = { dx: 0, dy: 0 };
@@ -519,9 +526,11 @@ function seed() {
   places.r5 = { dx: 0, dy: 0 };
   places.r6 = { dx: 0, dy: 0 };
   places.aq = { x: x(4), y: 64, abs: true };
+  places.pq = { dx: 0, dy: 0 };
   // record what each seeded output read, in creation order so upstream hashes are final
   for (const c of Object.values(cells).sort((a, b) => a.at - b.at)) if (c.out) c.out.read = resolve(c).map((id) => ({ id, hash: hashOf(id) }));
 }
+const PASSAGE = '<p>It is the earliest of the core examples, which are listed by publication year. One adjacent case is older: <i>The Player of Games</i> (1988), in which Culture Minds and drones act for Gurgeh while Special Circumstances has arranged the outcome in advance.</p>';
 const CMP = '<p>Both lists include <i>Accelerando</i>, <i>Daemon</i>, "Maneki Neko" and <i>The Quantum Thief</i>, but they ask different questions of them.</p><ul><li><b>The intention scan</b> groups works by mechanism. The network is the actor: "Maneki Neko" routes favours through a hidden gift economy, and the Daemon assigns tasks by rank. Nobody in particular is the principal.</li><li><b>The agents scan</b> groups works by whom the agent serves. Its main pattern is the fiduciary that defects: the agent appears to serve its user while serving a platform, a hidden principal or its own goals.</li></ul><p>Only <i>Accelerando</i> sits clearly in both: Manfred\'s agents work for him, and the agent-run economy they join later works for no one.</p>';
 const FILTER = '<ul><li><i>The Space Merchants</i> (Frederik Pohl and C. M. Kornbluth, 1953 in book form). Advertising agencies run the world\'s political economy.</li><li>"The Midas Plague" (Frederik Pohl, 1954). Rationed consumption is a legal duty.</li><li><i>The Shockwave Rider</i> (John Brunner, 1975). "Delphi pools" collect public wagers on questions.</li></ul>';
 const CANNED = [
@@ -693,34 +702,73 @@ function markReads() {
     el.classList.add(ch ? 'not-read' : 'is-read'); const r = el.querySelector('.rd'); if (r) r.textContent = ch ? 'changed' : 'read';
   }
 }
-function drawEdges() {
-  const svg = document.getElementById('edges'); let h = '';
-  const sc = cells[sel];
-  const hot = new Set(sc && sc.out ? sc.out.read.map((r) => r.id) : []); if (sc) hot.add(sel);
-  const box = (id) => { const el = document.querySelector(`[data-cell="${id}"]`); if (!el) return null; const col = el.closest('.col'); if (!layout[col.dataset.col]) return null; const p = wpos(el); return { x: p.x, y: p.y, w: el.offsetWidth, col: col.dataset.col }; };
-  const curve = (a, b, cls) => {
-    const dx = Math.max(30, Math.abs(b.x - a.x) / 2);
-    h += `<path class="${cls}" d="M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}"/><circle class="${cls.includes('hot') ? 'hot' : ''}" cx="${b.x}" cy="${b.y}" r="3"/>`;
-  };
-  // fork edges: from the anchor card to the head of the column beside it
-  for (const hd of Object.keys(layout)) {
-    const anchor = hd === '__draft' ? (draft.kind === 'branch' ? draft.anchor : null) : cells[hd].prev;
-    if (!anchor) continue;
-    const el = document.querySelector(`[data-card="${anchor}"]`) || document.querySelector(`[data-cell="${anchor}"]`); if (!el) continue;
-    const a = wpos(el), l = layout[hd];
-    curve({ x: a.x + el.offsetWidth, y: a.y + 18 }, { x: l.x, y: l.y + 18 }, 'fork' + (hd === '__draft' || (hot.has(anchor) && hot.has(hd)) ? ' hot' : ''));
+/* the passage a branch is about: "@anchor#n" in the branch's first part */
+function passageOf(hd) {
+  const c = cells[hd]; if (!c || c.body.text == null) return null;
+  const m = new RegExp('@' + c.prev + '#(\\d+)').exec(c.body.text); return m ? +m[1] : null;
+}
+function passageEl(cellId, n) {
+  const pr = document.querySelector(`[data-cell="${cellId}"] .prose`); if (!pr) return null;
+  return { pr, b: pr.querySelectorAll('p, li')[n - 1] || null };
+}
+/* the unit of a column: the column, its parent column and its branch columns */
+function activeHeads() {
+  const out = new Set();
+  for (const id of [hoverHead, sel && columnHeadOf(sel)]) {
+    if (!id || !cells[id]) continue;
+    out.add(id);
   }
-  // reference edges: from a source to the part whose text or expression names it
-  for (const c of Object.values(cells)) {
-    const srcs = c.body.text != null ? mentions(c.body.text) : (parse(c.body.expr).refs || []).map((r) => r.id);
-    for (const s of srcs) {
-      const a = box(s), b = box(c.id); if (!a || !b || a.col === b.col) continue;
-      const right = a.x + a.w < b.x;
-      const hotE = sel === c.id || sel === s || (sc && sc.prev === c.id);
-      if (hotE) curve({ x: right ? a.x + a.w : a.x, y: a.y + 16 }, { x: right ? b.x : b.x + b.w, y: b.y + 16 }, 'ref hot');
+  return out;
+}
+/* connectors from each branch's exact anchor, from live element positions */
+function drawEdges() {
+  const svg = document.getElementById('edges'), world = document.getElementById('world');
+  const wr = world.getBoundingClientRect(), k = view.k; let h = '';
+  const X = (v) => (v - wr.left) / k, Y = (v) => (v - wr.top) / k;
+  const curve = (x1, y1, x2, y2, cls, dot) => {
+    const mx = x2 < x1 ? 40 : Math.max(16, (x2 - x1) / 2);
+    h += `<path class="${cls}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/>`;
+    if (dot) h += `<circle class="${cls.includes('hot') ? 'hot' : ''}" cx="${x1}" cy="${y1}" r="${3 / Math.max(k, .4)}"/>`;
+  };
+  const act = activeHeads();
+  for (const colEl of document.querySelectorAll('#cols > .col')) {
+    const hd = colEl.dataset.col;
+    const anchor = hd === '__draft' ? (draft && draft.kind === 'branch' ? draft.anchor : null) : cells[hd] && cells[hd].prev;
+    if (!anchor) continue;
+    const ae = document.querySelector(`[data-card="${anchor}"]`) || document.querySelector(`[data-cell="${anchor}"]`); if (!ae) continue;
+    const pcol = ae.closest('.col'); if (!pcol) continue;
+    let ay = ae.getBoundingClientRect().top + 16;
+    const n = hd === '__draft' ? null : passageOf(hd);
+    if (n) { const pe = passageEl(anchor, n); if (pe && pe.b) ay = Math.min(pe.b.getBoundingClientRect().top + 9, pe.pr.getBoundingClientRect().bottom - 8); }
+    const fr = colEl.getBoundingClientRect();
+    const parentHead = pcol.dataset.col;
+    const hot = hd === '__draft' || act.has(hd) || act.has(parentHead);
+    const det = hd !== '__draft' && places[hd] && places[hd].abs;
+    curve(X(pcol.getBoundingClientRect().right), Y(ay), X(fr.left), Y(fr.top) + 16, 'fork' + (det ? ' det' : '') + (hot ? ' hot' : ''), true);
+  }
+  // reference edges (mentions and @id in expressions): only for the selected part, dotted, accent
+  const sc = cells[sel];
+  if (sc) {
+    const box = (id) => { const el = document.querySelector(`[data-cell="${id}"]`); return el && el.closest('.col') ? el.getBoundingClientRect() : null; };
+    for (const c of Object.values(cells)) {
+      const srcs = c.body.text != null ? mentions(c.body.text) : (parse(c.body.expr).refs || []).map((r) => r.id);
+      for (const sId of srcs) {
+        if (!(sel === c.id || sel === sId || sc.prev === c.id)) continue;
+        const a = box(sId), b = box(c.id); if (!a || !b) continue;
+        const ca = document.querySelector(`[data-cell="${sId}"]`).closest('.col'), cb = document.querySelector(`[data-cell="${c.id}"]`).closest('.col');
+        if (ca === cb) continue;
+        const right = a.right < b.left;
+        curve(X(right ? a.right : a.left), Y(a.top) + 16, X(right ? b.left : b.right), Y(b.top) + 16, 'ref hot', false);
+      }
     }
   }
   svg.innerHTML = h;
+  // hovering a branch column marks its anchor in the parent: the card, or the passage
+  document.querySelectorAll('.anchor-hot').forEach((x) => x.classList.remove('anchor-hot'));
+  const f = hoverHead && cells[hoverHead]; if (!f || !f.prev || !places[hoverHead]) return;
+  const n = passageOf(hoverHead), pe = n && passageEl(f.prev, n);
+  if (pe && pe.b) pe.b.classList.add('anchor-hot');
+  else { const ae = document.querySelector(`[data-card="${f.prev}"]`); if (ae) ae.classList.add('anchor-hot'); }
 }
 function updateRunning(id) {
   const el = document.querySelector(`[data-stream="${id}"]`), c = cells[id];
@@ -897,6 +945,13 @@ function mentionPicker(ta) {
   };
 }
 
+/* hovering a column makes its unit (it, its parent, its branches) active */
+let hoverHead = null;
+document.addEventListener('mouseover', (e) => {
+  const col = e.target.closest('#cols > .col'); const id = col && col.dataset.col !== '__draft' ? col.dataset.col : null;
+  if (id === hoverHead) return; hoverHead = id; drawEdges();
+});
+
 /* ---------- selecting a passage of an answer ---------- */
 document.addEventListener('mouseup', (e) => setTimeout(() => {
   const pp = document.getElementById('pp'), s = getSelection();
@@ -914,7 +969,7 @@ document.addEventListener('mouseup', (e) => setTimeout(() => {
 
 /* ---------- pan, zoom, drag ---------- */
 let moved = false, drag0 = () => null, edgeT = 0;
-function drawEdgesSoon() { if (edgeT) return; edgeT = requestAnimationFrame(() => { edgeT = 0; const d = drag0(); if (d) layout[d.hd] = Object.assign({}, layout[d.hd], { x: d.nx, y: d.ny }); drawEdges(); }); }
+function drawEdgesSoon() { if (edgeT) return; edgeT = requestAnimationFrame(() => { edgeT = 0; drawEdges(); }); }
 (() => {
   const vp = document.getElementById('vp');
   let pan = null, drag = null;
