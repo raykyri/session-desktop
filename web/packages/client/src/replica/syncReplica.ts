@@ -532,11 +532,7 @@ export class SyncReplica implements ReplicaSource {
     for (const log of gone) {
       this.streamed.delete(log);
       const sp = log.slice("space:".length);
-      if (!this.watched.has(sp)) {
-        client.dropLog(log);
-        this.loadedLogs.delete(log);
-        this.spaceReads.delete(log);
-      }
+      if (!this.watched.has(sp)) this.dropSpaceLog(client, sp);
     }
     for (const log of added) this.streamed.add(log);
     await Promise.all(
@@ -545,6 +541,20 @@ export class SyncReplica implements ReplicaSource {
       ),
     );
     this.restartStream();
+  }
+
+  /** Stop reading a channel's log. Its record then comes from the directory
+   * read on page load, if it is an open channel; that copy predates what
+   * the log carried since (a Leave lowers `members`), so the log's record
+   * replaces it first. */
+  private dropSpaceLog(client: SyncClient, space: string): void {
+    const log = spaceLog(space);
+    const record = client.get(`space:${space}`);
+    if (record?.kind === "space" && this.directoryRecords?.has(space))
+      this.directoryRecords.set(space, record);
+    client.dropLog(log);
+    this.loadedLogs.delete(log);
+    this.spaceReads.delete(log);
   }
 
   private async loadDirectory(gen: number, required = false): Promise<void> {
@@ -1360,9 +1370,7 @@ export class SyncReplica implements ReplicaSource {
       this.watched.delete(space);
       // a reader keeps every open channel: Home reads them all
       if (!this.writer || this.streamed.has(log)) return;
-      this.client?.dropLog(log);
-      this.loadedLogs.delete(log);
-      this.spaceReads.delete(log);
+      if (this.client) this.dropSpaceLog(this.client, space);
       for (const [thread, sp] of [...this.wantOpen]) if (sp === space) this.wantOpen.delete(thread);
     };
   }

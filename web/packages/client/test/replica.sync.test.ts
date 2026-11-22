@@ -507,6 +507,22 @@ test("leaving an open channel in this tab is not told as a ban", async (t) => {
   t.deepEqual(banned, []);
 });
 
+test("leaving an open channel from Browse counts one member fewer, and the count stays after the log is dropped", async (t) => {
+  const { f, lounge } = world();
+  const { r } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready() && f.streams.size === 1);
+  const lounges = () => channelsOf(r).find((c) => c.name === "lounge");
+  await until(() => lounges()?.joined === true);
+  t.is(lounges()?.members, 2, "olga and mona");
+  t.true((await r.mutate("spaces.leave", { space: lounge })).ok);
+  await until(() => lounges()?.joined === false);
+  // the stream no longer carries the channel's log
+  await until(() => [...f.streams].every((s) => !s.cursors.has(`space:${lounge}`)));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.is(lounges()?.members, 1);
+});
+
 test("notifications about an open channel the viewer was banned from fetch their threads: the title and the kind", async (t) => {
   const { f, lounge } = world();
   const removed = f.id();
