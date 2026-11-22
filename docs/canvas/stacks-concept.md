@@ -43,32 +43,35 @@ from a part or one of its blocks.
 
 ## Context rule (the attached code)
 
-A model part sees what its `see` rule resolves to. The default is `above + trunk`.
+A model part reads what its `see` rule resolves to. The terms are small:
 
-- `above`, `above N`: the parts above it in its stack, or the N nearest.
-- `trunk`: for a fork, the fork part and everything that part sees, recursively. A block anchor includes the whole
+- `above`: the parts above it in its own stack.
+- `trunk`: for a fork, the fork part and everything that part reads, recursively. A block anchor includes the whole
   part, with the block marked.
 - `fork`: the fork part only.
-- `none`; terms join with `+`.
+- Terms are joined with `+`.
 
-```
-see: fork             a Look up: only the phrase's part
-see: above 1          only the question directly above
-see: above 2 + fork   the two parts above, plus the fork point
-```
+The rule is set by where the part is. Nobody edits it.
+- A part at the bottom of a stack, or one added with "+ Add to this stack", always reads the whole thread above it:
+  `above + trunk`. Inserts use the same rule.
+- An answer in an inline fork ("Fork here") reads `above + fork`: its own question and the passage it starts from.
+  Here reading less is the point. A Look up would use the same rule.
 
-The rule selects positions: it neither computes values (C) nor sends messages (A). The "read N" chip opens it. It
-outlines the parts the answer read when it ran, or, while you edit the rule, the parts it would read. It also lists
-relations. Only the asker edits the rule; Re-run is a plain action that replaces the answer. There is no staleness
-tracking: an insert above an answer does not mark it, and the "inserted" label on the new part tells readers that
-the answers below were written without it.
+The rule selects positions: it doesn't compute values (C) or send messages (A). The "read N" chip opens a read-only
+list of the parts the answer read, outlined on the canvas, with the rule and the part's relations. Re-run is a plain
+action for the asker. An insert above an answer leaves that answer as it was; the "inserted" label tells readers.
+
+**Compaction.** When the thread above exceeds the model's context budget, the earliest parts are replaced by a
+compacted summary. The parts nearest the new part, and the fork point, stay verbatim. `run.ctx` records that a
+compaction was used and which parts it covered. The mock doesn't implement this.
 
 ## Layout and interaction
 
 - **Seams.** Every stack ends with "+ Add to this stack". On desktop, hovering a gap shows a "+" in the left gutter.
   On touch, tapping a stack selects it and its gaps show the "+". There is no seam between a question and the answer
   it prompted: the pair reads as one.
-- **Inserting.** A draft opens in the gap, with "+ part", Post, Ask and a line saying what an ask there would see.
+- **Inserting.** A draft opens in the gap: a text field and one row (a quiet "+ part"; Cancel, Post, Ask), with
+  shortcuts in the button titles. An insert adds one faint line: "Answers below won't read this."
   Parts below and their forks slide down (FLIP, 300 ms). Stacks elsewhere stay where they are.
 - **Inside an answer.** Hovering a passage (or tapping one in a selected stack) shows "Fork here". It creates an inline
   fork at that block, so the column grows there without splitting the answer. Inline forks fold to one line. "Move
@@ -96,24 +99,23 @@ the answers below were written without it.
 | Branch here, ask about a passage | fork with `block` and `quote` |
 | Branch beside | fork at the parent's model part |
 | Look up | fork whose model part has `see: fork` |
-| comment on a node | person part after the answer; context for later asks below it unless their rule is `above N` |
+| comment on a node | person part after the answer; later asks below it read it |
 | run record | `run` on the model part |
 | save, counts | per-viewer state; counts as today |
 | Open as its own thread | give the fork its own x, y; `fork` stays, so its context is unchanged |
 
 ## Open questions
 
-1. An insert above someone else's answer is not part of what that answer read. Is the "inserted" label enough for
-   readers, or should channels be able to limit inserts?
-2. Two inserts into one gap both survive (fractional keys), but how the second author sees the first before sending
-   is open.
-3. With no `-` or `#id`, a rule cannot skip one comment in the middle. If that matters, an "exclude" action on a part
-   is a better answer than a larger grammar.
+1. An insert above someone else's answer is not part of what that answer read. Is the "inserted" label enough, or
+   should channels be able to limit inserts?
+2. Two inserts into one gap both survive (fractional keys). How does the second author see the first before sending?
+3. Asks at the end of a stack can't skip a comment above them. Is that acceptable, or does compaction need to drop
+   comments first?
 4. `x`, `y` and `inline` are shared, so one person's drag rearranges everyone's canvas.
 
 ## Advisor log
 
-The advisor was a separate subagent, run over three rounds.
+The advisor was a separate subagent, run over three rounds. Steers from the parent session follow.
 
 **Round 1.** Run was a hidden fourth primitive, and section parts would orphan forks. *Changed:* one run is one
 part; fork anchors carry block and quote.
@@ -121,23 +123,17 @@ part; fork anchors carry block and quote.
 **Round 2.** Split-on-demand (`cont`) still orphaned forks; depth lanes would cross. *Changed:* inline block forks,
 subtree-extent lanes. *Rejected:* horizontal displacement, which would break the columns people read down.
 
-**Round 3, mock walkthrough.** This was the most useful round.
-- *Criticism:* the demo put an ask between a question and its own answer, part seams and block seams looked alike,
-  and the overlap sweep was unstable.
-- *Changed:* no seam inside a question and answer pair, "Fork here" appears on hover, and inline forks fold. Overview
-  shows one headline per stack, the sweep repeats until stable, and seed positions no longer depend on the viewer.
-- *Rejected:* removing the relations line from the popover, because the brief asks for relations to be visible.
+**Round 3, mock walkthrough. This was the most useful round.** The demo put an ask between a question and its own
+answer, and part seams and block seams looked alike. *Changed:* no seam inside a question and answer pair, a hover
+"Fork here", folded inline forks, one overview headline per stack, a stable sweep, viewer-independent seed
+positions. *Rejected:* dropping the popover's relations line, because the brief asks for relations to be visible.
 
-**Steer from the parent session.** Staleness marks, re-run versions (`revs`) and answer history overlap with
-direction C. The steer was to cut them, keep the rule language small, and put the effort into interjection, forks and
-scale.
-- *Changed:* context is frozen when a part runs, and Re-run is a plain action. `rev`, `revs` and the "changed" mark
-  are removed. The grammar is now `above`, `above N`, `trunk`, `fork`, `none` and `+`. Hovering a fork highlights its
-  anchor in the parent.
+**Steer 1 (overlap with C).** *Changed:* removed staleness, `rev`/`revs` and the "changed" mark; context is frozen
+at run time. Fork hover highlights the anchor.
 
-**Second steer from the parent session, for the user.** By default a stack is one person in a multi-turn exchange
-with the model, and the model is one workspace setting.
-- *Changed:* in the seed, follow-ups belong to the first asker and continue the stack. Dagen H has three turns plus
-  Hal Bryce's fork, and the intention-marketplaces stack has four. All answers use Gemini 3.8 Flash. The model is
-  shown once beside "+ Add ask". Per-run model and effort choices are removed, and "for X" appears only when the
-  asker is not the stack's author.
+**Steer 2 (for the user).** *Changed:* a stack is one asker's multi-turn exchange, and the seed follows that. One
+workspace model is shown once beside "+ Add ask", with no per-run model or effort.
+
+**Steer 3 (for the user).** *Changed:* answers carry no timestamp; the composer is a field and one row. A part at the
+end of a stack always reads the whole thread, so the rule follows position and the popover is read-only. Compaction
+is described above.
