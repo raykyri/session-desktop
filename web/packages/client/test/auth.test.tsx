@@ -6,7 +6,7 @@ import { UNUSABLE_INVITE_MESSAGE, parseInviteCode } from "@session/shared";
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
-import { treeRows } from "../src/features/auth/InvitesPage.js";
+import { inviteIntro, treeRows } from "../src/features/auth/InvitesPage.js";
 import { openAuthDialog } from "../src/features/auth/authDialog.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
 import { COPY_FAILED } from "../src/lib/clipboard.js";
@@ -419,6 +419,30 @@ test.serial("Invites: the tree, the open links, and no create button at 0 left",
   t.truthy(screen.getByText("You have used your 3 invites. An admin can give you more."));
   t.is(screen.getAllByRole("button", { name: "Revoke this link" }).length, 3);
   t.truthy(screen.getByText("Joined Nov 14"));
+});
+
+test.serial("Invites: the introduction names the deployment's invites per member", async (t) => {
+  await renderApp("/invites", {
+    user: testUser({ id: "ines.v", login: "ines.v" }),
+    responses: {
+      "members.tree": treeNodes(),
+      "accountInvites.list": { ...invitesView(0), perMember: 5 },
+    },
+  });
+  await waitUntil(
+    t,
+    () => document.querySelector(".tcopy")?.textContent?.includes("5") ?? false,
+    "the intro",
+  );
+  t.is(
+    document.querySelector(".tcopy")?.textContent,
+    "Session is invite-only. Each user starts with 5 invites which they can use to add other members.",
+  );
+  t.is(
+    inviteIntro(1),
+    "Session is invite-only. Each user starts with 1 invite which they can use to add other members.",
+  );
+  t.is(inviteIntro(null), "Session is invite-only.");
 });
 
 test.serial(

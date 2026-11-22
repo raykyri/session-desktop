@@ -212,18 +212,23 @@ function InviteBox() {
   );
 }
 
+/** The page's introduction. The number is the deployment's invites per
+ * member (`SESSION_INVITES_PER_MEMBER`, 04 I2), known once the invites load. */
+export const inviteIntro = (perMember: number | null) =>
+  perMember === null
+    ? "Session is invite-only."
+    : `Session is invite-only. Each user starts with ${perMember} ${perMember === 1 ? "invite" : "invites"} which they can use to add other members.`;
+
 export function InvitesPage() {
   const me = useMe().data ?? null;
+  const perMember = useAccountInvites().data?.perMember ?? null;
   return (
     <PageFrame title="Invites">
       <div className="mcols">
         <div className="mmain">
           <section aria-labelledby="tree-h">
             <h3 id="tree-h">Invite tree</h3>
-            <p className="tcopy">
-              Session is invite-only. Each user starts with 3 invites which they can use to add
-              other members.
-            </p>
+            <p className="tcopy">{inviteIntro(perMember)}</p>
             <InviteTree meId={me?.id ?? null} />
           </section>
         </div>
