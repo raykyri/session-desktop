@@ -101,7 +101,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .col { position: absolute; width: var(--w); display: flex; flex-direction: column; }
 .card { position: relative; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); }
 .card.sel { box-shadow: 0 0 0 2px var(--accent); }
-.sec { padding: 10px 12px; position: relative; }
+.sec { padding: 10px 12px; position: relative; display: flex; gap: 10px; align-items: flex-start; }
+.gut { flex: none; width: 22px; display: flex; justify-content: center; padding-top: 1px; }
+.gut.grip { cursor: grab; }
+.gut .av { width: 22px; height: 22px; font-size: 8.5px; }
+.gut .mk { width: 22px; height: 22px; border-radius: 6px; }
+.gut .mk svg { width: 14px; height: 14px; }
+.sbody { flex: 1; min-width: 0; }
+.sec .rd { position: absolute; right: 10px; top: 4px; }
 .sec + .sec { border-top: 1px solid var(--divider); }
 .hd { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 3px; min-width: 0; }
 .hd b { color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
@@ -536,7 +543,7 @@ function groupsOf(chain) {
 function renderChain(head) {
   const groups = groupsOf(chainFrom(head)), mine = cells[head].u === ME;   // only the column's author continues it
   if (places[head] && places[head].folded) {
-    return `<div class="card fold" data-card="${groups[0][groups[0].length - 1]}"><div class="foldh hd grip" data-grip="${head}">${av(cells[head].u)}<b>${esc(cells[head].u)}</b><span>${groups.length} cards</span><button class="tlink" data-act="fold" data-id="${head}">Unfold</button></div>`
+    return `<div class="card fold" data-card="${groups[0][groups[0].length - 1]}"><div class="foldh hd grip" data-grip="${head}">${av(cells[head].u)}<span>${groups.length} cards</span><button class="tlink" data-act="fold" data-id="${head}">Unfold</button></div>`
       + groups.map((g) => { const last = cells[g[g.length - 1]]; const st = isModel(last) ? state(last) : 'ok'; return `<div class="fl${st === 'stale' ? ' st' : ''}" data-cell="${g[0]}">${esc(label(g[0], 60))}</div>`; }).join('') + '</div>';
   }
   let h = '';
@@ -563,23 +570,25 @@ function renderCard(g, head) {
   for (const id of g) h += secHtml(id, id === head);
   return h + '</div>';
 }
-function hdHtml(c, isHead, extra, noTime) {
-  return `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? c.id : ''}">${av(c.u)}<b>${esc(c.u)}</b>${noTime ? '' : `<span>${ago(c.at)}</span>`}${c.edited ? '<span>· edited</span>' : ''}${extra || ''}<span class="rd"></span></div>`;
+/* a part: the author's avatar (or the model mark) on the left, the content on the right; no name or time */
+function rowHtml(c, isHead, model, inner, cls) {
+  const g = model ? `<span class="mk" title="${MODEL}">${MARK}</span>` : av(c.u).replace('class="av"', `class="av" title="${esc(c.u)}"`);
+  return `<div class="sec${cls ? ' ' + cls : ''}" data-cell="${c.id}"><div class="gut${isHead ? ' grip' : ''}" data-grip="${isHead ? c.id : ''}">${g}</div><div class="sbody">${inner}</div><span class="rd"></span></div>`;
 }
 function secHtml(id, isHead) {
   const c = cells[id];
   if (editing === id) {
     const nx = cont(id), q = c.body.text != null && nx && isAnswer(nx);
     const val = c.body.text != null ? c.body.text : c.body.expr;
-    return `<div class="sec" data-cell="${id}">${hdHtml(c, isHead)}<div class="edit"><textarea data-edit="${id}" ${c.body.expr ? 'class="mono" spellcheck="false"' : ''}>${esc(val)}</textarea><div class="row"><button data-act="edit-cancel">Cancel</button>${q ? `<button data-act="edit-save" data-id="${id}">Save</button><button class="pri" data-act="edit-save-run" data-id="${id}">Save and re-run</button>` : `<button class="pri" data-act="edit-save" data-id="${id}">Save</button>`}</div></div></div>`;
+    return rowHtml(c, isHead, false, `<div class="edit"><textarea data-edit="${id}" ${c.body.expr ? 'class="mono" spellcheck="false"' : ''}>${esc(val)}</textarea><div class="row"><button data-act="edit-cancel">Cancel</button>${q ? `<button data-act="edit-save" data-id="${id}">Save</button><button class="pri" data-act="edit-save-run" data-id="${id}">Save and re-run</button>` : `<button class="pri" data-act="edit-save" data-id="${id}">Save</button>`}</div></div>`);
   }
   if (c.body.text != null) {
     const q = isAnswer(cont(id)) && cont(id).prev === id;
-    return `<div class="sec" data-cell="${id}">${hdHtml(c, isHead)}<div class="txt${q ? ' qtxt' : ''}">${richText(c.body.text)}</div>${causeHtml(id)}</div>`;
+    return rowHtml(c, isHead, false, `<div class="txt${q ? ' qtxt' : ''}">${richText(c.body.text)}</div>${causeHtml(id)}`);
   }
   if (isQuote(c)) {
     const qv = quoteValue(c);
-    return `<div class="sec" data-cell="${id}">${hdHtml(c, isHead)}<div class="qsrc"><span class="fx">= quote</span> from ${qv.src ? chip(qv.src) : ''} <span class="live">live · no run</span></div><div class="quote">${esc(qv.text)}</div></div>`;
+    return rowHtml(c, isHead, false, `<div class="qsrc"><span class="fx">= quote</span> from ${qv.src ? chip(qv.src) : ''} <span class="live">live · no run</span></div><div class="quote">${esc(qv.text)}</div>`);
   }
   return modelHtml(c, isHead);
 }
@@ -610,10 +619,8 @@ function modelHtml(c, isHead) {
     if (st !== 'stale') badge += causeHtml(id);
   }
   const mark = st === 'stale' && !c.showPrev ? '<span class="stale-mark"></span>' : '';
-  const hd = ans
-    ? `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? id : ''}"><span class="mk">${MARK}</span><span>${MODEL_SHORT}</span><span class="rd"></span></div>`
-    : hdHtml(c, isHead, '', true) + `<div class="qsrc">${exprLine(c)} <span class="bym">· <span class="mk sm">${MARK}</span> ${MODEL_SHORT}</span></div>`;
-  return `<div class="sec ans" data-cell="${id}">${mark}${hd}${body}${badge}${ftr ? `<div class="ftr">${ftr}</div>` : ''}</div>`;
+  const hd = ans ? '' : `<div class="qsrc">${exprLine(c)}</div>`;
+  return rowHtml(c, isHead, true, `${mark}${hd}${body}${badge}${ftr ? `<div class="ftr">${ftr}</div>` : ''}`, 'ans');
 }
 function preflight() {
   const d = draft; if (!d) return '';

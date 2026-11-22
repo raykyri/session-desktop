@@ -8,7 +8,8 @@ followed by a cell whose expression is `answer(above)`. Nothing re-runs without 
 
 A column is one person's multi-turn exchange with the model. Only the column's author continues it or inserts into
 it; everyone else branches (Branch, or "Ask about this" on a passage). The model is a workspace setting (Gemini 3.8 Flash in the mock), named once at the top left; every model cell
-uses it, and cards show a mark and "Gemini".
+uses it. On cards, a person's part shows only their avatar to its left (no name or time), and model output shows
+the circle-dot mark to its left.
 
 faketalk was unreachable (GitHub 404; site blocked by the network policy), so the design follows the stated
 principles: everything is a cell, cells relate only by reference, references bind at run time, everything is
