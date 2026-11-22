@@ -851,8 +851,8 @@ test("a refused link join: the link message for a link that does not work, the s
   t.is(linkJoinMessage({ code: "FORBIDDEN", message: LINK_UNUSABLE }, "lab"), LINK_UNUSABLE);
   t.is(linkJoinMessage({ code: "FORBIDDEN", message: frozenMessage("lab") }, "lab"), LINK_UNUSABLE);
   t.is(
-    linkJoinMessage({ code: "FORBIDDEN", message: "You are banned from #lab." }, "lab"),
-    "You are banned from #lab.",
+    linkJoinMessage({ code: "FORBIDDEN", message: "You no longer have access to #lab." }, "lab"),
+    "You no longer have access to #lab.",
   );
 });
 
@@ -892,8 +892,8 @@ for (const [why, message, shown] of [
   ["a used link", () => LINK_UNUSABLE, () => LINK_UNUSABLE],
   [
     "a ban",
-    (name: string) => `You are banned from #${name}.`,
-    (name: string) => `You are banned from #${name}.`,
+    (name: string) => `You can no longer post in #${name}.`,
+    (name: string) => `You can no longer post in #${name}.`,
   ],
 ] as const)
   test.serial(`a link join refused for ${why} shows its message`, async (t) => {
@@ -1230,7 +1230,7 @@ test.serial(
     fireEvent.click(within(comment).getByRole("button", { name: "More" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
     const confirm = await screen.findByRole("alertdialog", {
-      name: "Delete this comment and your replies under it?",
+      name: "Delete this comment and your replies?",
     });
     t.deepEqual(calls, []);
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
@@ -1313,7 +1313,7 @@ test.serial("after deleting one's comment, focus is on the selected branch row",
   fireEvent.click(within(comment).getByRole("button", { name: "More" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
   const confirm = await screen.findByRole("alertdialog", {
-    name: "Delete this comment and your replies under it?",
+    name: "Delete this comment and your replies?",
   });
   fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
   await waitUntil(
@@ -1665,7 +1665,7 @@ test.serial("a moderation log entry of a removal shows no title of the item", as
  * for a ban, or because the channel froze while it was on its way, shows the
  * server's message and leaves the text in the composer. */
 for (const [why, message] of [
-  ["a ban", "You are banned from #public."],
+  ["a ban", "You can no longer post in #public."],
   ["a frozen channel", "#public is unavailable because its owner's account is deactivated."],
 ] as const)
   test.serial(`a post refused for ${why} shows the message and keeps the text`, async (t) => {

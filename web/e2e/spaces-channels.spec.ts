@@ -440,7 +440,7 @@ test("§6.6: the owner bans a member of an open channel; the log lists it; their
   const answer = await m.nick?.send([
     ["threads.create", { id: ulid(), space: w.ownId, kind: "ask", q: "Still here?", ...MODEL }],
   ]);
-  expect(answer?.[0]?.error?.message).toBe(`You are banned from #${w.own}.`);
+  expect(answer?.[0]?.error?.message).toBe(`You can no longer post in #${w.own}.`);
   const context = await browser.newContext();
   const banned = await context.newPage();
   await signIn(banned, { login: "e2e-channels-nick" });
@@ -448,7 +448,7 @@ test("§6.6: the owner bans a member of an open channel; the log lists it; their
   await expect(card(banned, "A thread in the viewer's channel")).toBeVisible();
   await expect(banned.getByRole("textbox", { name: "Ask or post" })).toHaveCount(0);
   await banned.locator(".sphead").getByRole("button", { name: "Join" }).click();
-  await expect(toast(banned, "alert")).toHaveText(`You are banned from #${w.own}.`);
+  await expect(toast(banned, "alert")).toHaveText(`You can no longer post in #${w.own}.`);
   await expect(banned.locator(".sphead").getByRole("button", { name: "Join" })).toBeVisible();
   await context.close();
 });

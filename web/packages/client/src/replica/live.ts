@@ -5,6 +5,8 @@
 // reads, and a new read of the session when the cookie turns out to be
 // another person's.
 
+import { bannedMessage } from "@session/mutators";
+
 import { getMe, queryKeys } from "../api/account.js";
 import { fetchDirectory, fetchSpaceByName, fetchThreadSpace } from "../api/spaces.js";
 import { appQueryClient } from "../app/queryClient.js";
@@ -72,9 +74,9 @@ export function liveReplicaConfig(
         whoAmI: o.whoAmI ?? sessionHandle,
         onSessionChanged: () => void appQueryClient.invalidateQueries({ queryKey: queryKeys.me() }),
         beforeReload: beforeUpgradeReload,
-        onLeft: (name) => showToast(`You are no longer a member of #${name}.`),
+        onLeft: (name) => showToast(`You no longer have access to #${name}.`),
         // the server's wording of a ban (`@session/mutators` `tx.ts`)
-        onBanned: (name) => showToast(`You are banned from #${name}.`),
+        onBanned: (name, open) => showToast(bannedMessage(name, open)),
         onConnection: (status) => useConnectionStore.getState().setStatus(status),
       });
     },

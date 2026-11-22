@@ -20,7 +20,7 @@ export function memberActionText(
   channel: { name: string; private: boolean },
 ): string {
   if (action === "remove")
-    return `@${user} stops being a member of #${channel.name} and can no longer read it. A new invite link lets them join again.`;
+    return `@${user} is removed from #${channel.name}. Send them a new invite link to add them back.`;
   return channel.private
     ? `@${user} is removed from #${channel.name} and can't read it, write in it or join it again with a link. You can unban them in the member list.`
     : `@${user} can no longer write in #${channel.name} or join it. Anyone can still read an open channel. You can unban them in the member list.`;

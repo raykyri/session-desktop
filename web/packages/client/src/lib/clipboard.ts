@@ -4,7 +4,7 @@
 // refuse the permission.
 
 /** The alert a screen shows when the browser refuses a link copy. */
-export const COPY_FAILED = "The link could not be copied. Select it and copy it by hand.";
+export const COPY_FAILED = "Couldn't copy the link. Select it and copy it manually.";
 
 export async function writeClipboardText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {

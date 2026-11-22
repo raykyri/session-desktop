@@ -45,11 +45,11 @@ export function runFailureText(fail: Pick<RunFailure, "why" | "cls">): string {
     case "tokens":
       return OUT_OF_TOKENS_TEXT;
     case "key":
-      return "The API key for this run was rejected or removed. Check your keys in Usage.";
+      return "Your API key was rejected or removed during this run. See Usage for more details.";
     case "rate":
       return "The model provider is rate limiting this deployment. Try again in a minute.";
     case "access":
-      return "You can no longer read this channel, so the ask did not run.";
+      return "Did not run: You no longer have access to this channel.";
     case "interrupted":
       return "The run was interrupted.";
     case "stopped":

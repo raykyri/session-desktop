@@ -200,7 +200,7 @@ export type WriteEvent =
 
 /** What the client tells the app besides writes: a protocol below the
  * server's minimum (reload, `01` S1); the end of the person's access to a
- * private space (R4: "You are no longer a member of #name."); and a client
+ * private space (R4: "You no longer have access to #name."); and a client
  * id the client registered itself (after WRONG_CLIENT), for the tab to keep
  * (`storeClientId`, Y3); and a session signed in as another person than the
  * client's (`user`: the handle signed in, null for none), found when the

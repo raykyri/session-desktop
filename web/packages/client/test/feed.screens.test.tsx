@@ -93,7 +93,7 @@ test.serial("without an invite: the banner, no composer, disabled write controls
   if (!first) throw new Error("no card");
   const save = within(first).getByRole("button", { name: /^Save/ });
   t.true((save as HTMLButtonElement).disabled);
-  t.is(save.getAttribute("title"), "Saving opens once you have an invite");
+  t.is(save.getAttribute("title"), "Available once you have an invite");
 });
 
 test.serial("signed out: the composer is a cover that opens sign-in", async (t) => {

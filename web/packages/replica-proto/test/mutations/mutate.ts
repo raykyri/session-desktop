@@ -804,7 +804,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-8 a hidden branch is opened as its own thread",
     file: "../mutators/src/threads.ts",
-    from: '  if (n.mod !== null) throw refuse("PRECONDITION_FAILED", "This branch is hidden.");\n',
+    from: '  if (n.mod !== null)\n    throw refuse("PRECONDITION_FAILED", "This branch was hidden by the channel owner.");\n',
     to: "",
   },
   {
@@ -1639,7 +1639,7 @@ const MUTATIONS: Mutation[] = [
     // record arrives (`checkOwnBans`), not from a lost membership
     name: "M6-C40 (C18) an arrived ban record is not told",
     file: "../client/src/replica/syncReplica.ts",
-    from: "      this.options.onBanned?.(s.name);",
+    from: '      this.options.onBanned?.(s.name, s.vis === "open");',
     to: "      void s;",
     packageOnly: true,
     files: ["test/replica.sync.test.ts"],

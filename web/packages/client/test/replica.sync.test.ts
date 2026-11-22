@@ -4,7 +4,7 @@
 // channel view read; the event stream; "Not sent" with Retry and Discard;
 // `UPGRADE_REQUIRED`; known versus unknown reads; threads outside the window.
 
-import { DAY, QUEUED_RUNS_MAX, threadKey } from "@session/mutators";
+import { DAY, QUEUED_RUNS_MAX, bannedMessage, threadKey } from "@session/mutators";
 import { claimClientId } from "@session/sync/client";
 import test from "ava";
 
@@ -57,6 +57,8 @@ function replicaOf(
   const restored: DraftRef[] = [];
   const left: string[] = [];
   const banned: string[] = [];
+  // what the app's toast says for each ban (`live.ts`)
+  const bannedText: string[] = [];
   const transport = new HttpSyncTransport({
     fetch: f.fetchFor(u),
     ...(o.onUpgrade ? { onUpgrade: o.onUpgrade } : {}),
@@ -72,13 +74,16 @@ function replicaOf(
     claim: (userId, register) => claimClientId({ userId, storage, locks, register }),
     restoreDraft: (d) => restored.push(d),
     onLeft: (name) => left.push(name),
-    onBanned: (name) => banned.push(name),
+    onBanned: (name, open) => {
+      banned.push(name);
+      bannedText.push(bannedMessage(name, open));
+    },
     clock: f.clock,
     maxBackoffMs: 50,
     gatherMs: 20,
   });
   r.activate();
-  return { r, restored, left, banned, storage, locks };
+  return { r, restored, left, banned, bannedText, storage, locks };
 }
 
 const query = <T>(f: () => T) => runQuery(f);
@@ -425,13 +430,18 @@ test("leaving a private channel in this tab shows no lost-access message", async
 
 test("a ban in an open channel reaches the banned member as their ban record, told once (C18)", async (t) => {
   const { f, lounge } = world();
-  const { r, banned, left } = replicaOf(f, MONA);
+  const { r, banned, bannedText, left } = replicaOf(f, MONA);
   t.teardown(() => r.dispose());
   await until(() => r.ready() && f.streams.size === 1);
   await until(() => channelsOf(r).some((c) => c.name === "lounge" && c.joined));
   f.ok(OLGA, "members.ban", { space: lounge, user: MONA });
   await until(() => banned.length > 0);
-  t.deepEqual(banned, ["lounge"], "You are banned from #lounge.");
+  t.deepEqual(banned, ["lounge"]);
+  t.deepEqual(
+    bannedText,
+    ["You can no longer post in #lounge."],
+    "an open channel: posting is gone",
+  );
   t.deepEqual(left, [], "an open channel stays readable: no lost-access message");
   t.true(channelsOf(r).some((c) => c.name === "lounge" && !c.joined));
   t.like(r.get(`ban:${lounge}:${MONA}`), { kind: "ban", sp: lounge, u: MONA });
@@ -447,7 +457,7 @@ test("a ban in a private channel is told once as the ban, not as a lost membersh
     code: string;
   };
   f.ok(MONA, "spaces.join", { space: lab, invite: link.code });
-  const { r, banned, left } = replicaOf(f, MONA);
+  const { r, banned, bannedText, left } = replicaOf(f, MONA);
   t.teardown(() => r.dispose());
   await until(() => r.ready() && f.streams.size === 1);
   await until(() => channelsOf(r).some((c) => c.name === "lab" && c.joined));
@@ -455,7 +465,12 @@ test("a ban in a private channel is told once as the ban, not as a lost membersh
   await until(() => banned.length > 0);
   await until(() => !channelsOf(r).some((c) => c.name === "lab" && c.joined));
   await new Promise((resolve) => setTimeout(resolve, 50));
-  t.deepEqual(banned, ["lab"], "You are banned from #lab.");
+  t.deepEqual(banned, ["lab"]);
+  t.deepEqual(
+    bannedText,
+    ["You no longer have access to #lab."],
+    "a private channel: access is gone",
+  );
   t.deepEqual(left, []);
 });
 

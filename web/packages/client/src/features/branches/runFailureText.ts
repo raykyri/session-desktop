@@ -23,16 +23,14 @@ export interface FailureView {
 
 /** The asker's tokens copy for a run that failed `tokens` before the
  * current allowance or a key could pay (03 K10: Run again starts it). */
-export const TOKENS_PAST_TEXT =
-  "This ask did not run: included tokens had run out. Run again to start it.";
-export const TOKENS_OTHER_TEXT = "This ask did not run: its author had no included tokens left.";
+export const TOKENS_PAST_TEXT = "Did not run: Out of included tokens.";
+export const TOKENS_OTHER_TEXT = "Did not run: Author was out of tokens.";
 export const KEY_OTHER_TEXT = "Stopped: Author's API key could not be used.";
-export const ACCESS_OTHER_TEXT =
-  "This ask did not run: its author could no longer read this channel.";
+export const ACCESS_OTHER_TEXT = "Did not run: Author no longer has access to this channel.";
 export const RATE_OTHER_TEXT = "Stopped: Rate limited by model provider.";
 /** The asker's key copy for a record written without `detail`. */
 export const KEY_TEXT =
-  "The API key for this run was rejected or removed. Check your keys in Usage.";
+  "Your API key was rejected or removed during this run. See Usage for more details.";
 
 /** The provider of the member's key a run was billed to, from its payer or
  * its bill; null when neither names one. */

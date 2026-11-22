@@ -36,7 +36,7 @@ export const apiKeysRouter = router({
       if (release === null) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
-          message: "A key check is already running. Wait for it to finish.",
+          message: "A key check is already in progress. Try again when it finishes.",
         });
       }
       try {

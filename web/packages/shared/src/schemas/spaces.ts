@@ -87,7 +87,7 @@ export const QUEUED_RUNS_PER_USER = 20;
  * the viewer's time zone instead (`outOfTokensText`), since the reset is
  * Thursday west of UTC (`03` K8). */
 export const OUT_OF_TOKENS_TEXT =
-  "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
+  "Out of tokens until Friday. You can still post, or add an API key in Usage.";
 
 // ---- roles and memberships (C18) ----
 

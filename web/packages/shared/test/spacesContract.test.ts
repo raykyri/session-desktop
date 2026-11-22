@@ -109,7 +109,7 @@ test("the sync codes are answer codes, and the unrecorded ones are listed", (t) 
   t.false((spaces.unrecordedErrorCodes as readonly string[]).includes("PRECONDITION_FAILED"));
   const queueFull = {
     code: "PRECONDITION_FAILED",
-    message: "You have 20 asks waiting to run.",
+    message: "You can have up to 20 asks waiting to run.",
     reason: "queue_full",
     serverTime: 1_794_823_200_000,
   };

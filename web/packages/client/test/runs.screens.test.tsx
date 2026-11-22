@@ -144,11 +144,11 @@ test.serial("failed: the reason for each fail.why, and Run again", async (t) => 
     [
       { why: "tokens", at: null, cls: null },
       // the fixture member has tokens left now (`FIXTURE_USAGE`)
-      "This ask did not run: included tokens had run out. Run again to start it.",
+      "Did not run: Out of included tokens.",
     ],
     [
       { why: "key", at: null, cls: null },
-      "The API key for this run was rejected or removed. Check your keys in Usage.",
+      "Your API key was rejected or removed during this run. See Usage for more details.",
     ],
     [
       { why: "rate", at: 0, cls: null },
@@ -156,7 +156,7 @@ test.serial("failed: the reason for each fail.why, and Run again", async (t) => 
     ],
     [
       { why: "access", at: null, cls: null },
-      "You can no longer read this channel, so the ask did not run.",
+      "Did not run: You no longer have access to this channel.",
     ],
     [{ why: "error", at: null, cls: "timeout" }, "Stopped: Exceeded maximum duration."],
   ];
@@ -216,7 +216,7 @@ test.serial("L1: an ask refused for a full queue keeps its text in the composer"
       error: {
         code: "PRECONDITION_FAILED",
         reason: "queue_full",
-        message: "You have 20 asks waiting to run.",
+        message: "You can have up to 20 asks waiting to run.",
       },
     } as WriteOutcome);
   const field = await screen.findByRole("textbox", { name: "Ask or post" });
