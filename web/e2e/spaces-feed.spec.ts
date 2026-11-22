@@ -93,6 +93,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("a post goes to the top of Home with its channel in the footer", async ({ page }) => {
+  // The send action's icon has 9 px before it and 6 px after it; the
+  // chevron segment keeps its 24 px.
+  const main = page.locator(".split-main");
+  await expect(main).toHaveCSS("padding-left", "9px");
+  await expect(main).toHaveCSS("padding-right", "6px");
+  await expect(page.locator(".split-more")).toHaveCSS("width", "24px");
   await compose(page, "Reading list for the winter, suggestions welcome.", "Post");
   const first = page.locator(".tcard").first();
   await expect(first.locator(".tt-title")).toHaveText(

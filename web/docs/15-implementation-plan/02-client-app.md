@@ -605,8 +605,8 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   the composer starts on the default model and default effort. At 600 px and below the submenu is drawn inline under its row
   (W2.5). No cost estimate is shown for high efforts (decision P13);
 - split send button: the main part shows the icon of the chosen mode, the
-  send arrow for Ask and the pencil for Post, with label and title "Ask" or
-  "Post", disabled while empty; the chevron part
+  send arrow for Ask and the pencil for Post, padded 9 px before the icon and
+  6 px after it, with label and title "Ask" or "Post", disabled while empty; the chevron part
   (label "Ask or post") opens Ask (arrow) / Post (pencil) with descriptions
   ("Agent researches and answers", "A message to people in the channel")
   and a check;
