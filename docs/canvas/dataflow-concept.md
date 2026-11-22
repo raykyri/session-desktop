@@ -1,127 +1,126 @@
 # Canvas variant C: dataflow
 
-Mock: `docs/mockups/canvas-dataflow.html`. Seed content from `docs/mockups/session-handoff.html`.
+Mock: `docs/mockups/canvas-dataflow.html` (seed content from `session-handoff.html`).
 
-The canvas of a channel is a reactive document, closer to a notebook than to a chat. Every object is a cell. A cell
-holds text that a person wrote, or an expression that computes text from other cells. A post is a series of text
-cells. An ask is a text cell followed by a cell whose expression is `answer(above)`. Answers are recomputed only when
-someone presses Run, because runs cost money.
+A channel's canvas is a reactive document, like a spreadsheet. Every object is a cell holding either text a person
+wrote or an expression computing text from other cells. A post is a series of text cells. An ask is a text cell
+followed by a cell whose expression is `answer(above)`. Nothing re-runs without a click.
 
-Reference: I could not read faketalk. The GitHub URL returned 404 and antimatter15.com is blocked by this
-environment's network policy. The design follows the stated principles instead: everything is an object (a cell);
-objects relate only through references, the equivalent of messages; references bind late, when a run starts; and
-every object is inspectable and editable in place.
+faketalk was unreachable (GitHub 404; antimatter15.com blocked by the network policy). The design follows the stated
+principles instead: everything is a cell, cells relate only by reference, references bind when a run starts, and
+every cell is inspectable and editable in place.
 
-## Primitives
+## Primitives (two, plus reference syntax)
 
-**Cell** `{ id, author, at, prev?, body, versions[], pinned }`
-- `body.text`: written by a person. `@id` inside the text is a reference, shown as a chip.
-- `body.expr`: computed. Two functions:
-  - `answer(...)`: the only model call.
-  - `quote(@id#n)`: free and derived on render. It has no versions.
-- `versions` (answers only): `[{ n, html, read: [{id, hash}], expr, by, at }]`. A run appends a version and keeps the
-  older ones.
+**Cell** `{ id, author, at, prev?, body, out?, prevOut? }`
+- `body.text`: written by a person; `@id` (or `@id#n`, passage n) is a reference, drawn as a chip.
+- `body.expr`: computed (grammar below).
+- `out = { html, read: [{id, hash}], expr, by, at }`: the last result and what it read; `prevOut` is the one before.
 - `prev`: the cell this one follows. A series is a `prev` chain.
 
-**Placement** `{ head, mode: beside | inset | chip, x, y | dx, dy }`: one record per column head.
-- A root cell's Placement is absolute.
-- A fork (a second child of some cell) always has a Placement:
-  - `beside`: its own column, positioned relative to its anchor until someone drags it.
-  - `inset`: drawn in the gap under its anchor.
-  - `chip`: not opened yet; a count on the anchor.
-- The child that has no Placement is the series' continuation. This rule is explicit, so an insert or an older fork
-  cannot change which child continues the column.
+**Placement** `{ head, x, y | dx, dy }` positions a column head.
+A root's Placement is absolute; a branch (a second child of some cell) is placed relative to that cell until dragged.
+The child without a Placement continues the column, so an insert cannot change which child continues.
 
-**Reference** is syntax, not a stored record: `@id`, or `@id#n` for passage n. Fork edges come from `prev`, and
-mention and quote edges come from references.
+**Reference** is syntax, not a stored record. Branch edges come from `prev`. Mention and quote edges come from
+references and are drawn while either end is selected.
 
-## Relations and computation
-
-`answer(above)` reads the `prev` chain to the root, through any fork, plus the cells those parts mention (one hop, not
-the mentioned cell's own chain). Arguments: `above`, `@id` to include, `-@id` to exclude. The default ask shows no
-code. The user types a question, and the expression lives in the inspector. There, the × on a read-set row writes
-`-@id`, and typing `@id` adds a cell.
-
-Example: a compare cell placed under two threads.
+## Expressions
 
 ```
-cq  text  "compare @ia and @aa: in each list, who does the agent actually work for?"
-ca  expr  answer(above)          → reads cq, ia, aa
-    expr  answer(above, -@aa)    → reads cq, ia      (written by the × in the inspector)
-r3  expr  quote(@ia#4)           → passage 4 of ia, live, no run
+answer(above)                     the default ask; never shown unless inspected
+summarize(@a, @b, …)              model
+compare(@a, @b, "on what")        model
+filter(@a, "criterion")           model
+quote(@a#n)                       free: passage n of @a, recomputed whenever @a changes
 ```
 
-A version records the hash of each cell it read. Comparing those hashes with the current ones gives the states an
-answer can be in, each worded as an event in the margin:
-- **up to date**: every hash still matches.
-- **edited**: "Answered before [chip] was edited", with Re-run.
-- **re-run**: "Written against answer 1 of [chip], which has been re-run", with Show answer 1 and Re-run.
-- **added**: "Answered before [chip] was added", with Include and re-run. This means the current `above` holds a
-  cell the version did not read.
-- **expression changed**: the expression differs from the one the version ran with.
-- **pinned**: the answer was pinned, which hides the badges above.
+`above` is the `prev` chain to the root, through any branch, plus the cells those parts mention (one hop).
 
-Re-run behaviour:
-- Re-run reads the same cells as before, so the read set is pinned. "Include and re-run" resolves the set again.
-- Re-run offers a scope: "Re-run with 4 below" runs the answers lower in the series that read this one, in order.
-- There is no global re-run, and badges do not propagate past the cells that actually read the change.
+A part that starts with `=` in the composer is computed. In the seed:
 
-Every answer's footer reads "Read n parts" and shows a pager, "‹ answer 2 of 2 ›". Clicking "Read n parts" marks the
-cells it read on the canvas, and marks the cells above it that it did not read as "not read". So the read set is
-visible before anything goes wrong.
+```
+r4  =filter(@ia, "published before 1980")                   reads ia
+cc  =compare(@ia, @aa, "who the agent or network works for") reads ia, aa
+r3  =quote(@ia#4)                                            no run; follows ia's latest answer
+```
 
-What "computable object" means here:
-- Computed cells are either model calls, which cost money, run only on request and are versioned, or free functions,
-  which are recomputed on every render and are not versioned.
-- `summarize` and `compare` are not functions. They are question text, which keeps one model function.
-- More free functions fit the same slot. Candidates are `count`, `list of headings` and `latest answer of`. None is
-  needed for the brief.
+"Computable" means two kinds of cell. Model cells (`answer`, `summarize`, `compare`, `filter`) cost money, run on
+request and record what they read. Free cells (`quote`) have no `out` and are derived on every render. The model
+functions differ only in instruction; naming them makes the operation visible on the card ("= compare A with B
+on …").
+
+## Recomputation
+
+A model cell is **stale** when a cell it read has a different hash (edited or re-run), when `above` resolves to a
+different set (a part was inserted), or when its expression changed. That is one state: "Inputs changed since this
+answer · Re-run". The inspector gives the reason per input. Re-run reads the current set.
+
+The cause carries a summary, so one edit does not leave twenty badges to find: "Edited after 9 answers read it ·
+Re-run 9", or on an insert, "6 answers below have not read this yet · Re-run 6". Each answer's footer says what it
+read ("Read its question and 2 parts above"); clicking marks those parts. A re-run keeps the previous answer behind
+"Show previous".
 
 ## Layout
 
-- **Positions.** Roots are placed absolutely. Forks are placed relative to their anchor, so they follow it when the
-  column above grows. A dragged column becomes absolute.
-- **Growth.** Columns are laid out parents first. A column that would overlap one already placed is pushed down below
-  it; nothing moves sideways. Answers render clamped to about eight lines, and a running answer reserves that height,
-  so streaming does not reflow the canvas.
-- **Inserting between two cards** creates an inset fork in the gap. It reads the parts above the gap, and the column
-  grows by the aside's height. The answers below do not read it and stay up to date. Geometry shows the rule: flush
-  parts are context for what follows, inset parts are not. "Merge into series" relinks the aside into the chain. The
-  answers below then show "added" and offer Include and re-run.
-- **Branching from mid-thread.** Branch on any text part or ask card opens a new column to the right at that card's
-  height, joined by a fork edge. Its answer reads the series up to the fork and nothing below it.
+- **Columns** are `prev` chains from placed heads, laid out depth by depth and, within a depth, by wanted height. A
+  column that would overlap a placed one moves down; nothing moves sideways. Answers clamp to eight lines and a
+  running answer reserves that height, so streaming does not reflow.
+- **Insert between two cards** ("+" in the gap): the new ask gets `prev` = the card above, and the card below is
+  relinked to follow it. It reads only the parts above. The column grows. Later answers read `above`, so they depend
+  on it and turn stale; text parts never do. The composer states this before posting.
+- **Branch from mid-thread** (Branch on a card, or "Ask about this" on a selected passage) opens a column to the right
+  at that card's height. It reads the thread up to the fork. Further branches nearby stack below.
+- **Fold** shows a column as one line per card, keeping stale marks.
 
 ## Mapping from the handoff model
 
 | Today | Dataflow |
 |---|---|
-| Thread, post | root text cell; a multi-part post is a chain of the author's text cells |
-| Thread, ask | root text cell (question) + `answer(above)` |
+| Thread (post) | root text cell; a multi-part post is a chain of text cells |
+| Thread (ask) | root text cell + `answer(above)` |
 | Node, Continue | question + answer appended at the tail |
-| Branch, Branch here, Branch (ask beside) | fork with Placement `beside` |
-| Passage branch, Look up | fork whose question carries `@id#n` |
-| Reply on a post | text cell appended (flush) or an inset fork under a part |
-| Comment on a node | text inset fork under the answer; no run |
-| Open as its own thread | give the fork head an absolute Placement; nothing is copied |
+| Branch, Branch here, Branch (ask beside) | branch with a relative Placement |
+| Passage branch, Look up | branch whose question carries `@id#n` |
+| Reply on a post | text cell appended, or a branch from the part it replies to |
+| Comment on a node | text branch from the answer; no run |
+| Open as its own thread | give the branch head an absolute Placement; nothing is copied |
 | Save | a per-user set of ids, outside the model |
 | Channel | the canvas; Placements are per canvas |
-| Run record | `versions[]` + the in-flight run |
+| Run record | `out`, `prevOut`, and the in-flight run |
 | Follow-up counts | derived from `prev` and references |
 
 ## Open questions
 
-- **Who may re-run** someone else's answer, and who pays for the run. The mock attributes every version to the person
-  who ran it.
-- **Merge permission.** Proposed: the series author, or the aside's author on an ask thread.
-- **Shared layout.** Layout is last-writer-wins, so one person's drag moves the column for everyone. The alternative
-  is per-user overrides.
-- **Passage anchors.** A passage anchor survives a re-run through its stored text. Matching it fuzzily against a
-  rewritten answer is unsolved.
-- **Context size.** Context through deep forks has no bound. It needs a cap and a visible estimate before a run.
-- **Free functions.** Whether to keep `quote` as the only free function or to add a small set.
-- **Concurrent appends.** The server must resolve "append at tail" at commit time. Otherwise two appends become a
-  silent fork.
+- **Cost.** Who may re-run another person's answer, and who pays for "Re-run 9" on a shared thread.
+- **Insert noise.** An insert near the top of a long thread stales every answer below. Whether later answers should
+  read inserts at all needs testing.
+- **Post boundary.** Whether an author's part added after someone's reply still belongs to the post.
+- **Passage anchors.** `@ia#4` is an index, so after a re-run it points at the new passage 4. Matching the stored text
+  is unsolved.
+- **Scale.** Bounding context through deep branches; semantic zoom; shared layout under last-writer-wins; resolving
+  concurrent appends at the tail on the server; readable mention tokens in the composer.
 
 ## Advisor log
 
-(filled in below)
+**Round 1 (v1: Cell, Stack, Reference; live `above`).** Said: overwriting answers breaks what people built on; Stack
+order, `Stack.from` and references are three relations, not one; the question was hidden in an expression string;
+positional refs break on insert; four model functions are redundant. Changed: `prev` links replace Stack; the question
+is a text cell; read sets record hashes; ids only, shown as chips; Save leaves the model. Rejected: one model function,
+because the brief asks what computable means beyond an ask.
+
+**Round 2 (v2: Cell, Placement).** Said: "oldest child continues the column" breaks after an insert (I had hit the
+same bug); the read set must be visible before anything goes wrong; one reference type; anchor-relative branches.
+Changed: explicit column heads, the "Read …" footer, `quote` as the only free function, relative branches. Adopted,
+later removed: unlinked asides with "Merge", per-cause badge kinds, an answer pager, Pin. Rejected: author-only post
+chains (permission is a social rule, not structure).
+
+**Round 3 (mock walkthrough).** Most useful: the passage gesture was missing; Enter did opposite things in the two
+composer modes; one root edit badged twenty answers; seven run verbs. Changed: selection popover; one composer (Enter
+adds a part, Ctrl+Enter runs the primary button); outcome and preflight labels; the summary on the cause with
+"Re-run n"; one verb; "Model answer" labels; reference edges only on selection; Fold.
+
+**Steer from the parent session (after round 3).** One stale state; no Merge (an insert is a cell in the series and
+goes stale by the same rule); at most the previous answer; three or fewer primitives; show `summarize`, `compare` and
+`filter` to stay distinct from variant B. All adopted, reversing my round 2 asides and my round 1 cut of the model
+functions.

@@ -6,19 +6,21 @@ A design mock. One self-contained file; the only external request is the Inter f
 falls back to the system font). Nothing calls a model: answers are canned and runs are timers.
 Concept: docs/canvas/dataflow-concept.md. Seed content: docs/mockups/session-handoff.html (branch claude/session-web).
 
-Data model (in memory; a reload starts over)
-- Cell { id, u, at, prev, body, versions, pinned }
-  - body.text: a part written by a person. "@id" inside the text is a reference (drawn as a chip).
-  - body.expr: a computed part. answer(...) is the only model call; quote(@id#n) is free and recomputed on render.
-  - versions (answer cells only): [{ n, html, read: [{id, hash}], expr, by, at }]. Re-running appends a version.
-  - prev: the part this one follows. The parts of one series are a prev chain.
-- Placement { head, mode, x, y | dx, dy, abs }: one per column head. A root cell has one (absolute position). A fork
-  (a second child of some cell) always has one: mode 'beside' (its own column, positioned relative to its anchor until
-  dragged), 'inset' (drawn in the gap under its anchor, not read by the parts below) or 'chip' (unopened, a count on
-  the anchor). The child of a cell that has no Placement is the series' continuation.
-- answer(above) reads the prev chain to the root plus the cells mentioned in those parts (one hop). Arguments: above,
-  @id (include), -@id (exclude). Each version records the hash of everything it read; comparing those hashes with the
-  current ones gives the states: up to date, edited, re-run, added, pinned.
+Data model (in memory; a reload starts over). Two primitives; references are syntax.
+- Cell { id, u, at, prev, body, out, prevOut }
+  - body.text: a part written by a person. "@id" (or "@id#n", passage n) inside it is a reference, drawn as a chip.
+  - body.expr: a computed part. Model functions: answer(above), summarize(@a, …), compare(@a, @b, "on what"),
+    filter(@a, "criterion"). Free function: quote(@a#n), recomputed on every render and never run.
+  - out: { html, read: [{id, hash}], expr, by, at }, the last result and the hash of everything it read.
+    prevOut: the result before it.
+  - prev: the part this one follows. A series is a prev chain.
+- Placement { x, y, abs } or { dx, dy }: one per column head. Roots are absolute; a branch (a second child of some cell)
+  is placed relative to that cell until dragged. The child without a Placement continues the column.
+- answer(above) reads the prev chain to the root, through any branch, plus the cells those parts mention (one hop).
+- A model cell is stale when anything it read has a new hash, when what it would read now differs (an insert), or
+  when its expression changed. Nothing runs without a click. The cell that caused it shows "Re-run n".
+- In the composer, Enter adds a part, Ctrl+Enter runs the primary button, @ picks a card, and a part starting with
+  "=" is an expression. Selecting text in an answer offers "Ask about this" (a branch citing the passage) and "Quote".
 -->
 <html lang="en">
 <head>
@@ -204,6 +206,23 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .mpick button:hover, .mpick button.on { background: var(--control); }
 .mpick small { color: var(--t-faint); font-family: var(--mono); margin-right: 6px; }
 
+.fx { font-family: var(--mono); font-size: 11.5px; color: var(--accent); font-weight: 600; }
+.pref { font-size: var(--fs-xs); color: var(--t-faint); }
+.state.cause { background: var(--inset); box-shadow: inset 0 0 0 1px var(--divider); }
+.comp .outc { font-size: 10.5px; font-weight: 600; letter-spacing: .03em; color: var(--accent); margin-bottom: 6px; }
+.comp .hint { font-size: 10.5px; color: var(--t-faint); margin-top: 8px; }
+.comp .row .sp { flex: 1; font-size: var(--fs-xs); color: var(--t-faint); }
+.edit textarea.mono { font-family: var(--mono); font-size: 12.5px; }
+.pop { position: fixed; z-index: 45; display: flex; gap: 2px; padding: 3px; border-radius: 15px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
+.pop button { height: 26px; padding: 0 10px; border-radius: 13px; font-size: var(--fs-xs); font-weight: 600; color: var(--t-heading); }
+.pop button:hover { background: var(--control); }
+.card.fold { padding: 8px 12px 10px; }
+.foldh { margin-bottom: 6px; } .foldh .tlink { margin-left: auto; color: var(--accent); font-size: var(--fs-xs); font-weight: 600; }
+.fl { position: relative; font-size: var(--fs-sm); color: var(--t-secondary); padding: 3px 0 3px 10px; border-left: 2px solid var(--divider);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl.st { border-left-color: var(--warn); }
+#insp details { margin-top: 14px; } #insp summary { cursor: pointer; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); margin-bottom: 5px; }
+
 /* ---- inspector ---- */
 #insp { position: fixed; right: 12px; top: 12px; bottom: 12px; width: 340px; z-index: 35; background: var(--card); border-radius: var(--r-xl);
   box-shadow: var(--shadow), var(--shadow-pop); display: flex; flex-direction: column; overflow: hidden; }
@@ -250,11 +269,12 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 <div id="tl">
   <button id="addPost" type="button">+ Add post</button>
   <button id="addAsk" type="button">+ Add ask</button>
-  <span class="where">#public · canvas</span>
+  <span class="where">#public · canvas · you: ines.v</span>
 </div>
 <div id="vp"><div id="world"><svg id="edges" width="1" height="1"></svg><div id="cols"></div></div></div>
 <aside id="insp" hidden aria-label="Inspector"></aside>
 <div id="mp" class="mpick" hidden></div>
+<div id="pp" class="pop" hidden><button data-act="pask">Ask about this</button><button data-act="pquote">Quote</button></div>
 <div id="toast" class="toast" hidden></div>
 <script>
 'use strict';
@@ -267,150 +287,152 @@ const now = () => NOW0 + (Date.now() - T0);
 const W = innerWidth < 640 ? 300 : 360, GAPX = 56;
 document.documentElement.style.setProperty('--w', W + 'px');
 
-/* ---------- store ---------- */
+/* ---------- store: cells and placements ---------- */
 const cells = {}, places = {};
 let seq = 1;
 const nid = () => 'p' + (seq++);
-function put(c) { cells[c.id] = Object.assign({ versions: [], pinned: false }, c); return cells[c.id]; }
+function put(c) { cells[c.id] = Object.assign({ out: null, prevOut: null, runs: 0 }, c); return cells[c.id]; }
 const t = (s) => Date.parse('2026-11-16T' + s + 'Z');
 
-/* ---------- small helpers ---------- */
+/* ---------- helpers ---------- */
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const strip = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent; };
 function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
-const isAnswer = (c) => c && c.body.expr && /^answer\(/.test(c.body.expr);
-const isQuote = (c) => c && c.body.expr && /^quote\(/.test(c.body.expr);
-const latest = (c) => c.versions[c.versions.length - 1];
 function ago(ms) { const m = Math.max(0, Math.round((now() - ms) / 60000)); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
 function av(u) { return `<span class="av" style="background:var(--av${USERS[u] || 1})">${esc(u.slice(0, 2).toUpperCase())}</span>`; }
 function toast(s) { const el = document.getElementById('toast'); el.textContent = s; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2400); }
+const fnOf = (c) => c && c.body.expr ? (parse(c.body.expr).fn || null) : null;
+const isAnswer = (c) => fnOf(c) === 'answer';
+const isQuote = (c) => fnOf(c) === 'quote';
+const isModel = (c) => ['answer', 'summarize', 'compare', 'filter'].includes(fnOf(c));
+const shown = (c) => (c.showPrev && c.prevOut) || c.out;
 
 /* passages of a cell: its paragraphs and list items, numbered from 1 */
 function passages(c) {
   if (!c) return [];
   if (c.body.text != null) return c.body.text.split(/\n+/).filter(Boolean);
-  const v = shownVersion(c); if (!v) return [];
-  const d = document.createElement('div'); d.innerHTML = v.html;
+  if (!c.out) return [];
+  const d = document.createElement('div'); d.innerHTML = c.out.html;
   return [...d.querySelectorAll('p, li')].map((e) => e.textContent.trim());
 }
-/* the text of a cell, as an answer reads it */
 function textOf(c) {
   if (!c) return '';
   if (c.body.text != null) return c.body.text;
   if (isQuote(c)) return quoteValue(c).text;
-  const v = latest(c); return v ? strip(v.html) : '';
+  return c.out ? strip(c.out.html) : '';
 }
 function label(id, n = 44) {
   const c = cells[id]; if (!c) return 'removed part';
   let s;
   if (isAnswer(c)) { const q = cells[c.prev]; s = '= ' + (q && q.body.text != null ? q.body.text : 'answer'); }
-  else if (isQuote(c)) s = 'quote: ' + quoteValue(c).text;
+  else if (c.body.expr) s = '= ' + plainExpr(c.body.expr);
   else s = c.body.text;
-  s = s.replace(/@([\w-]+)/g, (m, x) => cells[x] ? '“' + plainLabel(x) + '”' : m).replace(/\s+/g, ' ').trim();
+  s = s.replace(/@([\w-]+)(#\d+)?/g, (m, x) => cells[x] && x !== id ? '“' + short(x) + '”' : m).replace(/\s+/g, ' ').trim();
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
-function plainLabel(id) { const c = cells[id]; if (!c) return id; if (isAnswer(c)) { const q = cells[c.prev]; return (q ? q.body.text : '').slice(0, 30) + '… answer'; } return (c.body.text || '').slice(0, 30); }
-function chip(id, extra = '') { const c = cells[id]; return `<button class="chip${c ? '' : ' gone'}" data-go="${esc(id)}" title="@${esc(id)}" ${extra}>${esc(label(id, 34))}</button>`; }
-function richText(s) { return esc(s).replace(/@([\w-]+)/g, (m, id) => cells[id] ? chip(id) : m); }
+function short(id) { const c = cells[id]; if (!c) return id; const s = isAnswer(c) ? (cells[c.prev] ? cells[c.prev].body.text : '') : c.body.text != null ? c.body.text : plainExpr(c.body.expr); return s.length > 26 ? s.slice(0, 25) + '…' : s; }
+function plainExpr(e) { return e.replace(/\s+/g, ' '); }
+function chip(id) { const c = cells[id]; return `<button class="chip${c ? '' : ' gone'}" data-go="${esc(id)}" title="@${esc(id)}">${esc(label(id, 34))}</button>`; }
+function richText(s) { return esc(s).replace(/@([\w-]+)(?:#(\d+))?/g, (m, id, n) => cells[id] ? (n ? `<span class="pref">passage ${n} of</span> ` : '') + chip(id) : m); }
 const mentions = (s) => [...(s || '').matchAll(/@([\w-]+)/g)].map((m) => m[1]).filter((id) => cells[id]);
 
 /* ---------- graph ---------- */
 const kids = (id) => Object.values(cells).filter((c) => c.prev === id).sort((a, b) => a.at - b.at);
-const cont = (id) => kids(id).find((c) => !places[c.id]);           // the continuation: the child without a Placement
+const cont = (id) => kids(id).find((c) => !places[c.id]);   // the continuation is the child without a Placement
 const forks = (id) => kids(id).filter((c) => places[c.id]);
 function chainFrom(head) { const out = [head]; let c = cont(head); while (c) { out.push(c.id); c = cont(c.id); } return out; }
 function ancestors(id) { const out = []; let c = cells[cells[id].prev]; while (c) { out.unshift(c.id); c = cells[c.prev]; } return out; }
 function columnHeadOf(id) { let c = cells[id]; while (c && !places[c.id]) c = cells[c.prev]; return c ? c.id : null; }
 
-/* ---------- expressions ---------- */
+/* ---------- expressions ----------
+   answer(above)                    the default ask: the parts above, through any fork, and the cards they mention
+   summarize(@a, @b, …)             model
+   compare(@a, @b, "on what")       model
+   filter(@a, "criterion")          model
+   quote(@a#n)                      free: passage n of @a, recomputed on every change                         */
+const FNS = { answer: 'model', summarize: 'model', compare: 'model', filter: 'model', quote: 'free' };
 function parse(expr) {
-  const m = /^\s*(answer|quote)\s*\((.*)\)\s*$/.exec(expr || '');
-  if (!m) return { err: 'Write answer(…) or quote(@id#n).' };
-  const args = m[2].split(',').map((s) => s.trim()).filter(Boolean);
-  if (m[1] === 'quote') {
-    const q = /^@([\w-]+)(?:#(\d+))?$/.exec(args[0] || '');
-    if (!q || args.length !== 1) return { err: 'quote takes one reference, e.g. quote(@ia#3).' };
-    if (!cells[q[1]]) return { err: 'No part @' + q[1] + '.' };
-    return { fn: 'quote', id: q[1], n: q[2] ? +q[2] : null };
-  }
-  const out = { fn: 'answer', above: false, inc: [], exc: [] };
+  const m = /^\s*=?\s*([a-z]+)\s*\(([\s\S]*)\)\s*$/.exec(expr || '');
+  if (!m || !FNS[m[1]]) return { err: 'Use one of: answer(above), summarize(@a, …), compare(@a, @b, "on what"), filter(@a, "criterion"), quote(@a#n).' };
+  const fn = m[1], args = [...m[2].matchAll(/"([^"]*)"|[^,\s][^,]*/g)].map((x) => x[1] != null ? { s: x[1] } : { r: x[0].trim() });
+  const out = { fn, above: false, refs: [], text: '' };
   for (const a of args) {
-    if (a === 'above') out.above = true;
-    else if (/^-@[\w-]+$/.test(a)) out.exc.push(a.slice(2));
-    else if (/^@[\w-]+$/.test(a)) out.inc.push(a.slice(1));
-    else return { err: 'Unknown argument “' + a + '”. Use above, @id or -@id.' };
+    if (a.s != null) { out.text = a.s; continue; }
+    if (a.r === 'above') { out.above = true; continue; }
+    const r = /^@([\w-]+)(?:#(\d+))?$/.exec(a.r);
+    if (!r) return { err: 'Unknown argument “' + a.r + '”. Use above, @id, or text in quotes.' };
+    if (!cells[r[1]]) return { err: 'No part @' + r[1] + '.' };
+    out.refs.push({ id: r[1], n: r[2] ? +r[2] : null });
   }
-  for (const id of [...out.inc, ...out.exc]) if (!cells[id]) return { err: 'No part @' + id + '.' };
+  if (fn === 'quote' && (out.refs.length !== 1 || out.above)) return { err: 'quote takes one reference, e.g. quote(@ia#4).' };
+  if (fn === 'compare' && out.refs.length < 2) return { err: 'compare needs two references, e.g. compare(@ia, @aa, "on what").' };
+  if ((fn === 'filter' || fn === 'summarize') && !out.refs.length && !out.above) return { err: fn + ' needs a reference, e.g. ' + fn + '(@ia' + (fn === 'filter' ? ', "criterion")' : ')') + '.' };
   return out;
 }
-/* what an answer cell reads now: the prev chain to the root and the parts those mention (one hop) */
-function resolve(c, exprOverride) {
-  const p = parse(exprOverride || c.body.expr); if (p.err || p.fn !== 'answer') return [];
+/* what a model cell reads now */
+function resolve(c) {
+  const p = parse(c.body.expr); if (p.err || p.fn === 'quote') return [];
   let ids = [];
   const add = (id) => { if (id !== c.id && !ids.includes(id)) ids.push(id); };
-  if (p.above) for (const a of ancestors(c.id)) { add(a); const x = cells[a]; if (x.body.text != null) mentions(x.body.text).forEach(add); }
-  p.inc.forEach(add);
-  // a quote part is read through: the answer reads the quoted source
-  ids = ids.flatMap((id) => { const x = cells[id]; if (isQuote(x)) { const q = parse(x.body.expr); return [q.id]; } return [id]; });
-  ids = [...new Set(ids)].filter((id) => !p.exc.includes(id) && id !== c.id);
-  return ids;
+  if (p.above) for (const a of ancestors(c.id)) { add(a); const x = cells[a]; if (p.fn === 'answer' && x.body.text != null) mentions(x.body.text).forEach(add); }
+  p.refs.forEach((r) => add(r.id));
+  // a quote part is read through to its source
+  ids = ids.flatMap((id) => isQuote(cells[id]) ? [parse(cells[id].body.expr).refs[0].id] : [id]);
+  return [...new Set(ids)].filter((id) => id !== c.id);
 }
 function hashOf(id) {
   const c = cells[id]; if (!c) return 'gone';
   if (c.body.text != null) return 't' + hashStr(c.body.text);
-  if (isQuote(c)) return hashOf(parse(c.body.expr).id);
-  const v = latest(c); return v ? 'v' + v.n : 'none';
+  if (isQuote(c)) return hashOf(parse(c.body.expr).refs[0].id);
+  return c.out ? 'r' + c.runs : 'none';
 }
 function quoteValue(c) {
   const p = parse(c.body.expr); if (p.err) return { text: p.err, src: null };
-  const src = cells[p.id]; const ps = passages(src);
-  const text = p.n ? (ps[p.n - 1] || '') : textOf(src);
-  const pinned = c.body.pin;
-  const changed = pinned != null && pinned !== text && !ps.includes(pinned);
-  return { text: changed ? pinned : text, src: p.id, n: p.n, changed };
+  const r = p.refs[0], src = cells[r.id], ps = passages(src);
+  return { text: r.n ? (ps[r.n - 1] || '(no such passage)') : textOf(src), src: r.id, n: r.n };
 }
-/* the state of an answer cell, compared with what it read */
+/* one stale state: anything it read changed, the set it would read changed, or its expression changed */
+function reads(c) {
+  // rows for the inspector: each part read, and whether it changed since
+  if (!c.out) return resolve(c).map((id) => ({ id, st: 'will read' }));
+  const nowIds = resolve(c);
+  const rows = c.out.read.map((r) => ({ id: r.id, st: hashOf(r.id) === r.hash ? (nowIds.includes(r.id) ? 'read' : 'no longer read') : hashOf(r.id) === 'gone' ? 'removed' : 'changed since', ch: hashOf(r.id) !== r.hash || !nowIds.includes(r.id) }));
+  for (const id of nowIds) if (!c.out.read.some((r) => r.id === id)) rows.push({ id, st: 'new, not read', ch: true });
+  return rows;
+}
 function state(c) {
-  if (c.run) return { k: 'run' };
-  const v = latest(c); if (!v) return { k: 'new' };
-  if (c.pinned) return { k: 'pinned' };
-  if (v.expr !== c.body.expr) return { k: 'expr' };
-  for (const r of v.read) {
-    const h = hashOf(r.id);
-    if (h === r.hash) continue;
-    if (h === 'gone') return { k: 'gone', id: r.id };
-    if (isAnswer(cells[r.id])) return { k: 'rerun', id: r.id, v: +r.hash.slice(1) };
-    return { k: 'edited', id: r.id };
-  }
-  const added = resolve(c).filter((id) => !v.read.some((r) => r.id === id));
-  if (added.length) return { k: 'added', ids: added };
-  return { k: 'ok' };
+  if (c.run) return 'run';
+  if (!c.out) return 'new';
+  if (c.out.expr !== c.body.expr || reads(c).some((r) => r.ch)) return 'stale';
+  return 'ok';
 }
-const shownVersion = (c) => c.versions[(c.shown ?? c.versions.length - 1)] || latest(c);
-/* later answers in the same series that read this one */
-function laterReaders(id) {
-  const out = []; let c = cont(id);
-  while (c) { if (isAnswer(c) && latest(c) && latest(c).read.some((r) => r.id === id || out.includes(r.id))) out.push(c.id); c = cont(c.id); }
-  return out;
+function readers(id) { return Object.values(cells).filter((c) => c.out && c.out.read.some((r) => r.id === id)).map((c) => c.id)
+  .concat(Object.values(cells).filter((c) => isQuote(c) && parse(c.body.expr).refs[0].id === id).map((c) => c.id)); }
+function affected(id) {
+  return Object.values(cells).filter((c) => c.out && !c.run && isModel(c) && c.id !== id && (
+    c.out.read.some((r) => r.id === id && r.hash !== hashOf(id)) || (resolve(c).includes(id) && !c.out.read.some((r) => r.id === id))))
+    .sort((a, b) => a.at - b.at).map((c) => c.id);
 }
-function readers(id) { return Object.values(cells).filter((c) => isAnswer(c) && latest(c) && latest(c).read.some((r) => r.id === id)).map((c) => c.id)
-  .concat(Object.values(cells).filter((c) => isQuote(c) && parse(c.body.expr).id === id).map((c) => c.id)); }
+function causeHtml(id) {
+  // a text part reports only answers that read an earlier version of it; the rest is reported by the card's last cell
+  let ids = affected(id);
+  if (cells[id].body.text != null && isAnswer(cont(id))) ids = ids.filter((x) => cells[x].out.read.some((r) => r.id === id));
+  if (!ids.length) return '';
+  const c = cells[id], before = ids.filter((x) => cells[x].out.read.some((r) => r.id === id)).length;
+  const what = before === ids.length ? `${c.body.text != null ? 'Edited' : 'Re-run'} after ${ids.length} answer${ids.length === 1 ? '' : 's'} read it.` : before ? `${ids.length} answers read an earlier version or have not read it.` : `${ids.length} answer${ids.length === 1 ? ' below has' : 's below have'} not read this yet.`;
+  return `<div class="state cause"><span class="sp">${what}</span><button class="b" data-act="runmany" data-ids="${ids.join(',')}">Re-run ${ids.length}</button></div>`;
+}
 function sizeWord(ids) { const n = ids.reduce((s, id) => s + textOf(cells[id]).length, 0); return n < 3000 ? 'short' : n < 12000 ? 'medium' : 'long'; }
 
-/* ---------- runs (timers; nothing leaves the page) ---------- */
+/* ---------- runs: timers only; nothing leaves the page ---------- */
 const queue = [];
-function enqueue(ids, how) {
-  for (const id of ids) { const c = cells[id]; if (!c || c.run) continue; c.run = { status: 'queued', how, shown: 0 }; queue.push(id); }
-  render(); pump();
-}
+function enqueue(id) { const c = cells[id]; if (!c || c.run) return; c.run = { status: 'queued', shown: 0 }; queue.push(id); render(); pump(); }
 function pump() {
   if (pump.busy || !queue.length) return;
   const id = queue.shift(), c = cells[id];
   if (!c || !c.run) return pump();
   pump.busy = true;
-  // the read set is fixed when the run starts: same parts on a re-run, the current set on a first run or "include"
-  const v = latest(c);
-  const ids = c.run.how === 'same' && v && v.expr === c.body.expr ? v.read.map((r) => r.id).filter((x) => cells[x]) : resolve(c);
+  const ids = resolve(c);                                   // a run reads the current set
   const read = ids.map((x) => ({ id: x, hash: hashOf(x) }));
   const html = canned(c, ids);
   const blocks = html.match(/<(p|ul|ol|h4)[\s\S]*?<\/\1>/g) || [html];
@@ -420,65 +442,70 @@ function pump() {
     if (!cells[id] || !c.run) { pump.busy = false; return pump(); }
     i++; c.run.shown = i; updateRunning(id);
     if (i < blocks.length) return setTimeout(step, 1600 / blocks.length);
-    c.versions.push({ n: c.versions.length + 1, html, read, expr: c.body.expr, by: ME, at: now() });
-    c.shown = null; c.run = null; pump.busy = false; render(); pump();
+    c.prevOut = c.out; c.runs++;
+    c.out = { html, read, expr: c.body.expr, by: ME, at: now() };
+    c.showPrev = false; c.run = null; pump.busy = false; render(); pump();
   };
   setTimeout(step, 450);
 }
 function canned(c, ids) {
-  if (c.seedHtml) return c.seedHtml;                         // a re-run of a seeded answer repeats its text
-  const q = cells[c.prev] && cells[c.prev].body.text != null ? cells[c.prev].body.text : '';
-  for (const [re, html] of CANNED) if (re.test(q)) return html;
-  const items = ids.slice(-6).map((id) => `<li>${esc(label(id, 70))}</li>`).join('');
-  return `<p>Canned answer for the mock. A run would answer “${esc(q.replace(/@([\w-]+)/g, (m, x) => cells[x] ? plainLabel(x) : m) || 'this')}” from the ${ids.length} part${ids.length === 1 ? '' : 's'} it read${ids.length > 6 ? ', the last six of which are' : ''}:</p><ul>${items}</ul><p>Branching from a different part gives a different read set, and so a different answer.</p>`;
+  if (c.seedHtml) return c.seedHtml;                        // a re-run of a seeded cell repeats its text
+  const p = parse(c.body.expr);
+  const list = `<ul>${ids.slice(-6).map((id) => `<li>${esc(label(id, 70))}</li>`).join('')}</ul>`;
+  if (p.fn === 'answer') {
+    const q = cells[c.prev] && cells[c.prev].body.text != null ? cells[c.prev].body.text : '';
+    for (const [re, html] of CANNED) if (re.test(q)) return html;
+    return `<p>Canned answer for the mock. A run would answer “${esc(q.replace(/@([\w-]+)/g, (m, x) => cells[x] ? short(x) : m))}” from the ${ids.length} part${ids.length === 1 ? '' : 's'} it read${ids.length > 6 ? ', the last six of which are' : ''}:</p>${list}<p>Branching from a different part gives a different read set, and so a different answer.</p>`;
+  }
+  const what = p.fn === 'summarize' ? 'summarize' : p.fn === 'compare' ? `compare, on “${esc(p.text || 'everything')}”,` : `keep only what matches “${esc(p.text)}” in`;
+  return `<p>Canned output for the mock. A run would ${what} these ${ids.length} part${ids.length === 1 ? '' : 's'}:</p>${list}`;
 }
 
 /* ---------- seed ---------- */
 function seed() {
   const A = (id, u, at, prev, text) => put({ id, u, at: t(at), prev, body: { text } });
-  const R = (id, at, prev, html, by) => {
-    const c = put({ id, u: 'model', at: t(at), prev, body: { expr: 'answer(above)' }, seedHtml: html });
-    c.versions.push({ n: 1, html, read: [], expr: 'answer(above)', by, at: t(at) });
+  const M = (id, u, at, prev, expr, html, by) => {
+    const c = put({ id, u, at: t(at), prev, body: { expr }, seedHtml: html });
+    if (html) { c.out = { html, read: [], expr, by, at: t(at) }; c.runs = 1; }
     return c;
   };
-  const fix = (id) => { const c = cells[id]; latest(c).read = resolve(c).map((x) => ({ id: x, hash: hashOf(x) })); };
+  const R = (id, at, prev, html, by) => M(id, 'model', at, prev, 'answer(above)', html, by);
   // ines.v's ask in #public and the follow-ups under it
-  A('iq', 'ines.v', '09:55:30', null, TXT.intentionQ);
-  R('ia', '09:55:40', 'iq', TXT.intentionAnswer, 'ines.v');
+  A('iq', 'ines.v', '09:55:30', null, TXT.intentionQ); R('ia', '09:55:40', 'iq', TXT.intentionAnswer, 'ines.v');
   A('tq', 'hal_b', '09:56:30', 'ia', TXT.tradeQ); R('ta', '09:56:40', 'tq', TXT.trade, 'hal_b');
   A('nq', 'jun.park', '09:57:30', 'ta', TXT.nonEnQ); R('na', '09:57:40', 'nq', TXT.nonEn, 'jun.park');
   A('dq', 'ines.v', '09:58:30', 'na', TXT.decadeQ); R('da', '09:58:40', 'dq', TXT.decade, 'ines.v');
-  // a branch from the middle of the thread: reads iq, ia, tq, ta only
+  // branches from the middle of the thread: each reads the parts up to its fork, not below
   A('gq', 'ines.v', '09:59:00', 'ta', TXT.daemonQ); R('ga', '09:59:10', 'gq', TXT.daemon, 'ines.v');
   A('hq', 'hal_b', '09:59:30', 'ga', TXT.ledgerQ); R('ha', '09:59:40', 'hq', TXT.ledger, 'hal_b');
-  // an unopened branch
   A('lq', 'lettie', '09:58:00', 'na', TXT.lemQ); R('la', '09:58:10', 'lq', TXT.lem, 'lettie');
-  // mira_k's ask in #sci-fi, with an aside and a follow-up
-  A('aq', 'mira_k', '09:19:30', null, TXT.agentsQ); R('aa', '09:19:40', 'aq', TXT.agents, 'mira_k');
-  A('oq', 'oduya', '09:25:00', 'aa', TXT.liableQ); R('oa', '09:25:10', 'oq', TXT.liable, 'oduya');
-  A('bq', 'tomasz', '09:30:00', 'aa', TXT.backforthQ); R('ba', '09:30:10', 'bq', TXT.backforth, 'tomasz');
-  // tomasz's multi-part post, with a live quote part and a reply, and an ask nobody has run yet
+  // tomasz's multi-part post: two text parts, a live quote, a filter, a reply, and an ask nobody has run yet
   A('r1', 'tomasz', '07:30:00', null, 'Reading group: Accelerando chapter 3 on Thursday. Put your notes in this thread.');
   A('r2', 'tomasz', '07:31:00', 'r1', 'For anyone new to the book, this is how the intention scan describes it:');
-  put({ id: 'r3', u: 'tomasz', at: t('07:31:30'), prev: 'r2', body: { expr: 'quote(@ia#4)' } });
-  A('r4', 'lettie', '09:19:30', 'r3', 'Linked this from the wiki.');
-  A('r5', 'ines.v', '09:40:00', 'r4', 'which other books in @aa have an agent that works for one person, like manfred’s?');
-  put({ id: 'r6', u: 'model', at: t('09:40:05'), prev: 'r5', body: { expr: 'answer(above)' } });
-  // a question that compares two threads by mentioning their answers
-  A('cq', 'ines.v', '09:50:00', null, 'compare @ia and @aa: in each list, who does the agent or network actually work for?');
-  R('ca', '09:50:10', 'cq', CMP, 'ines.v');
-  ['ia', 'ta', 'na', 'da', 'ga', 'ha', 'la', 'aa', 'oa', 'ba', 'ca'].forEach(fix);
-  cells.r3.body.pin = quoteValue(cells.r3).text;
+  M('r3', 'tomasz', '07:31:30', 'r2', 'quote(@ia#4)');
+  M('r4', 'tomasz', '07:32:00', 'r3', 'filter(@ia, "published before 1980")', FILTER, 'tomasz');
+  A('r5', 'lettie', '09:19:30', 'r4', 'Linked this from the wiki.');
+  A('r6', 'ines.v', '09:40:00', 'r5', 'which other books in @aa have an agent that works for one person, like manfred’s?');
+  M('r7', 'model', '09:40:05', 'r6', 'answer(above)');
+  // a compare cell that reads two threads
+  M('cc', 'ines.v', '09:50:00', null, 'compare(@ia, @aa, "who the agent or network works for")', CMP, 'ines.v');
+  // mira_k's ask in #sci-fi, a follow-up, and a branch
+  A('aq', 'mira_k', '09:19:30', null, TXT.agentsQ); R('aa', '09:19:40', 'aq', TXT.agents, 'mira_k');
+  A('bq', 'tomasz', '09:30:00', 'aa', TXT.backforthQ); R('ba', '09:30:10', 'bq', TXT.backforth, 'tomasz');
+  A('oq', 'oduya', '09:25:00', 'aa', TXT.liableQ); R('oa', '09:25:10', 'oq', TXT.liable, 'oduya');
   const x = (i) => 24 + i * (W + GAPX);
-  places.iq = { mode: 'beside', x: x(0), y: 64, abs: true };
-  places.gq = { mode: 'beside', dx: 0, dy: 0 };
-  places.lq = { mode: 'chip' };
-  places.r1 = { mode: 'beside', x: x(2), y: 64, abs: true };
-  places.cq = { mode: 'beside', x: x(2), y: 640, abs: true };
-  places.aq = { mode: 'beside', x: x(3), y: 64, abs: true };
-  places.oq = { mode: 'inset' };
+  places.iq = { x: x(0), y: 64, abs: true };
+  places.gq = { dx: 0, dy: 0 };
+  places.lq = { dx: 0, dy: 0 };
+  places.r1 = { x: x(2), y: 64, abs: true };
+  places.cc = { x: x(2), y: 900, abs: true };
+  places.aq = { x: x(3), y: 64, abs: true };
+  places.oq = { dx: 0, dy: 0 };
+  // record what each seeded output read, in creation order so upstream hashes are final
+  for (const c of Object.values(cells).sort((a, b) => a.at - b.at)) if (c.out) c.out.read = resolve(c).map((id) => ({ id, hash: hashOf(id) }));
 }
-const CMP = '<p>Both lists include <i>Accelerando</i>, <i>Daemon</i>, "Maneki Neko" and <i>The Quantum Thief</i>, but they ask different questions of them.</p><ul><li><b>The intention scan</b> groups works by mechanism. The network is the actor: "Maneki Neko" routes favours through a hidden gift economy, and the Daemon assigns tasks by rank. Nobody in particular is the principal.</li><li><b>The agents scan</b> groups works by whom the agent serves, and its main pattern is the fiduciary that defects: the agent appears to serve its user while serving a platform, a hidden principal or its own goals.</li></ul><p>Only <i>Accelerando</i> sits clearly in both: Manfred\'s agents work for him, and the agent-run economy they join later works for no one.</p>';
+const CMP = '<p>Both lists include <i>Accelerando</i>, <i>Daemon</i>, "Maneki Neko" and <i>The Quantum Thief</i>, but they ask different questions of them.</p><ul><li><b>The intention scan</b> groups works by mechanism. The network is the actor: "Maneki Neko" routes favours through a hidden gift economy, and the Daemon assigns tasks by rank. Nobody in particular is the principal.</li><li><b>The agents scan</b> groups works by whom the agent serves. Its main pattern is the fiduciary that defects: the agent appears to serve its user while serving a platform, a hidden principal or its own goals.</li></ul><p>Only <i>Accelerando</i> sits clearly in both: Manfred\'s agents work for him, and the agent-run economy they join later works for no one.</p>';
+const FILTER = '<ul><li><i>The Space Merchants</i> (Frederik Pohl and C. M. Kornbluth, 1953 in book form). Advertising agencies run the world\'s political economy.</li><li>"The Midas Plague" (Frederik Pohl, 1954). Rationed consumption is a legal duty.</li><li><i>The Shockwave Rider</i> (John Brunner, 1975). "Delphi pools" collect public wagers on questions.</li></ul>';
 const CANNED = [
   [/one person|manfred/i, '<p>Three works in the agents scan give an agent a single, named principal:</p><ul><li><i>Accelerando</i>: Manfred Macx\'s agents file patents and set up companies for him.</li><li>"Maneki Neko": the pokkecon routes favours for its owner, who mostly complies.</li><li><i>The Perfect Match</i>: Tilly arranges its user\'s meals and dates, while optimising for the company that runs it.</li></ul><p>The Daemon is the counter-example: it works for a system, not a person.</p>'],
 ];
@@ -495,267 +522,242 @@ function groupsOf(chain) {
   }
   return g;
 }
-function renderChain(head, inset) {
-  const chain = chainFrom(head), groups = groupsOf(chain);
+function renderChain(head) {
+  const groups = groupsOf(chainFrom(head));
+  if (places[head] && places[head].folded) {
+    return `<div class="card fold" data-card="${groups[0][groups[0].length - 1]}"><div class="foldh hd grip" data-grip="${head}">${av(cells[head].u)}<b>${esc(cells[head].u)}</b><span>${groups.length} cards</span><button class="tlink" data-act="fold" data-id="${head}">Unfold</button></div>`
+      + groups.map((g) => { const last = cells[g[g.length - 1]]; const st = isModel(last) ? state(last) : 'ok'; return `<div class="fl${st === 'stale' ? ' st' : ''}" data-cell="${g[0]}">${esc(label(g[0], 60))}</div>`; }).join('') + '</div>';
+  }
   let h = '';
   groups.forEach((g, gi) => {
     const last = g[g.length - 1];
-    h += renderCard(g, head, inset);
-    // asides drawn in the gap under this card, then the gap where a new aside can be inserted
-    const asides = forks(last).filter((f) => places[f.id].mode === 'inset');
-    if (gi < groups.length - 1 || asides.length) h += gapHtml(last);
-    for (const f of asides) h += `<div class="insetw"><div class="lbl">aside · not read by the parts below <button data-act="merge" data-id="${f.id}">Merge into series</button></div>${renderChain(f.id, true)}</div>`;
-    if (draft && draft.kind === 'insert' && draft.anchor === last) h += `<div class="insetw"><div class="lbl">aside</div>${composerHtml()}</div>`;
-    if (asides.length && gi < groups.length - 1) h += gapHtml(last, true);
+    h += renderCard(g, head);
+    if (draft && draft.kind === 'insert' && draft.anchor === last) h += `<div class="gap"></div>${composerHtml()}<div class="gap"></div>`;
+    else if (gi < groups.length - 1) h += `<div class="gap"><button class="ins" data-act="insert" data-id="${last}" title="Insert an ask here" aria-label="Insert an ask here">+</button></div>`;
   });
-  const tail = chain[chain.length - 1];
+  const tail = chainFrom(head).pop();
   if (draft && draft.kind === 'append' && draft.anchor === tail) h += `<div class="gap"></div>${composerHtml()}`;
   else h += `<div class="tail"><button data-act="append" data-id="${tail}">Continue…</button></div>`;
   return h;
 }
-function gapHtml(anchor, plain) {
-  return plain ? '<div class="gap"></div>' : `<div class="gap"><button class="ins" data-act="insert" data-id="${anchor}" title="Insert an ask here" aria-label="Insert an ask here">+</button></div>`;
-}
-function renderCard(g, head, inset) {
+function renderCard(g, head) {
   const last = g[g.length - 1], c0 = cells[g[0]];
-  const isSel = g.includes(sel);
-  const own = c0.body.text != null && c0.u === ME;
-  let tb = `<div class="tb">`;
-  tb += `<button data-act="branch" data-id="${last}" title="Branch from here: a new column that reads this card and everything above it">Branch</button>`;
+  const own = c0.u === ME && (c0.body.text != null || !isAnswer(c0));
+  let tb = `<div class="tb"><button data-act="branch" data-id="${last}" title="Branch: a new column that reads this card and everything above it">Branch</button>`;
   if (own) tb += `<button data-act="edit" data-id="${c0.id}">Edit</button>`;
-  if (g.length === 2 || isAnswer(c0)) tb += `<button data-act="pin" data-id="${last}">${cells[last].pinned ? 'Unpin' : 'Pin answer'}</button>`;
+  if (g[0] === head) tb += `<button data-act="fold" data-id="${head}" title="Show this column as one line per card">Fold</button>`;
   tb += `<button class="code" data-act="inspect" data-id="${last}" title="Inspect: expression, reads, layout">&lt;/&gt;</button></div>`;
-  let h = `<div class="card${isSel ? ' sel' : ''}" data-card="${last}">${tb}`;
+  let h = `<div class="card${g.includes(sel) ? ' sel' : ''}" data-card="${last}">${tb}`;
   for (const id of g) h += secHtml(id, id === head);
-  const chips = forks(last).filter((f) => places[f.id].mode === 'chip');
-  if (chips.length) h += `<div class="forks">${chips.map((f) => `<button data-act="open" data-id="${f.id}" title="Open this branch beside">↳ ${esc(label(f.id, 40))}</button>`).join('')}</div>`;
   return h + '</div>';
+}
+function hdHtml(c, isHead, extra) {
+  return `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? c.id : ''}">${av(c.u)}<b>${esc(c.u)}</b><span>${ago(c.at)}</span>${c.edited ? '<span>· edited</span>' : ''}${extra || ''}<span class="rd"></span></div>`;
 }
 function secHtml(id, isHead) {
   const c = cells[id];
-  const grip = isHead ? ' grip' : '';
+  if (editing === id) {
+    const nx = cont(id), q = c.body.text != null && nx && isAnswer(nx);
+    const val = c.body.text != null ? c.body.text : c.body.expr;
+    return `<div class="sec" data-cell="${id}">${hdHtml(c, isHead)}<div class="edit"><textarea data-edit="${id}" ${c.body.expr ? 'class="mono" spellcheck="false"' : ''}>${esc(val)}</textarea><div class="row"><button data-act="edit-cancel">Cancel</button>${q ? `<button data-act="edit-save" data-id="${id}">Save</button><button class="pri" data-act="edit-save-run" data-id="${id}">Save and re-run</button>` : `<button class="pri" data-act="edit-save" data-id="${id}">Save</button>`}</div></div></div>`;
+  }
   if (c.body.text != null) {
-    const q = isAnswer(cells[cont(id) && cont(id).id]) && cont(id).prev === id;
-    let body;
-    if (editing === id) body = `<div class="edit"><textarea data-edit="${id}">${esc(c.body.text)}</textarea><div class="row"><button data-act="edit-cancel">Cancel</button>${q ? `<button data-act="edit-save" data-id="${id}">Save</button><button class="pri" data-act="edit-save-run" data-id="${id}">Save and re-run</button>` : `<button class="pri" data-act="edit-save" data-id="${id}">Save</button>`}</div></div>`;
-    else body = `<div class="txt${q ? ' qtxt' : ''}">${richText(c.body.text)}</div>`;
-    return `<div class="sec" data-cell="${id}"><div class="hd${grip}" data-grip="${isHead ? id : ''}">${av(c.u)}<b>${esc(c.u)}</b><span>${ago(c.at)}</span>${c.edited ? '<span>· edited</span>' : ''}<span class="rd"></span></div>${body}</div>`;
+    const q = isAnswer(cont(id)) && cont(id).prev === id;
+    return `<div class="sec" data-cell="${id}">${hdHtml(c, isHead)}<div class="txt${q ? ' qtxt' : ''}">${richText(c.body.text)}</div>${causeHtml(id)}</div>`;
   }
   if (isQuote(c)) {
     const qv = quoteValue(c);
-    return `<div class="sec" data-cell="${id}"><div class="hd${grip}" data-grip="${isHead ? id : ''}">${av(c.u)}<b>${esc(c.u)}</b><span>${ago(c.at)}</span><span class="rd"></span></div>
-      <div class="qsrc">Quote${qv.n ? ' of passage ' + qv.n : ''} from ${qv.src ? chip(qv.src) : ''} <span class="live">live</span></div>
-      <div class="quote">${esc(qv.text)}</div>${qv.changed ? '<div class="state">The source changed since this was quoted. Showing the quoted text.</div>' : ''}</div>`;
+    return `<div class="sec" data-cell="${id}">${hdHtml(c, isHead)}<div class="qsrc"><span class="fx">= quote</span> from ${qv.src ? chip(qv.src) : ''} <span class="live">live · no run</span></div><div class="quote">${esc(qv.text)}</div></div>`;
   }
-  return ansHtml(c, grip, isHead);
+  return modelHtml(c, isHead);
 }
-function ansHtml(c, grip, isHead) {
-  const st = state(c), v = shownVersion(c), id = c.id;
-  let body = '', ftr = '', badge = '', mark = '';
+/* the expression of a non-ask cell, written out with chips */
+function exprLine(c) {
+  const p = parse(c.body.expr); if (p.err) return `<span class="fx">=</span> <code>${esc(c.body.expr)}</code>`;
+  const refs = p.refs.map((r) => chip(r.id));
+  const txt = p.text ? ` on “${esc(p.text)}”` : '';
+  if (p.fn === 'compare') return `<span class="fx">= compare</span> ${refs.join(' with ')}${txt}`;
+  if (p.fn === 'filter') return `<span class="fx">= filter</span> ${refs.join(' ')}${p.text ? ` by “${esc(p.text)}”` : ''}`;
+  return `<span class="fx">= ${p.fn}</span> ${p.above ? 'the parts above ' : ''}${refs.join(' ')}${txt}`;
+}
+function modelHtml(c, isHead) {
+  const id = c.id, st = state(c), o = shown(c), ans = isAnswer(c);
+  let body = '', ftr = '', badge = '';
   if (c.run) {
-    const shown = c.run.blocks ? c.run.blocks.slice(0, c.run.shown).join('') : '';
-    body = `<div class="prose reserve" data-stream="${id}">${shown}</div>`;
+    body = `<div class="prose reserve" data-stream="${id}">${c.run.blocks ? c.run.blocks.slice(0, c.run.shown).join('') : ''}</div>`;
     ftr = `<span class="running">${c.run.status === 'queued' ? 'Queued' : 'Running'} · reads ${c.run.ids ? c.run.ids.length : resolve(c).length} parts</span>`;
-  } else if (!v) {
-    const n = resolve(c).length;
+  } else if (!o) {
+    const ids = resolve(c);
     body = `<div class="prose" style="color:var(--t-faint)">Not run yet.</div>`;
-    badge = `<div class="state ctx"><span class="sp">Will read ${n} part${n === 1 ? '' : 's'} (${sizeWord(resolve(c))} context).</span><button class="b" data-act="run" data-id="${id}">Run</button></div>`;
+    badge = `<div class="state ctx"><span class="sp">Will read ${ids.length} part${ids.length === 1 ? '' : 's'} (${sizeWord(ids)} context).</span><button class="b" data-act="run" data-id="${id}">Run</button></div>`;
   } else {
     const ex = expanded.has(id);
-    body = `<div class="prose${ex ? '' : ' clamp'}">${v.html}</div><button class="more" data-act="expand" data-id="${id}">${ex ? 'Show less' : 'Show all'}</button>`;
-    const nv = c.versions.length, si = c.shown ?? nv - 1;
-    const pager = nv > 1 ? `<span class="pager"><button data-act="ver" data-id="${id}" data-d="-1" ${si === 0 ? 'disabled' : ''} aria-label="Earlier answer">‹</button>answer ${si + 1} of ${nv}<button data-act="ver" data-id="${id}" data-d="1" ${si === nv - 1 ? 'disabled' : ''} aria-label="Later answer">›</button></span>` : '';
-    ftr = `<button data-act="reads" data-id="${id}" title="Show what this answer read">Read ${v.read.length} part${v.read.length === 1 ? '' : 's'}</button>${pager}<span>${st.k === 'ok' ? 'up to date' : st.k === 'pinned' ? 'pinned' : ''}</span>`;
-    const later = laterReaders(id);
-    const scope = later.length ? `<button class="b2" data-act="rerun" data-id="${id}" data-scope="1" title="Re-run this answer, then the ${later.length} answers below it that read it, in order">Re-run with ${later.length} below</button>` : '';
-    if (st.k === 'edited') badge = `<div class="state"><span class="sp">Answered before ${chip(st.id)} was edited.</span><button class="b" data-act="rerun" data-id="${id}">Re-run</button>${scope}</div>`;
-    else if (st.k === 'rerun') badge = `<div class="state"><span class="sp">Written against answer ${st.v} of ${chip(st.id)}, which has been re-run.</span><button class="b2" data-act="showv" data-id="${st.id}" data-v="${st.v}">Show answer ${st.v}</button><button class="b" data-act="rerun" data-id="${id}">Re-run</button>${scope}</div>`;
-    else if (st.k === 'gone') badge = `<div class="state"><span class="sp">A part it read was removed.</span><button class="b" data-act="rerun" data-id="${id}">Re-run</button></div>`;
-    else if (st.k === 'expr') badge = `<div class="state"><span class="sp">Its expression changed since this answer.</span><button class="b" data-act="rerun-new" data-id="${id}">Run</button></div>`;
-    else if (st.k === 'added') badge = `<div class="state ctx"><span class="sp">Answered before ${st.ids.slice(0, 2).map(chip).join(' ')}${st.ids.length > 2 ? ' and ' + (st.ids.length - 2) + ' more' : ''} ${st.ids.length > 1 ? 'were' : 'was'} added.</span><button class="b2" data-act="rerun-new" data-id="${id}">Include and re-run</button></div>`;
-    if (st.k === 'edited' || st.k === 'rerun' || st.k === 'gone' || st.k === 'expr') mark = '<span class="stale-mark"></span>';
-    else if (st.k === 'added') mark = '<span class="stale-mark ctx-mark"></span>';
-    if (si !== nv - 1) badge = `<div class="state ctx"><span class="sp">Showing an earlier answer.</span><button class="b2" data-act="ver" data-id="${id}" data-d="99">Latest</button></div>` + badge;
+    body = `<div class="prose${ex ? '' : ' clamp'}">${o.html}</div><button class="more" data-act="expand" data-id="${id}">${ex ? 'Show less' : 'Show all'}</button>`;
+    const nq = ans && o.read.some((r) => r.id === c.prev), more = o.read.length - (nq ? 1 : 0);
+    ftr = `<button data-act="reads" data-id="${id}" title="Mark the parts it read">${nq ? `Read its question${more ? ` and ${more} part${more === 1 ? '' : 's'} above` : ''}` : `Read ${o.read.length} part${o.read.length === 1 ? '' : 's'}`}</button>`
+      + `<span>${c.showPrev ? 'previous answer' : st === 'ok' ? 'up to date' : ''}</span>`
+      + (c.prevOut ? `<button data-act="prev" data-id="${id}">${c.showPrev ? 'Show current' : 'Show previous'}</button>` : '');
+    if (st === 'stale') badge = `<div class="state"><span class="sp">Inputs changed since this ${ans ? 'answer' : 'result'}.</span><button class="b2" data-act="inspect" data-id="${id}">What changed</button><button class="b" data-act="run" data-id="${id}">Re-run</button></div>`;
+    if (st !== 'stale') badge += causeHtml(id);
   }
-  const hd = isHead ? `<div class="hd grip" data-grip="${id}"><span class="mk">=</span><b>answer</b><span class="rd"></span></div>` : `<div class="hd"><span class="mk">=</span><span>answer${v ? ' · run by ' + esc(v.by) + ' · ' + ago(v.at) : ''}</span><span class="rd"></span></div>`;
+  const mark = st === 'stale' && !c.showPrev ? '<span class="stale-mark"></span>' : '';
+  const hd = ans
+    ? `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? id : ''}"><span class="mk">M</span><span>Model answer${c.out ? ' · ' + ago(c.out.at) + ' ago' : ''}</span><span class="rd"></span></div>`
+    : hdHtml(c, isHead) + `<div class="qsrc">${exprLine(c)}</div>`;
   return `<div class="sec ans" data-cell="${id}">${mark}${hd}${body}${badge}<div class="ftr">${ftr}</div></div>`;
+}
+function preflight() {
+  const d = draft; if (!d) return '';
+  const base = d.anchor ? [...ancestors(d.anchor), d.anchor] : [];
+  const ids = new Set(base);
+  for (const id of base) { const x = cells[id]; if (x.body.text != null) mentions(x.body.text).forEach((m) => ids.add(m)); }
+  for (const s of d.parts) mentions(s).forEach((m) => ids.add(m));
+  const n = ids.size + d.parts.filter((s) => s.trim()).length;
+  return `Ask reads ${n} part${n === 1 ? '' : 's'}`;
 }
 function composerHtml() {
   const d = draft, ask = d.mode === 'ask';
   const parts = d.parts.map((p, i) => `<div class="part"><span class="pn">${d.parts.length > 1 ? i + 1 : ''}</span><textarea data-part="${i}" rows="1" placeholder="${ask && i === d.parts.length - 1 ? (d.kind === 'branch' ? 'Ask about the parts up to here…' : 'Ask a question…') : i ? 'Next part…' : 'Write a post…'}">${esc(p)}</textarea></div>`).join('');
-  const hint = ask ? 'Enter asks · Shift+Enter new line · @ mentions a card' : 'Enter adds a part · ⌘/Ctrl+Enter posts · @ mentions a card';
-  return `<div class="card" data-draft="1"><div class="comp">${parts}<div class="row"><span class="hint">${hint}</span><button class="x" data-act="cancel">Cancel</button><button class="${ask ? '' : 'pri'}" data-act="commit" data-mode="post">Post</button><button class="${ask ? 'pri' : ''}" data-act="commit" data-mode="ask">Ask</button></div></div></div>`;
+  const outcome = { root: 'New thread', append: 'Continues the thread · later asks read it', insert: 'Inserted into the thread · answers below it will show changed inputs', branch: 'Branch · reads the thread up to here, not below' }[d.kind];
+  const hint = `Enter: new part · ⌘/Ctrl+Enter: ${ask ? 'Ask' : 'Post'} · @ mentions a card · a part starting with = is computed, e.g. =summarize(@ia)`;
+  return `<div class="card" data-draft="1"><div class="comp"><div class="outc">${outcome}</div>${parts}<div class="hint">${hint}</div><div class="row"><span class="sp pre">${preflight()}</span><button class="x" data-act="cancel">Cancel</button><button class="${ask ? '' : 'pri'}" data-act="commit" data-mode="post">Post</button><button class="${ask ? 'pri' : ''}" data-act="commit" data-mode="ask">Ask</button></div></div></div>`;
 }
 
 let layout = {};
 function render() {
-  const cols = document.getElementById('cols');
-  const heads = Object.keys(places).filter((h) => cells[h] && places[h].mode === 'beside');
+  const heads = Object.keys(places).filter((h) => cells[h]);
   let h = heads.map((hd) => `<div class="col" data-col="${hd}">${renderChain(hd)}</div>`).join('');
   if (draft && (draft.kind === 'root' || draft.kind === 'branch')) h += `<div class="col" data-col="__draft">${composerHtml()}</div>`;
-  cols.innerHTML = h;
+  document.getElementById('cols').innerHTML = h;
   place(heads);
   markReads();
   drawEdges();
   renderInspector();
   restoreFocus();
 }
-/* world position of an element, summed through offset parents up to #cols */
+/* world position of an element */
 function wpos(el) { let x = 0, y = 0; const stop = document.getElementById('world'); while (el && el !== stop) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; } return { x, y }; }
+function anchorPos(id) {
+  const el = document.querySelector(`[data-card="${id}"]`) || document.querySelector(`[data-cell="${id}"]`);
+  const col = el && el.closest('.col'); if (!col || !layout[col.dataset.col]) return null;
+  const p = wpos(el); return { x: p.x + el.offsetWidth + GAPX, y: p.y };
+}
 function place(heads) {
-  // parents before forks; each column is pushed down past any placed column it overlaps
+  // parents before forks; a column that would overlap one already placed moves down below it
   const depth = (hd) => { let d = 0, c = cells[hd]; while (c && c.prev) { c = cells[columnHeadOf(c.prev)]; d++; } return d; };
-  const order = heads.slice().sort((a, b) => depth(a) - depth(b) || (places[a].y || 0) - (places[b].y || 0));
   const done = []; layout = {};
-  const elOf = (hd) => document.querySelector(`.col[data-col="${hd}"]`);
-  const settle = (hd, el, x, y) => {
-    const hgt = el.offsetHeight;
-    let moved = true;
-    while (moved) { moved = false; for (const o of done) { if (x < o.x + o.w + 20 && x + W + 20 > o.x && y < o.y + o.h + 20 && y + hgt + 20 > o.y) { y = o.y + o.h + 28; moved = true; } } }
+  const settle = (hd, x, y) => {
+    const el = document.querySelector(`.col[data-col="${hd}"]`), hgt = el.offsetHeight;
+    for (let again = true; again;) { again = false; for (const o of done) if (x < o.x + o.w + 20 && x + W + 20 > o.x && y < o.y + o.h + 20 && y + hgt + 20 > o.y) { y = o.y + o.h + 28; again = true; } }
     el.style.left = x + 'px'; el.style.top = y + 'px';
-    const r = { hd, x, y, w: W, h: hgt }; done.push(r); layout[hd] = r;
+    done.push(layout[hd] = { hd, x, y, w: W, h: hgt });
   };
-  for (const hd of order) {
-    const el = elOf(hd), p = places[hd];
-    el.style.left = '0px'; el.style.top = '0px';
-    let x, y;
-    if (p.abs) { x = p.x; y = p.y; }
-    else {
-      const anchorEl = document.querySelector(`[data-card="${cells[hd].prev}"]`) || document.querySelector(`[data-cell="${cells[hd].prev}"]`);
-      const ac = anchorEl && anchorEl.closest('.col'), lay = ac && layout[ac.dataset.col];
-      if (!lay) { x = 24; y = 64; } else { const ap = wpos(anchorEl); x = ap.x + anchorEl.offsetWidth + GAPX + (p.dx || 0); y = ap.y + (p.dy || 0); }
-    }
-    settle(hd, el, x, y);
+  // depth by depth; within a depth, by wanted height, so a fork sits as close to its anchor as the ones above allow
+  const maxD = Math.max(0, ...heads.map(depth));
+  for (let d = 0; d <= maxD; d++) {
+    const want = heads.filter((hd) => depth(hd) === d).map((hd) => {
+      const p = places[hd]; if (p.abs) return { hd, x: p.x, y: p.y };
+      const a = anchorPos(cells[hd].prev) || { x: 24, y: 64 }; return { hd, x: a.x + (p.dx || 0), y: a.y + (p.dy || 0) };
+    }).sort((a, b) => a.y - b.y || cells[a.hd].at - cells[b.hd].at);
+    for (const w of want) settle(w.hd, w.x, w.y);
   }
   if (draft && (draft.kind === 'root' || draft.kind === 'branch')) {
-    const el = elOf('__draft'); let x = draft.x, y = draft.y;
-    if (draft.kind === 'branch') {
-      const anchorEl = document.querySelector(`[data-card="${draft.anchor}"]`); const ac = anchorEl && anchorEl.closest('.col'), lay = ac && layout[ac.dataset.col];
-      if (lay) { const ap = wpos(anchorEl); x = ap.x + anchorEl.offsetWidth + GAPX; y = ap.y; }
-    }
-    settle('__draft', el, x, y); draft.at = layout.__draft;
+    const a = draft.kind === 'branch' ? anchorPos(draft.anchor) : null;
+    settle('__draft', a ? a.x : draft.x, a ? a.y : draft.y); draft.at = layout.__draft;
   }
 }
 function markReads() {
   const c = cells[sel];
-  if (!c || !isAnswer(c)) return;
-  const v = latest(c);
-  const read = c.run && c.run.ids ? c.run.ids : v ? v.read.map((r) => r.id) : resolve(c);
-  const notRead = v && !c.run ? resolve(c).filter((id) => !read.includes(id)) : [];
-  for (const id of read) { const el = document.querySelector(`[data-cell="${id}"]`); if (el) { el.classList.add('is-read'); const r = el.querySelector('.rd'); if (r) r.textContent = 'read'; } }
-  for (const id of notRead) { const el = document.querySelector(`[data-cell="${id}"]`); if (el) { el.classList.add('not-read'); const r = el.querySelector('.rd'); if (r) r.textContent = 'not read'; } }
+  if (!c || !isModel(c)) return;
+  const read = c.run && c.run.ids ? c.run.ids : c.out ? c.out.read.map((r) => r.id) : resolve(c);
+  const changed = c.out && !c.run ? reads(c).filter((r) => r.ch).map((r) => r.id) : [];
+  for (const id of new Set([...read, ...changed])) {
+    const el = document.querySelector(`[data-cell="${id}"]`); if (!el) continue;
+    const ch = changed.includes(id);
+    el.classList.add(ch ? 'not-read' : 'is-read'); const r = el.querySelector('.rd'); if (r) r.textContent = ch ? 'changed' : 'read';
+  }
 }
 function drawEdges() {
   const svg = document.getElementById('edges'); let h = '';
-  const hot = new Set();
   const sc = cells[sel];
-  if (sc) { (isAnswer(sc) && latest(sc) ? latest(sc).read.map((r) => r.id) : []).forEach((id) => hot.add(id)); hot.add(sel); }
-  const box = (id) => { const el = document.querySelector(`[data-cell="${id}"]`); if (!el) return null; const col = el.closest('.col'); const l = layout[col.dataset.col]; if (!l) return null; const p = wpos(el); return { x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight, col: col.dataset.col }; };
-  const cardBox = (id) => { const el = document.querySelector(`[data-card="${id}"]`) || document.querySelector(`[data-cell="${id}"]`); if (!el) return null; const p = wpos(el); return { x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight }; };
+  const hot = new Set(sc && sc.out ? sc.out.read.map((r) => r.id) : []); if (sc) hot.add(sel);
+  const box = (id) => { const el = document.querySelector(`[data-cell="${id}"]`); if (!el) return null; const col = el.closest('.col'); if (!layout[col.dataset.col]) return null; const p = wpos(el); return { x: p.x, y: p.y, w: el.offsetWidth, col: col.dataset.col }; };
   const curve = (a, b, cls) => {
     const dx = Math.max(30, Math.abs(b.x - a.x) / 2);
     h += `<path class="${cls}" d="M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}"/><circle class="${cls.includes('hot') ? 'hot' : ''}" cx="${b.x}" cy="${b.y}" r="3"/>`;
   };
-  // fork edges: from the anchor card to the head of each column beside it
+  // fork edges: from the anchor card to the head of the column beside it
   for (const hd of Object.keys(layout)) {
-    if (hd === '__draft') continue;
-    const c = cells[hd]; if (!c.prev) continue;
-    const a = cardBox(c.prev), l = layout[hd]; if (!a) continue;
-    curve({ x: a.x + a.w, y: a.y + 18 }, { x: l.x, y: l.y + 18 }, 'fork' + (hot.has(c.prev) && hot.has(hd) ? ' hot' : ''));
+    const anchor = hd === '__draft' ? (draft.kind === 'branch' ? draft.anchor : null) : cells[hd].prev;
+    if (!anchor) continue;
+    const el = document.querySelector(`[data-card="${anchor}"]`) || document.querySelector(`[data-cell="${anchor}"]`); if (!el) continue;
+    const a = wpos(el), l = layout[hd];
+    curve({ x: a.x + el.offsetWidth, y: a.y + 18 }, { x: l.x, y: l.y + 18 }, 'fork' + (hd === '__draft' || (hot.has(anchor) && hot.has(hd)) ? ' hot' : ''));
   }
-  if (draft && draft.kind === 'branch' && layout.__draft) { const a = cardBox(draft.anchor); if (a) curve({ x: a.x + a.w, y: a.y + 18 }, { x: layout.__draft.x, y: layout.__draft.y + 18 }, 'fork hot'); }
-  // reference edges: a mention or a quote, from the source to the part that names it
+  // reference edges: from a source to the part whose text or expression names it
   for (const c of Object.values(cells)) {
-    const srcs = c.body.text != null ? mentions(c.body.text) : isQuote(c) ? [parse(c.body.expr).id] : [];
+    const srcs = c.body.text != null ? mentions(c.body.text) : (parse(c.body.expr).refs || []).map((r) => r.id);
     for (const s of srcs) {
       const a = box(s), b = box(c.id); if (!a || !b || a.col === b.col) continue;
       const right = a.x + a.w < b.x;
-      const hotE = sel === c.id || sel === s || (sc && isAnswer(sc) && sc.prev === c.id);
-      curve({ x: right ? a.x + a.w : a.x, y: a.y + 16 }, { x: right ? b.x : b.x + b.w, y: b.y + 16 }, 'ref' + (hotE ? ' hot' : ''));
+      const hotE = sel === c.id || sel === s || (sc && sc.prev === c.id);
+      if (hotE) curve({ x: right ? a.x + a.w : a.x, y: a.y + 16 }, { x: right ? b.x : b.x + b.w, y: b.y + 16 }, 'ref hot');
     }
   }
   svg.innerHTML = h;
 }
-let edgeT = 0;
-function drawEdgesSoon() { if (edgeT) return; edgeT = requestAnimationFrame(() => { edgeT = 0; if (drag0()) { const d = drag0(); layout[d.hd] = Object.assign({}, layout[d.hd], { x: d.nx, y: d.ny }); } drawEdges(); }); }
 function updateRunning(id) {
-  const el = document.querySelector(`[data-stream="${id}"]`); const c = cells[id];
+  const el = document.querySelector(`[data-stream="${id}"]`), c = cells[id];
   if (el && c.run) el.innerHTML = c.run.blocks.slice(0, c.run.shown).join('');
 }
 
 /* ---------- inspector ---------- */
 function renderInspector() {
-  const el = document.getElementById('insp');
-  const c = cells[sel];
+  const el = document.getElementById('insp'), c = cells[sel];
   if (!inspOpen || !c) { el.hidden = true; return; }
   el.hidden = false;
-  const p = places[c.id];
+  const p = places[c.id], fn = fnOf(c);
   let h = `<div class="ih"><h2>${esc(label(c.id, 60))}</h2><button data-act="close" aria-label="Close inspector">×</button></div><div class="ib">`;
-  h += `<h3>Object</h3><div class="kind"><code>@${esc(c.id)}</code> · ${c.body.text != null ? 'text, written by ' + esc(c.u) : isQuote(c) ? 'computed, free: recomputed whenever its source changes' : 'computed by a model run: runs only when someone presses Run'}</div>`;
-  if (c.body.text != null) {
-    h += `<h3>Expression</h3><div class="expr"><input id="exprIn" placeholder="none: this part is text" value=""><button data-act="expr-apply">Apply</button></div>
-      <p class="help">A part is text or an expression. Giving it an expression makes it computed, e.g. <code>quote(@ia#3)</code>. To ask about it, use Continue and Ask instead.</p>`;
-  } else {
-    h += `<h3>Expression</h3><div class="expr"><input id="exprIn" value="${esc(c.body.expr)}" spellcheck="false"><button data-act="expr-apply">Apply</button></div><div class="err" id="exprErr"></div>
-      <p class="help"><code>answer(above)</code> reads every part above this one in its series, through any fork, and the cards those parts mention. <code>@id</code> adds a card, <code>-@id</code> leaves one out. <code>quote(@id#n)</code> shows passage n of a card and needs no run.</p>`;
-  }
-  if (isAnswer(c)) {
-    const v = latest(c), now = resolve(c), st = state(c);
-    const read = v ? v.read : [];
-    h += `<h3>Reads${v ? ' (answer ' + v.n + ')' : ' (when run)'}</h3><ul class="rs">`;
-    const rows = v ? read.map((r) => ({ id: r.id, st: hashOf(r.id) === r.hash ? 'read' : hashOf(r.id) === 'gone' ? 'removed' : 'changed since', warn: hashOf(r.id) !== r.hash }))
-      : now.map((id) => ({ id, st: 'will read' }));
-    if (v) for (const id of now) if (!read.some((r) => r.id === id)) rows.push({ id, st: 'added since, not read', warn: true });
-    for (const r of rows) h += `<li>${chip(r.id)}<span class="st${r.warn ? ' w' : ''}">${r.st}</span><button class="xb" data-act="exclude" data-id="${r.id}" title="Leave this part out (writes -@${esc(r.id)})" aria-label="Leave out">×</button></li>`;
-    if (!rows.length) h += '<li>nothing</li>';
-    h += '</ul>';
-    const later = laterReaders(c.id);
-    h += `<div class="acts" style="margin-top:8px">${v ? `<button class="pri" data-act="rerun" data-id="${c.id}">Re-run same parts</button><button data-act="rerun-new" data-id="${c.id}">Re-read and run</button>` : `<button class="pri" data-act="run" data-id="${c.id}">Run</button>`}${later.length && v ? `<button data-act="rerun" data-id="${c.id}" data-scope="1">Re-run with ${later.length} below</button>` : ''}</div>`;
-    if (c.versions.length) {
-      h += `<h3>Answers</h3><div class="vers">`;
-      c.versions.forEach((v2, i) => h += `<button data-act="showv" data-id="${c.id}" data-v="${v2.n}" class="${(c.shown ?? c.versions.length - 1) === i ? 'on' : ''}"><span>answer ${v2.n}</span><span style="margin-left:auto">read ${v2.read.length} · run by ${esc(v2.by)} · ${ago(v2.at)}</span></button>`);
-      h += '</div>';
-    }
+  h += `<h3>Object</h3><div class="kind"><code>@${esc(c.id)}</code> · ${c.body.text != null ? 'text, written by ' + esc(c.u) : fn === 'quote' ? 'computed without a model: recomputed whenever its source changes' : 'computed by a model: runs only when someone presses Run'}</div>`;
+  if (c.body.expr != null) h += `<h3>Expression</h3><div class="expr"><input id="exprIn" value="${esc(c.body.expr)}" spellcheck="false"><button data-act="expr-apply">Apply</button></div><div class="err" id="exprErr"></div>
+    <p class="help"><code>answer(above)</code> reads the parts above, through any fork, and the cards they mention. <code>summarize(@a, …)</code>, <code>compare(@a, @b, "on what")</code> and <code>filter(@a, "criterion")</code> are also model runs. <code>quote(@a#n)</code> shows passage n of a card and needs no run. Apply changes the expression and marks the result out of date; it does not run.</p>`;
+  else h += `<h3>Text</h3><div class="kind">${richText(c.body.text)}</div>`;
+  if (isModel(c)) {
+    const rows = reads(c);
+    h += `<h3>${c.out ? 'Reads' : 'Will read'}</h3><ul class="rs">${rows.map((r) => `<li>${chip(r.id)}<span class="st${r.ch ? ' w' : ''}">${r.st}</span></li>`).join('') || '<li>nothing</li>'}</ul>`;
+    if (c.out && c.out.expr !== c.body.expr) h += `<p class="help" style="color:var(--warn)">The expression changed since this ran: <code>${esc(c.out.expr)}</code></p>`;
+    h += `<div class="acts" style="margin-top:8px"><button class="pri" data-act="run" data-id="${c.id}">${c.out ? 'Re-run' : 'Run'}</button>${c.prevOut ? `<button data-act="prev" data-id="${c.id}">${c.showPrev ? 'Show current' : 'Show previous'}</button>` : ''}</div>`;
   }
   const rb = readers(c.id);
-  h += `<h3>Read by</h3>${rb.length ? `<ul class="rs">${rb.map((id) => `<li>${chip(id)}<span class="st">${isQuote(cells[id]) ? 'quotes it' : 'answer'}</span></li>`).join('')}</ul>` : '<div class="kind" style="color:var(--t-faint)">No answer has read this part.</div>'}`;
+  h += `<h3>Read by</h3>${rb.length ? `<ul class="rs">${rb.map((id) => `<li>${chip(id)}</li>`).join('')}</ul>` : '<div class="kind" style="color:var(--t-faint)">Nothing reads this part.</div>'}`;
   h += `<h3>Layout</h3><div class="kind">`;
-  if (!p) h += c.prev ? `continues ${chip(c.prev)}` : 'not placed';
-  else if (!c.prev) h += `column head at x ${Math.round(layout[c.id] ? layout[c.id].x : p.x)}, y ${Math.round(layout[c.id] ? layout[c.id].y : p.y)}`;
-  else if (p.mode === 'beside') h += `branch beside ${chip(c.prev)}, ${p.abs ? 'dragged to a fixed position' : 'positioned relative to it'}`;
-  else if (p.mode === 'inset') h += `aside under ${chip(c.prev)}; not read by the parts below it`;
-  else h += `unopened branch from ${chip(c.prev)}`;
+  if (!p) h += c.prev ? `follows ${chip(c.prev)} in its series` : 'not placed';
+  else if (!c.prev || p.abs) h += `column at x ${Math.round(layout[c.id] ? layout[c.id].x : p.x)}, y ${Math.round(layout[c.id] ? layout[c.id].y : p.y)}${c.prev ? ', branched from ' + chip(c.prev) : ''}`;
+  else h += `branch beside ${chip(c.prev)}, placed relative to it`;
   h += '</div>';
-  if (p && c.prev) h += `<div class="acts" style="margin-top:8px">${p.mode !== 'beside' ? `<button data-act="open" data-id="${c.id}">Open beside</button>` : ''}${p.mode === 'inset' ? `<button data-act="merge" data-id="${c.id}">Merge into series</button>` : ''}${p.mode === 'beside' ? `<button data-act="toinset" data-id="${c.id}">Show as aside</button>` : ''}</div>`;
-  const rec = JSON.parse(JSON.stringify({ id: c.id, u: c.u, at: new Date(c.at).toISOString(), prev: c.prev || null, body: c.body, pinned: c.pinned || undefined,
-    versions: c.versions.map((v) => ({ n: v.n, read: v.read, expr: v.expr, by: v.by, html: strip(v.html).slice(0, 60) + '…' })), placement: p || undefined }));
-  if (!rec.versions.length) delete rec.versions;
-  h += `<h3>Record</h3><pre>${esc(JSON.stringify(rec, null, 1))}</pre></div>`;
+  const strip2 = (o) => o && { read: o.read, expr: o.expr, by: o.by, html: strip(o.html).slice(0, 60) + '…' };
+  const rec = { id: c.id, u: c.u, at: new Date(c.at).toISOString(), prev: c.prev || null, body: c.body, out: strip2(c.out) || undefined, prevOut: strip2(c.prevOut) || undefined, placement: p || undefined };
+  h += `<details><summary>Record</summary><pre>${esc(JSON.stringify(rec, null, 1))}</pre></details></div>`;
   el.innerHTML = h;
 }
 
 /* ---------- actions ---------- */
-function select(id, open) { sel = id; if (open) inspOpen = true; render(); }
+function select(id) { sel = id; render(); }
 function centerOn(id) {
   const el = document.querySelector(`[data-cell="${id}"]`); if (!el) return;
-  const col = el.closest('.col'), l = layout[col.dataset.col], p = wpos(el);
+  const p = wpos(el);
   const vw = innerWidth - (inspOpen && innerWidth > 640 ? 360 : 0), vh = innerWidth > 640 ? innerHeight : innerHeight * .44;
   view.x = vw / 2 - (p.x + W / 2) * view.k; view.y = Math.min(80, vh / 2 - (p.y + 40) * view.k); applyView();
 }
 function applyView() { document.getElementById('world').style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`; }
 function startDraft(kind, anchor, mode) {
-  draft = { kind, anchor, mode, parts: [''] };
-  if (kind === 'root') {
-    // the top-left of the visible canvas, below the buttons
-    draft.x = Math.round((24 - view.x) / view.k); draft.y = Math.round((64 - view.y) / view.k);
-  }
-  editing = null; draft.focus = 0; render();
-  if (kind !== 'root') { const el = document.querySelector('[data-draft] textarea'); if (el) el.scrollIntoView({ block: 'nearest' }); }
-  ensureVisible();
+  draft = { kind, anchor, mode, parts: [''], focus: 0 };
+  if (kind === 'root') { draft.x = Math.round((24 - view.x) / view.k); draft.y = Math.round((64 - view.y) / view.k); }
+  editing = null; render(); ensureVisible();
 }
 function ensureVisible() {
   const el = document.querySelector('[data-draft]'); if (!el) return;
-  const r = el.getBoundingClientRect(); const right = innerWidth - (inspOpen && innerWidth > 640 ? 360 : 0);
+  const r = el.getBoundingClientRect(), right = innerWidth - (inspOpen && innerWidth > 640 ? 360 : 0);
   let dx = 0, dy = 0;
   if (r.right > right - 16) dx = right - 16 - r.right; if (r.left + dx < 16) dx = 16 - r.left;
   if (r.bottom > innerHeight - 16) dy = innerHeight - 16 - r.bottom; if (r.top + dy < 56) dy = 56 - r.top;
@@ -766,34 +768,33 @@ function restoreFocus() {
   if (editing && restoreFocus.edit) { const el = document.querySelector(`[data-edit="${editing}"]`); if (el) el.focus(); restoreFocus.edit = false; }
 }
 function commit(mode) {
-  const d = draft; const parts = d.parts.map((s) => s.trim()).filter(Boolean);
+  const d = draft, parts = d.parts.map((s) => s.trim()).filter(Boolean);
   if (!parts.length) { toast('Write something first.'); return; }
+  for (const s of parts) if (s.startsWith('=')) { const p = parse(s); if (p.err) { toast(p.err); return; } }
   let prev = d.kind === 'root' ? null : d.anchor;
+  if (d.kind === 'append') { let c = cont(prev); while (c) { prev = c.id; c = cont(c.id); } }   // an append lands after the current tail
+  const below = d.kind === 'insert' ? cont(prev) : null;                                          // the part the insert goes above
   const made = [];
-  // an append lands after the current tail (the server would resolve this at commit time)
-  if (d.kind === 'append') { let c = cont(prev); while (c) { prev = c.id; c = cont(c.id); } }
-  parts.forEach((s, i) => { const c = put({ id: nid(), u: ME, at: now() + i, prev, body: { text: s } }); made.push(c.id); prev = c.id; });
-  let ans = null;
-  if (mode === 'ask') { ans = put({ id: nid(), u: 'model', at: now() + parts.length, prev, body: { expr: 'answer(above)' } }); made.push(ans.id); }
+  parts.forEach((s, i) => { const c = put({ id: nid(), u: ME, at: now() + i, prev, body: s.startsWith('=') ? { expr: s.slice(1).trim() } : { text: s } }); made.push(c.id); prev = c.id; });
+  const lastIsText = cells[prev].body.text != null;
+  if (mode === 'ask' && lastIsText) { const a = put({ id: nid(), u: 'model', at: now() + parts.length, prev, body: { expr: 'answer(above)' } }); made.push(a.id); prev = a.id; }
+  if (below) below.prev = prev;                        // insert: the part below now follows the new parts
   const head = made[0];
-  if (d.kind === 'root') places[head] = { mode: 'beside', x: d.at ? d.at.x : d.x, y: d.at ? d.at.y : d.y, abs: true };
-  else if (d.kind === 'branch') places[head] = { mode: 'beside', dx: 0, dy: d.at ? 0 : 0 };
-  else if (d.kind === 'insert') places[head] = { mode: 'inset' };
-  draft = null; sel = ans ? ans.id : made[made.length - 1];
-  if (ans) enqueue([ans.id], 'new'); else render();
-}
-function doRerun(id, scope, how) {
-  const ids = [id].concat(scope ? laterReaders(id) : []);
-  enqueue(ids, how);
-  toast(ids.length > 1 ? `Running ${ids.length} answers in order` : 'Running 1 answer');
+  if (d.kind === 'root') places[head] = { x: d.at ? d.at.x : d.x, y: d.at ? d.at.y : d.y, abs: true };
+  else if (d.kind === 'branch') places[head] = { dx: 0, dy: 0 };
+  draft = null; sel = made[made.length - 1];
+  const toRun = made.filter((id) => isModel(cells[id]) && (mode === 'ask' || !isAnswer(cells[id])));
+  render();
+  toRun.forEach(enqueue);
 }
 
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act], [data-go]');
   if (!b) {
     const card = e.target.closest('[data-card]');
+    if (card && !getSelection().isCollapsed) return;                    // selecting text, not the card
     if (card && !e.target.closest('textarea, input')) { const sec = e.target.closest('[data-cell]'); const id = sec ? sec.dataset.cell : card.dataset.card; if (id !== sel) select(id); return; }
-    if (e.target.closest('#vp') && !moved && !e.target.closest('[data-draft]')) { if (sel) { sel = null; render(); } }
+    if (e.target.closest('#vp') && !moved && !e.target.closest('[data-draft]') && sel) { sel = null; render(); }
     return;
   }
   if (b.dataset.go) { e.stopPropagation(); select(b.dataset.go); centerOn(b.dataset.go); return; }
@@ -803,70 +804,56 @@ document.addEventListener('click', (e) => {
     case 'close': inspOpen = false; render(); break;
     case 'branch': startDraft('branch', id, 'ask'); break;
     case 'insert': startDraft('insert', id, 'ask'); break;
-    case 'append': startDraft('append', id, cells[id] && (isAnswer(cells[id])) ? 'ask' : 'post'); break;
+    case 'append': startDraft('append', id, isAnswer(cells[id]) ? 'ask' : 'post'); break;
     case 'cancel': draft = null; render(); break;
     case 'commit': commit(b.dataset.mode); break;
-    case 'run': enqueue([id], 'new'); break;
-    case 'rerun': doRerun(id, !!b.dataset.scope, 'same'); break;
-    case 'rerun-new': enqueue([id], 'new'); break;
+    case 'run': enqueue(id); break;
+    case 'runmany': b.dataset.ids.split(',').forEach(enqueue); toast('Re-running in order'); break;
+    case 'fold': places[id].folded = !places[id].folded; render(); break;
+    case 'pask': case 'pquote': {
+      const pp = document.getElementById('pp'); pp.hidden = true; getSelection().removeAllRanges();
+      const ref = '@' + pp.dataset.cell + '#' + pp.dataset.n;
+      if (a === 'pask') { startDraft('branch', pp.dataset.card, 'ask'); draft.parts = [ref + ' ']; }
+      else { startDraft('root', null, 'post'); draft.parts = ['=quote(' + ref + ')']; }
+      draft.focus = 0; render(); ensureVisible(); break;
+    }
     case 'expand': expanded.has(id) ? expanded.delete(id) : expanded.add(id); render(); break;
-    case 'ver': { const c = cells[id], n = c.versions.length; const cur = c.shown ?? n - 1; const d = +b.dataset.d; c.shown = d === 99 ? null : Math.max(0, Math.min(n - 1, cur + d)); if (c.shown === n - 1) c.shown = null; render(); break; }
-    case 'showv': { const c = cells[id]; c.shown = (+b.dataset.v) - 1; if (c.shown === c.versions.length - 1) c.shown = null; sel = id; render(); centerOn(id); break; }
-    case 'reads': sel = id; render(); toast('Parts it read are marked on the canvas'); break;
-    case 'pin': cells[id].pinned = !cells[id].pinned; render(); break;
+    case 'prev': cells[id].showPrev = !cells[id].showPrev; render(); break;
+    case 'reads': sel = id; render(); toast('The parts it read are marked'); break;
     case 'edit': editing = id; draft = null; restoreFocus.edit = true; render(); break;
     case 'edit-cancel': editing = null; render(); break;
     case 'edit-save': case 'edit-save-run': {
-      const ta = document.querySelector(`[data-edit="${id}"]`); const c = cells[id];
-      if (ta && ta.value.trim() && ta.value !== c.body.text) { c.body.text = ta.value.trim(); c.edited = true; }
+      const ta = document.querySelector(`[data-edit="${id}"]`), c = cells[id], v = ta ? ta.value.trim() : '';
+      if (v && c.body.text != null && v !== c.body.text) { c.body.text = v; c.edited = true; }
+      if (v && c.body.expr != null && v !== c.body.expr) { const p = parse(v); if (p.err) { toast(p.err); break; } c.body.expr = v.replace(/^=\s*/, ''); }
       editing = null;
-      if (a === 'edit-save-run') { const nx = cont(id); if (nx && isAnswer(nx)) { sel = nx.id; enqueue([nx.id], 'same'); break; } }
+      if (a === 'edit-save-run') { const nx = cont(id); if (nx && isAnswer(nx)) { sel = nx.id; render(); enqueue(nx.id); break; } }
       render(); break;
-    }
-    case 'open': places[id] = { mode: 'beside', dx: 0, dy: 0 }; sel = id; render(); break;
-    case 'toinset': places[id] = { mode: 'inset' }; render(); break;
-    case 'merge': merge(id); break;
-    case 'exclude': {
-      const c = cells[sel]; if (!isAnswer(c)) break;
-      const p = parse(c.body.expr); if (p.err) break;
-      const args = (p.above ? ['above'] : []).concat(p.inc.filter((x) => x !== id).map((x) => '@' + x), p.exc.concat(p.inc.includes(id) ? [] : [id]).map((x) => '-@' + x));
-      c.body.expr = 'answer(' + args.join(', ') + ')'; render(); break;
     }
     case 'expr-apply': {
-      const c = cells[sel]; const v = document.getElementById('exprIn').value.trim();
-      if (c.body.text != null) { if (!v) break; const p = parse(v); if (p.err) { toast(p.err); break; } c.body = { expr: v }; if (p.fn === 'quote') c.body.pin = quoteValue(c).text; render(); break; }
+      const c = cells[sel], v = document.getElementById('exprIn').value.trim().replace(/^=\s*/, '');
+      if (!v) break;
       const p = parse(v); if (p.err) { document.getElementById('exprErr').textContent = p.err; break; }
-      if (p.fn === 'quote') { c.body = { expr: v }; c.body.pin = quoteValue(c).text; } else c.body.expr = v;
-      render(); break;
+      c.body.expr = v; render(); break;
     }
   }
 });
-/* an aside joins the series: the part below it now follows the aside's last part */
-function merge(id) {
-  const f = cells[id], anchor = f.prev, below = cont(anchor);
-  delete places[id];
-  const chain = chainFrom(id); const tail = chain[chain.length - 1];
-  if (below && below.id !== id) below.prev = tail;
-  render(); toast('Merged. Answers below it now show that a part was added.');
-}
 
 /* composer typing */
 document.addEventListener('input', (e) => {
   const ta = e.target.closest('[data-draft] textarea');
-  if (ta) { draft.parts[+ta.dataset.part] = ta.value; mentionPicker(ta); }
+  if (ta) { draft.parts[+ta.dataset.part] = ta.value; mentionPicker(ta); const pf = document.querySelector('[data-draft] .pre'); if (pf) pf.textContent = preflight(); }
   const t2 = e.target.closest('textarea'); if (t2) { t2.style.height = 'auto'; t2.style.height = t2.scrollHeight + 'px'; }
 });
 document.addEventListener('keydown', (e) => {
-  const mp = document.getElementById('mp');
-  const ta = e.target.closest('[data-draft] textarea');
+  const mp = document.getElementById('mp'), ta = e.target.closest('[data-draft] textarea');
   if (ta && !mp.hidden && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); const f = mp.querySelector('button'); if (f) f.click(); return; }
   if (ta && e.key === 'Escape') { if (!mp.hidden) { mp.hidden = true; return; } draft = null; render(); return; }
   if (ta && e.key === 'Enter') {
     const i = +ta.dataset.part;
-    if (e.metaKey || e.ctrlKey) { e.preventDefault(); commit(draft.mode === 'ask' ? 'ask' : 'post'); return; }
+    if (e.metaKey || e.ctrlKey) { e.preventDefault(); commit(draft.mode); return; }
     if (e.shiftKey) return;
     e.preventDefault();
-    if (draft.mode === 'ask') { commit('ask'); return; }
     if (!ta.value.trim()) return;
     draft.parts.splice(i + 1, 0, ''); draft.focus = i + 1; render(); ensureVisible();
     return;
@@ -879,23 +866,39 @@ document.addEventListener('keydown', (e) => {
 });
 function mentionPicker(ta) {
   const mp = document.getElementById('mp');
-  const before = ta.value.slice(0, ta.selectionStart); const m = /@([\w-]*)$/.exec(before);
+  const before = ta.value.slice(0, ta.selectionStart), m = /@([\w-]*)$/.exec(before);
   if (!m) { mp.hidden = true; return; }
   const q = m[1].toLowerCase();
-  const opts = Object.values(cells).filter((c) => (isAnswer(c) && latest(c)) || (!c.prev && c.body.text != null))
+  const opts = Object.values(cells).filter((c) => (isModel(c) && c.out) || (!c.prev && c.body.text != null))
     .filter((c) => !q || c.id.startsWith(q) || label(c.id, 200).toLowerCase().includes(q)).slice(0, 8);
   if (!opts.length) { mp.hidden = true; return; }
   mp.innerHTML = opts.map((c) => `<button data-pick="${c.id}"><small>@${esc(c.id)}</small>${esc(label(c.id, 50))}</button>`).join('');
-  const r = ta.getBoundingClientRect(); mp.style.left = Math.min(r.left, innerWidth - 270) + 'px'; mp.style.top = (r.bottom + 4) + 'px'; mp.hidden = false;
+  const r = ta.getBoundingClientRect(); mp.style.left = Math.max(8, Math.min(r.left, innerWidth - 270)) + 'px'; mp.style.top = (r.bottom + 4) + 'px'; mp.hidden = false;
   mp.onclick = (ev) => {
     const b = ev.target.closest('[data-pick]'); if (!b) return;
-    const i = +ta.dataset.part; const val = ta.value; const pos = ta.selectionStart; const start = before.length - m[0].length;
+    const i = +ta.dataset.part, val = ta.value, pos = ta.selectionStart, start = before.length - m[0].length;
     draft.parts[i] = val.slice(0, start) + '@' + b.dataset.pick + ' ' + val.slice(pos); mp.hidden = true; draft.focus = i; render();
   };
 }
 
+/* ---------- selecting a passage of an answer ---------- */
+document.addEventListener('mouseup', (e) => setTimeout(() => {
+  const pp = document.getElementById('pp'), s = getSelection();
+  if (e.target.closest('#pp')) return;
+  if (!s || s.isCollapsed || !s.rangeCount) { pp.hidden = true; return; }
+  const node = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
+  const prose = node && node.closest('.sec.ans .prose'), blk = node && node.closest('p, li');
+  if (!prose || !blk || !prose.contains(blk)) { pp.hidden = true; return; }
+  const sec = prose.closest('[data-cell]'), card = prose.closest('[data-card]');
+  pp.dataset.cell = sec.dataset.cell; pp.dataset.card = card.dataset.card;
+  pp.dataset.n = [...prose.querySelectorAll('p, li')].indexOf(blk) + 1;
+  const r = s.getRangeAt(0).getBoundingClientRect();
+  pp.style.left = Math.max(8, Math.min(r.left, innerWidth - 220)) + 'px'; pp.style.top = (r.bottom + 6) + 'px'; pp.hidden = false;
+}, 0));
+
 /* ---------- pan, zoom, drag ---------- */
-let moved = false, drag0 = () => null;
+let moved = false, drag0 = () => null, edgeT = 0;
+function drawEdgesSoon() { if (edgeT) return; edgeT = requestAnimationFrame(() => { edgeT = 0; const d = drag0(); if (d) layout[d.hd] = Object.assign({}, layout[d.hd], { x: d.nx, y: d.ny }); drawEdges(); }); }
 (() => {
   const vp = document.getElementById('vp');
   let pan = null, drag = null;
@@ -905,8 +908,8 @@ let moved = false, drag0 = () => null;
     if (e.button && e.button !== 0) return;
     const grip = e.target.closest('[data-grip]');
     if (grip && grip.dataset.grip && !e.target.closest('button') && e.pointerType === 'mouse') {
-      const hd = grip.dataset.grip, l = layout[hd]; if (!l) return;
-      drag = { hd, sx: e.clientX, sy: e.clientY, x: l.x, y: l.y, id: e.pointerId }; return;
+      const l = layout[grip.dataset.grip]; if (!l) return;
+      drag = { hd: grip.dataset.grip, sx: e.clientX, sy: e.clientY, x: l.x, y: l.y, id: e.pointerId }; return;
     }
     if (e.target.closest('button, textarea, input, a')) return;
     if (e.target.closest('.card') && e.pointerType === 'mouse') return;   // a mouse selects text in cards; touch pans
@@ -921,7 +924,7 @@ let moved = false, drag0 = () => null;
     if (drag) { const el = document.querySelector(`.col[data-col="${drag.hd}"]`); drag.nx = drag.x + dx / view.k; drag.ny = drag.y + dy / view.k; el.style.left = drag.nx + 'px'; el.style.top = drag.ny + 'px'; drawEdgesSoon(); }
   });
   const up = () => {
-    if (drag && drag.nx != null) { places[drag.hd] = Object.assign({}, places[drag.hd], { mode: 'beside', x: Math.round(drag.nx), y: Math.round(drag.ny), abs: true }); render(); }
+    if (drag && drag.nx != null) { places[drag.hd] = { x: Math.round(drag.nx), y: Math.round(drag.ny), abs: true }; render(); }
     pan = null; drag = null; vp.classList.remove('panning'); setTimeout(() => moved = false, 0);
   };
   vp.addEventListener('pointerup', up); vp.addEventListener('pointercancel', up);
