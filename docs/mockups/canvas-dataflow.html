@@ -109,7 +109,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .av { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; color: var(--av-fg);
   font-size: 8px; font-weight: 700; }
 .mk { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; flex: none; background: var(--accent-soft);
-  color: var(--accent); font-size: 10px; font-weight: 700; }
+  color: var(--accent); }
+.mk svg { width: 12px; height: 12px; }
+.mk.sm svg { width: 10px; height: 10px; }
 .txt { color: var(--t-primary); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
 .qtxt { font-weight: 500; color: var(--t-heading); }
 .prose { color: var(--t-body); font-size: var(--fs-base); line-height: 1.55; overflow-wrap: anywhere; }
@@ -193,7 +195,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .comp textarea, .edit textarea { flex: 1; width: 100%; min-width: 0; resize: none; border: 0; outline: none; background: none; font-size: 14px;
   line-height: 1.5; color: var(--t-heading); padding: 1px 0; field-sizing: content; min-height: 22px; }
 .comp textarea::placeholder { color: var(--placeholder); }
-.comp .row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.comp .row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 8px; }
 .comp .hint { flex: 1; font-size: 10.5px; color: var(--t-faint); }
 .comp .row button, .edit .row button { height: 26px; padding: 0 12px; border-radius: 13px; font-size: var(--fs-xs); font-weight: 600;
   background: var(--control); color: var(--t-heading); }
@@ -213,7 +215,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .fx { font-family: var(--mono); font-size: 11.5px; color: var(--accent); font-weight: 600; }
 .pref { font-size: var(--fs-xs); color: var(--t-faint); }
 .state.cause { background: var(--inset); box-shadow: inset 0 0 0 1px var(--divider); }
-.comp .outc { font-size: 10.5px; font-weight: 600; letter-spacing: .03em; color: var(--accent); margin-bottom: 6px; }
+.comp .outc { font-size: var(--fs-xs); color: var(--t-faint); margin-top: 6px; }
 .comp .hint { font-size: 10.5px; color: var(--t-faint); margin-top: 8px; }
 .comp .row .sp { flex: 1; font-size: var(--fs-xs); color: var(--t-faint); }
 .edit textarea.mono { font-family: var(--mono); font-size: 12.5px; }
@@ -290,6 +292,7 @@ const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 
 const NOW0 = Date.parse('2026-11-16T10:00:00Z'), T0 = Date.now();
 const now = () => NOW0 + (Date.now() - T0);
 const MODEL = 'Gemini 3.8 Flash', MODEL_SHORT = 'Gemini';   // a workspace setting; every model cell uses it
+const MARK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg>';   // the handoff mock's model mark
 const W = innerWidth < 640 ? 300 : 360, GAPX = 56;
 document.documentElement.style.setProperty('--w', W + 'px');
 
@@ -370,6 +373,7 @@ function parse(expr) {
     if (!cells[r[1]]) return { err: 'No part @' + r[1] + '.' };
     out.refs.push({ id: r[1], n: r[2] ? +r[2] : null });
   }
+  if (fn === 'answer' && !out.above) return { err: 'An answer always reads the whole thread above it: keep “above”, and add cards with @id.' };
   if (fn === 'quote' && (out.refs.length !== 1 || out.above)) return { err: 'quote takes one reference, e.g. quote(@ia#4).' };
   if (fn === 'compare' && out.refs.length < 2) return { err: 'compare needs two references, e.g. compare(@ia, @aa, "on what").' };
   if ((fn === 'filter' || fn === 'summarize') && !out.refs.length && !out.above) return { err: fn + ' needs a reference, e.g. ' + fn + '(@ia' + (fn === 'filter' ? ', "criterion")' : ')') + '.' };
@@ -555,8 +559,8 @@ function renderCard(g, head) {
   for (const id of g) h += secHtml(id, id === head);
   return h + '</div>';
 }
-function hdHtml(c, isHead, extra) {
-  return `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? c.id : ''}">${av(c.u)}<b>${esc(c.u)}</b><span>${ago(c.at)}</span>${c.edited ? '<span>· edited</span>' : ''}${extra || ''}<span class="rd"></span></div>`;
+function hdHtml(c, isHead, extra, noTime) {
+  return `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? c.id : ''}">${av(c.u)}<b>${esc(c.u)}</b>${noTime ? '' : `<span>${ago(c.at)}</span>`}${c.edited ? '<span>· edited</span>' : ''}${extra || ''}<span class="rd"></span></div>`;
 }
 function secHtml(id, isHead) {
   const c = cells[id];
@@ -597,18 +601,15 @@ function modelHtml(c, isHead) {
   } else {
     const ex = expanded.has(id);
     body = `<div class="prose${ex ? '' : ' clamp'}">${o.html}</div><button class="more" data-act="expand" data-id="${id}">${ex ? 'Show less' : 'Show all'}</button>`;
-    const nq = ans && o.read.some((r) => r.id === c.prev), more = o.read.length - (nq ? 1 : 0);
-    ftr = `<button data-act="reads" data-id="${id}" title="Mark the parts it read">${nq ? `Read its question${more ? ` and ${more} part${more === 1 ? '' : 's'} above` : ''}` : `Read ${o.read.length} part${o.read.length === 1 ? '' : 's'}`}</button>`
-      + `<span>${c.showPrev ? 'previous answer' : st === 'ok' ? 'up to date' : ''}</span>`
-      + (c.prevOut ? `<button data-act="prev" data-id="${id}">${c.showPrev ? 'Show current' : 'Show previous'}</button>` : '');
+    ftr = c.prevOut ? `<button data-act="prev" data-id="${id}">${c.showPrev ? 'Show current' : 'Show previous'}</button>${c.showPrev ? '<span>previous answer</span>' : ''}` : '';
     if (st === 'stale') badge = `<div class="state"><span class="sp">Inputs changed since this ${ans ? 'answer' : 'result'}.</span><button class="b2" data-act="inspect" data-id="${id}">What changed</button><button class="b" data-act="run" data-id="${id}">Re-run</button></div>`;
     if (st !== 'stale') badge += causeHtml(id);
   }
   const mark = st === 'stale' && !c.showPrev ? '<span class="stale-mark"></span>' : '';
   const hd = ans
-    ? `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? id : ''}"><span class="mk">✦</span><span>${MODEL_SHORT}${c.out ? ' · ' + ago(c.out.at) + ' ago' : ''}</span><span class="rd"></span></div>`
-    : hdHtml(c, isHead) + `<div class="qsrc">${exprLine(c)} <span class="bym">· <span class="mk sm">✦</span> ${MODEL_SHORT}</span></div>`;
-  return `<div class="sec ans" data-cell="${id}">${mark}${hd}${body}${badge}<div class="ftr">${ftr}</div></div>`;
+    ? `<div class="hd${isHead ? ' grip' : ''}" data-grip="${isHead ? id : ''}"><span class="mk">${MARK}</span><span>${MODEL_SHORT}</span><span class="rd"></span></div>`
+    : hdHtml(c, isHead, '', true) + `<div class="qsrc">${exprLine(c)} <span class="bym">· <span class="mk sm">${MARK}</span> ${MODEL_SHORT}</span></div>`;
+  return `<div class="sec ans" data-cell="${id}">${mark}${hd}${body}${badge}${ftr ? `<div class="ftr">${ftr}</div>` : ''}</div>`;
 }
 function preflight() {
   const d = draft; if (!d) return '';
@@ -617,15 +618,15 @@ function preflight() {
   for (const id of base) { const x = cells[id]; if (x.body.text != null) mentions(x.body.text).forEach((m) => ids.add(m)); }
   for (const s of d.parts) mentions(s).forEach((m) => ids.add(m));
   const n = ids.size + d.parts.filter((s) => s.trim()).length;
-  return `Ask reads ${n} part${n === 1 ? '' : 's'}`;
+  return `reads ${n} part${n === 1 ? '' : 's'}`;
 }
 function composerHtml() {
-  const d = draft, ask = d.mode === 'ask';
-  const parts = d.parts.map((p, i) => `<div class="part"><span class="pn">${d.parts.length > 1 ? i + 1 : ''}</span><textarea data-part="${i}" rows="1" placeholder="${ask && i === d.parts.length - 1 ? (d.kind === 'branch' ? 'Ask about the parts up to here…' : 'Ask a question…') : i ? 'Next part…' : 'Write a post…'}">${esc(p)}</textarea></div>`).join('');
-  const outcome = { root: 'New thread', append: 'Continues the thread · later asks read it', insert: 'Inserted into the thread · answers below it will show changed inputs', branch: 'Branch · reads the thread up to here, not below' }[d.kind];
-  const hint = `Enter: new part · ⌘/Ctrl+Enter: ${ask ? 'Ask' : 'Post'} · @ mentions a card · a part starting with = is computed, e.g. =summarize(@ia)`;
-  return `<div class="card" data-draft="1"><div class="comp"><div class="outc">${outcome}</div>${parts}<div class="hint">${hint}</div><div class="row"><span class="sp pre">${preflight()}</span><button class="x" data-act="cancel">Cancel</button><button class="${ask ? '' : 'pri'}" data-act="commit" data-mode="post">Post</button><button class="${ask ? 'pri' : ''}" data-act="commit" data-mode="ask">Ask</button></div></div></div>`;
+  const d = draft, ask = d.mode === 'ask', many = d.parts.length > 1;
+  const parts = d.parts.map((p, i) => `<div class="part">${many ? `<span class="pn">${i + 1}</span>` : ''}<textarea data-part="${i}" rows="1" placeholder="${ask && i === d.parts.length - 1 ? (d.kind === 'branch' ? 'Ask about the parts up to here' : 'Ask a question') : i ? 'Next part' : 'Write a post'}">${esc(p)}</textarea></div>`).join('');
+  const note = d.kind === 'insert' ? '<div class="outc">Answers below will show changed inputs.</div>' : '';
+  return `<div class="card" data-draft="1"><div class="comp">${parts}${note}<div class="row"><button class="x" data-act="cancel">Cancel</button><button class="${ask ? '' : 'pri'}" data-act="commit" data-mode="post" title="${ask ? 'Post' : 'Post (⌘/Ctrl+Enter)'}">Post</button><button class="${ask ? 'pri' : ''}" data-act="commit" data-mode="ask" title="${askTitle()}">Ask</button></div></div></div>`;
 }
+function askTitle() { return (draft.mode === 'ask' ? 'Ask (⌘/Ctrl+Enter)' : 'Ask') + ' · ' + preflight(); }
 
 let layout = {};
 function render() {
@@ -724,7 +725,7 @@ function renderInspector() {
   let h = `<div class="ih"><h2>${esc(label(c.id, 60))}</h2><button data-act="close" aria-label="Close inspector">×</button></div><div class="ib">`;
   h += `<h3>Object</h3><div class="kind"><code>@${esc(c.id)}</code> · ${c.body.text != null ? 'text, written by ' + esc(c.u) : fn === 'quote' ? 'computed without a model: recomputed whenever its source changes' : 'computed by the workspace model (' + MODEL + '): runs only when someone presses Run'}</div>`;
   if (c.body.expr != null) h += `<h3>Expression</h3><div class="expr"><input id="exprIn" value="${esc(c.body.expr)}" spellcheck="false"><button data-act="expr-apply">Apply</button></div><div class="err" id="exprErr"></div>
-    <p class="help"><code>answer(above)</code> reads the parts above, through any fork, and the cards they mention. <code>summarize(@a, …)</code>, <code>compare(@a, @b, "on what")</code> and <code>filter(@a, "criterion")</code> are also model runs. <code>quote(@a#n)</code> shows passage n of a card and needs no run. Apply changes the expression and marks the result out of date; it does not run.</p>`;
+    <p class="help"><code>answer(above)</code> reads the whole thread above, through any fork, and the cards it mentions; <code>@id</code> adds a card. <code>summarize(@a, …)</code>, <code>compare(@a, @b, "on what")</code> and <code>filter(@a, "criterion")</code> are also model runs. <code>quote(@a#n)</code> shows passage n of a card and needs no run. Apply changes the expression and marks the result out of date; it does not run.</p>`;
   else h += `<h3>Text</h3><div class="kind">${richText(c.body.text)}</div>`;
   if (isModel(c)) {
     const rows = reads(c);
@@ -846,7 +847,7 @@ document.addEventListener('click', (e) => {
 /* composer typing */
 document.addEventListener('input', (e) => {
   const ta = e.target.closest('[data-draft] textarea');
-  if (ta) { draft.parts[+ta.dataset.part] = ta.value; mentionPicker(ta); const pf = document.querySelector('[data-draft] .pre'); if (pf) pf.textContent = preflight(); }
+  if (ta) { draft.parts[+ta.dataset.part] = ta.value; mentionPicker(ta); const ab = document.querySelector('[data-draft] [data-mode="ask"]'); if (ab) ab.title = askTitle(); }
   const t2 = e.target.closest('textarea'); if (t2) { t2.style.height = 'auto'; t2.style.height = t2.scrollHeight + 'px'; }
 });
 document.addEventListener('keydown', (e) => {
