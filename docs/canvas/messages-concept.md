@@ -14,7 +14,7 @@ There are two records. Handler code is a field on them.
 | field | meaning |
 |---|---|
 | `id`, `canvas` | identity; its channel |
-| `by` \| `model` | author: a person's handle, or a model |
+| `by` | a person's handle, or `model` for a model reply |
 | `text` | content (HTML for model replies) |
 | `prev` | the part it follows or answers |
 | `pos` | `next` · `inline` · `beside {dx,dy}` · `at {x,y}` |
@@ -25,12 +25,20 @@ There are two records. Handler code is a field on them.
 
 - A part without `to` is a post part and sends nothing.
 - A part with `to` is an ask: a reified message.
-- A part by a model is the reply to its `prev`.
+- A part by the model is the reply to its `prev`. Its run records which model produced it.
 - A multi-part post is a chain of parts joined by `next`.
 
 Post and ask are the same record; in the mock every draft has both a Post button and an Ask button.
 
 **Canvas**: `{ id, name, code? }`, a channel. It is the root of handler lookup.
+
+**The model is a workspace setting.** Every ask in every thread runs on the same model, and nobody picks one per ask
+or per turn. The mock shows the model's name once, beside the channel label ("#public · Gemini 3.8 Flash"); model
+parts carry a short mark ("Gemini").
+
+**A thread is, by default, one person working with the model over many turns:** question, answer, follow-up,
+answer. In the seed, each thread's follow-ups are by the person who asked first. Other people appear only where they
+show something specific: replies on a post, and one other person's branch.
 
 ## Messages
 
@@ -62,7 +70,7 @@ it:
 
 ```js
 context(msg) {
-  // Follow-ups see people's questions and the first answer, not answers to other follow-ups.
+  // Each follow-up sees the questions so far and the first answer, not the later answers.
   return ancestors(this.id).filter(id => !part(id).by.model || part(id).prev === this.head);
 }
 ```
@@ -128,7 +136,8 @@ handler that throws is skipped, the next level runs, and the ask records the fai
    channel owner the canvas's, with a history and a timeout.
 2. **Visibility.** A handler can return any id. The server must filter `saw` by what the asker may read, including
    parts on other canvases reached through `prev`.
-3. **Model and effort.** These are not fields yet. They could be args of `ask`, or chosen by a handler.
+3. **Effort.** The model is fixed for the workspace, but effort is not settled. It could be a workspace setting too,
+   or an argument of `ask` that a handler may set.
 4. **Comments in context.** An inline reply is an ancestor of anything asked under it. Should comments enter context
    by default?
 5. **Scale.** Push-down layout makes long columns at 50+ stacks. Zoom (Ctrl/⌘ + wheel) helps. Collapsing stacks to
@@ -181,3 +190,12 @@ The advisor was a separate agent, run for three rounds.
   result of handlers. Make late binding the first thing a viewer can try.
 - *Changed:* the "+N" label now names a context handler. Dagen H moved to the top left, with a hint for the
   edit-then-continue demo.
+
+**Second steer from the parent session, on the user's behalf.**
+- *It said:* make a thread one person's multi-turn exchange with the model, and make the model a single workspace
+  setting.
+- *Changed:*
+  - each seeded thread's follow-ups are by its first asker (3 turns each in Dagen H, the intention scan and
+    Banach–Tarski); hal_b's branch is the one other person's thread;
+  - the model is named once in the toolbar and nowhere chosen;
+  - the doc states that the model is a workspace setting, and open question 3 is now about effort only.

@@ -97,6 +97,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .chan { height: 30px; display: inline-flex; align-items: center; padding: 0 4px 0 10px; border-radius: 15px; background: var(--canvas); box-shadow: 0 0 0 1px var(--divider); color: var(--t-faint); font-size: 12.5px; font-weight: 500; }
 .chan button { color: var(--t-faint); padding: 2px 6px; border-radius: 6px; font-family: var(--mono); font-size: 11.5px; }
 .chan button:hover { background: var(--fill-hover); color: var(--t-heading); }
+.chan .mshort { display: none; }
+@media (max-width: 520px) { .chan .mfull { display: none; } .chan .mshort { display: inline; } }
 .selnote { height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-radius: 15px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 500; }
 .selnote button { height: 22px; padding: 0 8px; border-radius: 11px; font-weight: 600; }
 .selnote button:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -249,7 +251,8 @@ const SEED = {"dagen":{"q":"dagen h logistics. signage, the overnight changeover
 /* ---- people and models ---- */
 const ME = 'ines.v';
 const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
-const MODEL = 'Gemini 3.8 Flash';
+const MODEL = 'Gemini 3.8 Flash';   // the workspace's model: every run uses it
+const MODEL_SHORT = 'Gemini';
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const strip = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -280,7 +283,7 @@ const base = addr => String(addr).split('#')[0];
 const isAsk = p => Array.isArray(p.to);
 const receivers = p => !isAsk(p) ? [] : p.to.length ? p.to : p.prev ? [p.prev] : ['canvas'];
 const plain = p => p.text != null ? p.text : strip(p.html);
-const who = p => p.model ? p.model : p.by;
+const who = p => p.model ? MODEL_SHORT : p.by;
 
 /* ---- handlers: lookup, compile, call ----
    Lookup for part X: X, X's head, the head of the part that head hangs from, ..., the canvas, the default. Each
@@ -388,37 +391,37 @@ function canned(a, msg) {
 /* ---- seed ---- */
 function seed() {
   const S = SEED;
-  /* Dagen H: an ask, its answer and two follow-ups continuing the series. The head's context handler keeps the
-     other follow-up answers out of what each follow-up sees. */
+  /* Dagen H: one person's ask, its answer and two follow-ups by the same person. The head's context handler keeps
+     the later answers out of what each follow-up sees. */
   add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 64 } }, codeBy: { context: 'jun.park' }, code: { context:
 `context(msg) {
-  // Follow-ups see the people's questions and the first
-  // answer, not the answers to other follow-ups.
+  // Each follow-up sees the questions so far and the
+  // first answer, not the later answers.
   return ancestors(this.id).filter(id =>
     !part(id).by.model || part(id).prev === this.head);
 }` } });
   add({ id: 'd1', model: MODEL, html: S.dagen.a, prev: 'd0', pos: 'next' });
-  add({ id: 'd2', by: S.dagen.f[0].u, text: S.dagen.f[0].q, to: [], prev: 'd1', pos: 'next' });
+  add({ id: 'd2', by: 'jun.park', text: S.dagen.f[0].q, to: [], prev: 'd1', pos: 'next' });
   add({ id: 'd3', model: MODEL, html: S.dagen.f[0].a, prev: 'd2', pos: 'next' });
-  add({ id: 'd4', by: S.dagen.f[1].u, text: S.dagen.f[1].q, to: [], prev: 'd3', pos: 'next' });
+  add({ id: 'd4', by: 'jun.park', text: S.dagen.f[1].q, to: [], prev: 'd3', pos: 'next' });
   add({ id: 'd5', model: MODEL, html: S.dagen.f[1].a, prev: 'd4', pos: 'next' });
   /* a post with replies: replies are person parts placed inline under what they answer */
   add({ id: 'h0', by: 'hal_b', text: S.hal.q, pos: { at: { x: 24, y: 900 } } });
   add({ id: 'h1', by: S.hal.rp[0].u, text: S.hal.rp[0].t, prev: 'h0', pos: 'inline' });
   add({ id: 'h2', by: S.hal.rp[1].u, text: S.hal.rp[1].t, prev: 'h0', pos: 'inline' });
   add({ id: 'h3', by: S.hal.rp[1].kids[0].u, text: S.hal.rp[1].kids[0].t, prev: 'h2', pos: 'next' });
-  /* intention marketplaces: the series, and one branch beside the answer with its own follow-ups */
+  /* intention marketplaces: ines.v's series of follow-ups, and hal_b's branch beside the first answer */
   add({ id: 'i0', by: 'ines.v', text: S.intent.q, to: [], pos: { at: { x: 338, y: 64 } } });
   add({ id: 'i1', model: MODEL, html: S.intent.a, prev: 'i0', pos: 'next' });
-  add({ id: 'i2', by: S.intent.f[1].u, text: S.intent.f[1].q, to: [], prev: 'i1', pos: 'next' });
+  add({ id: 'i2', by: 'ines.v', text: S.intent.f[1].q, to: [], prev: 'i1', pos: 'next' });
   add({ id: 'i3', model: MODEL, html: S.intent.f[1].a, prev: 'i2', pos: 'next' });
-  add({ id: 'i4', by: S.intent.f[2].u, text: S.intent.f[2].q, to: [], prev: 'i3', pos: 'next' });
+  add({ id: 'i4', by: 'ines.v', text: S.intent.f[2].q, to: [], prev: 'i3', pos: 'next' });
   add({ id: 'i5', model: MODEL, html: S.intent.f[2].a, prev: 'i4', pos: 'next' });
-  add({ id: 'b0', by: S.intent.f[0].u, text: S.intent.f[0].q, to: [], prev: 'i1', pos: { beside: { dx: 314, dy: 0 } } });
+  add({ id: 'b0', by: 'hal_b', text: S.intent.f[0].q, to: [], prev: 'i1', pos: { beside: { dx: 314, dy: 0 } } });
   add({ id: 'b1', model: MODEL, html: S.intent.f[0].a, prev: 'b0', pos: 'next' });
-  add({ id: 'b2', by: S.intent.g1.u, text: S.intent.g1.q, to: [], prev: 'b1', pos: 'next' });
+  add({ id: 'b2', by: 'hal_b', text: S.intent.g1.q, to: [], prev: 'b1', pos: 'next' });
   add({ id: 'b3', model: MODEL, html: S.intent.g1.a, prev: 'b2', pos: 'next' });
-  add({ id: 'b4', by: S.intent.h1.u, text: S.intent.h1.q, to: [], prev: 'b3', pos: 'next' });
+  add({ id: 'b4', by: 'hal_b', text: S.intent.h1.q, to: [], prev: 'b3', pos: 'next' });
   add({ id: 'b5', model: MODEL, html: S.intent.h1.a, prev: 'b4', pos: 'next' });
   /* a post in two parts */
   const [s1, s2] = S.sol.split(/(?<=\.) /);
@@ -443,8 +446,10 @@ function seed() {
   /* Banach–Tarski */
   add({ id: 't0', by: 'lettie', text: S.bt.q, to: [], pos: { at: { x: 966, y: 660 } } });
   add({ id: 't1', model: MODEL, html: S.bt.a, prev: 't0', pos: 'next' });
-  add({ id: 't2', by: S.bt.f[0].u, text: S.bt.f[0].q, to: [], prev: 't1', pos: 'next' });
+  add({ id: 't2', by: 'lettie', text: S.bt.f[0].q, to: [], prev: 't1', pos: 'next' });
   add({ id: 't3', model: MODEL, html: S.bt.f[0].a, prev: 't2', pos: 'next' });
+  add({ id: 't4', by: 'lettie', text: S.bt.f[1].q, to: [], prev: 't3', pos: 'next' });
+  add({ id: 't5', model: MODEL, html: S.bt.f[1].a, prev: 't4', pos: 'next' });
   /* the canvas: every ask in #public also sees the Glossary terms it mentions (a head's own context handler, as on
      Dagen H, wins) */
   CANVAS.codeBy.context = 'sol';
@@ -591,7 +596,7 @@ function applyPan() { world.style.transform = `translate(${st.pan.x}px, ${st.pan
 function renderTools() {
   const n = st.sel.size;
   $('#tools').innerHTML = `<button class="tb" data-a="addpost">+ Add post</button><button class="tb" data-a="addask">+ Add ask</button>`
-    + (n ? `<span class="selnote">${n} selected · + Add ask sends to ${n === 1 ? 'it' : 'them'}<button data-a="selclear">Clear</button></span>` : `<span class="chan">#public<button data-a="inspect" data-id="canvas" title="Inspect the canvas and its handlers">{ }</button></span>`);
+    + (n ? `<span class="selnote">${n} selected · + Add ask sends to ${n === 1 ? 'it' : 'them'}<button data-a="selclear">Clear</button></span>` : `<span class="chan" title="The workspace model: every ask runs on ${esc(MODEL)}">#public · <span class="mfull">${esc(MODEL)}</span><span class="mshort">${esc(MODEL_SHORT)}</span><button data-a="inspect" data-id="canvas" title="Inspect the canvas and its handlers">{ }</button></span>`);
 }
 /* highlight: the context of an ask (hover "saw", or the inspector's preview) */
 function highlight() {
@@ -625,7 +630,7 @@ function renderInsp() {
   if (isC) fields = `<dl class="kv"><dt>id</dt><dd>${CANVAS.id}</dd><dt>name</dt><dd>#${CANVAS.name}</dd><dt>stacks</dt><dd>${Object.values(P).filter(isHead).length}</dd></dl>`;
   else {
     const pos = typeof p.pos === 'string' ? p.pos : p.pos.at ? `at {x:${Math.round(p.pos.at.x)}, y:${Math.round(p.pos.at.y)}}` : `beside {dx:${p.pos.beside.dx}, dy:${p.pos.beside.dy}}`;
-    fields = `<dl class="kv"><dt>id</dt><dd>${p.id}</dd><dt>by</dt><dd>${p.model ? 'model ' + esc(p.model) : esc(p.by)}${p.via ? ' (code on ' + ref(p.via) + ')' : ''}</dd><dt>prev</dt><dd>${p.prev ? ref(p.prev) : '—'}</dd><dt>pos</dt><dd>${esc(pos)}</dd><dt>head</dt><dd>${ref(headOf(p.id).id)}</dd>${isAsk(p) ? `<dt>to</dt><dd>${p.to.length ? p.to.map(ref).join(', ') : '[] (the part above' + (p.prev ? ': ' + ref(p.prev) : ', none: the canvas') + ')'}</dd><dt>saw</dt><dd>${(p.saw || []).map(ref).join(', ') || '—'}${p.answeredBy ? ' (not used: code on ' + ref(p.answeredBy) + ' replied)' : ''}</dd>` : ''}</dl>${isAsk(p) && p.saw?.length ? `<h3>What this ask sent</h3><div class="pv"><ol>${p.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol><p class="note">Click an id to go to it.</p></div>` : ''}`;
+    fields = `<dl class="kv"><dt>id</dt><dd>${p.id}</dd><dt>by</dt><dd>${p.model ? 'model (this run: ' + esc(p.model) + ')' : esc(p.by)}${p.via ? ' (code on ' + ref(p.via) + ')' : ''}</dd><dt>prev</dt><dd>${p.prev ? ref(p.prev) : '—'}</dd><dt>pos</dt><dd>${esc(pos)}</dd><dt>head</dt><dd>${ref(headOf(p.id).id)}</dd>${isAsk(p) ? `<dt>to</dt><dd>${p.to.length ? p.to.map(ref).join(', ') : '[] (the part above' + (p.prev ? ': ' + ref(p.prev) : ', none: the canvas') + ')'}</dd><dt>saw</dt><dd>${(p.saw || []).map(ref).join(', ') || '—'}${p.answeredBy ? ' (not used: code on ' + ref(p.answeredBy) + ' replied)' : ''}</dd>` : ''}</dl>${isAsk(p) && p.saw?.length ? `<h3>What this ask sent</h3><div class="pv"><ol>${p.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol><p class="note">Click an id to go to it.</p></div>` : ''}`;
   }
   /* messages: what this object sent and what was sent to it */
   let msgs = '';
