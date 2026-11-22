@@ -9,6 +9,7 @@ import test from "ava";
 import { treeRows } from "../src/features/auth/InvitesPage.js";
 import { openAuthDialog } from "../src/features/auth/authDialog.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
+import { COPY_FAILED } from "../src/lib/clipboard.js";
 import { clearPendingInvite } from "../src/lib/pendingInvite.js";
 
 import { renderApp, resetDocumentRoot, testUser, waitUntil, waitingTestUser } from "./helpers.js";
@@ -393,6 +394,33 @@ test.serial("Invites: create, copy and revoke toast", async (t) => {
   fireEvent.click(screen.getByRole("button", { name: "Copy" }));
   await waitUntil(t, () => currentToast() === "Link copied.", "copied");
   t.deepEqual(copied, ["http://localhost/i#SESS-AAA2-BB"]);
+});
+
+test.serial("Invites: a copy the browser refuses shows the copy-failed alert", async (t) => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: () => Promise.reject(new Error("denied")) },
+  });
+  const exec = Object.getOwnPropertyDescriptor(document, "execCommand");
+  document.execCommand = () => false;
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  process.on("unhandledRejection", onRejection);
+  t.teardown(() => {
+    Reflect.deleteProperty(navigator, "clipboard");
+    if (exec) Object.defineProperty(document, "execCommand", exec);
+    else Reflect.deleteProperty(document, "execCommand");
+    process.off("unhandledRejection", onRejection);
+  });
+  await renderApp("/invites", {
+    user: testUser({ login: "ines.v" }),
+    responses: { "members.tree": treeNodes(), "accountInvites.list": invitesView(1) },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Copy" }));
+  await waitUntil(t, () => currentToast() === COPY_FAILED, "the copy failure");
+  t.true(alertTexts().some((text) => text.includes(COPY_FAILED)));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  t.deepEqual(rejections, []);
 });
 
 test.serial("a waiting account is sent from Invites to Invite required", async (t) => {

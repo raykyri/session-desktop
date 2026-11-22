@@ -11,7 +11,7 @@ import {
   useMembersTree,
   useRevokeInviteLink,
 } from "../../api/membership.js";
-import { writeClipboardText } from "../../lib/clipboard.js";
+import { COPY_FAILED, writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { authorName } from "../feed/format.js";
@@ -144,7 +144,10 @@ function InviteBox() {
               type="button"
               className="btn1 sm"
               onClick={() => {
-                void writeClipboardText(link.link ?? "").then(() => showToast("Link copied."));
+                void writeClipboardText(link.link ?? "").then(
+                  () => showToast("Link copied."),
+                  () => showToast(COPY_FAILED, { alert: true }),
+                );
               }}
             >
               Copy

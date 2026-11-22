@@ -13,7 +13,7 @@ import test from "ava";
 
 import { safeReturn } from "../src/features/auth/AuthDialog.js";
 import { useAuthDialog } from "../src/features/auth/authDialog.js";
-import { COPY_FAILED, channelInviteLink } from "../src/features/channels/InviteLinksDialog.js";
+import { channelInviteLink } from "../src/features/channels/InviteLinksDialog.js";
 import { memberActions, memberOrder } from "../src/features/channels/MembersDialog.js";
 import { LINK_UNUSABLE, linkJoinMessage } from "../src/features/channels/useChannelInvite.js";
 import {
@@ -24,6 +24,7 @@ import {
   type NotifRow,
 } from "../src/features/notifications/notifications.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
+import { COPY_FAILED } from "../src/lib/clipboard.js";
 import {
   CHANNEL_INVITE_KEY,
   CHANNEL_INVITE_TTL_MS,

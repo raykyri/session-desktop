@@ -10,7 +10,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { isoToMs, type InviteRec } from "@session/mutators";
 import { useRef, useState } from "react";
 
-import { writeClipboardText } from "../../lib/clipboard.js";
+import { COPY_FAILED, writeClipboardText } from "../../lib/clipboard.js";
 import { PUBLIC_ORIGIN } from "../../lib/publicOrigin.js";
 import { useReplica, useReplicaQuery } from "../../replica/ReplicaProvider.js";
 import { useNow, type ChannelView } from "../../replica/queries.js";
@@ -30,9 +30,6 @@ export const CHANNEL_LINK_DAYS = 7;
 export function channelInviteLink(name: string, code: string, origin = PUBLIC_ORIGIN): string {
   return `${origin}/c/${name}#${code}`;
 }
-
-/** The toast when the browser refuses the copy. */
-export const COPY_FAILED = "The link could not be copied. Select it and copy it by hand.";
 
 /** A link's date of expiry, as its row shows it ("Nov 23"). */
 export function expiryDate(link: Pick<InviteRec, "expiresAt">): string {

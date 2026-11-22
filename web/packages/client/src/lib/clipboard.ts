@@ -3,6 +3,9 @@
 // the primary path, and `execCommand` remains the fallback for contexts that
 // refuse the permission.
 
+/** The alert a screen shows when the browser refuses a link copy. */
+export const COPY_FAILED = "The link could not be copied. Select it and copy it by hand.";
+
 export async function writeClipboardText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     try {
