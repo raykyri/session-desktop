@@ -5,9 +5,9 @@ Mock: `docs/mockups/canvas-stacks.html`. Its seed is converted from `docs/mockup
 A thread is a column of parts. You write into the gaps between parts, and a part's context is what sits above it.
 There are two primitives, Part and Stack, and they live on a canvas.
 
-faketalk could not be read from here: GitHub lists no such repository for antimatter15, and antimatter15.com and
-Hacker News are blocked. The design follows the principles in the brief instead. Each part is an object with a small
-rule of its own. Context binds late, when a run starts, and the resolved context can be inspected and edited.
+faketalk could not be read from here (no such repository on GitHub; antimatter15.com is blocked), so the design
+follows the principles in the brief: each part carries a small rule, binds its context when it runs, and can be
+inspected.
 
 ## Primitives
 
@@ -17,11 +17,18 @@ rule of its own. Context binds late, when a run starts, and the resolved context
   renumbered.
 - `author`: `{ person }` or `{ model }`.
 - `text`, `at`.
-- `run`, on model parts only: `{ by, model, effort, see, ctx, status, src }`. `by` is the person who asked, `see` is
+- `run`, on model parts only: `{ by, model, see, ctx, status, src }`. `by` is the person who asked, `see` is
   the context rule, and `ctx` lists the parts the rule resolved to when the run started. That context is frozen.
 
 An ask is a person part with a model part directly under it whose `run.by` is that person. A post is a person part
 with nothing produced under it. The editor has two buttons, Post and Ask; nothing else distinguishes them.
+
+By default a stack is one person's multi-turn exchange with the model: question, answer, follow-up, answer. Other
+people appear as replies on a post, as an insert, or in a fork of their own.
+
+The model is a workspace setting, shown once next to "+ Add ask", and every model part uses it. `run.model` records
+what produced the part; it is not a choice made per ask. There is no effort setting. A model part carries a short
+"Answer" mark, and names the asker only when that person is not the stack's author.
 
 **Stack**: a vertical column of parts.
 
@@ -71,9 +78,8 @@ the answers below were written without it.
 - **Units.** A root and its lane forks form a unit, and only the root stores x and y. Forks start level with their
   anchor; siblings stack by subtree extent, so connectors don't cross. Overlaps between units are resolved downward,
   never stored, and the unit being edited stays put.
-- **New stacks.** "+ Add post" and "+ Add ask" place a root at the free spot nearest the centre of the view.
-  Double-clicking the canvas writes at the pointer.
-- **Scale.** The seed has 22 units, 65 stacks and 156 parts. Units are packed in columns by last activity. Collapsed
+- **New stacks** go to the free spot nearest the centre of the view; double-clicking the canvas writes at the pointer.
+- **Scale.** The seed has 22 units, 51 stacks and 158 parts. Units are packed in columns by last activity. Collapsed
   units show their first part and "n parts · m forks". Below 50% zoom each stack shows one headline at a constant
   screen size. Connectors are faint except in the active unit. "Next new" jumps to the next unit with unread parts.
 
@@ -86,7 +92,7 @@ the answers below were written without it.
 | reply to a reply | inline fork at the reply |
 | ask thread | root stack: person part, then model part |
 | node | person part plus the model part under it |
-| Continue | append, or insert, in the same stack |
+| Continue | the asker's next turn in the same stack (append or insert) |
 | Branch here, ask about a passage | fork with `block` and `quote` |
 | Branch beside | fork at the parent's model part |
 | Look up | fork whose model part has `see: fork` |
@@ -109,15 +115,11 @@ the answers below were written without it.
 
 The advisor was a separate subagent, run over three rounds.
 
-**Round 1, concept.**
-- *Criticism:* Run was a hidden fourth primitive, and splitting answers into sections would orphan forks on a re-run.
-- *Changed:* one run is one part, and fork anchors carry the block and quote. Canvas and collapse are not content.
+**Round 1.** Run was a hidden fourth primitive, and section parts would orphan forks. *Changed:* one run is one
+part; fork anchors carry block and quote.
 
-**Round 2.**
-- *Criticism:* splitting answers on demand (`cont`) still orphaned forks, depth-indexed lanes would cross, and
-  semantic zoom would relayout.
-- *Changed:* inline block forks replace `cont`, lanes use subtree extents, and the overview keeps the geometry.
-- *Rejected:* horizontal displacement, because it would break the columns people read down.
+**Round 2.** Split-on-demand (`cont`) still orphaned forks; depth lanes would cross. *Changed:* inline block forks,
+subtree-extent lanes. *Rejected:* horizontal displacement, which would break the columns people read down.
 
 **Round 3, mock walkthrough.** This was the most useful round.
 - *Criticism:* the demo put an ask between a question and its own answer, part seams and block seams looked alike,
@@ -132,3 +134,10 @@ scale.
 - *Changed:* context is frozen when a part runs, and Re-run is a plain action. `rev`, `revs` and the "changed" mark
   are removed. The grammar is now `above`, `above N`, `trunk`, `fork`, `none` and `+`. Hovering a fork highlights its
   anchor in the parent.
+
+**Second steer from the parent session, for the user.** By default a stack is one person in a multi-turn exchange
+with the model, and the model is one workspace setting.
+- *Changed:* in the seed, follow-ups belong to the first asker and continue the stack. Dagen H has three turns plus
+  Hal Bryce's fork, and the intention-marketplaces stack has four. All answers use Gemini 3.8 Flash. The model is
+  shown once beside "+ Add ask". Per-run model and effort choices are removed, and "for X" appears only when the
+  asker is not the stack's author.
