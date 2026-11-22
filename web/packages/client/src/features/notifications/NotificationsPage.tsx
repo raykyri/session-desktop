@@ -126,7 +126,7 @@ function NotificationRow({ row }: { row: NotifRow }) {
       onClick={open}
     >
       <span className="nav-av">
-        <Avatar handle={row.actor} size="sm" />
+        <Avatar handle={row.actor} />
         <span className={`nk nk-${row.type}`} aria-hidden="true">
           <Icon />
         </span>
