@@ -730,7 +730,7 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .mhead b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
 .mhead small { display: block; margin-top: -2px; color: var(--t-faint); font-size: var(--fs-xs); }
 /* meter variants */
-.meter { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 15px; color: var(--t-secondary); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; --tone: var(--accent-strong); }
+.meter { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 15px; color: var(--t-secondary); text-decoration: none; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; --tone: var(--accent-strong); }
 .meter:hover { background: var(--fill-hover); color: var(--t-heading); }
 .meter.warn { --tone: var(--warn); } .meter.bad { --tone: var(--bad); }
 /* the ring only: no text and no bar */
@@ -1368,7 +1368,7 @@ function tree(p) {
   for (const n of [...list, ...(EXTRA[p.id] || [])]) {
     if (DELETED.has(p.id + ':' + n.id)) continue;
     const f = n.fu != null ? fu[n.fu] : null;
-    nodes[n.id] = { id: n.id, par: n.par, quote: n.quote, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', look: n.look, html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, run: n.run, model: n.model, b: n.b, mod: n.mod, del: n.del, unsent: n.unsent };
+    nodes[n.id] = { id: n.id, par: n.par, quote: n.quote, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', look: n.look, html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), src: n.src || f?.src || [], sum: f?.a || '', tok: n.tok || 0, run: n.run, model: n.model, b: n.b, mod: n.mod, del: n.del, unsent: n.unsent };
   }
   const kids = {};
   for (const id in nodes) { const n = nodes[id]; if (n.par) (kids[n.par] ||= []).push(n); }
@@ -1463,21 +1463,26 @@ function addBranch(p, par, q, quote, b, look) {
 const RUN_T = {}, RUN_JOB = {};
 const newRun = model => ({ status: 'queued', step: 0, attempt: 1, u: me(), model, text: '' });
 const runAt = (pid, node) => node === 'r' ? byId(pid)?.run : DELETED.has(pid + ':' + node) ? null : (EXTRA[pid] || []).find(x => x.id === node)?.run;
+const MID_FAIL = 'error:network';
 const failOf = (v = 'tokens') => { const [why, d] = v.split(':'); return why === 'key' ? { fail: { why, detail: d }, pay: d === 'key_only' ? 'key:openai' : 'key:anthropic' } : why === 'error' ? { fail: { why, cls: d || 'unknown' } } : { fail: { why } }; };
 function startRun(pid, node, resume = false) {
   const key = pid + ':' + node, run = runAt(pid, node), job = RUN_JOB[key]; if (!run || !job) return;
   clearTimeout(RUN_T[key]);
   if (!resume) Object.assign(run, { status: 'queued', step: 0, text: '', fail: null, outcome: st.mrun || 'answer' });
+  /* a failure ends the run before it starts, except a network failure (MID_FAIL), which ends it after text has
+     streamed; the text written so far stays under the reason */
+  const fail = () => {
+    const f = failOf(st.mfail); Object.assign(run, { status: 'failed', fail: f.fail, pay: f.pay || null });
+    if (f.fail.detail === 'key_rejected' && keys().anthropic) { keys().anthropic.status = 'invalid'; BILLING[st.user] = 'pause'; }
+    render();
+  };
   const tick = () => {
     if (runAt(pid, node) !== run || !isActiveRun(run)) return;
     if (run.status === 'queued') {
-      if (run.outcome === 'fail') {
-        const f = failOf(st.mfail); Object.assign(run, { status: 'failed', fail: f.fail, pay: f.pay || null });
-        if (f.fail.detail === 'key_rejected' && keys().anthropic) { keys().anthropic.status = 'invalid'; BILLING[st.user] = 'pause'; }
-        render(); return;
-      }
+      if (run.outcome === 'fail' && st.mfail !== MID_FAIL) { fail(); return; }
       run.status = 'running';
     } else if (run.step === 2 && run.outcome === 'interrupt') { run.status = 'interrupted'; render(); return; }
+    else if (run.step === 2 && run.outcome === 'fail') { fail(); return; }
     else if (run.step < 3) { run.step++; if (run.step === 2) run.text = job.stream; }
     else { run.status = 'complete'; run.text = ''; job.finish(run); render(); return; }
     render(); RUN_T[key] = setTimeout(tick, 500);
@@ -1548,7 +1553,7 @@ function card(p) {
   if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}" tabindex="-1"><div class="rmnote">${RM_IC}<span style="flex:1">Removed by @${esc(r.by)}${r.note ? `<small>Reason: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} by [deleted] in ${esc(spName(p.s))}</small></span>${mine(p.u) ? moreMenu('t:' + p.id, true, p.k === 'ask' ? 'ask' : 'post') : ''}</div></article>`; }
   /* hidden: its author and the channel's owner read it under a line saying so; anyone else reads only that line */
   const hid = p.hidden && !mine(p.u) && ownerOf(p.s) !== me();
-  const modItems = !fz && !mine(p.u) && !gone(p.u) && SPACE_META[p.s] && isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button><button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="ban" data-id="${esc(p.u)}" data-sp="${p.s}"><span>Ban from ${esc(spName(p.s))}</span></button>` : '';
+  const modItems = !fz && !p.del && !mine(p.u) && !gone(p.u) && SPACE_META[p.s] && isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button><button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="ban" data-id="${esc(p.u)}" data-sp="${p.s}"><span>Ban from ${esc(spName(p.s))}</span></button>` : '';
   const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) && !p.del ? moreMenu('t:' + p.id, !active && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, active ? 'Available when the answer finishes' : undefined) : '';
   /* the post title drawn like a row of the branch tree: a hollow node, the title in the tree's regular
      weight, the author's avatar on the right (name and time in its tooltip). An ask's source count, token
@@ -1644,7 +1649,7 @@ function preview(p, T, n) {
   const more = canWrite() && (extra || own) ? moreMenu('b:' + p.id + ':' + n.id, !active && !promoted && !othersUnderBranch(T, n.id), 'branch', extra, own, active ? 'Available when the answer finishes' : promoted ? 'Not available after it was opened as a thread' : undefined) : '';
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   const answer = noText(n, p.s) ? '' : n.run && !hasAnswer(n.run) ? runLine(p.id, n.id, n.run, n.look ? 'Looking up the phrase.' : 'Searching sources. The answer appears here when the run finishes.') : `<div class="prose">${n.html}</div>${runNote(n.run)}`;
-  return `<div class="preview${pvFade(p.id, 'b:' + n.id)}"><div class="who">${av(n.u, 'xs')}<b>${esc(authorName(n.u))}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.unsent ? notSentLine(n.unsent) : ''}${n.look ? `<div class="lookh">${SEARCH}<span>Look up</span><b>${esc(n.look)}</b></div>` : n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${modLine(n)}${answer}
+  return `<div class="preview${pvFade(p.id, 'b:' + n.id)}" data-pid="${p.id}" data-node="${n.id}"><div class="who">${av(n.u, 'xs')}<b>${esc(authorName(n.u))}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.unsent ? notSentLine(n.unsent) : ''}${n.look ? `<div class="lookh">${SEARCH}<span>Look up</span><b>${esc(n.look)}</b></div>` : n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${modLine(n)}${answer}
     ${branchActs(p, n, k, promoted)}
     ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue ask' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
     ${branchReplies(p, n)}</div>`;
@@ -1733,7 +1738,7 @@ function replyLines(p) {
   const row = ({ r, d, id, hid }) => { const b = `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" role="treeitem" aria-level="${d + 1}" aria-selected="${id === sel}"${(r.kids || []).length ? ` aria-expanded="${!hid}"` : ''} tabindex="${id === tab ? 0 : -1}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(authorName(r.u))}">${av(r.u, 'xs')}</span><span class="gt">${esc(rowText(r, p.s, plainReply(r.t)))}</span></span></button>`;
     return hid ? `<div class="grow-w">${b}<button type="button" class="rhid-btn" tabindex="-1" data-a="rcol" data-id="${p.id}" data-node="${id}" aria-label="Show ${noun(hid, 'more reply', 'more replies')}">+${hid}</button></div>` : b; };
   return `<div class="grp"><div class="graph" role="tree" aria-label="Replies" data-draw><svg aria-hidden="true"></svg>${rows.map(row).join('')}</div>
-    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(authorName(cur.r.u))}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) && !cur.r.del ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div>${modLine(cur.r)}${noText(cur.r, p.s) ? '' : `<div class="rtext">${fmtReply(cur.r.t, p.s)}</div>`}${cur.r.unsent ? notSentLine(cur.r.unsent) : ''}<div class="pf">${wr ? replyLink(p, cur.id) : ''}</div>${replyBox(p, cur.id, replyTo(cur.r.u))}</div>` : ''}
+    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(authorName(cur.r.u))}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) && !cur.r.del ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div>${modLine(cur.r)}${noText(cur.r, p.s) ? '' : `<div class="rtext">${fmtReply(cur.r.t, p.s)}</div>`}<div class="pf">${wr ? replyLink(p, cur.id) : ''}</div>${cur.r.unsent ? notSentLine(cur.r.unsent) : ''}${replyBox(p, cur.id, replyTo(cur.r.u))}</div>` : ''}
     <div class="rfoot">${wr ? replyLink(p, 'top', 'Reply at root') : isFrozen(p.s) ? '' : st.auth === 'out' ? '<button class="tlink" data-ma="openauth">Sign in to reply</button>' : '<span class="rnote">Replying opens once you have an invite</span>'}</div>${replyBox(p, 'top', replyTo(p.u))}</div>`;
 }
 
@@ -1745,8 +1750,9 @@ const V = {
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
-/* the picker shows the short name; the menu shows the full name. Sol runs only on the member's OpenAI key. */
-const MODEL_OPTS = ['Gemini 3.8 Flash', 'DeepSeek V4.1 Flash', 'GPT-5.6 Luna', 'Claude Fable 5.1', 'GPT-6.1 Sol'], SHORT = { 'Gemini 3.8 Flash': 'Gemini', 'DeepSeek V4.1 Flash': 'DeepSeek', 'GPT-5.6 Luna': 'Luna', 'Claude Fable 5.1': 'Fable', 'GPT-6.1 Sol': 'Sol' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS;
+/* the picker shows the short name; the menu shows the full name. These are the registry's four models; the menu's
+   key-only rows ("Add a key", "your OpenAI key") apply to none of them today. */
+const MODEL_OPTS = ['Gemini 3.8 Flash', 'DeepSeek V4.1 Flash', 'GPT-5.6 Luna', 'Claude Fable 5.1'], SHORT = { 'Gemini 3.8 Flash': 'Gemini', 'DeepSeek V4.1 Flash': 'DeepSeek', 'GPT-5.6 Luna': 'Luna', 'Claude Fable 5.1': 'Fable' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS;
 /* the Site Admin page lists these efforts; the composer lists only the efforts the chosen model accepts */
 const EFFORT_OPTS = ['low', 'medium', 'high', 'max'], EFFORT_ORDER = ['low', 'medium', 'high', 'xhigh', 'max'];
 /* the highest accepted effort not above `e` */
@@ -1766,7 +1772,7 @@ const spaceField = () => {
   if (!postable().some(x => x.id === st.newSpace) && postable()[0]) st.newSpace = postable()[0].id;
   const open = st.menu === 'space', list = postable();
   return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="space" aria-haspopup="menu" aria-expanded="${open}" title="Channel"><span>${esc(spName(st.newSpace))}</span>${I.down}</button>
-    ${open ? `<div class="menu menu-scroll" role="menu" aria-label="Space">${list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${x.id === st.newSpace}" data-a="setspace" data-v="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}</span>${x.id === st.newSpace ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`;
+    ${open ? `<div class="menu menu-scroll" role="menu" aria-label="Channel">${list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${x.id === st.newSpace}" data-a="setspace" data-v="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}</span>${x.id === st.newSpace ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`;
 };
 const newSpaceId = () => st.space === 'home' || st.space === 'saved' ? st.newSpace : st.space;
 const draft = (ph, extra = '') => `<textarea id="in-new" rows="1" placeholder="${esc(ph)}" aria-label="Ask or post"${extra}>${esc(st.draft)}</textarea>`;
@@ -1840,7 +1846,9 @@ const isBanned = (s, u) => (BANS[s] || []).some(b => b.u === u);
   for (const id in SPACE_META) MEMBERSHIP[id] = [{ u: SPACE_META[id].owner, role: 'owner', at: SP[id].createdAt }];
   for (const u in JOINED) for (const id of JOINED[u]) { if (!SPACE_META[id] || isMemberOf(id, u)) continue;
     const a = Math.max(t0, Date.parse(SP[id].createdAt) + 36e5), f = ((i++ * 37) % 97) / 97;
-    MEMBERSHIP[id].push({ u, role: 'member', at: new Date(a + f * Math.max(0, t1 - a)).toISOString() }); } }
+    MEMBERSHIP[id].push({ u, role: 'member', at: new Date(a + f * Math.max(0, t1 - a)).toISOString() }); }
+  /* a deleted account is no longer a member anywhere: the member list never has a row for one */
+  for (const id in MEMBERSHIP) MEMBERSHIP[id] = MEMBERSHIP[id].filter(m => !gone(m.u)); }
 /* channel invite links (owner of a private channel only): one person each, 7 days; codes are made by the server */
 const CH_LINKS = [];
 const newChCode = () => Array.from({ length: 26 }, () => '0123456789abcdefghjkmnpqrstvwxyz'[Math.floor(Math.random() * 32)]).join('');
@@ -1982,11 +1990,11 @@ function membersDlg(x) {
   const nm = esc(spName(x.id)), own = isMod(x.id);
   const list = (MEMBERSHIP[x.id] || []).slice().sort((a, b) => (b.role === 'owner') - (a.role === 'owner') || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0) || (a.u < b.u ? -1 : 1));
   const act = (k, u, label) => `<button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="${k}" data-id="${esc(u)}" data-sp="${x.id}"><span>${label}</span></button>`;
-  const row = m => `<li>${av(m.u, 'sm')}<span>${gone(m.u) ? 'Deleted account' : '@' + esc(m.u)}${m.u === me() ? '<small>You</small>' : ''}</span>${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : ''}</li>`;
+  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}${m.u === me() ? '<small>You</small>' : ''}</span>${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : ''}</li>`;
   const bans = (BANS[x.id] || []).slice().sort((a, b) => b.at - a.at);
   return `<div class="scrim ce-scrim" data-a="membersclose"></div><div class="dialog chdlg cedlg mbdlg" role="dialog" aria-modal="true" aria-labelledby="mb-h">
     <div class="chdlg-h">${glyph(x)}<h3 id="mb-h">Members of ${nm}</h3><button class="iconbtn" data-a="membersclose" aria-label="Close">${I.x}</button></div>
-    <div class="cebody"><ul class="mlist" aria-label="Members">${list.map(row).join('')}</ul>
+    <div class="cebody">${st.reads === 'loading' ? '<p class="chnone" role="status" aria-busy="true">Loading members…</p>' : `<ul class="mlist" aria-label="Members">${list.map(row).join('')}</ul>`}
     ${own ? `<h4 class="mbhead">Banned</h4>${bans.length ? `<ul class="mlist" aria-label="Banned">${bans.map(b => `<li>${av(b.u, 'sm')}<span>@${esc(b.u)}</span><button type="button" class="btn2 sm" data-a="unban" data-id="${esc(b.u)}" data-sp="${x.id}">Unban</button></li>`).join('')}</ul>` : `<p class="chnone">Nobody is banned from ${nm}.</p>`}` : ''}</div></div>`;
 }
 /* Ban or remove: an alert dialog with focus on Cancel */
@@ -1998,24 +2006,38 @@ function memberActDlg() {
     : `${who} stops being a member of ${nm} and can no longer write in it or join it. An open channel stays readable by anyone. You can unban them in the member list.`;
   return `<div class="scrim" style="z-index:46" data-a="memno"></div><div class="dialog" style="z-index:47" role="alertdialog" aria-modal="true" aria-labelledby="mact-h" aria-describedby="mact-p"><h3 id="mact-h">${ban ? 'Ban' : 'Remove'} ${who} from ${nm}?</h3><p id="mact-p">${text}</p><div class="dacts"><button class="btn2" data-a="memno">Cancel</button><button class="btn1 danger" data-a="memyes">${ban ? 'Ban' : 'Remove'}</button></div></div>`;
 }
+/* closing the confirm puts focus on the "..." button that opened its menu; when that row is gone, on the info
+   dialog's Members button, as the app does */
+function closeMemberAct() {
+  const from = st.memberAct?.from; st.memberAct = null; render();
+  (from && app.querySelector(`[data-m="${CSS.escape(from)}"]`) || app.querySelector('[data-a="members"]'))?.focus({ preventScroll: true });
+}
+/* moderation actions in this session get increasing times, so the log and the Banned list read newest first */
+let modT = NOW;
+const tick = () => ++modT;
 function banMember(sp, u) {
-  dropMember(sp, u); (BANS[sp] ||= []).push({ u, at: NOW + 1 });
-  MODLOG.push({ k: 'ban', s: sp, u, by: me(), at: NOW + 1 });
+  const at = tick(); dropMember(sp, u); (BANS[sp] ||= []).push({ u, at });
+  MODLOG.push({ k: 'ban', s: sp, u, by: me(), at });
   (PENDING[u] ||= []).push({ text: `You are banned from ${spName(sp)}.`, sp });
   toast(`Banned @${u} from ${spName(sp)}.`);
 }
-function removeMember(sp, u) {
+/* `adm`: the admission the owner saw when the confirm opened; a person let in again since then has a new one, and
+   the server refuses the removal as stale */
+const admissionOf = (sp, u) => (MEMBERSHIP[sp] || []).find(m => m.u === u)?.adm || 0;
+function removeMember(sp, u, adm) {
   if (!isMemberOf(sp, u)) { toast(`@${u} had already left ${spName(sp)}.`); return; }
+  if (adm != null && admissionOf(sp, u) !== adm) { toast('This item changed after you saw it. Look at it again.', { alert: true }); return; }
   dropMember(sp, u); (PENDING[u] ||= []).push({ text: `You are no longer a member of ${spName(sp)}.`, sp });
   toast(`Removed @${u} from ${spName(sp)}.`);
 }
-/* Invite links of a private channel, stacked over the info dialog; expired links are left out */
+/* Invite links of a private channel, stacked over the info dialog. An open link past its expiry is left out; a
+   revoked one stays as "Revoked", with Undo only while it has not expired (it could not work again after that). */
 function chLinksDlg(x) {
   const nm = esc(spName(x.id));
-  const list = CH_LINKS.filter(l => l.sp === x.id && !(l.state !== 'used' && Date.parse(l.expires) <= NOW)).sort((a, b) => a.created < b.created ? 1 : -1);
+  const list = CH_LINKS.filter(l => l.sp === x.id && !(l.state === 'open' && Date.parse(l.expires) <= NOW)).sort((a, b) => a.created < b.created ? 1 : -1);
   const row = (l, i) => { const ex = 'Expires ' + day(l.expires), name = `link ${i + 1}, expires ${day(l.expires)}`;
     const btns = l.state === 'open' ? `<button type="button" class="btn2 sm" data-a="chlinkcopy" data-id="${l.id}" aria-label="Copy ${name}">Copy</button><button type="button" class="btn2 sm" data-a="chlinkrevoke" data-id="${l.id}" aria-label="Revoke ${name}">Revoke</button>`
-      : l.state === 'revoked' ? `<button type="button" class="btn2 sm" data-a="chlinkundo" data-id="${l.id}" aria-label="Undo revoking ${name}">Undo</button>` : '';
+      : l.state === 'revoked' && Date.parse(l.expires) > NOW ? `<button type="button" class="btn2 sm" data-a="chlinkundo" data-id="${l.id}" aria-label="Undo revoking ${name}">Undo</button>` : '';
     return `<li><span><code class="ilink">${esc(chLinkUrl(x.name, l.code))}</code><small>${l.state === 'used' ? `Used by @${esc(l.usedBy)}` : l.state === 'revoked' ? 'Revoked' : ex}</small></span>${btns ? `<span class="acts">${btns}</span>` : ''}</li>`; };
   return `<div class="scrim ce-scrim" data-a="chlinksclose"></div><div class="dialog chdlg cedlg ildlg" role="dialog" aria-modal="true" aria-labelledby="il-h">
     <div class="chdlg-h">${glyph(x)}<h3 id="il-h">Invite to ${nm}</h3><button class="iconbtn" data-a="chlinksclose" aria-label="Close">${I.x}</button></div>
@@ -2077,8 +2099,9 @@ function createSpace() {
   const c = st.creating, name = $('#ns-name').value.trim().toLowerCase().replace(/^#/, ''), desc = $('#ns-desc').value.trim(), vis = $('input[name="nsvis"]:checked')?.value || 'open';
   c.name = name; c.desc = desc; c.vis = vis;
   if (st.offline) return;  /* creating a channel is online-only */
-  c.err = !/^[a-z0-9][a-z0-9-]{1,29}$/.test(name) ? 'Use 2 to 30 lowercase letters, numbers or dashes.' : SP[name] ? `#${name} already exists.`
-    : st.ml === 'reached' || (CREATED[st.user] || []).filter(t => NOW - t < 864e5).length >= 5 ? 'You can create 5 channels a day. Try again in 22 hours.' : '';
+  /* the server checks the daily limit before the name */
+  c.err = !/^[a-z0-9][a-z0-9-]{1,29}$/.test(name) ? 'Use 2 to 30 lowercase letters, numbers or dashes.'
+    : st.ml === 'reached' || (CREATED[st.user] || []).filter(t => NOW - t < 864e5).length >= 5 ? 'You can create 5 channels a day. Try again in 22 hours.' : SP[name] ? `#${name} already exists.` : '';
   if (c.err) { render(); $('#ns-name')?.focus(); return; }
   /* an empty description is sent as nothing: the channel has no About */
   const x = { id: name, name, title: name, desc, createdAt: new Date(NOW).toISOString(), av: 1 + hashN(name, 6), online: 1, posts: 0 };
@@ -2149,10 +2172,10 @@ app.addEventListener('click', e => {
   if (a === 'membersclose') { st.members = false; render(); app.querySelector('[data-a="members"]')?.focus(); return; }
   if (a === 'chlinks') { st.chLinks = true; render(); app.querySelector('.ildlg .iconbtn')?.focus(); return; }
   if (a === 'chlinksclose') { st.chLinks = false; render(); app.querySelector('[data-a="chlinks"]')?.focus(); return; }
-  if (a === 'memask') { st.memberAct = { sp: d.sp || st.chInfo, u: d.id, k: d.k }; st.menu = null; render(); app.querySelector('[data-a="memno"].btn2')?.focus(); return; }
-  if (a === 'memno') { st.memberAct = null; render(); return; }
-  if (a === 'memyes') { const m = st.memberAct; st.memberAct = null; if (m.k === 'ban') banMember(m.sp, m.u); else removeMember(m.sp, m.u); render(); return; }
-  if (a === 'unban') { const l = BANS[d.sp] || [], i = l.findIndex(b => b.u === d.id); if (i >= 0) l.splice(i, 1); MODLOG.push({ k: 'unban', s: d.sp, u: d.id, by: me(), at: NOW + 1 }); toast(`Unbanned @${d.id}.`); render(); return; }
+  if (a === 'memask') { const sp = d.sp || st.chInfo; st.memberAct = { sp, u: d.id, k: d.k, from: st.menu, adm: admissionOf(sp, d.id) }; st.menu = null; render(); app.querySelector('[data-a="memno"].btn2')?.focus(); return; }
+  if (a === 'memno') { closeMemberAct(); return; }
+  if (a === 'memyes') { const m = st.memberAct; if (m.k === 'ban') banMember(m.sp, m.u); else removeMember(m.sp, m.u, m.adm); closeMemberAct(); return; }
+  if (a === 'unban') { const l = BANS[d.sp] || [], i = l.findIndex(b => b.u === d.id); if (i >= 0) l.splice(i, 1); MODLOG.push({ k: 'unban', s: d.sp, u: d.id, by: me(), at: tick() }); toast(`Unbanned @${d.id}.`); render(); return; }
   if (a === 'chlinknew') { const sp = st.chInfo, mk = () => { CH_LINKS.push({ id: 'cl' + (++seq), sp, code: newChCode(), created: new Date(NOW).toISOString(), expires: new Date(NOW + 7 * 864e5).toISOString(), state: 'open' }); toast('Invite link created.'); };
     /* the server makes the code, so a link that is not sent shows nothing in the list */
     sendOrHold({ kind: 'chlink', send: mk }); render(); return; }
@@ -2193,7 +2216,7 @@ app.addEventListener('click', e => {
   if (a === 'qexpand') { if (st.quote) st.quote.open = true; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
   if (a === 'promote') { const P = byId(d.id), n = tree(P).nodes[d.node], id = 'new' + (++nseq);
     D.posts.push({ id, s: P.s, u: n.u, k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, model: n.model || modelOf(P), from: { pid: d.id, nid: d.node } });
-    D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); goThread(id); return; }
+    D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); goThread(id, undefined, { keepUrl: true }); return; }
   if (a === 'gothread') { goThread(d.id); return; }
   if (a === 'gofrom') { goThread(d.id, d.node); return; }
   if (a === 'brreply') { st.brReplying = st.brReplying === d.k ? null : d.k; if (st.brReplying?.endsWith('/top')) { st.asking = null; st.askPar = null; } render(); document.getElementById('in-br:' + d.k.replace('/', ':'))?.focus(); return; }
@@ -2218,7 +2241,7 @@ app.addEventListener('click', e => {
   if (a === 'nsretry' || a === 'nsdiscard') { const e1 = OUTBOX.filter(x => x.id === d.id); if (a === 'nsretry') obRetry(e1); else obDiscard(e1); return; }
   if (a === 'obretry' || a === 'obdiscard') { const list = OUTBOX.filter(x => !x.item); if (a === 'obretry') obRetry(list); else obDiscard(list); return; }
   if (a === 'upreload') { location.reload(); return; }
-  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (st.menu && (d.m === 'acct' || d.m.startsWith('more:'))) app.querySelector('.mpick .menu .mi:not([aria-disabled])')?.focus({ preventScroll: true }); else if (['model', 'space', 'send'].includes(d.m)) $('#in-new')?.focus({ preventScroll: true }); return; }
+  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (st.menu && d.m === 'acct' && e.detail > 0) $('#bar .menu')?.focus({ preventScroll: true }); else if (st.menu && (d.m === 'acct' || d.m.startsWith('more:'))) app.querySelector('.mpick .menu .mi:not([aria-disabled])')?.focus({ preventScroll: true }); else if (['model', 'space', 'send'].includes(d.m)) $('#in-new')?.focus({ preventScroll: true }); return; }
   if (a === 'setmodel') { st.picked.model = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }  /* the effort steps down in curEffort() */
   if (a === 'seteffort' || a === 'setspace') { if (a === 'seteffort') st.picked.effort = d.v; else st.newSpace = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
@@ -2227,11 +2250,17 @@ app.addEventListener('click', e => {
   if (a === 'admdtab') { st.admDTab = d.k; render(); app.querySelector(`[data-a="admdtab"][data-k="${d.k}"]`)?.focus(); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; st.askPar = null; st.brReplying = null; render(); return; }
 });
-/* citations: the superscript numbers open a small card for that source (the thread's sources, 1-based) */
+/* citations: the superscript numbers open a small card for that source (1-based): the thread's sources in a card's
+   answer, the branch's own sources in a branch preview. Escape closes the card and puts focus back on the number. */
+const sourcesOf = sup => { const pv = sup.closest('.preview[data-node]'), p = pv && byId(pv.dataset.pid);
+  if (pv) return (p && tree(p).nodes[pv.dataset.node]?.src) || [];
+  return D.srcd[sup.closest('[id^="card-"]')?.id.slice(5)] || []; };
+let citeFrom = null;
 function citeOpen(sup) {
   $('#citepop')?.remove();
-  const card = sup.closest('[id^="card-"]'), pid = card?.id.slice(5), n = +sup.textContent.trim(), src = (D.srcd[pid] || [])[n - 1];
+  const n = +sup.textContent.trim(), src = sourcesOf(sup)[n - 1];
   if (!src) return;
+  citeFrom = sup;
   const [title, domain, note] = src, r = sup.getBoundingClientRect(), A = app.getBoundingClientRect();
   app.insertAdjacentHTML('beforeend', `<div id="citepop" role="dialog" aria-label="Source ${n}"><div class="cp-h"><span class="cp-n">${n}</span><b>${esc(title)}</b></div>${note ? `<p>${esc(note)}</p>` : ''}<a href="https://${esc(domain)}" target="_blank" rel="noopener noreferrer nofollow ugc">${esc(domain)} ↗</a></div>`);
   const pop = $('#citepop');
@@ -2241,11 +2270,11 @@ function citeOpen(sup) {
 }
 /* a number with no source page is a plain faint superscript */
 const citeReady = () => app.querySelectorAll('.prose sup.cite:not([tabindex])').forEach(x => {
-  { const pid = x.closest('[id^="card-"]')?.id.slice(5); if (!(D.srcd[pid] || [])[+x.textContent.trim() - 1]) { x.classList.replace('cite', 'nocite'); return; } }
+  if (!sourcesOf(x)[+x.textContent.trim() - 1]) { x.classList.replace('cite', 'nocite'); return; }
   { const t = x.previousSibling; if (t && t.nodeType === 3) { const m = t.data.match(/(\S+\s*)$/); if (m) { const w = document.createElement('span'); w.className = 'nw'; t.data = t.data.slice(0, -m[1].length); w.append(m[1]); x.before(w); w.append(x); } } else if (t && t.nodeType === 1 && t.classList.contains('nw')) t.append(x); else if (t && t.nodeType === 1) { const w = document.createElement('span'); w.className = 'nw'; t.before(w); w.append(t, x); } } x.tabIndex = 0; x.setAttribute('role', 'button'); x.setAttribute('aria-label', 'Source ' + x.textContent.trim()); });
 app.addEventListener('click', e => { const c = e.target.closest('.prose sup.cite'); if (c) { e.stopPropagation(); citeOpen(c); } }, true);
 document.addEventListener('mousedown', e => { if (!e.target.closest('#citepop, .prose sup.cite')) $('#citepop')?.remove(); });
-app.addEventListener('keydown', e => { const c = e.target.closest?.('.prose sup.cite'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); citeOpen(c); } if (e.key === 'Escape') $('#citepop')?.remove(); });
+app.addEventListener('keydown', e => { const c = e.target.closest?.('.prose sup.cite'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); citeOpen(c); } if (e.key === 'Escape' && $('#citepop')) { $('#citepop').remove(); if (citeFrom?.isConnected) citeFrom.focus({ preventScroll: true }); citeFrom = null; } });
 /* Look up is offered when the selection is 1-4 whole words: it may not start or end inside a word. */
 function lookPhrase(range, text) {
   const W = /[\p{L}\p{N}]/u, sc = range.startContainer, ec = range.endContainer;
@@ -2307,7 +2336,7 @@ app.addEventListener('submit', e => {
   if (f.dataset.form.startsWith('rm:')) { const r = st.rm, p = byId(r.pid); r.note = $('#rm-note').value.trim();
     if (r.note.length > 300) { r.err = 'Keep the reason under 300 characters.'; render(); $('#rm-note')?.focus(); return; }
     const what = p.k === 'post' ? 'post' : 'ask';
-    MODLOG.push({ k: 'remove', s: p.s, pid: p.id, author: p.u, what, by: me(), note: r.note, at: NOW + 1 });
+    MODLOG.push({ k: 'remove', s: p.s, pid: p.id, author: p.u, what, by: me(), note: r.note, at: tick() });
     if (p.u !== me()) (NOTIFS[p.u] ||= []).push({ id: 'nrm' + p.id, k: 'removed', by: me(), pid: p.id, s: p.s, what, note: r.note, at: new Date(NOW).toISOString(), read: false });
     removeThread(p, { by: me(), note: r.note });
     st.rm = null; render(); toast('Removed.'); return; }
@@ -2353,7 +2382,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key !== 'Escape') return;
   if (st.delAsk) { st.delAsk = null; render(); return; }
-  if (st.memberAct) { st.memberAct = null; render(); return; }
+  if (st.memberAct) { closeMemberAct(); return; }
   if (st.rm) { st.rm = null; render(); return; }
   if (st.chEdit) { closeChEdit(); return; }
   if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
@@ -2377,6 +2406,8 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
+  /* editing the invite code after a check drops its result: the inviter and the sign-up buttons go until Continue */
+  if (t.id === 'in-code') { if (t.value !== st.code) { st.code = t.value; app.querySelectorAll('.authdlg .code-f ~ .inviter, .authdlg .code-f ~ .auth-acts').forEach(x => x.remove()); } return; }
   if (t.dataset.ce === 'desc' && st.chEdit) { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; }
   if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq' || t.id === 'in-admq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq', 'in-admq': 'admq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
@@ -2404,6 +2435,7 @@ const runDay = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short'
 
 const MEMBERS = [
   { u: 'sol', name: 'Sol Amari', x: 'solamari', inviter: null, joined: '2026-09-15T12:00:00Z', status: 'active', staff: 'admin' },
+  { u: 'noor.h', name: 'Noor Haddad', x: 'noorh', inviter: null, joined: '2026-09-15T14:00:00Z', status: 'active', staff: 'admin' },
   { u: 'hal_b', name: 'Hal Bryce', x: 'halbryce', inviter: 'sol', joined: '2026-09-16T09:00:00Z', status: 'active' },
   { u: 'ines.v', name: 'Ines V.', x: 'ines_v', inviter: 'sol', joined: '2026-09-15T15:00:00Z', status: 'active' },
   { u: 'tomasz', name: 'Tomasz W.', x: 'tomaszw', inviter: 'sol', joined: '2026-09-18T10:00:00Z', status: 'active' },
@@ -2422,6 +2454,8 @@ const INVITES = [
   { code: 'SESS-77LD-QA', by: 'lettie', created: '2026-11-11T10:00:00Z', used: null },
   { code: 'SESS-B2NE-5V', by: 'hal_b', created: '2026-11-10T10:00:00Z', used: 'dmitri_k' },
   { code: 'SESS-K8CM-3T', by: 'sol', created: '2026-11-16T08:00:00Z', used: null },
+  /* an open link whose stored code the server cannot decrypt (its secret key changed): "Code unavailable", no Copy */
+  { code: 'SESS-QZ5R-7N', by: 'ines.v', created: '2026-11-12T10:00:00Z', used: null, unreadable: true },
 ];
 const X_ACCOUNTS = [
   { x: 'ines_v', name: 'Ines V.', note: 'Has a Session account' },
@@ -2437,7 +2471,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mrun: 'answer', mfail: 'tokens', mw: 'accept', ml: 'as', mq: 'as', reads: 'ok', offline: false, provider: 'x', mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mrun: 'answer', mfail: 'tokens', mw: 'accept', ml: 'as', mq: 'as', reads: 'ok', offline: false, readAt: NOW, provider: 'x', mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* A removal erases the thread's text and everything under it; the placeholder keeps who removed it and the reason. */
 function removeThread(p, removed) { p.removed = removed; p.q = ''; p.sum = ''; delete PROMPTS[p.id]; D.rich[p.id] = ''; delete D.rp[p.id]; delete EXTRA[p.id]; }
 /* seeds: moderation logs list removals, bans and unbans.
@@ -2454,7 +2488,8 @@ if (RM_ASK) { MODLOG.push({ k: 'remove', s: RM_ASK.s, pid: RM_ASK.id, author: RM
 /* channel invite links of #grant-review (private, owned by @sol) */
 CH_LINKS.push({ id: 'cl-used', sp: 'grants', code: 'q7m2xk9d4hv0b3n8c5r1tf6wyz', created: '2026-11-12T10:00:00Z', expires: '2026-11-19T10:00:00Z', state: 'used', usedBy: 'ines.v' },
   { id: 'cl-open', sp: 'grants', code: 'h3p9w2c7k5m0xq4r8t1vbn6dyz', created: '2026-11-15T16:00:00Z', expires: '2026-11-22T16:00:00Z', state: 'open' },
-  { id: 'cl-rev', sp: 'grants', code: 'b8n1t5d0r3x7q2w9m4k6hcpvyz', created: '2026-11-14T09:00:00Z', expires: '2026-11-21T09:00:00Z', state: 'revoked' });
+  { id: 'cl-rev', sp: 'grants', code: 'b8n1t5d0r3x7q2w9m4k6hcpvyz', created: '2026-11-14T09:00:00Z', expires: '2026-11-21T09:00:00Z', state: 'revoked' },
+  { id: 'cl-rev-old', sp: 'grants', code: 'm5k2r8d1x0w7q3t9b4n6hcpvyz', created: '2026-11-07T09:00:00Z', expires: '2026-11-14T09:00:00Z', state: 'revoked' });
 /* #history is frozen; @ines.v is a member with one post of her own there */
 D.posts.push({ id: 'seedfrz1', s: 'history', u: 'ines.v', k: 'post', createdAt: '2026-11-14T15:00:00Z', q: 'Reading list for the guild apprenticeship thread: three books on indentures in the Hanseatic towns.', tok: 0, likesBase: 1 });
 /* runs: a failed ask by @ines.v (the mock bar's Run failure sets its reason), a failed ask by @jun.park read as
@@ -2471,6 +2506,9 @@ D.rich[SEED_NOTE.id] = '<p>Three papers report memory use at one million tokens.
    removed comment on a branch of @ines.v's ask in #sci-fi */
 { const r = (D.rp['01M7HM6J60BNFNCYM0WE5BCMK1'] || [])[1]; if (r) r.mod = 'hidden';
   (D.rp['01M7HM6J60BNFNCYM0WE5BCMK1'] ||= []).push({ u: 'oduya', createdAt: '2026-11-15T19:00:00Z', t: '', del: true, kids: [{ u: 'mira_k', createdAt: '2026-11-15T19:40:00Z', t: 'The Sprawl trilogy has an early version of this too, in the matrix deals.' }] }); }
+/* a post its author deleted after someone replied: the "[deleted]" shell keeps the replies */
+D.posts.push({ id: 'seeddel1', s: 'scifi', u: 'hal_b', k: 'post', del: true, q: '', createdAt: '2026-11-15T10:00:00Z', tok: 0, likesBase: 0 });
+D.rp.seeddel1 = [{ u: 'mira_k', createdAt: '2026-11-15T11:00:00Z', t: 'Accelerando has the same idea in its first chapter, with agents that trade on behalf of their owners.' }];
 /* a plain post by @ines.v in #ml, so "replied to your post" and a mention in a reply have something to point at */
 const SEED_POST = { id: 'seedpost1', s: 'ml', u: 'ines.v', k: 'post', createdAt: '2026-11-15T17:40:00Z', q: 'Collecting test-time compute results outside math and code. I have three papers so far; add any you know of.', tok: 0, likesBase: 4 };
 D.posts.push(SEED_POST);
@@ -2491,24 +2529,34 @@ const NOTIFS = {
     { id: 'n4', k: 'reply', by: 'lettie', n: 2, pid: 'seedpost1', rsel: '0', at: '2026-11-16T08:12:00Z', read: true },
     { id: 'n9', k: 'comment', by: 'tomasz', pid: '01M7H6F3P02JFX3X2X804X3986', at: '2026-11-13T18:00:00Z', read: true },
     { id: 'n10', k: 'mention', where: 'post', by: 'lettie', pid: 'gone-thread', s: 'ml', at: '2026-11-13T09:00:00Z', read: true },
-    { id: 'n5', k: 'comment', by: 'mira_k', pid: '01M7H6F3P02JFX3X2X804X3986', at: '2026-11-15T20:10:00Z', read: true },
+    { id: 'n5', k: 'comment', by: 'mira_k', pid: '01M7H6F3P02JFX3X2X804X3986', node: 'f0', at: '2026-11-15T20:10:00Z', read: true },
     { id: 'n6', k: 'mention', where: 'comment', by: 'oduya', pid: '01M7HGRPJ0E7RGZ45D4KENBQ6P', at: '2026-11-15T16:30:00Z', read: true },
     { id: 'n7', k: 'invite_used', by: 'priya.n', at: '2026-11-14T18:00:00Z', read: true },
     { id: 'n8', k: 'branch', by: 'jun.park', pid: '01M7H6F3P02JFX3X2X804X3986', at: '2026-11-14T22:00:00Z', read: true },
+    /* a removal of a thread whose record is not held: "removed your thread" */
+    { id: 'n12', k: 'removed', by: 'hal_b', pid: 'unloaded-thread', s: 'markets', note: 'Off topic for this channel.', at: '2026-11-12T16:00:00Z', read: true },
+    /* a mention on a summary thread: offline, its title reads “a thread” */
+    { id: 'n13', k: 'mention', where: 'reply', by: 'dmitri_k', pid: '01M7HQMDT05MJQ0F8KR8KKWF5G', at: '2026-11-12T14:00:00Z', read: true },
   ],
+  /* an invite used by an account that was later deleted */
+  sol: [{ id: 'n11', k: 'invite_used', by: 'tomasz', at: '2026-09-18T10:00:00Z', read: true }],
 };
-/* the comment in n5 exists on the first branch of that ask */
+/* the comment in n5 exists on the first branch of that ask (f0); n9 is a comment on its root answer */
 { const p = byId('01M7H6F3P02JFX3X2X804X3986'), k = p && tree(p).kids('r')[0]; if (k) (BRP[p.id + ':' + k.id] ||= []).push({ u: 'mira_k', createdAt: '2026-11-15T20:10:00Z', t: 'The 1964 World’s Fair Picturephone demo is the clearest case of this; worth adding.', likes: 1 }); }
+/* a branch answer with a source of its own: the first follow-up of the same ask cites one page */
+{ const f = (D.fu['01M7H6F3P02JFX3X2X804X3986'] || [])[0]; if (f?.html) { f.html = f.html.replace('alongside price.', 'alongside price.<sup class="cite">1</sup>'); f.src = [['Picturephone', 'en.wikipedia.org', 'World’s Fair demo, Pittsburgh launch and withdrawal']]; } }
 
 /* ---- models: the registry's models, the efforts each accepts and who can pay for a run on it ----
    A key-only model cannot be the site default. */
+const KEY_ONLY_MODEL = 'internal-key-only';
 const MODELS = {
   'Gemini 3.8 Flash': { prov: 'Google', efforts: ['low', 'medium', 'high'], payers: ['included'] },
   'DeepSeek V4.1 Flash': { prov: 'OpenRouter', efforts: ['low', 'medium', 'high'], payers: ['included'] },
   'GPT-5.6 Luna': { prov: 'OpenRouter', efforts: ['low', 'medium', 'high'], payers: ['included'] },
   'Claude Fable 5.1': { prov: 'Anthropic', efforts: ['low', 'medium', 'high', 'xhigh', 'max'], payers: ['included', 'key:anthropic'] },
-  /* placeholder key-only model (03 K11); not in the registry today */
-  'GPT-6.1 Sol': { prov: 'OpenAI', efforts: ['low', 'medium', 'high'], payers: ['key:openai'] },
+  /* internal: the model of the seeded run when Run failure is "Key: key-only model" (03 K11). It is not in
+     MODEL_OPTS, so no menu, list or page shows it, and its failure text names no model. */
+  [KEY_ONLY_MODEL]: { prov: 'OpenAI', efforts: ['low', 'medium', 'high'], payers: ['key:openai'] },
 };
 const ADMIN = { def: 'Gemini 3.8 Flash', effort: 'medium' };
 const member = u => MEMBERS.find(m => m.u === u);
@@ -2551,7 +2599,7 @@ function charge(q, tok, model = ADMIN.def, ref = {}) {
     if (onKey) bill = inc ? 'Included + Anthropic key' : 'Anthropic key';
     else { const room = Math.max(0, ALLOWANCE + OVERDRAFT - used()); usage()[TODAY] += Math.min(room, tok - inc); stopped = tok - inc > room; }
   }
-  (RUNLOG[st.user] ||= []).push({ q, at: new Date(NOW).toISOString(), tok, bill, ...ref });
+  (RUNLOG[st.user] ||= []).push({ q, at: new Date(NOW).toISOString(), tok, bill, ...ref }); st.readAt = NOW;  /* a new usage reading */
   return { bill, stopped };
 }
 let toastTimer;
@@ -2626,15 +2674,18 @@ function composerOrLock(v) {
 
 /* ---- token meter in the app bar (variants) ---- */
 /* With no current reading (mock bar: Reads, Usage fails) the ring draws its track only. Offline it keeps the last
-   reading and names when it was taken. */
+   reading and names when it was taken (st.readAt), with the date when that was not today. The ring is a link to
+   Usage. */
+const readTime = ms => { const t = new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(ms).toDateString() === new Date(NOW).toDateString() ? t : `${new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${t}`; };
 function meter() {
   if (!isActive()) return '';
   const r = 7, c = 2 * Math.PI * r;
-  if (st.reads === 'usage') return `<button class="meter" data-ma="go" data-to="usage" aria-label="Included tokens left this week: unknown"><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/></svg></button>`;
+  if (st.reads === 'usage') return `<a class="meter" href="#usage" data-ma="go" data-to="usage" aria-label="Included tokens left this week: unknown"><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/></svg></a>`;
   const u = used(), pct = Math.min(1, u / ALLOWANCE), l = left(), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
-  const asOf = st.offline ? ` as of ${new Date(st.offlineAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : '';
+  const asOf = st.offline ? ` as of ${readTime(st.readAt)}` : '';
   const title = `${fmtTok(l, true)} of ${fmtTok(ALLOWANCE)} included tokens left this week${asOf}; resets in ${resetIn()}`;
-  return `<button class="meter ${tone}" data-ma="go" data-to="usage" aria-label="${title}"><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></button>`;
+  return `<a class="meter ${tone}" href="#usage" data-ma="go" data-to="usage" aria-label="${title}"><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></a>`;
 }
 
 /* ---- app bar ---- */
@@ -2666,7 +2717,7 @@ function appbar() {
   return `<header class="appbar">${brandBtn()}${headerSpaces()}
     <span class="grow"></span>${meter()}${savedBtn()}${layoutBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}" aria-label="Account${nUnread() ? `, ${noun(nUnread(), 'unread notification', 'unread notifications')}` : ''}">${av(st.user, 'sm')}${nUnread() ? '<span class="adot" aria-hidden="true"></span>' : ''}${I.down}</button>
-    ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff === 'admin' ? 'Admin' : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
+    ${open ? `<div class="menu right" role="menu" tabindex="-1"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff === 'admin' ? 'Admin' : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
       ${isActive() ? `<button class="mi" data-ma="go" data-to="notifications"><span>Notifications</span>${nUnread() ? `<b class="nbadge">${nUnread()}</b>` : ''}</button><div class="msep"></div><button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>${isAdmin() ? `<button class="mi" data-ma="go" data-to="admin"><span>Site Admin</span></button>` : ''}` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
@@ -2674,20 +2725,33 @@ function appbar() {
 /* ---- signed-out site: the open network with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
 const brandBtn = () => `<button class="brand home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
 const appbarOut = () => `<header class="appbar">${brandBtn()}${headerSpaces()}
-  <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
+  <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth" data-to="landing">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
 /* every X button has a GitHub twin with the same wording; the mock's account picker stands in for both providers */
 const PROVIDER = () => st.provider === 'github' ? 'GitHub' : 'X';
-const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth" data-p="x">${label}</button><button class="xbtn" data-ma="xauth" data-p="github">${label.replace(/X$/, 'GitHub')}</button>`;
+/* each provider button starts with the provider's mark: X at 14px, GitHub at 15px */
+const XMARK = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.12z"/></svg>';
+const GHMARK = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
+const pMark = p => p === 'github' ? GHMARK : XMARK;
+const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth" data-p="x">${XMARK}${label}</button><button class="xbtn" data-ma="xauth" data-p="github">${GHMARK}${label.replace(/X$/, 'GitHub')}</button>`;
 /* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
 const CODE_COPY = { h: 'Join with invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
 const BAD_CODE = "This invite code doesn't work. Ask the person who invited you for a new one.";
+const ATTEMPTS_MSG = 'Too many attempts. Wait a while and try again.';
+/* a pasted link or a typed code: cut at the last '#' or '/', drop spaces and dashes, add a missing SESS prefix */
+const parseCode = s => { let t = s.trim().replace(/\/+$/, ''); t = t.slice(Math.max(t.lastIndexOf('#'), t.lastIndexOf('/')) + 1);
+  let c = t.toUpperCase().replace(/[\s-]+/g, ''); if (c.startsWith('SESS')) c = c.slice(4);
+  return /^[A-Z0-9]{6}$/.test(c) ? `SESS-${c.slice(0, 4)}-${c.slice(4)}` : t.toUpperCase(); };
+/* the signed-in waiting account the profile step activates (a new identity's account is made before the step) */
+const profileSelf = () => st.auth === 'in' && meM()?.status === 'waiting' ? meM() : null;
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
   const linkInv = st.fromLink && INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
-  if (st.flow === 'landing' && linkInv) {
+  if (st.flow === 'landing' && st.fromLink && st.linkChecking) {
+    body = '<div class="auth-c"><h2>Explore together.</h2><p role="status">Checking your invite…</p></div>';
+  } else if (st.flow === 'landing' && linkInv) {
     body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)}</small></div></div>
       <h2>Explore together.</h2><p>Session is a shared workspace for exploring questions, ideas, and artifacts.</p>
       <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
@@ -2703,32 +2767,32 @@ function authScreen() {
     const C = CODE_COPY;
     /* in redeem mode (a waiting account) there is no Back, and a valid code goes on to the profile step */
     body = `<div class="auth-c">${st.redeemMode ? '' : back('landing')}<h2>${C.h}</h2>${C.p ? `<p>${C.p}</p>` : ''}
-      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${C.btn}</button></form>
-      ${st.codeErr ? `<p class="ferr" role="alert">${esc(st.codeErr)}</p>` : ''}
+      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"${st.codeErr ? ' aria-invalid="true" aria-describedby="code-err"' : ''}><button type="submit" class="btn1" id="code-go">${C.btn}</button></form>
+      ${st.codeErr ? `<p class="ferr" role="alert" id="code-err">${esc(st.codeErr)}</p>` : ''}
       ${inv && !st.codeErr && !st.redeemMode ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     const P = PROVIDER();
     body = `<div class="auth-c">${back(st.fromLink || st.intent !== 'signup' ? 'landing' : 'code')}<h2>Sign in with ${P}</h2><p>Session uses your name, handle and profile picture from ${P} for your profile. It cannot post or read your messages.</p>
       <p>Use the same account each time you sign in.</p>
-      <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to ${P}</button></div></div>`;
+      <div class="auth-acts"><button class="xbtn" id="x-go" data-ma="xgo">${pMark(st.provider)}Continue to ${P}</button></div>${st.xErr ? `<p class="ferr" role="alert">${esc(st.xErr)}</p>` : ''}</div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
     body = `<div class="auth-c"><h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="redeemcode">Enter an invite code</button><button class="btn2" data-ma="waitlist">Continue without one</button></div><p class="fine">Without an invite you can read every open channel, and enter a code later.</p></div>`;
   } else if (st.flow === 'profile') {
     /* no Back; if the invite stopped working meanwhile, the submit button becomes "Enter an invite code" */
-    const a = X_ACCOUNTS.find(x => x.x === st.xacct), inv = INVITES.find(i => i.code === st.code), pf = st.profile;
+    const xh = (st.auth === 'in' && meM()?.x) || st.xacct, a = X_ACCOUNTS.find(x => x.x === xh), inv = INVITES.find(i => i.code === st.code), pf = st.profile;
     body = `<div class="auth-c"><h2>Create your account</h2><div class="inviter">${av(a ? a.x : pf.handle)}<div><b>Signed in with ${PROVIDER()} as @${esc(a ? a.x : pf.handle)}</b><small>Invited by ${esc(nameOf(inv.by))}</small></div></div>
       <form class="pform" data-mform="profile"><label>Name<input id="pf-name" value="${esc(pf.name)}" maxlength="50" autocomplete="off"></label>
-      <label>Handle on Session<span class="hwrap"><span>@</span><input id="pf-handle" value="${esc(pf.handle)}" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
+      <label>Handle on Session<span class="hwrap"><span aria-hidden="true">@</span><input id="pf-handle" value="${esc(pf.handle)}" maxlength="20" autocomplete="off" spellcheck="false" aria-describedby="pf-handle-hint"></span><small id="pf-handle-hint">Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
       ${pf.err ? `<p class="ferr" role="alert">${esc(pf.err)}</p>` : ''}
-      ${pf.dead ? '<button type="button" class="btn2 wide" data-ma="redeemcode">Enter an invite code</button>' : '<button type="submit" class="btn1 wide">Create account</button>'}</form></div>`;
+      ${pf.dead ? '<button type="button" class="btn2 wide" data-ma="redeemcode">Enter an invite code</button>' : '<button type="submit" class="btn1 wide" id="pf-go">Create account</button>'}</form></div>`;
   }
   return body;
 }
 
 /* ---- status page: signed in with X, no invite yet ----
    what is open now, and the code field */
-const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeem || '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${label}</button></form>${st.redeemErr ? `<p class="ferr">${esc(st.redeemErr)}</p>` : ''}`;
+const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeem || '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1" id="redeem-go">${label}</button></form>${st.redeemErr ? `<p class="ferr" role="alert">${esc(st.redeemErr)}</p>` : ''}`;
 function statusPage() {
   const m = meM();
   const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="network">Browse the network</button></div>`;
@@ -2740,7 +2804,8 @@ function statusPage() {
 /* ---- members page: invite tree and invites ---- */
 function treeRows() {
   const out = [], walk = (u, d) => { out.push({ m: member(u), d }); MEMBERS.filter(c => c.inviter === u).sort((a, b) => a.joined < b.joined ? -1 : 1).forEach(c => walk(c.u, d + 1)); };
-  if (st.treeScope === 'mine') walk(st.user, 0); else walk('sol', 0);
+  if (st.treeScope === 'mine') walk(st.user, 0);
+  else MEMBERS.filter(m => (!m.inviter || !member(m.inviter)) && m.status === 'active').sort((a, b) => a.joined < b.joined ? -1 : 1).forEach(m => walk(m.u, 0));
   return out;
 }
 function treeA() {
@@ -2750,7 +2815,7 @@ function treeA() {
     const y = i * H + H / 2;
     if (d > 0 && idx[m.inviter] != null) { const px = X(d - 1), py = idx[m.inviter] * H + H / 2; paths += `<path d="M${px} ${py + 11} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d) - 11} ${y}"/>`; }
   });
-  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => gone(m.u) ? `<div class="trow gone" style="padding-left:${X(d) - 10}px">${av(null, 'sm')}<span class="tn"><b>Deleted account</b></span></div>` : `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}${m.staff === 'admin' ? '<span class="trole"> · Admin</span>' : ''}</b><small>${esc(m.name)}</small></span></div>`).join('')}</div>`;
+  return `<div class="ttree" role="list" aria-label="Invite tree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => gone(m.u) ? `<div class="trow gone" role="listitem" aria-level="${d + 1}" style="padding-left:${X(d) - 10}px">${av(null, 'sm')}<span class="tn"><b>Deleted account</b></span></div>` : `<div class="trow${m.u === st.user ? ' me' : ''}" role="listitem" aria-level="${d + 1}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}${m.staff === 'admin' ? '<span class="trole"> · Admin</span>' : ''}</b><small>${esc(m.name)}</small></span></div>`).join('')}</div>`;
 }
 /* ---- members page, split into sections so each has variants ----
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
@@ -2759,19 +2824,24 @@ function treeA() {
 const TREE_COPY = [`Session is invite-only. You can have ${SLOTS} open invite links at a time. Each link works for one person. A slot frees when a link is used or revoked.`];
 function treeSection() {
   st.treeScope = 'all';
+  if (st.reads === 'invites') return '<section><h3>Invite tree</h3><p class="ferr">The invite tree could not be loaded.</p></section>';
+  if (st.reads === 'loading') return '<section><h3>Invite tree</h3><p class="sub" role="status" aria-busy="true">Loading the invite tree…</p></section>';
   return `<section><h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}<div class="tgap"></div>${treeA()}</section>`;
 }
 function invSection() {
   /* every open link with Copy and a revoke x, a button for a new one, then the people you invited */
   /* a site admin has no cap: "N open", and the create button always shows */
+  if (st.reads === 'invites' || st.reads === 'loading') return `<section class="box invc"><div class="shead"><h3>Invite someone</h3></div>${st.reads === 'invites' ? '<p class="ferr">Your invites could not be loaded.</p>' : '<p class="sub" role="status" aria-busy="true">Loading…</p>'}</section>`;
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = isAdmin() || used < SLOTS;
   const why = `You have ${SLOTS} open invites. One frees when it is used or revoked.`;
   const open = inv.filter(i => inviteState(i) === 'open'), L = x => inviteLink(x.code);
-  const ppl = MEMBERS.filter(m => m.inviter === st.user).sort((a, b) => a.joined < b.joined ? 1 : -1);
+  /* deleted accounts are left out here; they stay in the invite tree as "Deleted account" */
+  const ppl = MEMBERS.filter(m => m.inviter === st.user && !gone(m.u)).sort((a, b) => a.joined < b.joined ? 1 : -1);
+  const revokeBtn = x => `<button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button>`;
   return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${SLOTS - used} of ${SLOTS} left`}</small></div>
-    ${open.map(x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button><button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button></div>`).join('')}
+    ${open.map(x => x.unreadable ? `<div class="ilink"><code>Code unavailable</code>${revokeBtn(x)}</div>` : `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button>${revokeBtn(x)}</div>`).join('')}
     ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
-    ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip${gone(m.u) ? ' gone' : ''}">${av(m.u, 'xs')}<b>${gone(m.u) ? 'Deleted account' : esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
+    ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
 }
 const inviteLink = code => `https://session.dev/i#${code}`;
 function membersPage() {
@@ -2825,12 +2895,12 @@ function usageRunsSection() {
 }
 function usagePage() {
   if (st.reads === 'usage') return `<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2><p class="ferr" role="alert">Couldn't load your usage. Reload to try again.</p></div></div>`;
-  const hasKey = keys().anthropic?.status === 'working', solo = MODEL_OPTS.filter(m => MODELS[m].payers.join() === 'key:openai');
+  const hasKey = keys().anthropic?.status === 'working';
   return `<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2>
     ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
-      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? (solo.length ? `Needs an Anthropic key. Your OpenAI key only runs ${solo.join(', ')}.` : 'Needs an Anthropic key.') : 'Add a key below to turn this on.'}</small></span></label></section>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key.' : 'Add a key below to turn this on.'}</small></span></label></section>
     ${keysSection()}</div></div>`;
 }
 
@@ -2842,16 +2912,18 @@ const isAdmin = () => isActive() && meM()?.staff === 'admin';  /* users.is_admin
 const AT_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.4"/><path d="M10.4 8v1a1.9 1.9 0 0 0 3.6.8A6 6 0 1 0 11 13"/></svg>';
 const PERSON_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>';
 const N_KIND = { mention: AT_IC, reply: ARROW_REPLY, branch: BRANCH_IC, comment: BUBBLE, removed: RM_IC, invite_used: PERSON_IC };
-/* a thread with no text (deleted or removed) is quoted as “a deleted thread” */
-const titleOf = p => !p || p.removed || p.del ? 'a deleted thread' : clip(p.k === 'ask' ? tree(p).nodes.r.q : p.q, 64);
+/* a thread with no text (deleted or removed) is quoted as “a deleted thread”; one whose record is not loaded yet (a
+   summary thread while offline) as “a thread” */
+const titleOf = (p, loading) => loading ? 'a thread' : !p || p.removed || p.del ? 'a deleted thread' : clip(p.k === 'ask' ? tree(p).nodes.r.q : p.q, 64);
 function notifText(n) {
-  const p = n.pid ? byId(n.pid) : null, t = `<span class="nt">“${esc(titleOf(p))}”</span>`, who = `<b>${gone(n.by) ? 'Deleted account' : '@' + esc(n.by)}${n.n > 1 ? ' and others' : ''}</b>`;
+  const p = n.pid ? byId(n.pid) : null, loading = !!p?.summary && st.offline, t = `<span class="nt">“${esc(titleOf(p, loading))}”</span>`, who = `<b>${gone(n.by) ? 'Deleted account' : '@' + esc(n.by)}${n.n > 1 ? ' and others' : ''}</b>`;
   if (n.k === 'mention') return `${who} mentioned you in a ${n.where || 'post'} on ${t}`;
   if (n.k === 'reply') return `${who} replied to your post ${t}`;
   if (n.k === 'branch') return `${who} branched from your ask ${t}`;
   if (n.k === 'comment') return `${who} commented on your ask ${t}`;
-  /* the removal erased the thread, so the row names only its kind and the reason */
-  if (n.k === 'removed') { const note = n.note || p?.removed?.note; return `${who} removed your ${n.what || (p?.k === 'post' ? 'post' : 'ask')}${note ? `: <span class="nr">“${esc(note)}”</span>` : ''}`; }
+  /* the removal erased the thread, so the row names only its kind and the reason; "thread" while the thread's
+     record is not held */
+  if (n.k === 'removed') { const note = n.note || p?.removed?.note; return `${who} removed your ${n.what || (p && !loading ? (p.k === 'post' ? 'post' : 'ask') : 'thread')}${note ? `: <span class="nr">“${esc(note)}”</span>` : ''}`; }
   if (n.k === 'invite_used') return `${who} joined Session with your invite`;
   return '';
 }
@@ -2862,10 +2934,11 @@ const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-
 const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.', '<button class="btn2 sm" data-a="space" data-id="home">Go to Home</button>')}</div>`;
 const notifEmpty = () => emptyBox(EMPTY_BELL, 'No notifications yet', 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.', '<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>');
 function notifPage() {
+  if (st.reads === 'loading') return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall" disabled>Mark all as read</button></div><p class="sub" role="status" aria-busy="true">Loading notifications…</p></div></div>`;
   const list = notifs().slice().sort((a, b) => a.at < b.at ? 1 : -1), un = nUnread();
   const row = n => { const p = n.pid ? byId(n.pid) : null;
     return `<li><button class="nrow${n.read ? '' : ' unread'}" data-a="notif" data-id="${n.id}"><span class="nav-av">${av(n.by)}<span class="nk nk-${n.k}" aria-hidden="true">${N_KIND[n.k]}</span></span>
-      <span class="ntx">${notifText(n)}<small>${n.k === 'invite_used' ? 'Invites · ' : p || n.s ? esc(spName(p ? p.s : n.s)) + ' · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" aria-label="Unread"></span>'}</button></li>`; };
+      <span class="ntx">${notifText(n)}<small>${n.k === 'invite_used' ? 'Invites · ' : p || n.s ? esc(spName(p ? p.s : n.s)) + ' · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" role="img" aria-label="Unread"></span>'}</button></li>`; };
   return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall"${un ? '' : ' disabled'}>Mark all as read</button></div>
     ${!list.length ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
     ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : notifEmpty()}</div></div>`;
@@ -2878,18 +2951,18 @@ function openNotif(id) {
   if (n.k === 'invite_used') { st.screen = 'members'; render(); return; }
   const p = byId(n.pid); if (!p) { render(); return; }
   let sel = n.rsel ?? (n.node && tree(p).nodes[n.node] ? n.node : undefined);
-  if (sel == null && n.k === 'comment' && p.k === 'ask') sel = tree(p).kids('r')[0]?.id;
   goThread(p.id, sel);
 }
 /* A thread's address: ?t=<thread>&sel=<node or reply>. The channel's feed opens with the item selected, the card
-   12px below the top with the app bar kept shown, and a flash on the card. */
-function goThread(pid, sel) {
+   12px below the top with the app bar kept shown, and a flash on the card. `keepUrl`: scroll and flash only, and
+   leave the address as it is (Open as its own thread). */
+function goThread(pid, sel, { keepUrl = false } = {}) {
   const p = byId(pid);
   if (!p || !SPACE_META[p.s] || (isPrivate(p.s) && !isJoined(p.s))) { toast('This thread is not available.'); render(); return; }
   st.screen = 'network'; st.space = p.s; st.asking = null; st.menu = null;
   if (sel != null) { if (p.k === 'ask') st.sel[pid] = sel; else st.rsel[pid] = sel; }
   render();
-  try { history.replaceState(null, '', '?t=' + encodeURIComponent(pid) + (sel ? '&sel=' + encodeURIComponent(sel) : '') + location.hash); } catch {}
+  if (!keepUrl) try { history.replaceState(null, '', '?t=' + encodeURIComponent(pid) + (sel ? '&sel=' + encodeURIComponent(sel) : '') + location.hash); } catch {}
   const c = document.getElementById('card-' + pid), mg = $('#k-mg');
   if (c && mg) { st.keepBar = true; mg.scrollTop += c.getBoundingClientRect().top - mg.getBoundingClientRect().top - 12 - 49; }
   st.flash = pid; c?.classList.add('flash'); setTimeout(() => { if (st.flash !== pid) return; st.flash = null; document.getElementById('card-' + pid)?.classList.remove('flash'); }, 1600);
@@ -2897,32 +2970,39 @@ function goThread(pid, sel) {
 
 /* ---- admin page (site admins only): the default model and the default effort for members' asks ---- */
 /* a default change reaches only composers with no choice of their own (curModel, curEffort) */
+/* a refused save (mock bar: Writes, Refuse) puts the previous choice back and shows the server's message under its group */
+const admRefused = g => { if (st.mw !== 'refuse') return false; st.admErr = { [g]: 'You don’t have permission to do this.' }; render(); app.querySelector(`[data-adm="${g}"]:checked`)?.focus(); return true; };
 function setDefault(m) {
-  if (!MODELS[m] || keyOnly(m)) return;
-  ADMIN.def = m;
+  if (!MODELS[m] || keyOnly(m) || admRefused('def')) return;
+  ADMIN.def = m; st.admErr = null;
   toast(`Default model set to ${m}.`); render();
 }
 function setDefaultEffort(e) {
-  if (!EFFORT_OPTS.includes(e)) return;
-  ADMIN.effort = e;
+  if (!EFFORT_OPTS.includes(e) || admRefused('eff')) return;
+  ADMIN.effort = e; st.admErr = null;
   toast(`Default effort set to ${cap1(e)}.`); render();
 }
 const notFoundPage = () => `<div class="page"><div class="page-in narrow"><h2>Not found</h2><p class="lede">This page does not exist, or it was removed.</p><button class="ghost" data-ma="go" data-to="network">Go to Home</button></div></div>`;
 function adminPage() {
   const models = MODEL_OPTS.filter(m => MODELS[m].payers.includes('included'));
   const row = (name, val, label, sub, on) => `<label class="amrow${on ? ' on' : ''}"><span class="radio"><input type="radio" name="${name}" value="${val}" data-adm="${name}"${on ? ' checked' : ''}> <span><b>${esc(label)}${sub ? ` <small>${esc(sub)}</small>` : ''}</b></span></span></label>`;
+  const err = g => st.admErr?.[g] ? `<p class="ferr" role="alert">${esc(st.admErr[g])}</p>` : '';
+  /* the settings read fails with the usage read (mock bar: Reads, Usage fails) */
+  if (st.reads === 'usage') return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p><p class="ferr" role="alert">Couldn't load the settings. Reload to try again.</p></div></div>`;
   return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p>
-    <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div></section>
-    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div></section></div></div>`;
+    <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div>${err('def')}</section>
+    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div>${err('eff')}</section></div></div>`;
 }
 
 
 /* ---- app render ---- */
 /* Run failure: the reason of a failed run (the seeded ask by @ines.v, and the next run when Runs is Fail) */
-const FAIL_OPTS = [['tokens', 'Tokens'], ['key:key_only', 'Key: key-only model'], ['key:key_unset', 'Key: not set'], ['key:key_changed', 'Key: changed'], ['key:key_rejected', 'Key: rejected'], ['key:key_forbidden', 'Key: forbidden'], ['access', 'Access'], ['rate', 'Rate limit'], ['error:unknown', 'Error'], ['error:context_too_long', 'Error: context too long']];
+const FAIL_OPTS = [['tokens', 'Tokens'], ['key:key_only', 'Key: key-only model'], ['key:key_unset', 'Key: not set'], ['key:key_changed', 'Key: changed'], ['key:key_rejected', 'Key: rejected'], ['key:key_forbidden', 'Key: forbidden'], ['access', 'Access'], ['rate', 'Rate limit'], ['error:unknown', 'Error'], ['error:context_too_long', 'Error: context too long'], [MID_FAIL, 'Error: network (mid-answer)']];
+/* the text the seeded ask had written when a network failure ended it */
+const SEED_PARTIAL = '<p>The main long-context retrieval benchmarks are RULER, LongBench and the needle-in-a-haystack family. RULER measures';
 function setSeedFail(v) {
-  const r = SEED_FAIL.run, f = failOf(v), m = v === 'key:key_only' ? 'GPT-6.1 Sol' : 'Gemini 3.8 Flash';
-  clearTimeout(RUN_T[SEED_FAIL.id + ':r']); Object.assign(r, { status: 'failed', step: 0, text: '', fail: f.fail, pay: f.pay || null, model: m }); SEED_FAIL.model = m;
+  const r = SEED_FAIL.run, f = failOf(v), m = v === 'key:key_only' ? KEY_ONLY_MODEL : 'Gemini 3.8 Flash';
+  clearTimeout(RUN_T[SEED_FAIL.id + ':r']); Object.assign(r, { status: 'failed', step: 0, text: v === MID_FAIL ? SEED_PARTIAL : '', fail: f.fail, pay: f.pay || null, model: m }); SEED_FAIL.model = m;
 }
 function renderMock() {
   const base = ['sol', 'ines.v', 'kofi.a'], waiting = u => PENDING[u]?.length && member(u) && !base.includes(u) && !member(u).created;
@@ -2930,21 +3010,25 @@ function renderMock() {
   const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`]), ...Object.keys(PENDING).filter(waiting).map(u => [u, '@' + u])];
   const cur = st.auth === 'out' ? 'out' : st.user;
   const sw = (k, label, opts) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${opts.map(([v, l]) => `<button data-mx="${k}" data-x="${v}" aria-pressed="${String(st[k]) === v}">${l}</button>`).join('')}</span></span>`;
+  /* Connection: online, offline, or offline with a usage reading taken on an earlier day (the ring's "as of") */
+  const conn = !st.offline ? 'on' : new Date(st.readAt).toDateString() === new Date(NOW).toDateString() ? 'off' : 'old';
   const leaver = st.chInfo && st.members && (MEMBERSHIP[st.chInfo] || []).find(m => m.role !== 'owner' && m.u !== me());
+  /* Member rejoins: the member of the open Remove confirm, else the same member as Member leaves, gets a new admission */
+  const rejoiner = st.chInfo && st.members && isPrivate(st.chInfo) && ((st.memberAct && (MEMBERSHIP[st.chInfo] || []).find(m => m.u === st.memberAct.u)) || leaver);
   /* on phones the state switches fold behind one button, so the app keeps most of the screen */
   const fold = matchMedia('(max-width: 520px)').matches, shown = !fold || st.mkopen;
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? '' : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button></span></span>
+    <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? (isActive() ? '' : '<button data-mo="link" title="Open an account invite link">Invited</button>') : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button></span></span>
     ${fold ? `<button class="fsbtn" data-mx="mkopen" aria-expanded="${!!st.mkopen}">${st.mkopen ? 'Hide states' : 'Show states'}</button>` : ''}${!shown ? '' : `
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>
-    ${sw('reads', 'Reads', [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail']])}
+    ${sw('reads', 'Reads', [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail'], ['invites', 'Invites fail'], ['loading', 'Loading']])}
     ${sw('mrun', 'Runs', [['answer', 'Answer'], ['interrupt', 'Interrupt'], ['fail', 'Fail']])}
     <span class="mk"><label class="mkl" for="mk-fail">Run failure</label><select id="mk-fail" class="mksel">${FAIL_OPTS.map(([v, l]) => `<option value="${v}"${st.mfail === v ? ' selected' : ''}>${l}</option>`).join('')}</select></span>
     ${sw('mq', 'Queue', [['as', 'As is'], ['full', 'Full']])}
     ${sw('ml', 'Limits', [['as', 'As is'], ['reached', 'Reached']])}
-    ${sw('offline', 'Connection', [['false', 'Online'], ['true', 'Offline']])}
+    <span class="mk"><span class="mkl">Connection</span><span class="seg">${[['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14']].map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
     ${sw('mw', 'Writes', [['accept', 'Accept'], ['refuse', 'Refuse'], ['rate', 'Rate limited']])}
-    <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}</span></span>`}`;
+    <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}${rejoiner ? `<button data-mx="rejoin" title="@${esc(rejoiner.u)} leaves and joins again with a new link">Member rejoins</button>` : ''}</span></span>`}`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 /* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
@@ -3012,7 +3096,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="${st.toast
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'adm') { if (st.auth !== 'in' || !isAdmin()) signIn('sol'); st.screen = 'admin'; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
-  if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
+  if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
   render();
@@ -3026,6 +3110,8 @@ function signIn(u) {
   /* a change another person made while this persona was away (a ban, a removal): its toast, on that channel */
   const ev = PENDING[u]?.shift(); if (ev) { st.space = ev.sp; st.screen = 'network'; toast(ev.text); }
   if (st.chLinkId && member(u).status === 'active') { useChLink(st.chLinkId); return; }
+  /* a waiting account that holds an invite (it closed "Create your account" before creating) gets that step again */
+  if (member(u).status === 'waiting' && member(u).pendingInvite) { st.code = member(u).pendingInvite; openProfile(member(u), null); return; }
   render();
 }
 /* /c/<name>#<code>: the code leaves the address and the channel opens. Signed out, the sign-in dialog says what the
@@ -3044,26 +3130,32 @@ function useChLink(lid) {
   else { addMember(sp, st.user); l.state = 'used'; l.usedBy = st.user; toast(`Joined ${spName(sp)}.`); }
   render();
 }
-const openProfile = (m, from) => { st.profile = { name: m.name, handle: m.u, err: '' }; st.profileFrom = from; st.authOpen = true; st.flow = 'profile'; st.redeemMode = false; render(); };
+const openProfile = (m, from) => { st.profile = { name: m.name, handle: m.u, err: '' }; st.profileFrom = from; st.authOpen = true; st.flow = 'profile'; st.redeemMode = false; st.redeemOrigin = null; render(); };
 const renameMember = (m, h) => { const old = m.u; for (const s in MEMBERSHIP) MEMBERSHIP[s].forEach(x => { if (x.u === old) x.u = h; }); m.u = h; };
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
-  if (p) { st.chLink = null; st.chLinkId = null; st.redeemMode = false; st.profileFrom = null; if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.code = ''; st.xacct = null; st.profile = null; st.fromLink = false; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
+  if (p) { st.chLink = null; st.chLinkId = null; st.redeemMode = false; st.redeemOrigin = null; st.profileFrom = null; if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.code = ''; st.xacct = null; st.profile = null; st.fromLink = false; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
   const o = e.target.closest('[data-mo]');
   if (o && (o.dataset.mo === 'chlink' || o.dataset.mo === 'chlinkused')) { openChLink(o.dataset.mo === 'chlink' ? 'cl-open' : 'cl-used'); return; }
+  /* a waiting account opens /i#code: the redeem step with the code filled in, no Back */
+  if (o && o.dataset.mo === 'link' && st.auth === 'in' && !isActive()) { Object.assign(st, { authOpen: true, flow: 'code', redeemMode: true, redeemOrigin: 'dialog', code: 'SESS-9TQ2-X8', codeErr: '', menu: null, confirm: null }); render(); return; }
   if (o) { const k = o.dataset.mo; st.auth = 'out'; st.authOpen = true; st.confirm = null; st.menu = null; st.codeErr = ''; st.chLink = null; st.chLinkId = null; st.redeemMode = false;
     if (k === 'signin') { st.flow = 'landing'; st.fromLink = false; st.code = ''; }
-    if (k === 'link') { st.flow = 'landing'; st.fromLink = true; st.code = 'SESS-9TQ2-X8'; }
+    if (k === 'link') { st.flow = 'landing'; st.fromLink = true; st.code = 'SESS-9TQ2-X8'; st.linkChecking = true;
+      setTimeout(() => { st.linkChecking = false; const was = !document.activeElement || document.activeElement === document.body || document.activeElement.matches('.authdlg h2'); render();
+        const h = $('.authdlg h2'); if (was && h) { h.tabIndex = -1; h.focus({ preventScroll: true }); } }, 600); }
     if (k === 'code') { st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; }
     render(); return; }
   const sd = e.target.closest('[data-msd]'); if (sd) { st.ui.sd = sd.dataset.msd; st.ui.sv = '1'; st.menu = null; st.screen = 'network'; st.authOpen = false; render(); return; }
   const sv = e.target.closest('[data-msv]'); if (sv) { st.ui.sv = sv.dataset.msv; st.menu = null; st.screen = 'network'; if (st.ui.sd === 'b' && st.ui.sv !== '1') st.menu = null; render(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
   const x = e.target.closest('[data-mx]'); if (x) { const k = x.dataset.mx, v = x.dataset.x;
-    if (k === 'offline') { st.offline = v === 'true'; if (st.offline) st.offlineAt = NOW; else { st.loadingSummaries = true; setTimeout(() => { st.loadingSummaries = false; render(); }, 800); } }
+    if (k === 'conn') { const was = st.offline; st.offline = v !== 'on'; st.readAt = v === 'old' ? Date.parse('2026-11-14T15:05:00Z') : NOW;
+      if (was && !st.offline) { st.loadingSummaries = true; setTimeout(() => { st.loadingSummaries = false; render(); }, 800); } }
     else if (k === 'upgrade') st.upgrade = !st.upgrade;
     else if (k === 'mkopen') st.mkopen = !st.mkopen;
     else if (k === 'leave') { const m = (MEMBERSHIP[st.chInfo] || []).find(y => y.role !== 'owner' && y.u !== me()); if (m) dropMember(st.chInfo, m.u); }
+    else if (k === 'rejoin') { const l = MEMBERSHIP[st.chInfo] || [], m = (st.memberAct && l.find(y => y.u === st.memberAct.u)) || l.find(y => y.role !== 'owner' && y.u !== me()); if (m) { m.adm = (m.adm || 0) + 1; m.at = new Date(NOW).toISOString(); } }
     else st[k] = v;
     render(); return; }
   const t = e.target.closest('[data-mt]'); if (t) { st.mt = t.dataset.mt; const u = usage(); const need = { norm: null, low: ALLOWANCE * .85, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
@@ -3073,27 +3165,29 @@ const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, 
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-ma]'); if (!t || (t.tagName === 'INPUT' && t.type === 'radio')) return;
   const a = t.dataset.ma, d = t.dataset;
-  if (a === 'go') { st.screen = d.to; st.menu = null; if (d.to === 'network' && t.classList.contains('brand')) st.space = 'home'; render(); if ($('#k-page')) { $('#k-page').scrollTop = 0; const h = $('#k-page h2, #k-page h3'); h?.setAttribute('tabindex', '-1'); h?.focus({ preventScroll: true }); } return; }
+  if (a === 'go') { if (t.tagName === 'A') { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; e.preventDefault(); } st.screen = d.to; st.menu = null; if (d.to === 'network' && t.classList.contains('brand')) st.space = 'home'; render(); if ($('#k-page')) { $('#k-page').scrollTop = 0; const h = $('#k-page h2, #k-page h3'); h?.setAttribute('tabindex', '-1'); h?.focus({ preventScroll: true }); } return; }
   if (a === 'flow') { st.flow = d.to; st.codeErr = ''; if (d.to === 'code') { st.intent = 'signup'; st.redeemMode = false; } render(); $('#in-code')?.focus(); return; }
-  if (a === 'redeemcode') { st.flow = 'code'; st.redeemMode = true; st.code = ''; st.codeErr = ''; render(); $('#in-code')?.focus(); return; }
-  if (a === 'xauth') { st.provider = d.p || 'x'; if (st.flow === 'landing') st.intent = st.fromLink ? 'signup' : 'signin'; st.flow = 'xauth'; render(); return; }
-  if (a === 'openauth') { authFrom = sigOf(t); st.authOpen = true; st.flow = d.to || 'landing'; st.codeErr = ''; st.redeemMode = false; if (d.to === 'code') st.intent = 'signup'; render(); (app.querySelector('.authdlg #in-code') || app.querySelector('.authdlg .xbtn'))?.focus(); return; }
+  if (a === 'redeemcode') { st.flow = 'code'; st.redeemMode = true; st.redeemOrigin = null; st.code = ''; st.codeErr = ''; render(); $('#in-code')?.focus(); return; }
+  if (a === 'xauth') { st.provider = d.p || 'x'; st.xErr = ''; if (st.flow === 'landing') st.intent = st.fromLink ? 'signup' : 'signin'; st.flow = 'xauth'; render(); return; }
+  if (a === 'openauth') { authFrom = sigOf(t); st.authOpen = true; st.flow = d.to || 'landing'; st.codeErr = ''; st.redeemMode = false; if (d.to === 'code') st.intent = 'signup'; render(); return; }
   if (a === 'closeauth') { closeAuth(); return; }
-  if (a === 'nolink') { st.fromLink = false; st.code = ''; st.intent = 'signin'; st.flow = 'xauth'; render(); return; }
+  if (a === 'nolink') { st.fromLink = false; st.code = ''; st.intent = 'signin'; st.flow = 'landing'; lastFlow = null; render(); return; }
   if (a === 'fill') { st.code = d.code; st.codeErr = ''; render(); return; }
   if (a === 'xpick' || a === 'xgo') {
+    /* the server refuses to start the sign-in (mock bar: Writes, Refuse or Rate limited) */
+    if (a === 'xgo' && (st.mw === 'refuse' || st.mw === 'rate')) { st.xErr = st.mw === 'rate' ? 'Too many sign-in attempts. Try again in a minute.' : 'Sign-in is not available right now. Try again later.'; render(); return; }
     const x = a === 'xgo' ? st.mockX : d.x, m = MEMBERS.find(mm => mm.x === x);
-    st.xacct = x;
-    const invOpen = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
-    /* a waiting account back from the provider with an open code gets the profile step */
-    if (m && m.status === 'waiting' && invOpen) { const ch = st.chLinkId; st.chLinkId = null; signIn(m.u); st.chLinkId = ch; openProfile(m, 'welcome'); return; }
+    st.xacct = x; st.xErr = '';
+    /* an existing identity signs in and the code is ignored: a waiting account lands on "Invite required" */
     if (m) { signIn(m.u); return; }
+    /* a new identity: the waiting account is made first. With an open invite it holds the invite and the profile step
+       opens over "Invite required"; without one the no-account step opens there. */
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
-    if (st.intent === 'signup' && inv) { const a2 = X_ACCOUNTS.find(z => z.x === x); st.profile = { name: a2.name, handle: x.replace(/[^a-z0-9._]/g, '').slice(0, 20), rules: false, err: '' }; st.profileFrom = null; st.flow = 'profile'; render(); return; }
-    /* a new identity without an invite: the waiting account is made first, then the no-account step opens over "Invite required" */
     const a2 = X_ACCOUNTS.find(z => z.x === x), u = x.replace(/[^a-z0-9._]/g, '').slice(0, 20);
     if (!member(u)) MEMBERS.push({ created: true, u, name: a2.name, x, inviter: null, joined: new Date(NOW).toISOString(), status: 'waiting' });
-    const ch = st.chLinkId; st.chLinkId = null; signIn(u); st.chLinkId = ch; st.authOpen = true; st.flow = 'noaccount'; render(); return;
+    const ch = st.chLinkId; st.chLinkId = null; signIn(u); st.chLinkId = ch; st.authOpen = true;
+    if (st.intent === 'signup' && inv) { st.profile = { name: a2.name, handle: u, err: '' }; st.profileFrom = null; st.redeemMode = false; st.flow = 'profile'; render(); return; }
+    st.flow = 'noaccount'; render(); return;
   }
   if (a === 'signout') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.xacct = null; st.menu = null; render(); return; }
   if (a === 'cancel') { st.confirm = null; render(); return; }
@@ -3104,11 +3198,11 @@ app.addEventListener('click', e => {
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
   if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; st.keyDraft = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
-  if (a === 'keycancel') { st.keyForm = null; st.keyErr = ''; st.keyDraft = ''; render(); return; }
+  if (a === 'keycancel') { const k = st.keyForm; st.keyForm = null; st.keyErr = ''; st.keyDraft = ''; render(); $(`[data-ma="keyadd"][data-k="${k}"]`)?.focus(); return; }
   if (a === 'keyask') { st.removing = d.k; render(); $('.kconfirm [data-ma="keykeep"]')?.focus(); return; }
-  if (a === 'keykeep') { st.removing = null; render(); return; }
+  if (a === 'keykeep') { const k = st.removing; st.removing = null; render(); $(`[data-ma="keyask"][data-k="${k}"]`)?.focus(); return; }
   /* removing the Anthropic key returns billing to pause; a composer on a model nothing can pay for now falls back to the default (curModel) */
-  if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (d.k === 'anthropic') BILLING[st.user] = 'pause'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); return; }
+  if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (d.k === 'anthropic') BILLING[st.user] = 'pause'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); $(`[data-ma="keyadd"][data-k="${d.k}"]`)?.focus(); return; }
 });
 app.addEventListener('change', e => {
   const t = e.target, k = t.dataset.adm; if (!k) return;
@@ -3121,29 +3215,31 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const kind = f.dataset.mform;
   if (kind === 'code') {
-    const c = $('#in-code').value.trim().toUpperCase().replace(/\/+$/, '').replace(/^.*\//, ''); st.code = c;
-    /* used, revoked, unknown or malformed codes get one message */
+    const c = parseCode($('#in-code').value); st.code = c;
+    /* used, revoked, unknown or malformed codes get one message; a rate-limited check gets the server's */
     const inv = INVITES.find(i => i.code === c);
-    st.codeErr = !c ? 'Enter the code from your invite.' : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
-    if (!st.codeErr && st.redeemMode) { if (st.auth === 'in' && meM()) { openProfile(meM(), 'welcome'); return; } st.profile.dead = false; st.profile.err = ''; st.redeemMode = false; st.flow = 'profile'; }
+    st.codeErr = !c ? 'Enter the code from your invite.' : st.mw === 'rate' ? ATTEMPTS_MSG : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
+    if (!st.codeErr && st.redeemMode) { if (st.auth === 'in' && meM()) { openProfile(meM(), st.redeemOrigin || 'welcome'); return; } st.profile.dead = false; st.profile.err = ''; st.redeemMode = false; st.flow = 'profile'; }
     render(); return;
   }
   if (kind === 'redeem') {
-    const c = $('#in-redeem').value.trim().toUpperCase(), inv = INVITES.find(i => i.code === c.replace(/\/+$/, '').replace(/^.*\//, '')); st.redeem = c;
-    st.redeemErr = !c ? 'Enter the code from your invite.' : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
+    const c = parseCode($('#in-redeem').value), inv = INVITES.find(i => i.code === c); st.redeem = c;
+    st.redeemErr = !c ? 'Enter the code from your invite.' : st.mw === 'rate' ? ATTEMPTS_MSG : !inv || inviteState(inv) !== 'open' ? BAD_CODE : '';
     if (st.redeemErr) { render(); return; }
     /* a valid code opens the profile step; the account becomes active on Create account */
     st.code = inv.code; st.redeem = ''; openProfile(meM(), 'welcome'); return;
   }
   if (kind === 'profile') {
-    const pf = st.profile, m0 = st.profileFrom === 'welcome' ? meM() : null; pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase();
+    const pf = st.profile, m0 = profileSelf(); pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase();
     const inv = INVITES.find(i => i.code === st.code);
     if (!inv || inviteState(inv) !== 'open') { pf.err = BAD_CODE; pf.dead = true; render(); return; }
-    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) && member(pf.handle) !== m0 ? `@${pf.handle} is taken. Try another.` : '';
+    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) && member(pf.handle) !== m0 ? `@${pf.handle} is taken. Try another.` : st.mw === 'rate' ? ATTEMPTS_MSG : '';
     if (pf.err) { render(); return; }
     inv.used = pf.handle;
-    if (m0) { if (pf.handle !== m0.u) renameMember(m0, pf.handle); Object.assign(m0, { name: pf.name, status: 'active', inviter: inv.by, joined: new Date(NOW).toISOString() }); st.code = ''; st.profileFrom = null; st.space = 'home';
-      toast(`You're in. ${nameOf(inv.by)} invited you.`); signIn(m0.u); return; }
+    /* the waiting account becomes a member. Opened from "Invite required" ('welcome'): "You're in."; otherwise (a new
+       identity, an invite link opened while waiting, a held invite after a reload): "Account created." */
+    if (m0) { const from = st.profileFrom; if (pf.handle !== m0.u) renameMember(m0, pf.handle); Object.assign(m0, { name: pf.name, status: 'active', inviter: inv.by, joined: new Date(NOW).toISOString() }); delete m0.pendingInvite; st.code = ''; st.profileFrom = null; st.space = 'home';
+      if (from === 'welcome') { toast(`You're in. ${nameOf(inv.by)} invited you.`); signIn(m0.u); } else { signIn(m0.u); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); } return; }
     MEMBERS.push({ created: true, u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'active' });
     st.code = ''; signIn(pf.handle); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); return;
   }
@@ -3152,6 +3248,7 @@ app.addEventListener('submit', e => {
     const wrong = id === 'openai' && v.startsWith('sk-ant-');
     st.keyErr = !v ? 'Paste a key.' : wrong ? 'That looks like an Anthropic key. Add it under Anthropic.' : !v.startsWith(P.prefix) || v.length < 24 || v.length > 512 || /\s/.test(v) ? `${P.name} keys start with ${P.prefix} and are longer than this. Copy the whole key from your ${P.name} account.` : '';
     if (st.keyErr) { render(); $(`#in-key-${id}`)?.focus(); return; }
+    if (st.ml === 'reached') { st.keyErr = 'Too many key checks. Try again in a few minutes.'; st.keyDraft = v; render(); const i = $(`#in-key-${id}`); if (i) { i.value = v; i.focus(); } return; }
     keys()[id] = { last4: v.slice(-4), added: new Date(NOW).toISOString(), status: 'checking' };
     st.keyForm = null; render();
     /* the key is checked with the provider: a rejected key or no answer saves nothing, and the form reopens with the text */
@@ -3160,12 +3257,12 @@ app.addEventListener('submit', e => {
       const K = KEYS[owner] || {}; if (!K[id]) return;
       const err = v.includes('rejected') ? `That key was rejected by ${P.name}.` : v.includes('unreachable') ? `Couldn't reach ${P.name} to check the key. Try again.` : '';
       if (err) { delete K[id]; if (st.user !== owner) return; st.keyForm = id; st.keyErr = err; st.keyDraft = v; render(); const i = $(`#in-key-${id}`); if (i) { i.value = st.keyDraft; i.focus(); } return; }
-      K[id].status = 'working'; if (st.user === owner) toast(`${P.name} key works.`); render();
+      K[id].status = 'working'; if (st.user !== owner) { render(); return; } toast(`${P.name} key works.`); render(); $(`[data-ma="keyask"][data-k="${id}"]`)?.focus();
     }, 1300);
   }
 });
 let authFrom = null;
-const closeAuth = () => { st.authOpen = false; st.flow = 'landing'; st.fromLink = false; render(); findSig(authFrom)?.focus({ preventScroll: true }); authFrom = null; };
+const closeAuth = () => { const self = st.flow === 'profile' && profileSelf(); if (self && st.code) self.pendingInvite = st.code; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; render(); findSig(authFrom)?.focus({ preventScroll: true }); authFrom = null; };
 document.addEventListener('keydown', e => {
   const dlg = $('.authdlg');
   if (e.key === 'Tab' && dlg) { const fs = [...dlg.querySelectorAll('button, input, a[href], [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent); if (!fs.length) return;
@@ -3188,7 +3285,7 @@ go(location.hash.slice(1) || 'type');
 /* leaving the handle field checks whether the handle is taken */
 app.addEventListener('focusout', e => {
   if (e.target.id !== 'pf-handle' || !st.profile) return;
-  const pf = st.profile, h = e.target.value.trim().toLowerCase(), m = member(h), taken = !!h && !!m && m !== (st.profileFrom === 'welcome' ? meM() : null), msg = `@${h} is taken. Try another.`;
+  const pf = st.profile, h = e.target.value.trim().toLowerCase(), m = member(h), taken = !!h && !!m && m !== profileSelf(), msg = `@${h} is taken. Try another.`;
   pf.handle = h; pf.name = $('#pf-name')?.value.trim() ?? pf.name;
   if (taken && pf.err !== msg) { pf.err = msg; setTimeout(render); } else if (!taken && /is taken\. Try another\.$/.test(pf.err || '')) { pf.err = ''; setTimeout(render); }
 });
