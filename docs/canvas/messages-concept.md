@@ -57,12 +57,13 @@ When an ask is sent:
 
 Handlers run once per send and are never recomputed, so an old answer still says what it saw.
 
-**Continuations read the whole thread.** An ask added at the bottom of a thread (Continue, `pos: next`) always reads
-every part above it. Context handlers can only add to that: what `context` returns is unioned with the full thread.
-Interjections (Ask here), branches and asks to a selection or a passage take what the handlers return. By default
-that is the parts above their position.
+**Context is fixed by position.** An ask placed in a thread always reads the part it hangs from and everything above
+it, through earlier branch points. That covers continuations (Continue), interjections (Ask here), branches, and
+passage asks. A passage ask is a branch whose quoted passage marks its focus. There is no "this message only" kind of
+branch. Context handlers can only add to that base: what `context` returns is unioned with it. An ask sent to a
+selection of parts in different threads has no position, so its context is what the receivers' handlers return.
 
-**Compaction.** When the thread above a continuation is longer than the model's budget, its earliest parts are replaced
+**Compaction.** When the thread above an ask is longer than the model's budget, its earliest parts are replaced
 by a compacted summary, and `saw` records that a compaction was used. The mock does not implement this.
 
 **Lookup.** For part X the order is:
@@ -112,11 +113,14 @@ handler that throws is skipped, the next level runs, and the ask records the fai
   offset. Stacks are a convention, not a record.
 - **Order.** A part, then its `inline` children by `k`, then its single `next` child. A second Continue becomes a
   branch.
+- **Who may add where.** Only the person who started a thread (its head's author) can Continue it or Ask here
+  inside it. Everyone else branches, with Branch or Ask about this. The mock has a small "as" switch in the toolbar
+  to show both cases. It starts as jun.park, who owns Dagen H and does not own ines.v's thread.
 - **Growth.** "Ask here" between B and C creates `prev = B, pos = inline`, drawn indented with a rule. C keeps
-  `prev = B`, so the parts below never see the interjection, and nobody else's part is edited. The stack grows, and
-  more than two interjections collapse to "N more".
+  `prev = B`, so the parts below never see the interjection. The stack grows, and more than two interjections
+  collapse to "N more".
 - **Branching mid-thread.** "Branch" on B creates `prev = B, pos = beside`, with context B and everything above it.
-  Selecting text and choosing "Ask about this" does the same with `to: ["B#s-e"]`.
+  Selecting text and choosing "Ask about this" does the same with `to: ["B#s-e"]`, quoting the passage.
 - **Collisions.** Heads are placed in creation order, each followed by its branches. Overlapping stacks move down; a
   branch pushed far from its anchor takes the next lane to the right.
 - **Connectors** appear only where position does not show the relation: branches, passage asks and selection asks.
@@ -134,7 +138,7 @@ handler that throws is skipped, the next level runs, and the ask records the fai
 | Branch (beside) | ask with `pos: beside` |
 | quoted-passage node | ask with `to: ["id#s-e"]` |
 | Look up | an ask reading "look up …"; an `ask` handler may answer it |
-| reply, comment | person part, `pos: inline`, no `to` |
+| reply on a post, comment | another person's branch beside it: a part with `pos: beside` and no `to` |
 | save | a per-person set of ids, outside the model |
 | Open as its own thread | a new head on another canvas that keeps `prev` as a back-link, with frozen copies of its handlers |
 
@@ -146,8 +150,8 @@ handler that throws is skipped, the next level runs, and the ask records the fai
    parts on other canvases reached through `prev`.
 3. **Effort.** The model is fixed for the workspace, but effort is not settled. It could be a workspace setting too,
    or an argument of `ask` that a handler may set.
-4. **Comments in context.** An inline reply is an ancestor of anything asked under it. Should comments enter context
-   by default?
+4. **Branch clutter.** Replies are branches now, so a busy post grows a column of single-part branches beside it.
+   Collapsing them to a count may be needed.
 5. **Scale.** Push-down layout makes long columns at 50+ stacks. Zoom (Ctrl/⌘ + wheel) helps. Collapsing stacks to
    their heads would also help, and should be view state, not a field.
 
@@ -220,3 +224,15 @@ The advisor was a separate agent, run for three rounds.
   - The footer keeps only failures.
   - Continuations union handler results with the full thread (option (a)). The Dagen H handler, which used to filter
     answers out, now adds a Sources card, and the demo deletes it from the handler.
+
+**Fourth steer from the parent session, on the user's behalf.**
+- *It said:*
+  - A branch always reads everything above the part it branches from.
+  - Only a thread's author can continue it or insert into it.
+  - Other people's replies on a post are branches.
+  - The title becomes "Session Canvas Messages (A)".
+- *Changed:*
+  - Every positioned ask starts from its ancestors, and handlers only add.
+  - Continue and Ask here appear only for the thread's author, with an "as" persona switch in the toolbar.
+  - hal_b's post now has its replies as branches beside it.
+  - Open question 4 replaced (comments are no longer inline).
