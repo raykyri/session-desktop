@@ -7,10 +7,10 @@ are canned and runs are simulated with timers. The only external request is the 
 
 Data model (in memory; a reload starts over)
 - Part { id, st (stack), key (number; an insert takes the midpoint of its neighbours), by {k:'p', u} | {k:'m', model},
-  text (HTML), at, rev, revs (earlier texts after a re-run), run? }.
-  run (model parts only) { by (the person who asked), model, effort, see (context rule), ctx ([[id, rev]] frozen
-  when the run started), status queued|running|complete|stopped, step, src }.
-- Stack { id, ch (channel), fork? { part, rev, block?, quote? }, x?, y?, inline? }.
+  text (HTML), at, run? }.
+  run (model parts only) { by (the person who asked), model, effort, see (context rule), ctx (ids of the parts it
+  read, frozen when the run started), status queued|running|complete|stopped, step, src }.
+- Stack { id, ch (channel), fork? { part, block?, quote? }, x?, y?, inline? }.
   A stack with x,y is placed by itself (a root, or a fork opened as its own thread); otherwise it is placed in a lane
   beside its anchor part, or drawn inside its parent stack when inline is true.
 - View state, per viewer, not content: collapsed units, expanded answers, selection, zoom, seen parts.
@@ -107,8 +107,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .part + .part, .seam + .part, .part + .seam { }
 .part.m { background: var(--card-m); }
 .part.ctx { box-shadow: inset 3px 0 0 var(--ctx); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
-.part.picking { cursor: copy; }
-.part.picking:hover { box-shadow: inset 0 0 0 2px var(--accent); }
 .ph { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t-faint); margin-bottom: 4px; min-height: 20px; flex-wrap: wrap; }
 .ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; }
 .ph .late { color: var(--warn); }
@@ -141,8 +139,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .pending .bar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 .stalebox { margin-top: 6px; font-size: 12px; color: var(--warn); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .stalebox button { font-weight: 600; color: var(--accent); }
-.revs { font-size: 11.5px; color: var(--t-faint); margin-top: 4px; }
-.revs button { color: var(--accent); font-weight: 500; }
 
 /* seams: the gap between two parts. Desktop: a "+" in the left gutter of the hovered gap. Touch, or a selected stack:
    every gap shows its "+" (44px target). Inside an answer, gaps between blocks are fainter and make an inline fork. */
@@ -184,6 +180,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .ifh button { margin-left: 0; }
 #bfork { position: fixed; z-index: 24; height: 24px; padding: 0 8px 0 6px; border-radius: 12px; background: var(--card); color: var(--accent); font-size: 11.5px; font-weight: 600; box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.08); display: inline-flex; align-items: center; gap: 4px; }
 #bfork:hover { background: var(--accent); color: var(--on-accent); }
+.part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
+.prose > .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
 .prose > .bhov { box-shadow: -8px 0 0 -5px var(--accent); }
 @media (pointer: coarse) { #bfork { height: 34px; padding: 0 12px; border-radius: 17px; } }
 .sbody > .draft:first-child { border-top: 0; border-radius: 10px 10px 0 0; }
@@ -276,7 +274,7 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ---- content: parts and stacks ---- */
 const P = {}, S = {};
 let seq = 1000;
-for (const p of D.parts) { p.key = +p.key.slice(1); p.rev = 1; p.revs = []; if (p.run) p.run.see = 'above + trunk'; P[p.id] = p; }
+for (const p of D.parts) { p.key = +p.key.slice(1); if (p.run) p.run.see = 'above + trunk'; P[p.id] = p; }
 for (const s of D.stacks) S[s.id] = s;
 const byKey = (a, b) => a.key - b.key;
 const partsOf = sid => Object.values(P).filter(p => p.st === sid).sort(byKey);
@@ -299,7 +297,7 @@ const above = (p, n) => { const a = partsOf(p.st).filter(q => q.key < p.key); re
 const trunk = s => { if (!s.fork) return []; const fp = P[s.fork.part]; return fp ? [...positional(fp), fp] : []; };
 const positional = p => [...trunk(S[p.st]), ...above(p)];
 function parseRule(rule) {
-  const toks = String(rule).trim().split(/\s*([+-])\s*/); const out = []; let sign = '+';
+  const toks = String(rule).trim().split(/\s*(\+)\s*/); const out = []; let sign = '+';
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i].trim();
     if (i % 2 === 1) { sign = t; continue; }
@@ -307,8 +305,7 @@ function parseRule(rule) {
     let m;
     if ((m = t.match(/^above(?:\s+(\d+))?$/))) out.push([sign, 'above', m[1] ? +m[1] : 0]);
     else if (t === 'trunk' || t === 'fork' || t === 'none') out.push([sign, t]);
-    else if ((m = t.match(/^#(p\d+)$/))) { if (!P[m[1]]) return { err: `No part ${t}.` }; out.push([sign, 'ref', m[1]]); }
-    else return { err: `Unknown term "${t}". Use above, above N, trunk, fork, #id or none.` };
+    else return { err: `Unknown term "${t}". Use above, above N, trunk, fork or none, joined with +.` };
   }
   return { terms: out };
 }
@@ -316,7 +313,7 @@ function resolve(p, rule = p.run?.see || 'above + trunk') {
   const r = parseRule(rule); if (r.err) return { err: r.err, parts: [] };
   const set = new Map(), s = S[p.st];
   for (const [sign, k, a] of r.terms) {
-    const got = k === 'above' ? above(p, a) : k === 'trunk' ? trunk(s) : k === 'fork' ? (s.fork && P[s.fork.part] ? [P[s.fork.part]] : []) : k === 'ref' ? [P[a]] : [];
+    const got = k === 'above' ? above(p, a) : k === 'trunk' ? trunk(s) : k === 'fork' ? (s.fork && P[s.fork.part] ? [P[s.fork.part]] : []) : [];
     for (const q of got) if (q.id !== p.id) { if (sign === '+') set.set(q.id, q); else set.delete(q.id); }
   }
   /* reading order: trunk first, then this stack */
@@ -324,19 +321,12 @@ function resolve(p, rule = p.run?.see || 'above + trunk') {
   return { parts: [...set.values()].sort((a, b) => rank(a.id) - rank(b.id)) };
 }
 const blockText = (p, i) => { const t = document.createElement('div'); t.innerHTML = p.text; return strip(t.children[i]?.innerHTML || ''); };
-const ctxOf = p => resolve(p).parts.map(q => [q.id, q.rev]);
+const ctxOf = p => resolve(p).parts.map(q => q.id);
 const sameCtx = (a, b) => a.length === b.length && a.every(([id, r], i) => b[i][0] === id && b[i][1] === r);
 for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
-function staleInfo(p) {
-  if (!p.run || p.run.status !== 'complete') return null;
-  const now = ctxOf(p); if (sameCtx(now, p.run.ctx)) return null;
-  const was = new Map(p.run.ctx), is = new Map(now);
-  const added = now.filter(([id]) => !was.has(id)).length, removed = p.run.ctx.filter(([id]) => !is.has(id)).length, changed = now.filter(([id, r]) => was.has(id) && was.get(id) !== r).length;
-  return [added && `+${added} part${added > 1 ? 's' : ''}`, removed && `−${removed}`, changed && `${changed} re-run`].filter(Boolean).join(', ');
-}
 
 /* ---- view state (per viewer) ---- */
-const V = { openIn: new Set(), legend: false, x: 0, y: 0, z: 1, sel: null, collapsed: new Set(), full: new Set(), seen: new Set(), pop: null, picking: false, draft: null, hot: null };
+const V = { openIn: new Set(), legend: false, x: 0, y: 0, z: 1, sel: null, collapsed: new Set(), full: new Set(), seen: new Set(), pop: null, draft: null, hot: null };
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
 const unitStacks = root => { const out = []; const walk = s => { out.push(s); for (const p of partsOf(s.id)) for (const f of forksOf(p.id)) if (f.x == null) walk(f); }; walk(root); return out; };
@@ -350,9 +340,9 @@ function head(p, s) {
   const nw = isNew(p) ? '<span class="dot" title="New"></span>' : '';
   const acts = `<span class="acts"><button class="ab" data-a="fork" data-id="${p.id}" title="Start a stack beside this part that sees everything up to here">Fork</button></span>`;
   if (!isModel(p)) return `<div class="ph">${nw}${av(p.by.u)}<b>${esc(NAMES[p.by.u] || p.by.u)}</b><span>${rel(p.at)}</span>${late}${acts}</div>`;
-  const r = p.run, st = staleInfo(p), n = r.status === 'complete' ? r.ctx.length : ctxOf(p).length;
+  const r = p.run, n = r.status === 'complete' ? r.ctx.length : ctxOf(p).length;
   return `<div class="ph">${nw}${MARK}<b title="${esc(r.model)}">${esc(SHORT[r.model] || r.model)}</b><span>for ${esc(NAMES[r.by] || r.by)}</span>
-    ${st || r.see !== 'above + trunk' || V.sel === rootLane(s).id || V.pop === p.id ? `<button class="chip${st ? ' stale' : ''}" data-a="pop" data-id="${p.id}" title="${st ? 'Context changed since this ran. ' : ''}Context rule: ${esc(r.see)}">${r.see !== 'above + trunk' ? 'ƒ ' : ''}sees ${n}${st ? ' · changed' : ''}</button>` : ''}${acts}</div>`;
+    ${r.see !== 'above + trunk' || V.sel === rootLane(s).id || V.pop === p.id ? `<button class="chip" data-a="pop" data-id="${p.id}" title="Context rule: ${esc(r.see)}">${r.see !== 'above + trunk' ? 'ƒ ' : ''}read ${n}</button>` : ''}${acts}</div>`;
 }
 function proseHTML(p, s, selected) {
   if (isModel(p) && p.run.status !== 'complete') {
@@ -377,7 +367,6 @@ function proseHTML(p, s, selected) {
   if (big) out += `<button class="more" data-a="full" data-id="${p.id}">Show the whole answer${inl.length ? ` · ${inl.length} inline fork${inl.length > 1 ? 's' : ''}` : ''}</button>`;
   else if (long) out += `<button class="more" data-a="full" data-id="${p.id}">Show less</button>`;
   for (const f of inl.filter(f => f.fork.block == null)) out += ifork(f, selected);
-  if (p.revs.length) out += `<div class="revs">Re-run ${p.revs.length}× · <button data-a="oldrev" data-id="${p.id}">${V.oldrev === p.id ? 'Hide' : 'Show'} the earlier answer</button></div>${V.oldrev === p.id ? `<div class="prose" style="opacity:.7;margin-top:6px">${p.revs[p.revs.length - 1]}</div>` : ''}`;
   const st = null;
   if (st) out += `<div class="stalebox">Context changed since this ran (${esc(st)}).${p.run.by === ME ? `<button data-a="rerun" data-id="${p.id}">Re-run</button>` : `<span>${esc(NAMES[p.run.by] || p.run.by)} can re-run it.</span>`}</div>`;
   return out;
@@ -386,7 +375,7 @@ function partHTML(p, s, selected, first = false) {
   const ctx = V.pop && V.popCtx?.has(p.id) ? ' ctx' : '';
   const isRoot = !s.fork || s.x != null, n = first && isRoot ? unitNew(s) : 0;
   const pre = first ? `<small>${isRoot ? `#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}` : 'fork'}</small>` : '';
-  return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${ctx}${V.picking ? ' picking' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}">
+  return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${ctx}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}">
     <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${head(p, s)}${proseHTML(p, s, selected)}</div>`;
 }
 /* a question and the answer it prompted are read as one: no seam between them (Fork here covers that position) */
@@ -420,7 +409,7 @@ function stackHTML(s) {
   if (isRoot) { const n = unitNew(s);
     h += `<div class="sh" data-a="grip" data-id="${s.id}"><span class="ov" aria-hidden="true">#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}</span><span class="ch">#${esc(CH[s.ch] || s.ch)}</span>${s.fork ? '<span>· opened from a fork</span>' : ''}<span class="grow"></span>${n ? `<span class="newc">${n} new</span>` : ''}
       <button class="ib" data-a="collapse" data-id="${s.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button></div>`; }
-  if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : ''; h += `<div class="fq"><i>Fork of</i> ${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}${fp.rev !== s.fork.rev ? ' <span class="old">· forked from an earlier version</span>' : ''}</div>`; } }
+  if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : ''; h += `<div class="fq"><i>Fork of</i> ${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
   if (collapsed) {
     const u = unitStacks(s), np = u.reduce((n, x) => n + partsOf(x.id).length, 0);
     h += ps[0] ? partHTML(ps[0], s, false, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') : '';
@@ -610,8 +599,8 @@ function commitDraft(ask) {
   if (!texts.length) { document.querySelector('.draft textarea')?.focus(); return; }
   let [a, b] = keyAfter(d.st, d.after); const step = (b - a) / (texts.length + (ask ? 2 : 1));
   const made = []; let k = a;
-  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(NOW + (seq - 1000) * 1000).toISOString(), rev: 1, revs: [] }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
-  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: 'Gemini 3.8 Flash' }, text: '', at: new Date(NOW + (seq - 1000) * 1000).toISOString(), rev: 1, revs: [],
+  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(NOW + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
+  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: 'Gemini 3.8 Flash' }, text: '', at: new Date(NOW + (seq - 1000) * 1000).toISOString(),
     run: { by: ME, model: 'Gemini 3.8 Flash', effort: 'medium', see: d.see || 'above + trunk', ctx: [], status: 'queued', step: 0, src: [] } }; P[m.id] = m; made.push(m.id); V.seen.add(m.id); startRun(m); }
   V.fresh = new Set(made); V.draft = null; render();
 }
@@ -640,29 +629,28 @@ function canned(p, q) {
 }
 function rerun(p) {
   if (!p.run || p.run.by !== ME) return;
-  p.revs.push(p.text); p.rev++; startRun(p); render();
+  startRun(p); render();
 }
 
 /* ---- popover: the model part's context rule and relations ---- */
-function openPop(pid) { V.popPanned = false; V.pop = pid; V.picking = false; V.popRule = P[pid].run.see; computePopCtx(); render(); setTimeout(() => $('#pop input')?.focus({ preventScroll: true })); }
-function closePop() { V.pop = null; V.picking = false; V.popCtx = null; $('#pop').hidden = true; }
-function computePopCtx() { const p = P[V.pop]; const r = resolve(p, V.popRule); V.popCtx = new Set(r.parts.map(x => x.id)); V.popErr = r.err; }
-function readsAs(rule) { return esc(rule).replace(/#(p\d+)/g, (m, id) => P[id] ? `“${esc(words(P[id], 4))}”` : m); }
+function openPop(pid) { V.popPanned = false; V.pop = pid; V.popRule = P[pid].run.see; computePopCtx(); render(); setTimeout(() => $('#pop input')?.focus({ preventScroll: true })); }
+function closePop() { V.pop = null; V.popCtx = null; $('#pop').hidden = true; }
+function computePopCtx() { const p = P[V.pop]; const editing = V.popRule.trim() !== p.run.see || p.run.status !== 'complete'; const r = editing ? resolve(p, V.popRule) : { parts: p.run.ctx.map(id => P[id]).filter(Boolean) }; V.popCtx = new Set(r.parts.map(x => x.id)); V.popErr = r.err; }
 function renderPop() {
   const el = $('#pop'); if (!V.pop || !P[V.pop]) { el.hidden = true; return; }
-  const p = P[V.pop], s = S[p.st], r = resolve(p, V.popRule), list = partsOf(s.id), idx = list.findIndex(x => x.id === p.id) + 1;
-  const fp = s.fork && P[s.fork.part], fk = forksOf(p.id), st = staleInfo(p);
+  const p = P[V.pop], s = S[p.st], editing = V.popRule.trim() !== p.run.see, r = editing || p.run.status !== 'complete' ? resolve(p, V.popRule) : { parts: p.run.ctx.map(id => P[id]).filter(Boolean) }, list = partsOf(s.id), idx = list.findIndex(x => x.id === p.id) + 1;
+  const fp = s.fork && P[s.fork.part], fk = forksOf(p.id);
   const ctxList = r.parts.map(x => `<li>${isModel(x) ? `<b>${esc(x.run.model)}</b>` : `<b>${esc(NAMES[x.by.u] || x.by.u)}</b>`}: ${esc(clip(strip(x.text), 70))}${s.fork && x.id === s.fork.part && s.fork.block != null ? ' <i>(passage marked)</i>' : ''}</li>`).join('');
   const was = document.activeElement?.id === 'rule-in' ? [document.activeElement.selectionStart] : null;
   const mine = p.run.by === ME;
   el.innerHTML = `<h3>Context rule<button class="q" data-a="legend" aria-expanded="${V.legend}" title="What the terms mean">?</button><button class="x" data-a="popclose" aria-label="Close">✕</button></h3>
-    <div class="rule"><input id="rule-in" value="${esc(V.popRule)}" spellcheck="false" aria-label="Context rule"${mine ? '' : ' readonly'}>${mine ? `<button class="btn" data-a="pick" title="Click a part on the canvas to add it">${V.picking ? 'Click a part…' : '+ part'}</button>` : ''}</div>
-    ${V.popErr ? `<div class="err">${esc(V.popErr)}</div>` : `<div class="reads">${mine ? 'Reads as' : `Set by ${esc(NAMES[p.run.by] || p.run.by)}, who asked. Reads as`}: ${readsAs(V.popRule)}</div>`}
-    <div class="terms"${V.legend ? '' : ' hidden'}><code>above</code> <code>above 2</code> parts above in this stack · <code>trunk</code> the fork point and what it sees · <code>fork</code> the fork point only · <code>#id</code> one part · <code>none</code> · join with <code>+</code> and <code>-</code></div>
-    <div class="lbl">Sees ${r.parts.length} part${r.parts.length === 1 ? '' : 's'} (outlined)</div>${ctxList ? `<ol>${ctxList}</ol>` : '<div class="reads">Nothing.</div>'}
+    <div class="rule"><input id="rule-in" value="${esc(V.popRule)}" spellcheck="false" aria-label="Context rule"${mine ? '' : ' readonly'}></div>
+    ${V.popErr ? `<div class="err">${esc(V.popErr)}</div>` : (mine ? '' : `<div class="reads">Set by ${esc(NAMES[p.run.by] || p.run.by)}, who asked.</div>`)}
+    <div class="terms"${V.legend ? '' : ' hidden'}><code>above</code> <code>above 2</code> parts above in this stack · <code>trunk</code> the fork point and what it sees · <code>fork</code> the fork point only · <code>none</code> · join with <code>+</code>, as in <code>above 2 + fork</code></div>
+    <div class="lbl">${editing ? 'With this rule it would read' : p.run.status === 'complete' ? 'Read when it ran' : 'Reads'} ${r.parts.length} part${r.parts.length === 1 ? '' : 's'} (outlined)</div>${ctxList ? `<ol>${ctxList}</ol>` : '<div class="reads">Nothing.</div>'}
     <div class="lbl">Relations</div><div class="rel">Part ${idx} of ${list.length} in its stack.${fp ? ` The stack is a fork of “${esc(words(fp, 6))}”${s.fork.block != null ? ', at a passage' : ''}. <button data-a="goto" data-id="${fp.id}">Show</button>` : ' The stack is a root.'}${fk.length ? ` ${fk.length} fork${fk.length > 1 ? 's' : ''} start${fk.length > 1 ? '' : 's'} here.` : ''}</div>
-    <div class="lbl">Run</div><div class="rel">${esc(p.run.model)} · ${esc(p.run.effort)} · asked by ${esc(NAMES[p.run.by] || p.run.by)} · ${p.run.status}${st ? `<br><span style="color:var(--warn)">Context changed since it ran: ${esc(st)}.</span>` : ''}</div>
-    ${mine && p.run.status === 'complete' && (st || V.popRule.trim() !== p.run.see) ? `<div class="row"><button class="btn pri" data-a="rerun" data-id="${p.id}"${V.popErr ? ' disabled' : ''}>${V.popRule.trim() !== p.run.see ? 'Save rule and re-run' : 'Re-run'}</button>${V.popRule.trim() !== 'above + trunk' ? '<button class="btn ghost" data-a="ruledefault">Default rule</button>' : ''}</div>` : ''}`;
+    <div class="lbl">Run</div><div class="rel">${esc(p.run.model)} · ${esc(p.run.effort)} · asked by ${esc(NAMES[p.run.by] || p.run.by)} · ${p.run.status}</div>
+    ${mine && p.run.status === 'complete' ? `<div class="row"><button class="btn pri" data-a="rerun" data-id="${p.id}"${V.popErr ? ' disabled' : ''}>${V.popRule.trim() !== p.run.see ? 'Save rule and re-run' : 'Re-run'}</button>${V.popRule.trim() !== 'above + trunk' ? '<button class="btn ghost" data-a="ruledefault">Default rule</button>' : ''}</div>` : ''}`;
   el.hidden = false;
   const pe = document.querySelector(`[data-part="${p.id}"]`);
   if (pe && innerWidth <= 640 && !V.popPanned) { V.popPanned = true; const b = pe.getBoundingClientRect(); V.y += 64 - b.top; applyView(); drawLinks(); }
@@ -702,7 +690,7 @@ $('#add-post').onclick = () => newRoot('post');
 $('#add-ask').onclick = () => newRoot('ask');
 function newFork(pid, { block = null, quote = null, inline = false } = {}) {
   const fp = P[pid], id = 's' + (++seq);
-  S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, rev: fp.rev, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) }, ...(inline ? { inline: true } : {}) };
+  S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) }, ...(inline ? { inline: true } : {}) };
   const r = rootOf(S[id]); V.collapsed.delete(r.id);
   V.draft = { st: id, after: '', mode: 'ask', texts: [''] }; V.sel = inline ? rootLane(S[id]).id : id; closePop(); if (inline) V.openIn.add(id); hideHint();
   render({ focus: '.draft textarea' });
@@ -712,7 +700,6 @@ document.addEventListener('click', e => {
   if (vp.dataset.justPanned) { e.preventDefault(); e.stopPropagation(); return; }
   if (!e.target.closest('#selfork')) $('#selfork')?.remove();
   const partEl = e.target.closest('[data-part]');
-  if (V.picking && partEl && !e.target.closest('#pop')) { const id = partEl.dataset.part; if (id !== V.pop) { V.popRule = (V.popRule.trim() ? V.popRule.trim() + ' + ' : '') + '#' + id; V.picking = false; computePopCtx(); render({ noAnim: true }); } return; }
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
   if (a === 'seam') { e.stopPropagation(); const st = S[d.st]; V.collapsed.delete(rootOf(st).id); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }
   if (a === 'bfork') { $('#bfork')?.remove(); newFork(d.id, { block: +d.b, inline: true }); return; }
@@ -728,7 +715,6 @@ document.addEventListener('click', e => {
   if (a === 'oldrev') { V.oldrev = V.oldrev === d.id ? null : d.id; render(); return; }
   if (a === 'pop') { V.pop === d.id ? (closePop(), render()) : openPop(d.id); return; }
   if (a === 'popclose') { closePop(); render(); return; }
-  if (a === 'pick') { V.picking = !V.picking; render({ noAnim: true }); return; }
   if (a === 'legend') { V.legend = !V.legend; renderPop(); return; }
   if (a === 'ruleapply') { const p = P[V.pop]; p.run.see = V.popRule.trim(); render(); toast('Rule saved. The answer is marked until it is re-run.'); return; }
   if (a === 'ruledefault') { V.popRule = 'above + trunk'; P[V.pop].run.see = V.popRule; computePopCtx(); render(); return; }
@@ -749,7 +735,12 @@ vp.addEventListener('dblclick', e => {
   S[id] = { id, ch: 'public', fork: null, x, y };
   V.draft = { st: id, after: '', mode: 'post', texts: [''] }; V.sel = id; render({ noAnim: true, focus: '.draft textarea' });
 });
-document.addEventListener('mouseover', e => { const s = e.target.closest('.stack'); const id = s?.dataset.stack || null; if (id !== V.hot) { V.hot = id; drawLinks(); } });
+/* hovering a fork marks where it starts: the anchor part, or the anchor block, in the parent */
+document.addEventListener('mouseover', e => { const s = e.target.closest('.stack, .ifork'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks();
+  document.querySelectorAll('.anchor-hot').forEach(x => x.classList.remove('anchor-hot'));
+  const f = id && S[id]; if (!f?.fork) return; const pe = document.querySelector(`[data-part="${f.fork.part}"]`); if (!pe) return;
+  if (f.fork.block != null) { const pr = pe.querySelector('.prose[data-p]'), kids = pr ? [...pr.children].filter(c => !c.classList.contains('ifork')) : []; kids[f.fork.block]?.classList.add('anchor-hot'); }
+  else pe.classList.add('anchor-hot'); });
 
 /* keys: Cmd/Ctrl+Enter asks, Shift+Cmd/Ctrl+Enter posts; Escape closes the innermost thing. In a draft, a blank
    line followed by Enter on an empty line starts the next part. */
@@ -760,7 +751,7 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); const i = +ta.dataset.di; V.draft.texts[i] = ta.value.replace(/\n+$/, ''); V.draft.texts.splice(i + 1, 0, ''); render({ focus: `.draft textarea[data-di="${i + 1}"]` }); return; }
   if (ta && e.key === 'Backspace' && !ta.value && V.draft.texts.length > 1) { e.preventDefault(); const i = +ta.dataset.di; V.draft.texts.splice(i, 1); render({ focus: `.draft textarea[data-di="${Math.max(0, i - 1)}"]` }); return; }
   if (e.target.id === 'rule-in' && e.key === 'Enter') { e.preventDefault(); const p = P[V.pop]; if (!V.popErr && p.run.by === ME && V.popRule.trim() !== p.run.see) { p.run.see = V.popRule.trim(); rerun(p); } return; }
-  if (e.key === 'Escape') { if (V.picking) { V.picking = false; render({ noAnim: true }); return; } if (V.pop) { closePop(); render({ noAnim: true }); return; } if ($('#selfork')) { $('#selfork').remove(); return; } if (V.draft) { cancelDraft(); return; } if (V.sel) { V.sel = null; render({ noAnim: true }); } }
+  if (e.key === 'Escape') { if (V.pop) { closePop(); render({ noAnim: true }); return; } if ($('#selfork')) { $('#selfork').remove(); return; } if (V.draft) { cancelDraft(); return; } if (V.sel) { V.sel = null; render({ noAnim: true }); } }
 });
 
 /* selecting text in an answer offers a fork that stores the passage (block and quote) */

@@ -16,9 +16,9 @@ rule of its own. Context binds late, when a run starts, and the resolved context
 - `id`, `stack`, `key`. The key is a fractional index: an insert takes a key between its neighbours, so nothing is
   renumbered.
 - `author`: `{ person }` or `{ model }`.
-- `text`, `at`, `rev`, `revs`. A re-run bumps `rev`, and earlier texts stay readable in `revs`.
+- `text`, `at`.
 - `run`, on model parts only: `{ by, model, effort, see, ctx, status, src }`. `by` is the person who asked, `see` is
-  the context rule, and `ctx` is the list of `[partId, rev]` pairs the rule resolved to when the run started.
+  the context rule, and `ctx` lists the parts the rule resolved to when the run started. That context is frozen.
 
 An ask is a person part with a model part directly under it whose `run.by` is that person. A post is a person part
 with nothing produced under it. The editor has two buttons, Post and Ask; nothing else distinguishes them.
@@ -26,7 +26,7 @@ with nothing produced under it. The editor has two buttons, Post and Ask; nothin
 **Stack**: a vertical column of parts.
 
 - `id`, `canvas`.
-- `fork?`: `{ part, rev, block?, quote? }`, the part, block or quoted passage the stack starts from.
+- `fork?`: `{ part, block?, quote? }`, the part, block or quoted passage the stack starts from.
 - `x?`, `y?`: set only on stacks placed by themselves (roots, and forks opened as their own thread).
 - `inline?`: draw this fork inside its parent, at its anchor.
 
@@ -42,19 +42,19 @@ A model part sees what its `see` rule resolves to. The default is `above + trunk
 - `trunk`: for a fork, the fork part and everything that part sees, recursively. A block anchor includes the whole
   part, with the block marked.
 - `fork`: the fork part only.
-- `#id`: one part. You enter it by clicking the part; it is shown as the part's first words.
-- `none`; `+` and `-` add and remove.
+- `none`; terms join with `+`.
 
 ```
-see: fork                  a Look up: only the phrase's part
-see: above 1               only the question directly above
-see: above + trunk - #p41  everything positional except one comment
+see: fork             a Look up: only the phrase's part
+see: above 1          only the question directly above
+see: above 2 + fork   the two parts above, plus the fork point
 ```
 
-The rule selects positions: it neither computes values (C) nor sends messages (A). The "sees N" chip opens it, outlines
-what it resolves to as you type, and lists relations. Only the asker edits it ("Save rule and re-run"). When the
-resolution differs from `run.ctx`, the chip turns amber. A re-run writes a new rev and keeps the old one; nothing
-re-runs automatically.
+The rule selects positions: it neither computes values (C) nor sends messages (A). The "read N" chip opens it. It
+outlines the parts the answer read when it ran, or, while you edit the rule, the parts it would read. It also lists
+relations. Only the asker edits the rule; Re-run is a plain action that replaces the answer. There is no staleness
+tracking: an insert above an answer does not mark it, and the "inserted" label on the new part tells readers that
+the answers below were written without it.
 
 ## Layout and interaction
 
@@ -90,19 +90,19 @@ re-runs automatically.
 | Branch here, ask about a passage | fork with `block` and `quote` |
 | Branch beside | fork at the parent's model part |
 | Look up | fork whose model part has `see: fork` |
-| comment on a node | person part after the answer. It is context for later asks below it; `- #id` excludes it |
+| comment on a node | person part after the answer; context for later asks below it unless their rule is `above N` |
 | run record | `run` on the model part |
 | save, counts | per-viewer state; counts as today |
 | Open as its own thread | give the fork its own x, y; `fork` stays, so its context is unchanged |
 
 ## Open questions
 
-1. An insert above someone else's answer changes that answer's context. Should channels be able to limit this, or is
-   the amber mark enough?
+1. An insert above someone else's answer is not part of what that answer read. Is the "inserted" label enough for
+   readers, or should channels be able to limit inserts?
 2. Two inserts into one gap both survive (fractional keys), but how the second author sees the first before sending
    is open.
-3. Excluding comments takes one `#id` each. If that is common, add an "exclude" action that writes the refs, rather
-   than more grammar.
+3. With no `-` or `#id`, a rule cannot skip one comment in the middle. If that matters, an "exclude" action on a part
+   is a better answer than a larger grammar.
 4. `x`, `y` and `inline` are shared, so one person's drag rearranges everyone's canvas.
 
 ## Advisor log
@@ -110,26 +110,25 @@ re-runs automatically.
 The advisor was a separate subagent, run over three rounds.
 
 **Round 1, concept.**
-- *Criticism:* Run was a hidden fourth primitive. Section parts would orphan forks on a re-run and lose the quoted
-  passage. Stale marks would cascade. Pushing stacks aside would overwrite people's arrangement.
-- *Changed:* one run is one part, and fork anchors carry `rev`, `block` and `quote`. Stale marks are quiet and only the
-  asker re-runs. Displacement is derived. Canvas and collapse are not content, and the grammar is cut to seven terms.
+- *Criticism:* Run was a hidden fourth primitive, and splitting answers into sections would orphan forks on a re-run.
+- *Changed:* one run is one part, and fork anchors carry the block and quote. Canvas and collapse are not content.
 
-**Round 2, v2.**
-- *Criticism:* splitting answers on demand (`cont`) brought orphaning back. Depth-indexed lanes would cross. Semantic
-  zoom would relayout. Appending needed a selection first.
-- *Changed:* inline block forks replace `cont`. Lanes use subtree extents. Overview keeps the geometry. The end seam and
-  gutter "+" no longer need a selection.
-- *Rejected:* horizontal displacement. The downward sweep already resolves an overlap, and moving units sideways would
-  break the columns people read down.
+**Round 2.**
+- *Criticism:* splitting answers on demand (`cont`) still orphaned forks, depth-indexed lanes would cross, and
+  semantic zoom would relayout.
+- *Changed:* inline block forks replace `cont`, lanes use subtree extents, and the overview keeps the geometry.
+- *Rejected:* horizontal displacement, because it would break the columns people read down.
 
 **Round 3, mock walkthrough.** This was the most useful round.
-- *Criticism:* the demo put an ask between a question and its own answer. Part seams and block seams looked alike. The
-  sweep was unstable. Seed positions depended on the viewer.
-- *Changed:* no seam inside a question and answer pair, and "Fork here" appears on hover. Inline forks fold. The stale
-  mark is a chip, with details in the popover. Connectors are faint unless their unit is active. Overview shows one
-  headline per stack. The sweep repeats until stable, with the edited unit fixed. Seed positions no longer depend on
-  the viewer.
-- *Rejected:* showing the stale chip only to the asker, because readers need to know that an answer did not read a
-  part inserted above it. Also rejected: removing the relations line, because the brief asks for relations to be
-  visible.
+- *Criticism:* the demo put an ask between a question and its own answer, part seams and block seams looked alike,
+  and the overlap sweep was unstable.
+- *Changed:* no seam inside a question and answer pair, "Fork here" appears on hover, and inline forks fold. Overview
+  shows one headline per stack, the sweep repeats until stable, and seed positions no longer depend on the viewer.
+- *Rejected:* removing the relations line from the popover, because the brief asks for relations to be visible.
+
+**Steer from the parent session.** Staleness marks, re-run versions (`revs`) and answer history overlap with
+direction C. The steer was to cut them, keep the rule language small, and put the effort into interjection, forks and
+scale.
+- *Changed:* context is frozen when a part runs, and Re-run is a plain action. `rev`, `revs` and the "changed" mark
+  are removed. The grammar is now `above`, `above N`, `trunk`, `fork`, `none` and `+`. Hovering a fork highlights its
+  anchor in the parent.
