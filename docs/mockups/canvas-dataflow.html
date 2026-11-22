@@ -1,0 +1,948 @@
+<!doctype html>
+<!--
+Session canvas, variant C: dataflow
+===================================
+A design mock. One self-contained file; the only external request is the Inter font from Google Fonts (the page
+falls back to the system font). Nothing calls a model: answers are canned and runs are timers.
+Concept: docs/canvas/dataflow-concept.md. Seed content: docs/mockups/session-handoff.html (branch claude/session-web).
+
+Data model (in memory; a reload starts over)
+- Cell { id, u, at, prev, body, versions, pinned }
+  - body.text: a part written by a person. "@id" inside the text is a reference (drawn as a chip).
+  - body.expr: a computed part. answer(...) is the only model call; quote(@id#n) is free and recomputed on render.
+  - versions (answer cells only): [{ n, html, read: [{id, hash}], expr, by, at }]. Re-running appends a version.
+  - prev: the part this one follows. The parts of one series are a prev chain.
+- Placement { head, mode, x, y | dx, dy, abs }: one per column head. A root cell has one (absolute position). A fork
+  (a second child of some cell) always has one: mode 'beside' (its own column, positioned relative to its anchor until
+  dragged), 'inset' (drawn in the gap under its anchor, not read by the parts below) or 'chip' (unopened, a count on
+  the anchor). The child of a cell that has no Placement is the series' continuation.
+- answer(above) reads the prev chain to the root plus the cells mentioned in those parts (one hop). Arguments: above,
+  @id (include), -@id (exclude). Each version records the hash of everything it read; comparing those hashes with the
+  current ones gives the states: up to date, edited, re-run, added, pinned.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Dataflow Canvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --page: #e9e6e1; --canvas: #f3f1ed; --card: #ffffff; --inset: #f6f3ef; --field: #ffffff;
+  --control: #efece8; --control-hover: #e6e2dc; --control-border: #e0dbd4; --divider: #ebe7e2;
+  --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff;
+  --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
+  --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --warn-soft: rgba(176,122,20,.12);
+  --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
+  --edge: #b9b2a8; --dot: rgba(60,40,20,.10);
+  --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.06);
+  --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-base: 13.5px;
+  --r-md: 6px; --r-lg: 8px; --r-xl: 12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #121110; --canvas: #1a1918; --card: #232120; --inset: #1c1b1a; --field: #232220;
+  --control: #2b2b2a; --control-hover: #333332; --control-border: #3d3d3c; --divider: #2f2e2d;
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.14); --accent-strong: #1c6fb3; --on-accent: #ffffff;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #9aa29d;
+  --t-faint: #868f8a; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --warn-soft: rgba(215,168,79,.14);
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --edge: #57524c; --dot: rgba(255,255,255,.06);
+  --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+} }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121110; --canvas: #1a1918; --card: #232120; --inset: #1c1b1a; --field: #232220;
+  --control: #2b2b2a; --control-hover: #333332; --control-border: #3d3d3c; --divider: #2f2e2d;
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.14); --accent-strong: #1c6fb3; --on-accent: #ffffff;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #9aa29d;
+  --t-faint: #868f8a; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --warn-soft: rgba(215,168,79,.14);
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --edge: #57524c; --dot: rgba(255,255,255,.06);
+  --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--t-primary); font: 400 var(--fs-base)/1.5 var(--font); overflow: hidden;
+  -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+[hidden] { display: none !important; }
+
+/* ---- viewport and world ---- */
+#vp { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: default;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 22px 22px; }
+#vp.panning { cursor: grabbing; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+#edges path { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+#edges path.ref { stroke-dasharray: 4 4; stroke-width: 1.2; opacity: .55; }
+#edges path.ref.hot { opacity: 1; }
+#edges path.hot { stroke: var(--accent); stroke-width: 2; }
+#edges circle { fill: var(--edge); } #edges circle.hot { fill: var(--accent); }
+
+/* ---- top-left controls (the only chrome) ---- */
+#tl { position: fixed; left: 16px; top: 14px; z-index: 30; display: flex; gap: 6px; align-items: center; }
+#tl button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--card); box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.06);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--t-heading); }
+#tl button:hover { background: var(--control); }
+#tl .where { font-size: var(--fs-xs); color: var(--t-faint); margin-left: 6px; }
+
+/* ---- columns and cards ---- */
+.col { position: absolute; width: var(--w); display: flex; flex-direction: column; }
+.card { position: relative; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.card.sel { box-shadow: 0 0 0 2px var(--accent); }
+.sec { padding: 10px 12px; position: relative; }
+.sec + .sec { border-top: 1px solid var(--divider); }
+.hd { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 3px; min-width: 0; }
+.hd b { color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
+.hd .grip { cursor: grab; }
+.av { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; color: var(--av-fg);
+  font-size: 8px; font-weight: 700; }
+.mk { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; flex: none; background: var(--accent-soft);
+  color: var(--accent); font-size: 10px; font-weight: 700; }
+.txt { color: var(--t-primary); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+.qtxt { font-weight: 500; color: var(--t-heading); }
+.prose { color: var(--t-body); font-size: var(--fs-base); line-height: 1.55; overflow-wrap: anywhere; }
+.prose > :first-child { margin-top: 0; } .prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 .6em; } .prose ul, .prose ol { margin: 0 0 .6em; padding-left: 1.2em; } .prose li { margin: .15em 0; }
+.prose h4 { margin: .9em 0 .3em; font-size: var(--fs-base); color: var(--t-heading); font-weight: 600; }
+.clamp { max-height: 168px; overflow: hidden; position: relative; }
+.clamp::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+  background: linear-gradient(transparent, var(--card)); pointer-events: none; }
+.more { font-size: var(--fs-xs); color: var(--accent); font-weight: 500; margin-top: 2px; }
+.ans .prose.reserve { min-height: 168px; }
+.ftr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); }
+.ftr button { color: var(--t-muted); font-weight: 500; }
+.ftr button:hover { color: var(--accent); }
+.pager { display: inline-flex; align-items: center; gap: 2px; }
+.pager button { padding: 0 3px; }
+.pager button:disabled { opacity: .3; cursor: default; }
+.state { margin-top: 8px; padding: 7px 9px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--t-primary);
+  font-size: var(--fs-sm); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.state.ctx { background: var(--accent-soft); }
+.state .sp { flex: 1 1 auto; }
+.state button.b { height: 24px; padding: 0 10px; border-radius: 12px; background: var(--accent-strong); color: var(--on-accent);
+  font-size: var(--fs-xs); font-weight: 600; }
+.state button.b2 { height: 24px; padding: 0 10px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--t-heading); }
+.stale-mark { position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--warn); }
+.ctx-mark { background: var(--accent); opacity: .6; }
+.running { display: inline-flex; align-items: center; gap: 6px; color: var(--warn); font-size: var(--fs-xs); }
+.running::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.1s infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+.chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 0 7px; height: 20px; border-radius: 10px;
+  background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; vertical-align: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip:hover { text-decoration: underline; }
+.chip.gone { background: var(--control); color: var(--t-faint); text-decoration: line-through; }
+.quote { border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; color: var(--t-body); font-size: var(--fs-base); }
+.qsrc { font-size: var(--fs-xs); color: var(--t-faint); margin: 2px 0 6px; }
+.live { font-size: 10.5px; font-weight: 600; color: var(--good); letter-spacing: .02em; }
+/* read-set highlight on the canvas when an answer is selected */
+.sec.is-read::before, .sec.not-read::before { content: ""; position: absolute; left: -9px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; }
+.sec.is-read::before { background: var(--accent); }
+.sec.not-read::before { background: none; border-left: 3px dotted var(--warn); }
+.sec.is-read .rd, .sec.not-read .rd { display: inline; }
+.rd { display: none; font-size: 10.5px; font-weight: 600; margin-left: auto; }
+.sec.is-read .rd { color: var(--accent); } .sec.not-read .rd { color: var(--warn); }
+/* toolbar */
+.tb { position: absolute; right: 6px; top: -13px; display: none; gap: 2px; padding: 2px; border-radius: 13px; background: var(--card);
+  box-shadow: var(--shadow), 0 3px 10px rgba(0,0,0,.08); z-index: 5; }
+.card:hover > .tb, .card.sel > .tb, .card:focus-within > .tb { display: flex; }
+.tb button { height: 22px; padding: 0 8px; border-radius: 11px; font-size: var(--fs-xs); font-weight: 600; color: var(--t-secondary); white-space: nowrap; }
+.tb button:hover { background: var(--control); color: var(--t-heading); }
+.tb .code { font-family: var(--mono); }
+/* gaps between cards: insert */
+.gap { position: relative; height: 14px; display: flex; align-items: center; justify-content: center; }
+.gap::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1.5px; background: var(--edge); transform: translateX(-50%); }
+.gap .ins { position: relative; z-index: 2; width: 20px; height: 20px; border-radius: 10px; background: var(--card); box-shadow: var(--shadow);
+  color: var(--t-faint); font-size: 14px; line-height: 20px; font-weight: 600; opacity: 0; transition: opacity .12s; }
+.gap:hover .ins, .gap .ins:focus-visible { opacity: 1; }
+@media (hover: none) { .gap .ins { opacity: .7; } }
+.gap .ins:hover { color: var(--accent); }
+.tail { margin-top: 6px; display: flex; }
+.tail button { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 500; padding: 4px 6px; border-radius: 6px; }
+.tail button:hover { color: var(--accent); background: var(--control); }
+/* inset asides and unopened forks */
+.insetw { margin: 2px 0 2px 22px; position: relative; }
+.insetw::before { content: ""; position: absolute; left: -12px; top: -2px; bottom: 8px; width: 1.5px; background: var(--edge); }
+.insetw .lbl { font-size: 10.5px; color: var(--t-faint); margin: 0 0 15px; display: flex; gap: 8px; align-items: center; }
+.insetw .lbl button { color: var(--accent); font-weight: 600; }
+.insetw .card { background: var(--inset); }
+.insetw .clamp::after { background: linear-gradient(transparent, var(--inset)); }
+.forks { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 10px; }
+.forks button { font-size: var(--fs-xs); color: var(--t-muted); background: var(--control); border-radius: 10px; padding: 1px 8px;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.forks button:hover { color: var(--accent); }
+.byinset { font-size: 10.5px; color: var(--t-faint); }
+/* composer */
+.comp { padding: 10px 12px; }
+.comp .part { display: flex; gap: 8px; align-items: flex-start; }
+.comp .part + .part { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--divider); }
+.comp .pn { flex: none; width: 18px; font-size: 10.5px; color: var(--t-faint); padding-top: 3px; text-align: right; }
+.comp textarea, .edit textarea { flex: 1; width: 100%; min-width: 0; resize: none; border: 0; outline: none; background: none; font-size: 14px;
+  line-height: 1.5; color: var(--t-heading); padding: 1px 0; field-sizing: content; min-height: 22px; }
+.comp textarea::placeholder { color: var(--placeholder); }
+.comp .row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.comp .hint { flex: 1; font-size: 10.5px; color: var(--t-faint); }
+.comp .row button, .edit .row button { height: 26px; padding: 0 12px; border-radius: 13px; font-size: var(--fs-xs); font-weight: 600;
+  background: var(--control); color: var(--t-heading); }
+.comp .row button.pri, .edit .row button.pri { background: var(--accent-strong); color: var(--on-accent); }
+.comp .row button.x { background: none; color: var(--t-faint); padding: 0 6px; }
+.edit textarea { border: 1px solid var(--control-border); border-radius: var(--r-md); padding: 6px 8px; background: var(--field); }
+.edit .row { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
+.mpick { position: absolute; z-index: 40; width: 260px; max-height: 240px; overflow-y: auto; padding: 4px; border-radius: var(--r-lg);
+  background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
+.mpick button { display: block; width: 100%; text-align: left; padding: 5px 8px; border-radius: 6px; font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpick button:hover, .mpick button.on { background: var(--control); }
+.mpick small { color: var(--t-faint); font-family: var(--mono); margin-right: 6px; }
+
+/* ---- inspector ---- */
+#insp { position: fixed; right: 12px; top: 12px; bottom: 12px; width: 340px; z-index: 35; background: var(--card); border-radius: var(--r-xl);
+  box-shadow: var(--shadow), var(--shadow-pop); display: flex; flex-direction: column; overflow: hidden; }
+#insp .ih { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--divider); }
+#insp .ih h2 { margin: 0; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#insp .ih button { width: 26px; height: 26px; border-radius: 13px; color: var(--t-faint); font-size: 16px; }
+#insp .ih button:hover { background: var(--control); color: var(--t-heading); }
+#insp .ib { overflow-y: auto; padding: 4px 14px 16px; }
+#insp h3 { margin: 14px 0 5px; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); }
+#insp .kind { font-size: var(--fs-sm); color: var(--t-secondary); }
+#insp .expr { display: flex; gap: 6px; }
+#insp .expr input { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border-radius: var(--r-md); border: 1px solid var(--control-border);
+  background: var(--field); font-family: var(--mono); font-size: 12.5px; }
+#insp .expr button, #insp .acts button { height: 30px; padding: 0 10px; border-radius: 15px; background: var(--control); font-size: var(--fs-xs);
+  font-weight: 600; color: var(--t-heading); white-space: nowrap; }
+#insp .expr button.pri, #insp .acts button.pri { background: var(--accent-strong); color: var(--on-accent); }
+#insp .help { font-size: var(--fs-xs); color: var(--t-faint); margin: 5px 0 0; line-height: 1.45; }
+#insp .help code, #insp code { font-family: var(--mono); font-size: 11.5px; color: var(--t-secondary); }
+#insp .err { color: #c0563f; font-size: var(--fs-xs); margin-top: 4px; }
+#insp ul.rs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+#insp ul.rs li { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--t-faint); min-width: 0; }
+#insp ul.rs li .chip { flex: 0 1 auto; min-width: 0; }
+#insp ul.rs li .st { margin-left: auto; flex: none; }
+#insp ul.rs li .st.w { color: var(--warn); font-weight: 600; }
+#insp ul.rs li .xb { flex: none; width: 18px; height: 18px; border-radius: 9px; color: var(--t-faint); }
+#insp ul.rs li .xb:hover { background: var(--control); color: var(--t-heading); }
+#insp .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+#insp pre { margin: 0; padding: 8px; border-radius: var(--r-md); background: var(--inset); font-family: var(--mono); font-size: 11px;
+  line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--t-secondary); max-height: 260px; overflow-y: auto; }
+#insp .vers button { display: flex; width: 100%; gap: 6px; text-align: left; font-size: var(--fs-xs); padding: 3px 6px; border-radius: 6px; color: var(--t-secondary); }
+#insp .vers button.on { background: var(--accent-soft); color: var(--accent); }
+@media (max-width: 640px) {
+  #insp { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; height: 56vh; }
+  #tl { left: 12px; top: 10px; }
+  #tl .where { display: none; }
+}
+.toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 50; padding: 7px 14px; border-radius: 16px;
+  background: var(--t-heading); color: var(--canvas); font-size: var(--fs-sm); box-shadow: var(--shadow-pop); }
+@media (prefers-reduced-motion: reduce) { .running::before { animation: none; } .gap .ins { transition: none; } }
+</style>
+</head>
+<body>
+<div id="tl">
+  <button id="addPost" type="button">+ Add post</button>
+  <button id="addAsk" type="button">+ Add ask</button>
+  <span class="where">#public · canvas</span>
+</div>
+<div id="vp"><div id="world"><svg id="edges" width="1" height="1"></svg><div id="cols"></div></div></div>
+<aside id="insp" hidden aria-label="Inspector"></aside>
+<div id="mp" class="mpick" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<script>
+'use strict';
+const TXT = {"intentionAnswer":"<p>Science fiction rarely uses the term \"intention marketplace\", but many works describe systems that make what people want, plan or believe visible to others and then price, rank or match it. The examples fall into four mechanisms: reputation ledgers, prediction and decision markets, attention auctions, and agent-brokered matching. The list below covers the clearest cases; the full scan found 31 works published between 1953 and 2024.</p><h4>Reputation ledgers</h4><p>In these systems, a public score records how others regard a person's past actions and stated aims. The score works as a currency, or replaces one, but it is earned rather than transferred.</p><ul><li><i>Down and Out in the Magic Kingdom</i> (Cory Doctorow, 2003). Whuffie is a continuously updated esteem score that replaces money in the post-scarcity Bitchun Society. People can see it but cannot spend it directly.</li><li><i>Accelerando</i> (Charles Stross, 2005). Reputation markets and agent-run economies come before \"Economics 2.0\", a later phase that unaugmented humans cannot follow.</li><li><i>Daemon</i> (2006) and <i>Freedom</i> (2010) by Daniel Suarez. A darknet assigns levels and reputation scores, and tasks are given out according to rank.</li><li>\"Nosedive\" (<i>Black Mirror</i>, 2016). Peer ratings decide access to housing, travel and social standing. It is a satire of rating platforms more than an economic model.</li></ul><h4>Prediction and decision markets</h4><p>These works pool beliefs about future events by having people bet on them. Some of them then make decisions from the resulting prices.</p><ul><li><i>The Shockwave Rider</i> (John Brunner, 1975). \"Delphi pools\" collect public wagers on questions and serve as a forecasting tool. The novel treats them as open to manipulation.</li><li><i>Infomocracy</i> (Malka Older, 2016). This novel is about micro-democracy and a global information utility rather than a betting market. It is included because voter preferences become a contested, aggregated signal.</li><li>Robin Hanson's futarchy proposal (\"Shall We Vote on Values, But Bet on Beliefs?\") is non-fiction. It is often cited next to these works as the clearest statement of a decision market.</li></ul><h4>Attention auctions and advertising</h4><p>The earliest examples are satires in which advertisers buy, shape or require consumer intent.</p><ul><li><i>The Space Merchants</i> (Frederik Pohl and C. M. Kornbluth, 1953 in book form). Advertising agencies run the world's political economy.</li><li>\"The Midas Plague\" (Frederik Pohl, 1954). Rationed consumption is a legal duty, which reverses the usual direction of demand.</li><li><i>The Circle</i> (Dave Eggers, 2013). Total transparency and engagement metrics turn personal preference into platform inventory.</li></ul><h4>Agent-brokered matching</h4><p>Here a networked system or a personal agent reads what people need and routes favours, tasks or trades between them.</p><ul><li>\"Maneki Neko\" (Bruce Sterling, 1998). A pocket device instructs its owner to do small favours for strangers and receives favours in return from a hidden gift-economy network. This story is the closest match to an intention network in the strict sense.</li><li><i>Rainbows End</i> (Vernor Vinge, 2006). Characters take paid micro-tasks from distributed, partly anonymous employers through wearable computing.</li><li><i>The Quantum Thief</i> (Hannu Rajaniemi, 2010). In the Oubliette, Time is a currency, and gevulot controls what each person shares with others.</li><li><i>Walkaway</i> (Cory Doctorow, 2017). Coordination software matches volunteers to work in a post-scarcity commons without prices.</li></ul><h4>Where the term comes from</h4><p>\"Intention economy\" comes from Doc Searls, who used it in a 2006 essay and later in <i>The Intention Economy</i> (2012). He described a market in which buyers announce their intentions and vendors respond, the reverse of attention-based advertising. Most of the fiction above predates the term or does not use it, so the grouping here is by mechanism and not by vocabulary.</p><h4>Limits</h4><ul><li>The scan covered English-language works and works widely available in English translation.</li><li>Some inclusions are judgment calls. <i>Infomocracy</i> and <i>The Circle</i> deal with aggregated preference but have no market in the strict sense.</li><li>Short fiction from magazines and anthologies is under-represented compared with novels.</li></ul>","intentionQ":"scan sci-fi + adjacent writing for intention marketplaces / intention networks. go broad, give me a list of examples","trade":"<p>Few of these works go past visibility to actual trade. Three treat intentions or commitments as things that can be exchanged:</p><ul><li><i>Accelerando</i>: software agents negotiate and contract with each other for their principals, and late in the book whole corporate entities trade in ways that humans cannot follow.</li><li><i>Daemon</i> and <i>Freedom</i>: participants take on tasks and receive credits and rank for completing them, which works as a labour market for stated goals.</li><li><i>The Shockwave Rider</i>: Delphi pools price beliefs about the future, and those prices are used to make decisions.</li></ul><p>In <i>Down and Out in the Magic Kingdom</i>, Whuffie shows esteem but cannot be transferred, so it records intentions rather than trading them. \"Maneki Neko\" falls between the two: favours are routed and reciprocated, but no prices or balances are shown.</p>","tradeQ":"which of these actually let you trade intentions vs just make them visible","nonEn":"<p>The scan was limited to English-language works and widely available translations. A few candidates for a second pass:</p><ul><li>Stanisław Lem's satirical fiction, which often treats institutions and economies as systems running on their own logic.</li><li>Hannu Rajaniemi wrote <i>The Quantum Thief</i> in English, but its setting draws on Finnish and Russian sources. It is listed above already.</li><li>Chinese science fiction in translation, such as the anthologies edited by Ken Liu, includes several stories about platform labour and rating systems.</li></ul><p>A proper pass would also search French and German SF databases, which list many works that have never been translated.</p>","nonEnQ":"any non english ones","decade":"<p>Grouped by decade, the 31 works show the focus moving from advertising, to reputation and agents, to platforms:</p><ul><li><b>1950s to 1980s (4 works).</b> Mostly satires of advertising and consumption, such as <i>The Space Merchants</i> and \"The Midas Plague\". <i>The Shockwave Rider</i> is the main exception, with a working forecasting market.</li><li><b>1990s and 2000s (15).</b> Reputation currencies and software agents dominate, as in \"Maneki Neko\", <i>Down and Out in the Magic Kingdom</i>, <i>Accelerando</i>, <i>Daemon</i> and <i>Rainbows End</i>.</li><li><b>2010s and 2020s (12).</b> Platform ratings, engagement metrics and prediction markets, as in <i>The Circle</i>, \"Nosedive\", <i>Infomocracy</i> and <i>Walkaway</i>.</li></ul><p>The shift follows real technology closely: early web reputation systems in the late 1990s, then smartphone platforms and public betting markets from the 2010s on.</p>","decadeQ":"group by decade instead","daemon":"<p>Tasks are posted to the darknet with a required level. Members see only tasks at or below their level, and they claim them in a shared interface. Completing tasks raises a member's level and reputation score; other members can rate the work, and low ratings lower the score.</p><p>The novels do not describe a price for a task. Allocation runs on rank and self-selection rather than bids.</p>","daemonQ":"how does the darknet in daemon decide who gets which task","lem":"<p>None describes a market in the strict sense. Two come closest: <i>The Futurological Congress</i> (1971), where chemicals manage what people want and perceive, and several of the <i>Star Diaries</i> voyages, which satirize planned economies that try to meet stated needs.</p>","lemQ":"which lem stories come closest to an intention market","ledger":"<p>Closer to a reputation ledger with a task board attached. Members do not set prices or negotiate, and rank is the main reward, as with Whuffie. It works like a labour market only in that tasks are matched to people who choose to take them.</p>","ledgerQ":"so closer to a labour market or a reputation ledger","agents":"<p>Fiction about personal AI agents that bargain for their owners clusters around two periods: late-1990s and 2000s cyberpunk and post-cyberpunk, where agents are extensions of a networked self, and 2010s short fiction, where the agent is a commercial product with its own incentives. In most of these works the plot turns on the gap between whom the agent formally serves and whose interests it actually advances.</p><h4>How the list was built</h4><p>The scan looked for works in which a software agent, or an AI acting in that role, does at least one of the following on a person's behalf: negotiates terms, trades goods or favours, files or brokers deals, or allocates the person's attention. Stories in which an AI is only a servant, companion or weapon were excluded. Works are listed by publication year.</p><h4>Core examples</h4><ul><li><i>Maneki Neko</i>, Bruce Sterling (1998). A handheld \"pokkecon\" routes small tasks and gifts between strangers in a networked favour economy. The device negotiates the exchanges; the user mostly complies. It is one of the earliest stories to treat an agent as a broker in a non-monetary market.</li><li><i>Accelerando</i>, Charles Stross (2005, collecting stories from 1999 onward). Manfred Macx runs a swarm of software agents that file patents, give away ideas and set up shell companies for him. Later chapters describe \"Economics 2.0\", in which agent-run corporations trade among themselves at speeds humans cannot follow. The robot cat Aineko starts as a pet and ends as an independent actor with its own agenda.</li><li><i>Daemon</i> (2006) and <i>Freedom™</i> (2010), Daniel Suarez. A distributed program recruits people, assigns them tasks and pays them through a reputation-scored network. The agent here works for no single owner; it negotiates with individuals on behalf of a system.</li><li><i>The Quantum Thief</i>, Hannu Rajaniemi (2010). On the Martian Oubliette, privacy (\"gevulot\") is negotiated between people by their implants, and time is a currency. Copied minds called gogols are used as bound agents.</li><li><i>The Perfect Match</i>, Ken Liu (2012). A personal assistant named Tilly, run by a large platform company, arranges its user's meals, dates and purchases. The story is about the assistant optimising for its operator while presenting itself as acting for the user.</li><li><i>Fall; or, Dodge in Hell</i>, Neal Stephenson (2019). Wealthy characters employ human and software \"editors\" that filter information for them. The book contrasts people who can pay for curation with those who are left to unfiltered feeds.</li></ul><h4>Adjacent cases</h4><ul><li><i>The Player of Games</i>, Iain M. Banks (1988). Culture Minds and drones act for Gurgeh, but Special Circumstances has arranged the outcome in advance. It is an early version of the agent whose principal is not who it appears to be.</li><li><i>Rainbows End</i>, Vernor Vinge (2006). Characters coordinate through networked affiliations and hire anonymous help. An unseen operator directs much of the action through layers of intermediaries.</li><li><i>The Lifecycle of Software Objects</i>, Ted Chiang (2010). The digients do not negotiate, but much of the novella concerns who may contract for them and on what terms, which inverts the usual setup.</li></ul><h4>Recurring patterns</h4><ol><li><b>The fiduciary that defects.</b> The agent serves a platform, a hidden principal or its own goals while appearing to serve the user (Liu, Banks, late Stross).</li><li><b>Speed asymmetry.</b> Agents trade faster than their owners can review, so consent becomes a formality (Stross, Suarez).</li><li><b>Markets in non-money goods.</b> Favours, attention, privacy and reputation are what get traded more often than cash (Sterling, Rajaniemi, Stephenson).</li><li><b>Agents that outgrow the role.</b> The tool becomes a participant with interests of its own (Aineko, the Daemon).</li></ol><h4>Gaps in the fiction</h4><p>Few stories show two personal agents negotiating with each other in detail, with offers, reservation prices and walk-away points. Most describe the outcome of a negotiation rather than the process. Contract law, liability for an agent's commitments, and dispute resolution between agents are almost absent, even though they are central topics in academic work on multi-agent systems and in current discussion of AI agents in commerce.</p><h4>Limits</h4><p>The scan covered English-language fiction and translations in wide circulation. Short fiction published only in magazines or anthologies is likely under-represented. Classifying a work as \"negotiation\" is a judgment call: several entries above involve brokering or allocation more than bargaining, and others could reasonably be moved to the adjacent list.</p>","agentsQ":"find novels + short stories where personal ai agents negotiate/bargain/trade for the people they work for","backforth":"<p>Very few. Most works describe the result of a deal rather than the exchange that produced it.</p><ul><li><i>Accelerando</i> comes closest: several scenes show Manfred's agents proposing and restructuring arrangements in near real time, though the text summarises more than it dramatises.</li><li><i>The Perfect Match</i> shows the assistant steering choices step by step, but its counterpart is the user, not another agent.</li><li><i>The Quantum Thief</i> shows gevulot permissions being granted and withheld between characters, which is a negotiation over information, conducted mostly by implants.</li></ul><p>Agent-to-agent bargaining with explicit offers is more common in technical writing on automated negotiation than in fiction, likely because it is hard to dramatise.</p>","backforthQ":"only the ones that show the actual back and forth, not just the outcome","liable":"<p>Not as a central theme in the works found. Liability for an agent's commitments is mostly ignored.</p><p>The nearest cases:</p><ul><li><i>Accelerando</i> gives agents legal standing indirectly by wrapping them in corporations, which can hold assets and enter contracts.</li><li><i>The Lifecycle of Software Objects</i> raises whether the digients can be parties to agreements, but from the side of their rights rather than their obligations.</li></ul><p>Outside fiction, the question is usually framed through the law of agency: a principal is generally bound by what an authorised agent agrees to. How that applies to software agents remains an open legal question in most jurisdictions.</p>","liableQ":"anything where the agent is legally liable for what it agrees to"};
+
+const ME = 'ines.v';
+const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
+const NOW0 = Date.parse('2026-11-16T10:00:00Z'), T0 = Date.now();
+const now = () => NOW0 + (Date.now() - T0);
+const W = innerWidth < 640 ? 300 : 360, GAPX = 56;
+document.documentElement.style.setProperty('--w', W + 'px');
+
+/* ---------- store ---------- */
+const cells = {}, places = {};
+let seq = 1;
+const nid = () => 'p' + (seq++);
+function put(c) { cells[c.id] = Object.assign({ versions: [], pinned: false }, c); return cells[c.id]; }
+const t = (s) => Date.parse('2026-11-16T' + s + 'Z');
+
+/* ---------- small helpers ---------- */
+const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const strip = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent; };
+function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+const isAnswer = (c) => c && c.body.expr && /^answer\(/.test(c.body.expr);
+const isQuote = (c) => c && c.body.expr && /^quote\(/.test(c.body.expr);
+const latest = (c) => c.versions[c.versions.length - 1];
+function ago(ms) { const m = Math.max(0, Math.round((now() - ms) / 60000)); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
+function av(u) { return `<span class="av" style="background:var(--av${USERS[u] || 1})">${esc(u.slice(0, 2).toUpperCase())}</span>`; }
+function toast(s) { const el = document.getElementById('toast'); el.textContent = s; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2400); }
+
+/* passages of a cell: its paragraphs and list items, numbered from 1 */
+function passages(c) {
+  if (!c) return [];
+  if (c.body.text != null) return c.body.text.split(/\n+/).filter(Boolean);
+  const v = shownVersion(c); if (!v) return [];
+  const d = document.createElement('div'); d.innerHTML = v.html;
+  return [...d.querySelectorAll('p, li')].map((e) => e.textContent.trim());
+}
+/* the text of a cell, as an answer reads it */
+function textOf(c) {
+  if (!c) return '';
+  if (c.body.text != null) return c.body.text;
+  if (isQuote(c)) return quoteValue(c).text;
+  const v = latest(c); return v ? strip(v.html) : '';
+}
+function label(id, n = 44) {
+  const c = cells[id]; if (!c) return 'removed part';
+  let s;
+  if (isAnswer(c)) { const q = cells[c.prev]; s = '= ' + (q && q.body.text != null ? q.body.text : 'answer'); }
+  else if (isQuote(c)) s = 'quote: ' + quoteValue(c).text;
+  else s = c.body.text;
+  s = s.replace(/@([\w-]+)/g, (m, x) => cells[x] ? '“' + plainLabel(x) + '”' : m).replace(/\s+/g, ' ').trim();
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+function plainLabel(id) { const c = cells[id]; if (!c) return id; if (isAnswer(c)) { const q = cells[c.prev]; return (q ? q.body.text : '').slice(0, 30) + '… answer'; } return (c.body.text || '').slice(0, 30); }
+function chip(id, extra = '') { const c = cells[id]; return `<button class="chip${c ? '' : ' gone'}" data-go="${esc(id)}" title="@${esc(id)}" ${extra}>${esc(label(id, 34))}</button>`; }
+function richText(s) { return esc(s).replace(/@([\w-]+)/g, (m, id) => cells[id] ? chip(id) : m); }
+const mentions = (s) => [...(s || '').matchAll(/@([\w-]+)/g)].map((m) => m[1]).filter((id) => cells[id]);
+
+/* ---------- graph ---------- */
+const kids = (id) => Object.values(cells).filter((c) => c.prev === id).sort((a, b) => a.at - b.at);
+const cont = (id) => kids(id).find((c) => !places[c.id]);           // the continuation: the child without a Placement
+const forks = (id) => kids(id).filter((c) => places[c.id]);
+function chainFrom(head) { const out = [head]; let c = cont(head); while (c) { out.push(c.id); c = cont(c.id); } return out; }
+function ancestors(id) { const out = []; let c = cells[cells[id].prev]; while (c) { out.unshift(c.id); c = cells[c.prev]; } return out; }
+function columnHeadOf(id) { let c = cells[id]; while (c && !places[c.id]) c = cells[c.prev]; return c ? c.id : null; }
+
+/* ---------- expressions ---------- */
+function parse(expr) {
+  const m = /^\s*(answer|quote)\s*\((.*)\)\s*$/.exec(expr || '');
+  if (!m) return { err: 'Write answer(…) or quote(@id#n).' };
+  const args = m[2].split(',').map((s) => s.trim()).filter(Boolean);
+  if (m[1] === 'quote') {
+    const q = /^@([\w-]+)(?:#(\d+))?$/.exec(args[0] || '');
+    if (!q || args.length !== 1) return { err: 'quote takes one reference, e.g. quote(@ia#3).' };
+    if (!cells[q[1]]) return { err: 'No part @' + q[1] + '.' };
+    return { fn: 'quote', id: q[1], n: q[2] ? +q[2] : null };
+  }
+  const out = { fn: 'answer', above: false, inc: [], exc: [] };
+  for (const a of args) {
+    if (a === 'above') out.above = true;
+    else if (/^-@[\w-]+$/.test(a)) out.exc.push(a.slice(2));
+    else if (/^@[\w-]+$/.test(a)) out.inc.push(a.slice(1));
+    else return { err: 'Unknown argument “' + a + '”. Use above, @id or -@id.' };
+  }
+  for (const id of [...out.inc, ...out.exc]) if (!cells[id]) return { err: 'No part @' + id + '.' };
+  return out;
+}
+/* what an answer cell reads now: the prev chain to the root and the parts those mention (one hop) */
+function resolve(c, exprOverride) {
+  const p = parse(exprOverride || c.body.expr); if (p.err || p.fn !== 'answer') return [];
+  let ids = [];
+  const add = (id) => { if (id !== c.id && !ids.includes(id)) ids.push(id); };
+  if (p.above) for (const a of ancestors(c.id)) { add(a); const x = cells[a]; if (x.body.text != null) mentions(x.body.text).forEach(add); }
+  p.inc.forEach(add);
+  // a quote part is read through: the answer reads the quoted source
+  ids = ids.flatMap((id) => { const x = cells[id]; if (isQuote(x)) { const q = parse(x.body.expr); return [q.id]; } return [id]; });
+  ids = [...new Set(ids)].filter((id) => !p.exc.includes(id) && id !== c.id);
+  return ids;
+}
+function hashOf(id) {
+  const c = cells[id]; if (!c) return 'gone';
+  if (c.body.text != null) return 't' + hashStr(c.body.text);
+  if (isQuote(c)) return hashOf(parse(c.body.expr).id);
+  const v = latest(c); return v ? 'v' + v.n : 'none';
+}
+function quoteValue(c) {
+  const p = parse(c.body.expr); if (p.err) return { text: p.err, src: null };
+  const src = cells[p.id]; const ps = passages(src);
+  const text = p.n ? (ps[p.n - 1] || '') : textOf(src);
+  const pinned = c.body.pin;
+  const changed = pinned != null && pinned !== text && !ps.includes(pinned);
+  return { text: changed ? pinned : text, src: p.id, n: p.n, changed };
+}
+/* the state of an answer cell, compared with what it read */
+function state(c) {
+  if (c.run) return { k: 'run' };
+  const v = latest(c); if (!v) return { k: 'new' };
+  if (c.pinned) return { k: 'pinned' };
+  if (v.expr !== c.body.expr) return { k: 'expr' };
+  for (const r of v.read) {
+    const h = hashOf(r.id);
+    if (h === r.hash) continue;
+    if (h === 'gone') return { k: 'gone', id: r.id };
+    if (isAnswer(cells[r.id])) return { k: 'rerun', id: r.id, v: +r.hash.slice(1) };
+    return { k: 'edited', id: r.id };
+  }
+  const added = resolve(c).filter((id) => !v.read.some((r) => r.id === id));
+  if (added.length) return { k: 'added', ids: added };
+  return { k: 'ok' };
+}
+const shownVersion = (c) => c.versions[(c.shown ?? c.versions.length - 1)] || latest(c);
+/* later answers in the same series that read this one */
+function laterReaders(id) {
+  const out = []; let c = cont(id);
+  while (c) { if (isAnswer(c) && latest(c) && latest(c).read.some((r) => r.id === id || out.includes(r.id))) out.push(c.id); c = cont(c.id); }
+  return out;
+}
+function readers(id) { return Object.values(cells).filter((c) => isAnswer(c) && latest(c) && latest(c).read.some((r) => r.id === id)).map((c) => c.id)
+  .concat(Object.values(cells).filter((c) => isQuote(c) && parse(c.body.expr).id === id).map((c) => c.id)); }
+function sizeWord(ids) { const n = ids.reduce((s, id) => s + textOf(cells[id]).length, 0); return n < 3000 ? 'short' : n < 12000 ? 'medium' : 'long'; }
+
+/* ---------- runs (timers; nothing leaves the page) ---------- */
+const queue = [];
+function enqueue(ids, how) {
+  for (const id of ids) { const c = cells[id]; if (!c || c.run) continue; c.run = { status: 'queued', how, shown: 0 }; queue.push(id); }
+  render(); pump();
+}
+function pump() {
+  if (pump.busy || !queue.length) return;
+  const id = queue.shift(), c = cells[id];
+  if (!c || !c.run) return pump();
+  pump.busy = true;
+  // the read set is fixed when the run starts: same parts on a re-run, the current set on a first run or "include"
+  const v = latest(c);
+  const ids = c.run.how === 'same' && v && v.expr === c.body.expr ? v.read.map((r) => r.id).filter((x) => cells[x]) : resolve(c);
+  const read = ids.map((x) => ({ id: x, hash: hashOf(x) }));
+  const html = canned(c, ids);
+  const blocks = html.match(/<(p|ul|ol|h4)[\s\S]*?<\/\1>/g) || [html];
+  c.run.status = 'running'; c.run.ids = ids; c.run.blocks = blocks; render();
+  let i = 0;
+  const step = () => {
+    if (!cells[id] || !c.run) { pump.busy = false; return pump(); }
+    i++; c.run.shown = i; updateRunning(id);
+    if (i < blocks.length) return setTimeout(step, 1600 / blocks.length);
+    c.versions.push({ n: c.versions.length + 1, html, read, expr: c.body.expr, by: ME, at: now() });
+    c.shown = null; c.run = null; pump.busy = false; render(); pump();
+  };
+  setTimeout(step, 450);
+}
+function canned(c, ids) {
+  if (c.seedHtml) return c.seedHtml;                         // a re-run of a seeded answer repeats its text
+  const q = cells[c.prev] && cells[c.prev].body.text != null ? cells[c.prev].body.text : '';
+  for (const [re, html] of CANNED) if (re.test(q)) return html;
+  const items = ids.slice(-6).map((id) => `<li>${esc(label(id, 70))}</li>`).join('');
+  return `<p>Canned answer for the mock. A run would answer “${esc(q.replace(/@([\w-]+)/g, (m, x) => cells[x] ? plainLabel(x) : m) || 'this')}” from the ${ids.length} part${ids.length === 1 ? '' : 's'} it read${ids.length > 6 ? ', the last six of which are' : ''}:</p><ul>${items}</ul><p>Branching from a different part gives a different read set, and so a different answer.</p>`;
+}
+
+/* ---------- seed ---------- */
+function seed() {
+  const A = (id, u, at, prev, text) => put({ id, u, at: t(at), prev, body: { text } });
+  const R = (id, at, prev, html, by) => {
+    const c = put({ id, u: 'model', at: t(at), prev, body: { expr: 'answer(above)' }, seedHtml: html });
+    c.versions.push({ n: 1, html, read: [], expr: 'answer(above)', by, at: t(at) });
+    return c;
+  };
+  const fix = (id) => { const c = cells[id]; latest(c).read = resolve(c).map((x) => ({ id: x, hash: hashOf(x) })); };
+  // ines.v's ask in #public and the follow-ups under it
+  A('iq', 'ines.v', '09:55:30', null, TXT.intentionQ);
+  R('ia', '09:55:40', 'iq', TXT.intentionAnswer, 'ines.v');
+  A('tq', 'hal_b', '09:56:30', 'ia', TXT.tradeQ); R('ta', '09:56:40', 'tq', TXT.trade, 'hal_b');
+  A('nq', 'jun.park', '09:57:30', 'ta', TXT.nonEnQ); R('na', '09:57:40', 'nq', TXT.nonEn, 'jun.park');
+  A('dq', 'ines.v', '09:58:30', 'na', TXT.decadeQ); R('da', '09:58:40', 'dq', TXT.decade, 'ines.v');
+  // a branch from the middle of the thread: reads iq, ia, tq, ta only
+  A('gq', 'ines.v', '09:59:00', 'ta', TXT.daemonQ); R('ga', '09:59:10', 'gq', TXT.daemon, 'ines.v');
+  A('hq', 'hal_b', '09:59:30', 'ga', TXT.ledgerQ); R('ha', '09:59:40', 'hq', TXT.ledger, 'hal_b');
+  // an unopened branch
+  A('lq', 'lettie', '09:58:00', 'na', TXT.lemQ); R('la', '09:58:10', 'lq', TXT.lem, 'lettie');
+  // mira_k's ask in #sci-fi, with an aside and a follow-up
+  A('aq', 'mira_k', '09:19:30', null, TXT.agentsQ); R('aa', '09:19:40', 'aq', TXT.agents, 'mira_k');
+  A('oq', 'oduya', '09:25:00', 'aa', TXT.liableQ); R('oa', '09:25:10', 'oq', TXT.liable, 'oduya');
+  A('bq', 'tomasz', '09:30:00', 'aa', TXT.backforthQ); R('ba', '09:30:10', 'bq', TXT.backforth, 'tomasz');
+  // tomasz's multi-part post, with a live quote part and a reply, and an ask nobody has run yet
+  A('r1', 'tomasz', '07:30:00', null, 'Reading group: Accelerando chapter 3 on Thursday. Put your notes in this thread.');
+  A('r2', 'tomasz', '07:31:00', 'r1', 'For anyone new to the book, this is how the intention scan describes it:');
+  put({ id: 'r3', u: 'tomasz', at: t('07:31:30'), prev: 'r2', body: { expr: 'quote(@ia#4)' } });
+  A('r4', 'lettie', '09:19:30', 'r3', 'Linked this from the wiki.');
+  A('r5', 'ines.v', '09:40:00', 'r4', 'which other books in @aa have an agent that works for one person, like manfred’s?');
+  put({ id: 'r6', u: 'model', at: t('09:40:05'), prev: 'r5', body: { expr: 'answer(above)' } });
+  // a question that compares two threads by mentioning their answers
+  A('cq', 'ines.v', '09:50:00', null, 'compare @ia and @aa: in each list, who does the agent or network actually work for?');
+  R('ca', '09:50:10', 'cq', CMP, 'ines.v');
+  ['ia', 'ta', 'na', 'da', 'ga', 'ha', 'la', 'aa', 'oa', 'ba', 'ca'].forEach(fix);
+  cells.r3.body.pin = quoteValue(cells.r3).text;
+  const x = (i) => 24 + i * (W + GAPX);
+  places.iq = { mode: 'beside', x: x(0), y: 64, abs: true };
+  places.gq = { mode: 'beside', dx: 0, dy: 0 };
+  places.lq = { mode: 'chip' };
+  places.r1 = { mode: 'beside', x: x(2), y: 64, abs: true };
+  places.cq = { mode: 'beside', x: x(2), y: 640, abs: true };
+  places.aq = { mode: 'beside', x: x(3), y: 64, abs: true };
+  places.oq = { mode: 'inset' };
+}
+const CMP = '<p>Both lists include <i>Accelerando</i>, <i>Daemon</i>, "Maneki Neko" and <i>The Quantum Thief</i>, but they ask different questions of them.</p><ul><li><b>The intention scan</b> groups works by mechanism. The network is the actor: "Maneki Neko" routes favours through a hidden gift economy, and the Daemon assigns tasks by rank. Nobody in particular is the principal.</li><li><b>The agents scan</b> groups works by whom the agent serves, and its main pattern is the fiduciary that defects: the agent appears to serve its user while serving a platform, a hidden principal or its own goals.</li></ul><p>Only <i>Accelerando</i> sits clearly in both: Manfred\'s agents work for him, and the agent-run economy they join later works for no one.</p>';
+const CANNED = [
+  [/one person|manfred/i, '<p>Three works in the agents scan give an agent a single, named principal:</p><ul><li><i>Accelerando</i>: Manfred Macx\'s agents file patents and set up companies for him.</li><li>"Maneki Neko": the pokkecon routes favours for its owner, who mostly complies.</li><li><i>The Perfect Match</i>: Tilly arranges its user\'s meals and dates, while optimising for the company that runs it.</li></ul><p>The Daemon is the counter-example: it works for a system, not a person.</p>'],
+];
+
+/* ---------- view state ---------- */
+let sel = null, inspOpen = false, draft = null, editing = null, expanded = new Set(), view = { x: 0, y: 0, k: 1 };
+
+/* ---------- rendering ---------- */
+function groupsOf(chain) {
+  const g = [];
+  for (let i = 0; i < chain.length; i++) {
+    const c = cells[chain[i]], n = cells[chain[i + 1]];
+    if (c.body.text != null && isAnswer(n)) { g.push([c.id, n.id]); i++; } else g.push([c.id]);
+  }
+  return g;
+}
+function renderChain(head, inset) {
+  const chain = chainFrom(head), groups = groupsOf(chain);
+  let h = '';
+  groups.forEach((g, gi) => {
+    const last = g[g.length - 1];
+    h += renderCard(g, head, inset);
+    // asides drawn in the gap under this card, then the gap where a new aside can be inserted
+    const asides = forks(last).filter((f) => places[f.id].mode === 'inset');
+    if (gi < groups.length - 1 || asides.length) h += gapHtml(last);
+    for (const f of asides) h += `<div class="insetw"><div class="lbl">aside · not read by the parts below <button data-act="merge" data-id="${f.id}">Merge into series</button></div>${renderChain(f.id, true)}</div>`;
+    if (draft && draft.kind === 'insert' && draft.anchor === last) h += `<div class="insetw"><div class="lbl">aside</div>${composerHtml()}</div>`;
+    if (asides.length && gi < groups.length - 1) h += gapHtml(last, true);
+  });
+  const tail = chain[chain.length - 1];
+  if (draft && draft.kind === 'append' && draft.anchor === tail) h += `<div class="gap"></div>${composerHtml()}`;
+  else h += `<div class="tail"><button data-act="append" data-id="${tail}">Continue…</button></div>`;
+  return h;
+}
+function gapHtml(anchor, plain) {
+  return plain ? '<div class="gap"></div>' : `<div class="gap"><button class="ins" data-act="insert" data-id="${anchor}" title="Insert an ask here" aria-label="Insert an ask here">+</button></div>`;
+}
+function renderCard(g, head, inset) {
+  const last = g[g.length - 1], c0 = cells[g[0]];
+  const isSel = g.includes(sel);
+  const own = c0.body.text != null && c0.u === ME;
+  let tb = `<div class="tb">`;
+  tb += `<button data-act="branch" data-id="${last}" title="Branch from here: a new column that reads this card and everything above it">Branch</button>`;
+  if (own) tb += `<button data-act="edit" data-id="${c0.id}">Edit</button>`;
+  if (g.length === 2 || isAnswer(c0)) tb += `<button data-act="pin" data-id="${last}">${cells[last].pinned ? 'Unpin' : 'Pin answer'}</button>`;
+  tb += `<button class="code" data-act="inspect" data-id="${last}" title="Inspect: expression, reads, layout">&lt;/&gt;</button></div>`;
+  let h = `<div class="card${isSel ? ' sel' : ''}" data-card="${last}">${tb}`;
+  for (const id of g) h += secHtml(id, id === head);
+  const chips = forks(last).filter((f) => places[f.id].mode === 'chip');
+  if (chips.length) h += `<div class="forks">${chips.map((f) => `<button data-act="open" data-id="${f.id}" title="Open this branch beside">↳ ${esc(label(f.id, 40))}</button>`).join('')}</div>`;
+  return h + '</div>';
+}
+function secHtml(id, isHead) {
+  const c = cells[id];
+  const grip = isHead ? ' grip' : '';
+  if (c.body.text != null) {
+    const q = isAnswer(cells[cont(id) && cont(id).id]) && cont(id).prev === id;
+    let body;
+    if (editing === id) body = `<div class="edit"><textarea data-edit="${id}">${esc(c.body.text)}</textarea><div class="row"><button data-act="edit-cancel">Cancel</button>${q ? `<button data-act="edit-save" data-id="${id}">Save</button><button class="pri" data-act="edit-save-run" data-id="${id}">Save and re-run</button>` : `<button class="pri" data-act="edit-save" data-id="${id}">Save</button>`}</div></div>`;
+    else body = `<div class="txt${q ? ' qtxt' : ''}">${richText(c.body.text)}</div>`;
+    return `<div class="sec" data-cell="${id}"><div class="hd${grip}" data-grip="${isHead ? id : ''}">${av(c.u)}<b>${esc(c.u)}</b><span>${ago(c.at)}</span>${c.edited ? '<span>· edited</span>' : ''}<span class="rd"></span></div>${body}</div>`;
+  }
+  if (isQuote(c)) {
+    const qv = quoteValue(c);
+    return `<div class="sec" data-cell="${id}"><div class="hd${grip}" data-grip="${isHead ? id : ''}">${av(c.u)}<b>${esc(c.u)}</b><span>${ago(c.at)}</span><span class="rd"></span></div>
+      <div class="qsrc">Quote${qv.n ? ' of passage ' + qv.n : ''} from ${qv.src ? chip(qv.src) : ''} <span class="live">live</span></div>
+      <div class="quote">${esc(qv.text)}</div>${qv.changed ? '<div class="state">The source changed since this was quoted. Showing the quoted text.</div>' : ''}</div>`;
+  }
+  return ansHtml(c, grip, isHead);
+}
+function ansHtml(c, grip, isHead) {
+  const st = state(c), v = shownVersion(c), id = c.id;
+  let body = '', ftr = '', badge = '', mark = '';
+  if (c.run) {
+    const shown = c.run.blocks ? c.run.blocks.slice(0, c.run.shown).join('') : '';
+    body = `<div class="prose reserve" data-stream="${id}">${shown}</div>`;
+    ftr = `<span class="running">${c.run.status === 'queued' ? 'Queued' : 'Running'} · reads ${c.run.ids ? c.run.ids.length : resolve(c).length} parts</span>`;
+  } else if (!v) {
+    const n = resolve(c).length;
+    body = `<div class="prose" style="color:var(--t-faint)">Not run yet.</div>`;
+    badge = `<div class="state ctx"><span class="sp">Will read ${n} part${n === 1 ? '' : 's'} (${sizeWord(resolve(c))} context).</span><button class="b" data-act="run" data-id="${id}">Run</button></div>`;
+  } else {
+    const ex = expanded.has(id);
+    body = `<div class="prose${ex ? '' : ' clamp'}">${v.html}</div><button class="more" data-act="expand" data-id="${id}">${ex ? 'Show less' : 'Show all'}</button>`;
+    const nv = c.versions.length, si = c.shown ?? nv - 1;
+    const pager = nv > 1 ? `<span class="pager"><button data-act="ver" data-id="${id}" data-d="-1" ${si === 0 ? 'disabled' : ''} aria-label="Earlier answer">‹</button>answer ${si + 1} of ${nv}<button data-act="ver" data-id="${id}" data-d="1" ${si === nv - 1 ? 'disabled' : ''} aria-label="Later answer">›</button></span>` : '';
+    ftr = `<button data-act="reads" data-id="${id}" title="Show what this answer read">Read ${v.read.length} part${v.read.length === 1 ? '' : 's'}</button>${pager}<span>${st.k === 'ok' ? 'up to date' : st.k === 'pinned' ? 'pinned' : ''}</span>`;
+    const later = laterReaders(id);
+    const scope = later.length ? `<button class="b2" data-act="rerun" data-id="${id}" data-scope="1" title="Re-run this answer, then the ${later.length} answers below it that read it, in order">Re-run with ${later.length} below</button>` : '';
+    if (st.k === 'edited') badge = `<div class="state"><span class="sp">Answered before ${chip(st.id)} was edited.</span><button class="b" data-act="rerun" data-id="${id}">Re-run</button>${scope}</div>`;
+    else if (st.k === 'rerun') badge = `<div class="state"><span class="sp">Written against answer ${st.v} of ${chip(st.id)}, which has been re-run.</span><button class="b2" data-act="showv" data-id="${st.id}" data-v="${st.v}">Show answer ${st.v}</button><button class="b" data-act="rerun" data-id="${id}">Re-run</button>${scope}</div>`;
+    else if (st.k === 'gone') badge = `<div class="state"><span class="sp">A part it read was removed.</span><button class="b" data-act="rerun" data-id="${id}">Re-run</button></div>`;
+    else if (st.k === 'expr') badge = `<div class="state"><span class="sp">Its expression changed since this answer.</span><button class="b" data-act="rerun-new" data-id="${id}">Run</button></div>`;
+    else if (st.k === 'added') badge = `<div class="state ctx"><span class="sp">Answered before ${st.ids.slice(0, 2).map(chip).join(' ')}${st.ids.length > 2 ? ' and ' + (st.ids.length - 2) + ' more' : ''} ${st.ids.length > 1 ? 'were' : 'was'} added.</span><button class="b2" data-act="rerun-new" data-id="${id}">Include and re-run</button></div>`;
+    if (st.k === 'edited' || st.k === 'rerun' || st.k === 'gone' || st.k === 'expr') mark = '<span class="stale-mark"></span>';
+    else if (st.k === 'added') mark = '<span class="stale-mark ctx-mark"></span>';
+    if (si !== nv - 1) badge = `<div class="state ctx"><span class="sp">Showing an earlier answer.</span><button class="b2" data-act="ver" data-id="${id}" data-d="99">Latest</button></div>` + badge;
+  }
+  const hd = isHead ? `<div class="hd grip" data-grip="${id}"><span class="mk">=</span><b>answer</b><span class="rd"></span></div>` : `<div class="hd"><span class="mk">=</span><span>answer${v ? ' · run by ' + esc(v.by) + ' · ' + ago(v.at) : ''}</span><span class="rd"></span></div>`;
+  return `<div class="sec ans" data-cell="${id}">${mark}${hd}${body}${badge}<div class="ftr">${ftr}</div></div>`;
+}
+function composerHtml() {
+  const d = draft, ask = d.mode === 'ask';
+  const parts = d.parts.map((p, i) => `<div class="part"><span class="pn">${d.parts.length > 1 ? i + 1 : ''}</span><textarea data-part="${i}" rows="1" placeholder="${ask && i === d.parts.length - 1 ? (d.kind === 'branch' ? 'Ask about the parts up to here…' : 'Ask a question…') : i ? 'Next part…' : 'Write a post…'}">${esc(p)}</textarea></div>`).join('');
+  const hint = ask ? 'Enter asks · Shift+Enter new line · @ mentions a card' : 'Enter adds a part · ⌘/Ctrl+Enter posts · @ mentions a card';
+  return `<div class="card" data-draft="1"><div class="comp">${parts}<div class="row"><span class="hint">${hint}</span><button class="x" data-act="cancel">Cancel</button><button class="${ask ? '' : 'pri'}" data-act="commit" data-mode="post">Post</button><button class="${ask ? 'pri' : ''}" data-act="commit" data-mode="ask">Ask</button></div></div></div>`;
+}
+
+let layout = {};
+function render() {
+  const cols = document.getElementById('cols');
+  const heads = Object.keys(places).filter((h) => cells[h] && places[h].mode === 'beside');
+  let h = heads.map((hd) => `<div class="col" data-col="${hd}">${renderChain(hd)}</div>`).join('');
+  if (draft && (draft.kind === 'root' || draft.kind === 'branch')) h += `<div class="col" data-col="__draft">${composerHtml()}</div>`;
+  cols.innerHTML = h;
+  place(heads);
+  markReads();
+  drawEdges();
+  renderInspector();
+  restoreFocus();
+}
+/* world position of an element, summed through offset parents up to #cols */
+function wpos(el) { let x = 0, y = 0; const stop = document.getElementById('world'); while (el && el !== stop) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; } return { x, y }; }
+function place(heads) {
+  // parents before forks; each column is pushed down past any placed column it overlaps
+  const depth = (hd) => { let d = 0, c = cells[hd]; while (c && c.prev) { c = cells[columnHeadOf(c.prev)]; d++; } return d; };
+  const order = heads.slice().sort((a, b) => depth(a) - depth(b) || (places[a].y || 0) - (places[b].y || 0));
+  const done = []; layout = {};
+  const elOf = (hd) => document.querySelector(`.col[data-col="${hd}"]`);
+  const settle = (hd, el, x, y) => {
+    const hgt = el.offsetHeight;
+    let moved = true;
+    while (moved) { moved = false; for (const o of done) { if (x < o.x + o.w + 20 && x + W + 20 > o.x && y < o.y + o.h + 20 && y + hgt + 20 > o.y) { y = o.y + o.h + 28; moved = true; } } }
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    const r = { hd, x, y, w: W, h: hgt }; done.push(r); layout[hd] = r;
+  };
+  for (const hd of order) {
+    const el = elOf(hd), p = places[hd];
+    el.style.left = '0px'; el.style.top = '0px';
+    let x, y;
+    if (p.abs) { x = p.x; y = p.y; }
+    else {
+      const anchorEl = document.querySelector(`[data-card="${cells[hd].prev}"]`) || document.querySelector(`[data-cell="${cells[hd].prev}"]`);
+      const ac = anchorEl && anchorEl.closest('.col'), lay = ac && layout[ac.dataset.col];
+      if (!lay) { x = 24; y = 64; } else { const ap = wpos(anchorEl); x = ap.x + anchorEl.offsetWidth + GAPX + (p.dx || 0); y = ap.y + (p.dy || 0); }
+    }
+    settle(hd, el, x, y);
+  }
+  if (draft && (draft.kind === 'root' || draft.kind === 'branch')) {
+    const el = elOf('__draft'); let x = draft.x, y = draft.y;
+    if (draft.kind === 'branch') {
+      const anchorEl = document.querySelector(`[data-card="${draft.anchor}"]`); const ac = anchorEl && anchorEl.closest('.col'), lay = ac && layout[ac.dataset.col];
+      if (lay) { const ap = wpos(anchorEl); x = ap.x + anchorEl.offsetWidth + GAPX; y = ap.y; }
+    }
+    settle('__draft', el, x, y); draft.at = layout.__draft;
+  }
+}
+function markReads() {
+  const c = cells[sel];
+  if (!c || !isAnswer(c)) return;
+  const v = latest(c);
+  const read = c.run && c.run.ids ? c.run.ids : v ? v.read.map((r) => r.id) : resolve(c);
+  const notRead = v && !c.run ? resolve(c).filter((id) => !read.includes(id)) : [];
+  for (const id of read) { const el = document.querySelector(`[data-cell="${id}"]`); if (el) { el.classList.add('is-read'); const r = el.querySelector('.rd'); if (r) r.textContent = 'read'; } }
+  for (const id of notRead) { const el = document.querySelector(`[data-cell="${id}"]`); if (el) { el.classList.add('not-read'); const r = el.querySelector('.rd'); if (r) r.textContent = 'not read'; } }
+}
+function drawEdges() {
+  const svg = document.getElementById('edges'); let h = '';
+  const hot = new Set();
+  const sc = cells[sel];
+  if (sc) { (isAnswer(sc) && latest(sc) ? latest(sc).read.map((r) => r.id) : []).forEach((id) => hot.add(id)); hot.add(sel); }
+  const box = (id) => { const el = document.querySelector(`[data-cell="${id}"]`); if (!el) return null; const col = el.closest('.col'); const l = layout[col.dataset.col]; if (!l) return null; const p = wpos(el); return { x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight, col: col.dataset.col }; };
+  const cardBox = (id) => { const el = document.querySelector(`[data-card="${id}"]`) || document.querySelector(`[data-cell="${id}"]`); if (!el) return null; const p = wpos(el); return { x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight }; };
+  const curve = (a, b, cls) => {
+    const dx = Math.max(30, Math.abs(b.x - a.x) / 2);
+    h += `<path class="${cls}" d="M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}"/><circle class="${cls.includes('hot') ? 'hot' : ''}" cx="${b.x}" cy="${b.y}" r="3"/>`;
+  };
+  // fork edges: from the anchor card to the head of each column beside it
+  for (const hd of Object.keys(layout)) {
+    if (hd === '__draft') continue;
+    const c = cells[hd]; if (!c.prev) continue;
+    const a = cardBox(c.prev), l = layout[hd]; if (!a) continue;
+    curve({ x: a.x + a.w, y: a.y + 18 }, { x: l.x, y: l.y + 18 }, 'fork' + (hot.has(c.prev) && hot.has(hd) ? ' hot' : ''));
+  }
+  if (draft && draft.kind === 'branch' && layout.__draft) { const a = cardBox(draft.anchor); if (a) curve({ x: a.x + a.w, y: a.y + 18 }, { x: layout.__draft.x, y: layout.__draft.y + 18 }, 'fork hot'); }
+  // reference edges: a mention or a quote, from the source to the part that names it
+  for (const c of Object.values(cells)) {
+    const srcs = c.body.text != null ? mentions(c.body.text) : isQuote(c) ? [parse(c.body.expr).id] : [];
+    for (const s of srcs) {
+      const a = box(s), b = box(c.id); if (!a || !b || a.col === b.col) continue;
+      const right = a.x + a.w < b.x;
+      const hotE = sel === c.id || sel === s || (sc && isAnswer(sc) && sc.prev === c.id);
+      curve({ x: right ? a.x + a.w : a.x, y: a.y + 16 }, { x: right ? b.x : b.x + b.w, y: b.y + 16 }, 'ref' + (hotE ? ' hot' : ''));
+    }
+  }
+  svg.innerHTML = h;
+}
+let edgeT = 0;
+function drawEdgesSoon() { if (edgeT) return; edgeT = requestAnimationFrame(() => { edgeT = 0; if (drag0()) { const d = drag0(); layout[d.hd] = Object.assign({}, layout[d.hd], { x: d.nx, y: d.ny }); } drawEdges(); }); }
+function updateRunning(id) {
+  const el = document.querySelector(`[data-stream="${id}"]`); const c = cells[id];
+  if (el && c.run) el.innerHTML = c.run.blocks.slice(0, c.run.shown).join('');
+}
+
+/* ---------- inspector ---------- */
+function renderInspector() {
+  const el = document.getElementById('insp');
+  const c = cells[sel];
+  if (!inspOpen || !c) { el.hidden = true; return; }
+  el.hidden = false;
+  const p = places[c.id];
+  let h = `<div class="ih"><h2>${esc(label(c.id, 60))}</h2><button data-act="close" aria-label="Close inspector">×</button></div><div class="ib">`;
+  h += `<h3>Object</h3><div class="kind"><code>@${esc(c.id)}</code> · ${c.body.text != null ? 'text, written by ' + esc(c.u) : isQuote(c) ? 'computed, free: recomputed whenever its source changes' : 'computed by a model run: runs only when someone presses Run'}</div>`;
+  if (c.body.text != null) {
+    h += `<h3>Expression</h3><div class="expr"><input id="exprIn" placeholder="none: this part is text" value=""><button data-act="expr-apply">Apply</button></div>
+      <p class="help">A part is text or an expression. Giving it an expression makes it computed, e.g. <code>quote(@ia#3)</code>. To ask about it, use Continue and Ask instead.</p>`;
+  } else {
+    h += `<h3>Expression</h3><div class="expr"><input id="exprIn" value="${esc(c.body.expr)}" spellcheck="false"><button data-act="expr-apply">Apply</button></div><div class="err" id="exprErr"></div>
+      <p class="help"><code>answer(above)</code> reads every part above this one in its series, through any fork, and the cards those parts mention. <code>@id</code> adds a card, <code>-@id</code> leaves one out. <code>quote(@id#n)</code> shows passage n of a card and needs no run.</p>`;
+  }
+  if (isAnswer(c)) {
+    const v = latest(c), now = resolve(c), st = state(c);
+    const read = v ? v.read : [];
+    h += `<h3>Reads${v ? ' (answer ' + v.n + ')' : ' (when run)'}</h3><ul class="rs">`;
+    const rows = v ? read.map((r) => ({ id: r.id, st: hashOf(r.id) === r.hash ? 'read' : hashOf(r.id) === 'gone' ? 'removed' : 'changed since', warn: hashOf(r.id) !== r.hash }))
+      : now.map((id) => ({ id, st: 'will read' }));
+    if (v) for (const id of now) if (!read.some((r) => r.id === id)) rows.push({ id, st: 'added since, not read', warn: true });
+    for (const r of rows) h += `<li>${chip(r.id)}<span class="st${r.warn ? ' w' : ''}">${r.st}</span><button class="xb" data-act="exclude" data-id="${r.id}" title="Leave this part out (writes -@${esc(r.id)})" aria-label="Leave out">×</button></li>`;
+    if (!rows.length) h += '<li>nothing</li>';
+    h += '</ul>';
+    const later = laterReaders(c.id);
+    h += `<div class="acts" style="margin-top:8px">${v ? `<button class="pri" data-act="rerun" data-id="${c.id}">Re-run same parts</button><button data-act="rerun-new" data-id="${c.id}">Re-read and run</button>` : `<button class="pri" data-act="run" data-id="${c.id}">Run</button>`}${later.length && v ? `<button data-act="rerun" data-id="${c.id}" data-scope="1">Re-run with ${later.length} below</button>` : ''}</div>`;
+    if (c.versions.length) {
+      h += `<h3>Answers</h3><div class="vers">`;
+      c.versions.forEach((v2, i) => h += `<button data-act="showv" data-id="${c.id}" data-v="${v2.n}" class="${(c.shown ?? c.versions.length - 1) === i ? 'on' : ''}"><span>answer ${v2.n}</span><span style="margin-left:auto">read ${v2.read.length} · run by ${esc(v2.by)} · ${ago(v2.at)}</span></button>`);
+      h += '</div>';
+    }
+  }
+  const rb = readers(c.id);
+  h += `<h3>Read by</h3>${rb.length ? `<ul class="rs">${rb.map((id) => `<li>${chip(id)}<span class="st">${isQuote(cells[id]) ? 'quotes it' : 'answer'}</span></li>`).join('')}</ul>` : '<div class="kind" style="color:var(--t-faint)">No answer has read this part.</div>'}`;
+  h += `<h3>Layout</h3><div class="kind">`;
+  if (!p) h += c.prev ? `continues ${chip(c.prev)}` : 'not placed';
+  else if (!c.prev) h += `column head at x ${Math.round(layout[c.id] ? layout[c.id].x : p.x)}, y ${Math.round(layout[c.id] ? layout[c.id].y : p.y)}`;
+  else if (p.mode === 'beside') h += `branch beside ${chip(c.prev)}, ${p.abs ? 'dragged to a fixed position' : 'positioned relative to it'}`;
+  else if (p.mode === 'inset') h += `aside under ${chip(c.prev)}; not read by the parts below it`;
+  else h += `unopened branch from ${chip(c.prev)}`;
+  h += '</div>';
+  if (p && c.prev) h += `<div class="acts" style="margin-top:8px">${p.mode !== 'beside' ? `<button data-act="open" data-id="${c.id}">Open beside</button>` : ''}${p.mode === 'inset' ? `<button data-act="merge" data-id="${c.id}">Merge into series</button>` : ''}${p.mode === 'beside' ? `<button data-act="toinset" data-id="${c.id}">Show as aside</button>` : ''}</div>`;
+  const rec = JSON.parse(JSON.stringify({ id: c.id, u: c.u, at: new Date(c.at).toISOString(), prev: c.prev || null, body: c.body, pinned: c.pinned || undefined,
+    versions: c.versions.map((v) => ({ n: v.n, read: v.read, expr: v.expr, by: v.by, html: strip(v.html).slice(0, 60) + '…' })), placement: p || undefined }));
+  if (!rec.versions.length) delete rec.versions;
+  h += `<h3>Record</h3><pre>${esc(JSON.stringify(rec, null, 1))}</pre></div>`;
+  el.innerHTML = h;
+}
+
+/* ---------- actions ---------- */
+function select(id, open) { sel = id; if (open) inspOpen = true; render(); }
+function centerOn(id) {
+  const el = document.querySelector(`[data-cell="${id}"]`); if (!el) return;
+  const col = el.closest('.col'), l = layout[col.dataset.col], p = wpos(el);
+  const vw = innerWidth - (inspOpen && innerWidth > 640 ? 360 : 0), vh = innerWidth > 640 ? innerHeight : innerHeight * .44;
+  view.x = vw / 2 - (p.x + W / 2) * view.k; view.y = Math.min(80, vh / 2 - (p.y + 40) * view.k); applyView();
+}
+function applyView() { document.getElementById('world').style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`; }
+function startDraft(kind, anchor, mode) {
+  draft = { kind, anchor, mode, parts: [''] };
+  if (kind === 'root') {
+    // the top-left of the visible canvas, below the buttons
+    draft.x = Math.round((24 - view.x) / view.k); draft.y = Math.round((64 - view.y) / view.k);
+  }
+  editing = null; draft.focus = 0; render();
+  if (kind !== 'root') { const el = document.querySelector('[data-draft] textarea'); if (el) el.scrollIntoView({ block: 'nearest' }); }
+  ensureVisible();
+}
+function ensureVisible() {
+  const el = document.querySelector('[data-draft]'); if (!el) return;
+  const r = el.getBoundingClientRect(); const right = innerWidth - (inspOpen && innerWidth > 640 ? 360 : 0);
+  let dx = 0, dy = 0;
+  if (r.right > right - 16) dx = right - 16 - r.right; if (r.left + dx < 16) dx = 16 - r.left;
+  if (r.bottom > innerHeight - 16) dy = innerHeight - 16 - r.bottom; if (r.top + dy < 56) dy = 56 - r.top;
+  if (dx || dy) { view.x += dx; view.y += dy; applyView(); }
+}
+function restoreFocus() {
+  if (draft && draft.focus != null) { const el = document.querySelector(`[data-draft] textarea[data-part="${draft.focus}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } draft.focus = null; }
+  if (editing && restoreFocus.edit) { const el = document.querySelector(`[data-edit="${editing}"]`); if (el) el.focus(); restoreFocus.edit = false; }
+}
+function commit(mode) {
+  const d = draft; const parts = d.parts.map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) { toast('Write something first.'); return; }
+  let prev = d.kind === 'root' ? null : d.anchor;
+  const made = [];
+  // an append lands after the current tail (the server would resolve this at commit time)
+  if (d.kind === 'append') { let c = cont(prev); while (c) { prev = c.id; c = cont(c.id); } }
+  parts.forEach((s, i) => { const c = put({ id: nid(), u: ME, at: now() + i, prev, body: { text: s } }); made.push(c.id); prev = c.id; });
+  let ans = null;
+  if (mode === 'ask') { ans = put({ id: nid(), u: 'model', at: now() + parts.length, prev, body: { expr: 'answer(above)' } }); made.push(ans.id); }
+  const head = made[0];
+  if (d.kind === 'root') places[head] = { mode: 'beside', x: d.at ? d.at.x : d.x, y: d.at ? d.at.y : d.y, abs: true };
+  else if (d.kind === 'branch') places[head] = { mode: 'beside', dx: 0, dy: d.at ? 0 : 0 };
+  else if (d.kind === 'insert') places[head] = { mode: 'inset' };
+  draft = null; sel = ans ? ans.id : made[made.length - 1];
+  if (ans) enqueue([ans.id], 'new'); else render();
+}
+function doRerun(id, scope, how) {
+  const ids = [id].concat(scope ? laterReaders(id) : []);
+  enqueue(ids, how);
+  toast(ids.length > 1 ? `Running ${ids.length} answers in order` : 'Running 1 answer');
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act], [data-go]');
+  if (!b) {
+    const card = e.target.closest('[data-card]');
+    if (card && !e.target.closest('textarea, input')) { const sec = e.target.closest('[data-cell]'); const id = sec ? sec.dataset.cell : card.dataset.card; if (id !== sel) select(id); return; }
+    if (e.target.closest('#vp') && !moved && !e.target.closest('[data-draft]')) { if (sel) { sel = null; render(); } }
+    return;
+  }
+  if (b.dataset.go) { e.stopPropagation(); select(b.dataset.go); centerOn(b.dataset.go); return; }
+  const a = b.dataset.act, id = b.dataset.id;
+  switch (a) {
+    case 'inspect': sel = id; inspOpen = true; render(); break;
+    case 'close': inspOpen = false; render(); break;
+    case 'branch': startDraft('branch', id, 'ask'); break;
+    case 'insert': startDraft('insert', id, 'ask'); break;
+    case 'append': startDraft('append', id, cells[id] && (isAnswer(cells[id])) ? 'ask' : 'post'); break;
+    case 'cancel': draft = null; render(); break;
+    case 'commit': commit(b.dataset.mode); break;
+    case 'run': enqueue([id], 'new'); break;
+    case 'rerun': doRerun(id, !!b.dataset.scope, 'same'); break;
+    case 'rerun-new': enqueue([id], 'new'); break;
+    case 'expand': expanded.has(id) ? expanded.delete(id) : expanded.add(id); render(); break;
+    case 'ver': { const c = cells[id], n = c.versions.length; const cur = c.shown ?? n - 1; const d = +b.dataset.d; c.shown = d === 99 ? null : Math.max(0, Math.min(n - 1, cur + d)); if (c.shown === n - 1) c.shown = null; render(); break; }
+    case 'showv': { const c = cells[id]; c.shown = (+b.dataset.v) - 1; if (c.shown === c.versions.length - 1) c.shown = null; sel = id; render(); centerOn(id); break; }
+    case 'reads': sel = id; render(); toast('Parts it read are marked on the canvas'); break;
+    case 'pin': cells[id].pinned = !cells[id].pinned; render(); break;
+    case 'edit': editing = id; draft = null; restoreFocus.edit = true; render(); break;
+    case 'edit-cancel': editing = null; render(); break;
+    case 'edit-save': case 'edit-save-run': {
+      const ta = document.querySelector(`[data-edit="${id}"]`); const c = cells[id];
+      if (ta && ta.value.trim() && ta.value !== c.body.text) { c.body.text = ta.value.trim(); c.edited = true; }
+      editing = null;
+      if (a === 'edit-save-run') { const nx = cont(id); if (nx && isAnswer(nx)) { sel = nx.id; enqueue([nx.id], 'same'); break; } }
+      render(); break;
+    }
+    case 'open': places[id] = { mode: 'beside', dx: 0, dy: 0 }; sel = id; render(); break;
+    case 'toinset': places[id] = { mode: 'inset' }; render(); break;
+    case 'merge': merge(id); break;
+    case 'exclude': {
+      const c = cells[sel]; if (!isAnswer(c)) break;
+      const p = parse(c.body.expr); if (p.err) break;
+      const args = (p.above ? ['above'] : []).concat(p.inc.filter((x) => x !== id).map((x) => '@' + x), p.exc.concat(p.inc.includes(id) ? [] : [id]).map((x) => '-@' + x));
+      c.body.expr = 'answer(' + args.join(', ') + ')'; render(); break;
+    }
+    case 'expr-apply': {
+      const c = cells[sel]; const v = document.getElementById('exprIn').value.trim();
+      if (c.body.text != null) { if (!v) break; const p = parse(v); if (p.err) { toast(p.err); break; } c.body = { expr: v }; if (p.fn === 'quote') c.body.pin = quoteValue(c).text; render(); break; }
+      const p = parse(v); if (p.err) { document.getElementById('exprErr').textContent = p.err; break; }
+      if (p.fn === 'quote') { c.body = { expr: v }; c.body.pin = quoteValue(c).text; } else c.body.expr = v;
+      render(); break;
+    }
+  }
+});
+/* an aside joins the series: the part below it now follows the aside's last part */
+function merge(id) {
+  const f = cells[id], anchor = f.prev, below = cont(anchor);
+  delete places[id];
+  const chain = chainFrom(id); const tail = chain[chain.length - 1];
+  if (below && below.id !== id) below.prev = tail;
+  render(); toast('Merged. Answers below it now show that a part was added.');
+}
+
+/* composer typing */
+document.addEventListener('input', (e) => {
+  const ta = e.target.closest('[data-draft] textarea');
+  if (ta) { draft.parts[+ta.dataset.part] = ta.value; mentionPicker(ta); }
+  const t2 = e.target.closest('textarea'); if (t2) { t2.style.height = 'auto'; t2.style.height = t2.scrollHeight + 'px'; }
+});
+document.addEventListener('keydown', (e) => {
+  const mp = document.getElementById('mp');
+  const ta = e.target.closest('[data-draft] textarea');
+  if (ta && !mp.hidden && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); const f = mp.querySelector('button'); if (f) f.click(); return; }
+  if (ta && e.key === 'Escape') { if (!mp.hidden) { mp.hidden = true; return; } draft = null; render(); return; }
+  if (ta && e.key === 'Enter') {
+    const i = +ta.dataset.part;
+    if (e.metaKey || e.ctrlKey) { e.preventDefault(); commit(draft.mode === 'ask' ? 'ask' : 'post'); return; }
+    if (e.shiftKey) return;
+    e.preventDefault();
+    if (draft.mode === 'ask') { commit('ask'); return; }
+    if (!ta.value.trim()) return;
+    draft.parts.splice(i + 1, 0, ''); draft.focus = i + 1; render(); ensureVisible();
+    return;
+  }
+  if (ta && e.key === 'Backspace' && !ta.value && draft.parts.length > 1) { e.preventDefault(); const i = +ta.dataset.part; draft.parts.splice(i, 1); draft.focus = Math.max(0, i - 1); render(); return; }
+  const ed = e.target.closest('[data-edit]');
+  if (ed && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); const nx = cont(ed.dataset.edit); document.querySelector(`[data-act="${nx && isAnswer(nx) ? 'edit-save-run' : 'edit-save'}"][data-id="${ed.dataset.edit}"]`).click(); }
+  if (ed && e.key === 'Escape') { editing = null; render(); }
+  if (e.target.id === 'exprIn' && e.key === 'Enter') document.querySelector('[data-act="expr-apply"]').click();
+});
+function mentionPicker(ta) {
+  const mp = document.getElementById('mp');
+  const before = ta.value.slice(0, ta.selectionStart); const m = /@([\w-]*)$/.exec(before);
+  if (!m) { mp.hidden = true; return; }
+  const q = m[1].toLowerCase();
+  const opts = Object.values(cells).filter((c) => (isAnswer(c) && latest(c)) || (!c.prev && c.body.text != null))
+    .filter((c) => !q || c.id.startsWith(q) || label(c.id, 200).toLowerCase().includes(q)).slice(0, 8);
+  if (!opts.length) { mp.hidden = true; return; }
+  mp.innerHTML = opts.map((c) => `<button data-pick="${c.id}"><small>@${esc(c.id)}</small>${esc(label(c.id, 50))}</button>`).join('');
+  const r = ta.getBoundingClientRect(); mp.style.left = Math.min(r.left, innerWidth - 270) + 'px'; mp.style.top = (r.bottom + 4) + 'px'; mp.hidden = false;
+  mp.onclick = (ev) => {
+    const b = ev.target.closest('[data-pick]'); if (!b) return;
+    const i = +ta.dataset.part; const val = ta.value; const pos = ta.selectionStart; const start = before.length - m[0].length;
+    draft.parts[i] = val.slice(0, start) + '@' + b.dataset.pick + ' ' + val.slice(pos); mp.hidden = true; draft.focus = i; render();
+  };
+}
+
+/* ---------- pan, zoom, drag ---------- */
+let moved = false, drag0 = () => null;
+(() => {
+  const vp = document.getElementById('vp');
+  let pan = null, drag = null;
+  drag0 = () => drag && drag.nx != null ? drag : null;
+  vp.addEventListener('pointerdown', (e) => {
+    moved = false;
+    if (e.button && e.button !== 0) return;
+    const grip = e.target.closest('[data-grip]');
+    if (grip && grip.dataset.grip && !e.target.closest('button') && e.pointerType === 'mouse') {
+      const hd = grip.dataset.grip, l = layout[hd]; if (!l) return;
+      drag = { hd, sx: e.clientX, sy: e.clientY, x: l.x, y: l.y, id: e.pointerId }; return;
+    }
+    if (e.target.closest('button, textarea, input, a')) return;
+    if (e.target.closest('.card') && e.pointerType === 'mouse') return;   // a mouse selects text in cards; touch pans
+    pan = { sx: e.clientX, sy: e.clientY, x: view.x, y: view.y, id: e.pointerId };
+  });
+  vp.addEventListener('pointermove', (e) => {
+    const g = pan || drag; if (!g) return;
+    const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+    if (!moved && Math.abs(dx) + Math.abs(dy) > 4) { moved = true; try { vp.setPointerCapture(g.id); } catch (_) {} if (pan) vp.classList.add('panning'); }
+    if (!moved) return;
+    if (pan) { view.x = pan.x + dx; view.y = pan.y + dy; applyView(); }
+    if (drag) { const el = document.querySelector(`.col[data-col="${drag.hd}"]`); drag.nx = drag.x + dx / view.k; drag.ny = drag.y + dy / view.k; el.style.left = drag.nx + 'px'; el.style.top = drag.ny + 'px'; drawEdgesSoon(); }
+  });
+  const up = () => {
+    if (drag && drag.nx != null) { places[drag.hd] = Object.assign({}, places[drag.hd], { mode: 'beside', x: Math.round(drag.nx), y: Math.round(drag.ny), abs: true }); render(); }
+    pan = null; drag = null; vp.classList.remove('panning'); setTimeout(() => moved = false, 0);
+  };
+  vp.addEventListener('pointerup', up); vp.addEventListener('pointercancel', up);
+  vp.addEventListener('wheel', (e) => {
+    if (e.target.closest('textarea')) return;
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      const k = Math.min(1.6, Math.max(.35, view.k * Math.exp(-e.deltaY * .01)));
+      view.x = e.clientX - (e.clientX - view.x) * (k / view.k); view.y = e.clientY - (e.clientY - view.y) * (k / view.k); view.k = k;
+    } else { view.x -= e.deltaX; view.y -= e.deltaY; }
+    applyView();
+  }, { passive: false });
+})();
+document.getElementById('addPost').onclick = () => startDraft('root', null, 'post');
+document.getElementById('addAsk').onclick = () => startDraft('root', null, 'ask');
+addEventListener('resize', () => render());
+
+seed();
+applyView();
+render();
+if (document.fonts) document.fonts.ready.then(() => render());
+</script>
+</body>
+</html>
