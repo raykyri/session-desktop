@@ -20,7 +20,6 @@ import {
   usageTone,
   usedShare,
 } from "../src/features/shell/usage.js";
-import { barAlignment } from "../src/features/shell/useBarAlign.js";
 import {
   barReducer,
   initialBarState,
@@ -115,73 +114,6 @@ test("reset and show events", (t) => {
   t.is(barReducer(shown, { type: "show" }), shown, "no new state when nothing changes");
 });
 
-// ------------------------------------------------------- §2.2 placement
-
-const shell = { left: 0, right: 1600 };
-const main = { left: 400, right: 1000 };
-const side = { left: 1021, right: 1351 };
-
-test("above 1320 px in centred the bar takes the main column", (t) => {
-  t.deepEqual(
-    barAlignment({ layout: "centred", isFeed: true, viewportWidth: 1600, shell, main, side }),
-    { left: 400, width: 600 },
-  );
-});
-
-test("from 861 to 1320 px in centred the bar spans main and side columns", (t) => {
-  const narrowShell = { left: 0, right: 1150 };
-  const m = { left: 99, right: 699 };
-  const s = { left: 720, right: 1050 };
-  for (const width of [861, 1150, 1320]) {
-    t.deepEqual(
-      barAlignment({
-        layout: "centred",
-        isFeed: true,
-        viewportWidth: width,
-        shell: narrowShell,
-        main: m,
-        side: s,
-      }),
-      { left: 99, width: 951 },
-      `at ${width}px`,
-    );
-  }
-});
-
-test("wide, 860 px and below, and non-feed screens get a full-width bar", (t) => {
-  t.is(
-    barAlignment({ layout: "wide", isFeed: true, viewportWidth: 1600, shell, main, side }),
-    null,
-  );
-  t.is(
-    barAlignment({ layout: "centred", isFeed: true, viewportWidth: 860, shell, main, side }),
-    null,
-  );
-  t.is(
-    barAlignment({ layout: "centred", isFeed: false, viewportWidth: 1600, shell, main, side }),
-    null,
-  );
-  t.is(
-    barAlignment({ layout: "centred", isFeed: true, viewportWidth: 1600, shell, main: null, side }),
-    null,
-    "no row measured yet",
-  );
-});
-
-test("the alignment is relative to the shell's left edge", (t) => {
-  t.deepEqual(
-    barAlignment({
-      layout: "centred",
-      isFeed: true,
-      viewportWidth: 1600,
-      shell: { left: 16, right: 1600 },
-      main,
-      side,
-    }),
-    { left: 384, width: 600 },
-  );
-});
-
 // ------------------------------------------------------------ usage ring
 
 test("the ring's tone: ok below 80 %, warn from 80 %, bad from 95 %", (t) => {
@@ -230,11 +162,11 @@ test("the ring's label", (t) => {
 // ------------------------------------------------------ scopes and strip
 
 const CHANNELS: ShellChannel[] = [
-  { id: "1", name: "ml", private: false, joined: true, owned: true },
-  { id: "2", name: "history", private: false, joined: true, owned: false },
-  { id: "3", name: "open-house", private: false, joined: false, owned: false },
-  { id: "4", name: "secret", private: true, joined: false, owned: false },
-  { id: "5", name: "club", private: true, joined: true, owned: false },
+  { id: "1", name: "ml", private: false, joined: true, owned: true, frozen: false },
+  { id: "2", name: "history", private: false, joined: true, owned: false, frozen: false },
+  { id: "3", name: "open-house", private: false, joined: false, owned: false, frozen: false },
+  { id: "4", name: "secret", private: true, joined: false, owned: false, frozen: false },
+  { id: "5", name: "club", private: true, joined: true, owned: false, frozen: false },
 ];
 
 test("scopes per viewer: signed out only All, writers also Channels you manage", (t) => {

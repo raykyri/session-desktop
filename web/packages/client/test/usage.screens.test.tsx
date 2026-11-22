@@ -313,6 +313,45 @@ test.serial("removing a key asks first, then shows the toast", async (t) => {
   });
 });
 
+test.serial("Escape closes the key form, then the removal confirm (02 §10.2)", async (t) => {
+  const app = await renderApp("/usage", {
+    responses: {
+      "usage.get": () =>
+        testWeeklyUsage({
+          keys: [{ provider: "openai", last4: "77c2", status: "valid", addedAt: 1 }],
+        }),
+    },
+  });
+  await waitUntil(t, () => document.querySelector('[data-key="openai"] .chip') !== null, "row");
+  fireEvent.click(keyRow("anthropic").getByRole("button", { name: "Add key" }));
+  const field = await screen.findByLabelText("Anthropic API key");
+  fireEvent.change(field, { target: { value: KEY } });
+  field.focus();
+  fireEvent.keyDown(field, { key: "Escape" });
+  await waitUntil(t, () => screen.queryByLabelText("Anthropic API key") === null, "form closed");
+  await waitUntil(
+    t,
+    () => document.activeElement === keyRow("anthropic").queryByRole("button", { name: "Add key" }),
+    "focus on Add key",
+  );
+  fireEvent.click(keyRow("anthropic").getByRole("button", { name: "Add key" }));
+  t.is(input(await screen.findByLabelText("Anthropic API key")).value, "", "the text is dropped");
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  await waitUntil(t, () => screen.queryByLabelText("Anthropic API key") === null, "closed again");
+
+  fireEvent.click(keyRow("openai").getByRole("button", { name: "Remove" }));
+  t.truthy(keyRow("openai").getByText("Remove the OpenAI key? Asks billed to it will stop."));
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  await waitUntil(t, () => keyRow("openai").queryByText(/Remove the OpenAI key/) === null, "kept");
+  t.truthy(keyRow("openai").getByText("Valid"));
+  await waitUntil(
+    t,
+    () => document.activeElement === keyRow("openai").queryByRole("button", { name: "Remove" }),
+    "focus on Remove",
+  );
+  t.is(app.trpc.calls.filter((call) => call.path.startsWith("apiKeys.")).length, 0);
+});
+
 test.serial("a key a run found rejected shows Invalid", async (t) => {
   await renderApp("/usage", {
     responses: {

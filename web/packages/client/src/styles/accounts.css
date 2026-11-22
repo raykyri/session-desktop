@@ -69,6 +69,7 @@
 .auth-c h2 {
   margin: 6px 0 0;
   font-size: 22px;
+  font-weight: 700;
   line-height: 1.25;
   color: var(--text-heading);
   letter-spacing: -0.015em;
@@ -351,12 +352,14 @@
 .mcols h3 {
   margin: 0 0 4px;
   font-size: var(--fs-md);
+  font-weight: 700;
   color: var(--text-heading);
 }
 
 .mcols h4 {
   margin: 18px 0 6px;
   font-size: var(--fs-sm);
+  font-weight: 700;
   color: var(--text-heading);
 }
 
@@ -456,7 +459,7 @@
   font-size: var(--fs-xs);
 }
 
-.ilink {
+.invbox .ilink {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -466,11 +469,11 @@
   background: var(--content-inset-bg);
 }
 
-.ilink + .ilink {
+.invbox .ilink + .ilink {
   margin-top: 0;
 }
 
-.ilink code {
+.invbox .ilink code {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -481,7 +484,7 @@
   color: var(--text-heading);
 }
 
-.ilink .btn1 {
+.invbox .ilink .btn1 {
   margin-right: 2px;
   height: 22px;
   padding: 0 10px;

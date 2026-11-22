@@ -2,7 +2,7 @@
 // replica over the suite's server (02 §9.1); each spec writes the channels
 // and threads it reads through the sync routes first (`world.ts`).
 
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 import { signIn } from "./helpers.js";
 
@@ -31,6 +31,12 @@ export function row(page: Page, title: string | RegExp) {
  * refusals. Finding it asserts the region's role. */
 export function toast(page: Page, role: "status" | "alert" = "status") {
   return page.locator("[data-toast-region]").and(page.getByRole(role)).locator(".feed-toast");
+}
+
+/** An element's computed `font-weight`, as a number (Tailwind's preflight
+ * resets headings to 400, so a rule that sets none reads as body text). */
+export async function fontWeight(locator: Locator): Promise<number> {
+  return Number(await locator.evaluate((el) => getComputedStyle(el).fontWeight));
 }
 
 /** Waits until the feed's scroll offset is the same on two polls in a row. */

@@ -26,6 +26,8 @@ export interface ShellChannel {
   joined: boolean;
   /** The viewer owns it. */
   owned: boolean;
+  /** Its owner's account is not active: no one joins or writes (04 B5). */
+  frozen: boolean;
 }
 
 export interface ShellData {
@@ -90,6 +92,7 @@ export function useShellData(viewer: Viewer): ShellData & { scope: ChannelScope 
           private: c.private,
           joined: c.joined,
           owned: c.owned,
+          frozen: c.frozen,
         }));
   return {
     scope,

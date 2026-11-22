@@ -6,10 +6,11 @@
 import { UNUSABLE_INVITE_MESSAGE, parseInviteCode } from "@session/shared";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useMe } from "../../api/account.js";
 import { redeemInvite } from "../../api/membership.js";
+import { pendingInviteChannel } from "../../lib/pendingInvite.js";
 import { trpcErrorCode } from "../../lib/toast.js";
 import { PageFrame } from "../shell/Frames.js";
 import { CheckIcon } from "../shell/icons.js";
@@ -24,6 +25,19 @@ export function WelcomePage() {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+
+  // The route's guard sends a member Home only on entry. An account that
+  // becomes a member while this page shows (Create account in the profile
+  // step the shell opens, or a redeem in another tab) leaves it here: for
+  // the channel of a pending channel invite, else Home.
+  const member = me?.status === "active";
+  useEffect(() => {
+    if (!member) return;
+    const channel = pendingInviteChannel();
+    if (channel) void navigate({ to: "/c/$name", params: { name: channel }, replace: true });
+    else void navigate({ to: "/", replace: true });
+  }, [member, navigate]);
 
   // Arriving from a sign-in that made a waiting account: the "No Session
   // account" step, once; the marker leaves the address.
@@ -40,16 +54,22 @@ export function WelcomePage() {
     if (typed === "") return setError(EMPTY_CODE_MESSAGE);
     setPending(true);
     setError(null);
+    // Use code is disabled while the redeem runs, which drops focus to the
+    // page; a refused code puts it back in the field with the error.
+    const refused = (message: string) => {
+      setError(message);
+      field.current?.focus();
+    };
     try {
       const check = await redeemInvite(parseInviteCode(typed) ?? typed);
       if (check.status === "open") {
         setValue("");
         openAuthDialog({ step: "profile", profileInviter: check.inviter, origin: "welcome" });
       } else {
-        setError(UNUSABLE_INVITE_MESSAGE);
+        refused(UNUSABLE_INVITE_MESSAGE);
       }
     } catch (failure) {
-      setError(
+      refused(
         trpcErrorCode(failure) === "TOO_MANY_REQUESTS"
           ? "Too many attempts. Wait a while and try again."
           : UNUSABLE_INVITE_MESSAGE,
@@ -68,6 +88,7 @@ export function WelcomePage() {
         </p>
         <form className="code-f" onSubmit={(event) => void submit(event)} noValidate>
           <input
+            ref={field}
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
             placeholder="SESS-XXXX-XX"

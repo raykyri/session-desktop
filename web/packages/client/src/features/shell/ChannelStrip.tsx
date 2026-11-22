@@ -104,7 +104,8 @@ export function ChannelStrip({
         className="channel-strip flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
       >
         {channels.map((channel) => {
-          const joinable = scope === "all" && canWrite && !channel.joined;
+          // as Browse and the channel header: no Join on a frozen channel
+          const joinable = scope === "all" && canWrite && !channel.joined && !channel.frozen;
           return (
             <span key={channel.id} className="inline-flex shrink-0 items-center">
               <Link

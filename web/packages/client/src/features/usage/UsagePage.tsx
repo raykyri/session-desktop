@@ -14,7 +14,7 @@ import {
   apiKeyFormatError,
   type ApiKeyProvider,
 } from "@session/shared";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import {
   useModels,
@@ -25,6 +25,7 @@ import {
   useWeeklyUsage,
 } from "../../api/account.js";
 import { refusalMessage } from "../../lib/toast.js";
+import { OVERLAY_PRIORITY, useOverlaysStore } from "../../stores/overlays.js";
 import { clip } from "../feed/format.js";
 import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
@@ -214,6 +215,31 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
   const inputId = `in-key-${provider}`;
   const errorId = `${inputId}-error`;
 
+  // Both use only state setters, so they keep one identity across renders.
+  const cancelForm = useCallback(() => {
+    setForm(false);
+    setError(null);
+    setDraft("");
+    setFocusNext("add");
+  }, []);
+  const keepKey = useCallback(() => {
+    setConfirming(false);
+    setFocusNext("remove");
+  }, []);
+  // Escape closes the open form (as Cancel) or the removal confirm (as
+  // Keep), after every layer above them (02 §10.2). The layer is registered
+  // while either is shown, wherever focus is.
+  const layer = `key:${provider}:${useId()}`;
+  const formShown = checking === null && !(stored && confirming) && form;
+  const confirmShown = checking === null && Boolean(stored) && confirming;
+  const register = useOverlaysStore((state) => state.register);
+  const unregister = useOverlaysStore((state) => state.unregister);
+  useEffect(() => {
+    if (!formShown && !confirmShown) return;
+    register(layer, OVERLAY_PRIORITY.keyForm, formShown ? cancelForm : keepKey);
+    return () => unregister(layer);
+  }, [formShown, confirmShown, layer, register, unregister, cancelForm, keepKey]);
+
   const openForm = () => {
     setForm(true);
     setError(null);
@@ -293,15 +319,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
       <div className="kconfirm">
         <span>Remove the {info.name} key? Asks billed to it will stop.</span>
         <span className="grow" />
-        <button
-          ref={keep}
-          type="button"
-          className="btn2 sm"
-          onClick={() => {
-            setConfirming(false);
-            setFocusNext("remove");
-          }}
-        >
+        <button ref={keep} type="button" className="btn2 sm" onClick={keepKey}>
           Keep
         </button>
         <button
@@ -341,16 +359,7 @@ function KeyRow({ provider, stored }: { provider: ApiKeyProvider; stored: KeyVie
           <button type="submit" className="btn1 sm" aria-busy={setKey.isPending || undefined}>
             Save
           </button>
-          <button
-            type="button"
-            className="btn2 sm"
-            onClick={() => {
-              setForm(false);
-              setError(null);
-              setDraft("");
-              setFocusNext("add");
-            }}
-          >
+          <button type="button" className="btn2 sm" onClick={cancelForm}>
             Cancel
           </button>
         </form>

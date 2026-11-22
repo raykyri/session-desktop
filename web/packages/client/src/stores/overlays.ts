@@ -25,6 +25,8 @@ export const OVERLAY_PRIORITY = {
   selection: 150,
   /** An inline composer with focus. */
   inlineComposer: 100,
+  /** An open API key form or key-removal confirm on Usage (02 §10.2). */
+  keyForm: 50,
 } as const;
 
 export interface OverlayEntry {

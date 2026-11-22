@@ -7,6 +7,9 @@
 
 import { create } from "zustand";
 
+/** The message for a thread that is known to be absent (02 §2.1). */
+export const THREAD_UNAVAILABLE = "This thread is not available.";
+
 export interface Reveal {
   thread: string;
   /** The branch or reply to select. */

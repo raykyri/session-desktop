@@ -42,28 +42,11 @@
   transform: translateY(-100%);
 }
 
-/* The bar's insets and gap (`.appbar`). They are declared here rather than
-   as utilities on the header because utilities win over this layer, and the
-   floating card below narrows them. */
+/* The bar's insets and gap (`.appbar`). It spans the window in every layout
+   and at every width, with a bottom divider (02 §2.2 "Placement"). */
 .app-bar {
   padding: 0 14px 0 16px;
   gap: 12px;
-}
-
-/* Layout `centred` above 860 px: a floating card aligned to the feed's
-   columns. `useBarAlign` measures them and sets `--bl` and `--bw`. */
-.app-shell[data-bar-aligned] .app-bar-slot {
-  left: var(--bl);
-  right: auto;
-  width: var(--bw);
-}
-
-.app-shell[data-bar-aligned] .app-bar {
-  padding: 0 8px 0 10px;
-  gap: 8px;
-  border: 1px solid var(--surface-divider);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .app-scroll {

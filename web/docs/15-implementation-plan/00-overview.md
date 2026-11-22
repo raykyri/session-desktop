@@ -60,10 +60,8 @@ to them.
   page and the page reserves its 49 px height, so hiding or showing it never
   changes layout or scroll position; it slides away (`translateY(-100%)`,
   0.2 s, none under reduced motion) while the feed scrolls down and returns
-  on any scroll up. In the centred layout above 860 px it is a floating card
-  aligned to the feed columns (the main column above 1320 px, main and side
-  columns together from 861 to 1320 px); in the wide layout and at 860 px
-  and below it is full width (02 W2.2, W2.3).
+  on any scroll up. It spans the window in both layouts and at every width
+  (02 W2.2, W2.3).
 - Feed rows: a post on the left, its branches or replies in a side column.
   Titles are drawn as tree rows (hollow node, regular weight, author avatar on
   the right, name and time in the avatar's tooltip). An ask card has no

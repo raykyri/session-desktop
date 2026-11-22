@@ -655,11 +655,14 @@
   color: var(--accent-color);
 }
 
-/* Look up and Branch here over a selection (`#sellook`, `#selbranch`). */
+/* Look up and Branch here over a selection (`#sellook`, `#selbranch`). Their
+   containing block, `.selwrap`, has no width, so without nowrap a pill would
+   shrink to its longest word. */
 .selact {
   position: absolute;
   z-index: 25;
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   gap: 5px;
   height: 28px;
@@ -2020,6 +2023,7 @@
 .box h3 {
   margin: 0 0 4px;
   font-size: var(--fs-md);
+  font-weight: 700;
   color: var(--text-heading);
 }
 

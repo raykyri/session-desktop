@@ -15,7 +15,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
 import { PROTOCOL_HEADERS, e2eLogin, mutation, signIn } from "./helpers.js";
-import { toast } from "./spaces.js";
+import { initials, toast } from "./spaces.js";
 import { channelName, person, ulid } from "./world.js";
 
 const LOGIN = "e2e-notifications";
@@ -113,6 +113,42 @@ test("every kind reaches the viewer; the dot stays; a row opens its thread; Mark
   await expect(rowOf(page, "reply")).toContainText(`#${w.channel} · `);
   for (const kind of ["mention", "reply", "branch", "comment", "removed", "invite_used"])
     await expect(rowOf(page, kind).getByRole("img", { name: "Unread" })).toBeVisible();
+
+  // each row's avatar is the mock's 28 px, and the kind badge at its corner
+  // stays off the initials
+  for (const kind of ["mention", "reply", "branch", "comment", "removed"]) {
+    const geometry = await rowOf(page, kind)
+      .locator(".nav-av")
+      .evaluate((wrap) => {
+        const avatar = wrap.firstElementChild as HTMLElement;
+        const badge = wrap.querySelector(".nk") as HTMLElement;
+        const range = document.createRange();
+        range.selectNodeContents(avatar);
+        const rect = (el: { getBoundingClientRect(): DOMRect }) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
+        };
+        return {
+          avatar: rect(avatar),
+          badge: rect(badge),
+          text: rect(range),
+          initials: avatar.textContent,
+        };
+      });
+    expect(geometry.initials, kind).toBe(initials(w.ann));
+    expect(geometry.avatar.w, kind).toBeCloseTo(28, 0);
+    expect(geometry.avatar.h, kind).toBeCloseTo(28, 0);
+    const { avatar, badge, text } = geometry;
+    // the badge stays in the corner: clear of the avatar's centre, and
+    // over less than a quarter of the initials' line box (at 20 px it
+    // reached past the centre and covered over half of it)
+    expect(badge.x, kind).toBeGreaterThan(avatar.x + avatar.w / 2);
+    expect(badge.y, kind).toBeGreaterThan(avatar.y + avatar.h / 2);
+    const overlap =
+      Math.max(0, Math.min(text.right, badge.right) - Math.max(text.x, badge.x)) *
+      Math.max(0, Math.min(text.bottom, badge.bottom) - Math.max(text.y, badge.y));
+    expect(overlap / (text.w * text.h), kind).toBeLessThan(0.25);
+  }
 
   // the dot is on the avatar, and opening the page does not clear it
   await expect(account(page)).toHaveAccessibleName("Account, 6 unread notifications");

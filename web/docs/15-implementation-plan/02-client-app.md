@@ -63,7 +63,7 @@ New code:
 ```
 src/replica/              ReplicaProvider, adapters/, queries.ts, writes.ts, viewer.ts, runStream.ts, fixtureReplica.ts
 src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide,
-                          useBarAlign, SiteFooter
+                          SiteFooter
 src/features/feed/        FeedPage, FeedRow, ThreadCard, TitleRow, AnswerProse, CardFooter, RunStatus, RemovedCard, BranchedFrom
 src/features/branches/    BranchTree, BranchCard, BranchActions, BranchComments, SelectionActions, lookPhrase.ts, geometry.ts
 src/features/replies/     ReplyTree, ReplyCard
@@ -169,20 +169,14 @@ Items 4-6 are not rendered for accounts without an invite.
 **Signed out** (`appbarOut`): name, strip of open channels, "Join with invite"
 (opens the auth dialog at the code step) and "Sign in".
 
-**Placement** (`#bar`, `alignBar`). The bar is absolutely positioned over the
-page (`position: absolute; top: 0`), so showing or hiding it never changes
-the page's layout or scroll position; the feed and every page reserve its
-height with 49 px of top padding (and `scroll-padding-top: 49px` on pages).
-In layout `centred` above 860 px the bar is a floating card aligned to the
-feed's columns: no top border, a 1 px divider border on the other sides and
-rounded bottom corners. Above 1320 px, where the main column is centred on
-its own, the bar has the main column's left edge and width; from 861 to
-1320 px, where the main and side columns are centred as a pair, it spans
-both columns, from the main column's left edge to the side column's right
-edge. In layout `wide`, at 860 px and below, and on non-feed screens it is
-full width. `useBarAlign` measures the first feed row whose first cell is not
-the channel header, sets `--bl` and `--bw` on the shell, and re-measures on
-resize and on a layout change.
+**Placement** (`#bar`). The bar is absolutely positioned over the page
+(`position: absolute; top: 0`), so showing or hiding it never changes the
+page's layout or scroll position; the feed and every page reserve its height
+with 49 px of top padding (and `scroll-padding-top: 49px` on pages). It spans
+the window in both layouts, at every width and on every screen, with the
+`.app-bar` insets (16 px left, 14 px right, 12 px gap), a 1 px divider at its
+bottom and no rounded corners. The mock's column-aligned floating card in
+layout `centred` above 860 px (`alignBar`) is not built.
 
 **W2.2 `AppBar` and parts** in `features/shell/` on `ui/Menu` and
 `ui/RoundButton`. Acceptance: component tests per viewer state (signed out, no
@@ -192,9 +186,9 @@ and its two empty lines; the strip on each route of item 3 and not on
 button; Saved shows no number at 0 and `aria-current` only on `/saved`; the
 layout toggle's label per layout; fade variables are `0px` when the strip
 does not overflow; "Site Admin" in the account menu only for site admins.
-Playwright in `centred` at 1440 px reads the bar's left edge and width equal
-to the main column's, at 1100 px equal to the span of both columns, and in
-`wide` and at 800 px the full width.
+Playwright in `centred` at 1440 px reads the bar's box as the viewport's
+width and its border radius as 0, and reads the full width in `centred` and
+`wide` at 600, 1150 and 1440 px.
 
 **W2.3 Bar hides on scroll.** `useBarAutoHide(scrollEl)`: shown within 48 px of
 the top; past that a downward step over 4 px hides it and an upward step over
@@ -970,7 +964,9 @@ replica and enqueues the envelope.
   comment) shows "Not sent · Retry · Discard" under that item. A write with
   no item or composer (`saved.set`, `spaces.join`, `spaces.leave`,
   `prefs.set`, `notifications.markRead`, `notifications.markAllRead`,
-  `research.cancelNode`) shows a persistent toast (`role="alert"`) "Not
+  `research.cancelNode`), and a write whose item is not on screen with its
+  line (a branch or reply that is not selected, a comment on such a
+  branch), shows a persistent toast (`role="alert"`) "Not
   sent." with Retry and Discard; while several such writes are unsent it
   reads "N changes not sent." and its Retry and Discard act on all of them
   in outbox order. A reload drops unsent writes and their predictions; typed
@@ -1059,7 +1055,7 @@ lands. Acceptance: no fixture strings in `vite build` output.
 | `PROMOTED`, `from` | `promoted` on the node, `from` on the thread (03 G5) |
 | `MODLOG` seeds, `p.removed` | `modlog` records (removals and bans), the placeholder fields (01 C12) |
 | `mentionsIn` toast ("Notified @x.", "@y isn't a member.") and `NOTIFS` | the same toast from the handles the server reports with the confirmation (§4.3, N16); notification records (01 C16) on the notifications page (W2.6) |
-| `alignBar()` measuring a row's cells | `useBarAlign` (§2.2, Placement) |
+| `alignBar()` measuring a row's cells | not built: the bar is full width (§2.2, Placement) |
 | `ADMIN`, `MODELS`, `setDefault`, `setDefaultEffort` | `site_settings` through `admin.models.*` (03 K15) |
 | `render()` with focus restored by signature | React reconciliation and §10 focus rules |
 
@@ -1187,7 +1183,7 @@ footer meta, site footer, tree-row and chip text against `--workspace-bg`, `--co
 and `--popover-bg`, and against `--passage-mark` and the `qsel` tint
 composited over the workspace background, at least 4.5:1;
 tree rail, dots, the hollow title node, the ring arc and track, the Saved pill
-and layout toggle borders, the floating app bar's divider border, the avatar fill against `--avatar-fg`, and `--focus-ring`, at least
+and layout toggle borders, the app bar's bottom divider, the avatar fill against `--avatar-fg`, and `--focus-ring`, at least
 3:1 against their background; disabled controls are exempt. Acceptance: the
 test passes in CI and names the failing pair when it does not.
 
@@ -1197,7 +1193,7 @@ test passes in CI and names the failing pair when it does not.
 
 AVA, jsdom and Testing Library under `packages/client/test/`, on the fixture
 replica: `lookPhrase`, `railGeometry`, `placePins`, `useBarAutoHide`,
-`useBarAlign`, count and footer-meta formatting, notification text, the site
+count and footer-meta formatting, notification text, the site
 footer address, viewer fields, scope lists, invite-code parsing, run states,
 focus table, Escape stack, contrast pairs, one-composer rule, write rollback,
 stream gaps, "Not sent" states, the upgrade reload timer, client id

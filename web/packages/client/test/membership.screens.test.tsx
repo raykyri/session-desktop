@@ -9,11 +9,11 @@
 
 import { frozenMessage, msToIso, type NotifRec, type StoredRecord } from "@session/mutators";
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
-import test from "ava";
+import test, { type ExecutionContext } from "ava";
 
 import { safeReturn } from "../src/features/auth/AuthDialog.js";
 import { useAuthDialog } from "../src/features/auth/authDialog.js";
-import { COPY_FAILED, channelInviteLink } from "../src/features/channels/InviteLinksDialog.js";
+import { channelInviteLink } from "../src/features/channels/InviteLinksDialog.js";
 import { memberActions, memberOrder } from "../src/features/channels/MembersDialog.js";
 import { LINK_UNUSABLE, linkJoinMessage } from "../src/features/channels/useChannelInvite.js";
 import {
@@ -24,6 +24,7 @@ import {
   type NotifRow,
 } from "../src/features/notifications/notifications.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
+import { COPY_FAILED } from "../src/lib/clipboard.js";
 import {
   CHANNEL_INVITE_KEY,
   CHANNEL_INVITE_TTL_MS,
@@ -40,8 +41,14 @@ import {
   type FixtureReplica,
 } from "../src/replica/fixtureReplica.js";
 import { channelByName, channelsOf } from "../src/replica/queries.js";
-import { UNKNOWN, type ReplicaSource, type WriteOutcome } from "../src/replica/source.js";
+import {
+  UNKNOWN,
+  type ReplicaSource,
+  type UnsentWrite,
+  type WriteOutcome,
+} from "../src/replica/source.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
+import { useNavigationStore } from "../src/stores/navigation.js";
 import { useThreadUiStore } from "../src/stores/threadUi.js";
 
 import { renderApp, waitUntil, waitingTestUser } from "./helpers.js";
@@ -246,6 +253,32 @@ test.serial(
       () => screen.queryByRole("button", { name: "Account, 2 unread notifications" }) !== null,
       "one fewer unread",
     );
+  },
+);
+
+test.serial(
+  "a row whose thread is gone stays on the page and says the thread is not available",
+  async (t) => {
+    // a reply notification on a thread that was erased since: the channel's
+    // log is loaded and holds no record of it
+    const gone = "01M7HWGZJGT7JTFFVSYPX0GN01";
+    let n: NotifRec | undefined;
+    prepare = (replica) => {
+      const reply = replica.rawAll("notif").find((x) => x.type === "reply");
+      if (!reply) throw new Error("no reply notification in the fixtures");
+      n = { ...reply, th: gone, item: null, read: false };
+      replica.write([n]);
+    };
+    const app = await renderApp("/notifications");
+    await waitUntil(t, () => rowsOf("reply").some((x) => x.includes("a deleted thread")), "row");
+    const calls = recordWrites(replicaOf());
+    const rowEl = [...document.querySelectorAll<HTMLElement>('.nrow[data-notif="reply"]')].find(
+      (r) => r.textContent?.includes("a deleted thread"),
+    );
+    fireEvent.click(rowEl as HTMLElement);
+    t.deepEqual(calls[0], ["notifications.markRead", { id: n?.id }]);
+    await waitUntil(t, () => currentToast() === "This thread is not available.", "the toast");
+    t.is(app.router.state.location.pathname, "/notifications");
   },
 );
 
@@ -927,6 +960,54 @@ test.serial(
   },
 );
 
+test.serial(
+  "a channel link followed by a new identity's sign-in: the account redeems a code on /welcome, then joins the channel",
+  async (t) => {
+    const channel = unjoinedChannel();
+    let calls: [string, unknown][] = [];
+    prepare = (replica) => (calls = recordWrites(replica));
+    const inviter = { name: "Ines Vidal", handle: "ines.v" };
+    let me: object = waitingTestUser({ login: "rheaok" });
+    // the page load back from the provider restored the channel's code
+    savePendingInvite({ kind: "channel", channel: channel.name, code: "k3v8q2m9" });
+    const app = await renderApp("/welcome?new=1", {
+      user: me as never,
+      responses: {
+        "auth.me": () => me,
+        "accountInvites.redeem": { status: "open", inviter },
+        "account.checkHandle": { valid: true, available: true },
+        "account.create": (input: unknown) => {
+          const { handle } = input as { handle: string };
+          me = { ...waitingTestUser({ login: "rheaok" }), status: "active", handle };
+          return { me, inviter };
+        },
+      },
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Sign in to Session" });
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Enter an invite code" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Invite code" }), {
+      target: { value: "SESS-9TQ2-X8" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+    fireEvent.change(await within(dialog).findByRole("textbox", { name: /Handle on Session/ }), {
+      target: { value: "rhea" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create account" }));
+    await waitUntil(
+      t,
+      () => app.router.state.location.pathname === `/c/${channel.name}`,
+      "to the channel",
+    );
+    await waitUntil(t, () => calls.some(([n]) => n === "spaces.join"), "the join is sent");
+    t.deepEqual(
+      calls.filter(([n]) => n === "spaces.join"),
+      [["spaces.join", { space: channel.id, invite: "k3v8q2m9" }]],
+    );
+    await waitUntil(t, () => currentToast() === `Joined #${channel.name}.`, "the Joined toast");
+    t.is(readPendingInvite(), null);
+  },
+);
+
 test("a channel invite kept across a sign-in expires after 30 minutes", (t) => {
   const store = new Map<string, string>();
   const storage = {
@@ -1100,6 +1181,184 @@ test.serial(
   },
 );
 
+/** Selects the branch row `label` in a thread's side column and answers its
+ * card's "…" menu items, then closes the menu. */
+async function branchMenu(t: ExecutionContext, thread: string, label: RegExp): Promise<string[]> {
+  fireEvent.click(within(side(thread)).getByRole("treeitem", { name: label }));
+  const card = side(thread).querySelector<HTMLElement>(".preview .who");
+  if (!card) throw new Error("no branch card");
+  fireEvent.click(within(card).getByRole("button", { name: "More" }));
+  const menu = await screen.findByRole("menu");
+  const items = within(menu)
+    .getAllByRole("menuitem")
+    .map((item) => item.textContent ?? "");
+  fireEvent.keyDown(menu, { key: "Escape" });
+  await waitUntil(t, () => screen.queryByRole("menu") === null, "the menu closes");
+  return items;
+}
+
+test.serial(
+  "Open as its own thread is offered only where the server accepts it: answered, not hidden (03 G5)",
+  async (t) => {
+    const UNANSWERED = "01M7HWGZJGT7JTFFVSYPX0NA01";
+    prepare = (replica) => {
+      const nodes = replica.rawAll("node").filter((x) => x.th === BRANCHED);
+      const hidden = nodes.find((x) => /^which lem stories/.test(x.q));
+      const answered = nodes.find((x) => /darknet/.test(x.q));
+      if (!hidden || !answered) throw new Error("no branches");
+      rewrite(replica, hidden, { mod: "hidden", modBy: "jun.park", u: "ines.v" });
+      replica.write([
+        { ...answered, id: UNANSWERED, q: "a branch with no answer yet", promoted: null },
+      ]);
+    };
+    await renderApp("/");
+    await waitUntil(t, () => side(BRANCHED) !== null, "the side column renders");
+    const OPEN = "Open as its own thread";
+    t.true((await branchMenu(t, BRANCHED, /how does the darknet/)).includes(OPEN), "answered");
+    t.false((await branchMenu(t, BRANCHED, /which lem stories/)).includes(OPEN), "hidden");
+    t.false(
+      (await branchMenu(t, BRANCHED, /a branch with no answer yet/)).includes(OPEN),
+      "no answer",
+    );
+  },
+);
+
+test.serial("after deleting one's comment, focus is on the selected branch row", async (t) => {
+  let node = "";
+  prepare = (replica) => {
+    const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
+    if (!n) throw new Error("no branch");
+    node = n.id;
+    replica.write([
+      {
+        kind: "comment",
+        id: OWN_COMMENT,
+        th: BRANCHED,
+        s: n.s,
+        node: n.id,
+        parent: null,
+        u: "ines.v",
+        t: "My own comment on the branch",
+        edited: false,
+        del: false,
+        mod: null,
+        createdAt: "2026-11-16T09:40:00Z",
+      },
+    ]);
+  };
+  await renderApp("/");
+  await waitUntil(t, () => side(BRANCHED) !== null, "the side column renders");
+  fireEvent.click(within(side(BRANCHED)).getByRole("treeitem", { name: /how does the darknet/ }));
+  const comment = (await within(side(BRANCHED)).findByText("My own comment on the branch")).closest(
+    ".brr",
+  ) as HTMLElement;
+  fireEvent.click(within(comment).getByRole("button", { name: "More" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
+  const confirm = await screen.findByRole("alertdialog", {
+    name: "Delete this comment and your replies under it?",
+  });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+  await waitUntil(
+    t,
+    () => within(side(BRANCHED)).queryByText("My own comment on the branch") === null,
+    "the comment is gone",
+  );
+  const row = side(BRANCHED).querySelector<HTMLElement>(`[data-row="${node}"]`);
+  t.is(row?.getAttribute("aria-selected"), "true");
+  await waitUntil(t, () => document.activeElement === row, "focus on the selected row");
+  // and it stays there once the dialog has finished closing
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  t.is(document.activeElement, row);
+});
+
+test.serial("clicking a collapsed reply's +N expands it and keeps focus on its row", async (t) => {
+  const TOP = "01M7GGE530GDFVANPJE04YBAQN";
+  prepare = (replica) => {
+    const top = replica.raw(`reply:${TOP}`);
+    if (top?.kind !== "reply") throw new Error("no reply");
+    replica.write([
+      {
+        ...top,
+        id: "01M7HWGZJGT7JTFFVSYPX0RP09",
+        parent: TOP,
+        u: "jun.park",
+        t: "A reply under the first one",
+        createdAt: "2026-11-16T09:50:00Z",
+      },
+    ]);
+  };
+  useThreadUiStore.getState().toggleCollapsed(SEED_POST, TOP);
+  await renderApp("/c/ml-papers");
+  await waitUntil(t, () => side(SEED_POST) !== null, "the side column renders");
+  const more = await within(side(SEED_POST)).findByRole("button", { name: "Show 1 more reply" });
+  more.focus();
+  fireEvent.click(more);
+  await waitUntil(
+    t,
+    () => within(side(SEED_POST)).queryByText("A reply under the first one") !== null,
+    "the reply under it shows",
+  );
+  const row = side(SEED_POST).querySelector<HTMLElement>(`[data-row="${TOP}"]`);
+  await waitUntil(t, () => document.activeElement === row, "focus on the reply's row");
+});
+
+test.serial(
+  "a branch and a comment that were not sent show Not sent under them while shown, else in the outbox toast",
+  async (t) => {
+    let node = "";
+    const discarded: string[] = [];
+    prepare = (replica) => {
+      const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
+      if (!n) throw new Error("no branch");
+      node = n.id;
+      replica.write([
+        {
+          kind: "comment",
+          id: OWN_COMMENT,
+          th: BRANCHED,
+          s: n.s,
+          node: n.id,
+          parent: null,
+          u: "ines.v",
+          t: "My own comment on the branch",
+          edited: false,
+          del: false,
+          mod: null,
+          createdAt: "2026-11-16T09:40:00Z",
+        },
+      ]);
+      // the fixture replica sends every write at once: these two read as
+      // the sync replica's "Not sent" writes
+      const unsent: UnsentWrite[] = [
+        { local: "L1", name: "research.forkNode", input: {}, item: n.id, error: null },
+        { local: "L2", name: "comments.create", input: {}, item: OWN_COMMENT, error: null },
+      ];
+      Object.assign(replica, {
+        unsent: () => unsent,
+        discard: (local: string) => discarded.push(local),
+      });
+    };
+    const outbox = () => document.querySelector<HTMLElement>("[data-outbox-toast]");
+    await renderApp("/");
+    await waitUntil(t, () => side(BRANCHED) !== null, "the side column renders");
+    await waitUntil(t, () => outbox() !== null, "neither is on screen: the toast lists both");
+    t.is(outbox()?.textContent?.startsWith("2 changes not sent."), true);
+
+    fireEvent.click(within(side(BRANCHED)).getByRole("treeitem", { name: /how does the darknet/ }));
+    const card = side(BRANCHED).querySelector<HTMLElement>(".preview") as HTMLElement;
+    await waitUntil(t, () => card.querySelectorAll("[data-not-sent]").length === 2, "two lines");
+    const [branchLine, commentLine] = [...card.querySelectorAll<HTMLElement>("[data-not-sent]")];
+    t.is(branchLine?.previousElementSibling?.classList.contains("who"), true, "under the author");
+    t.truthy(branchLine?.closest(".preview") === card && !branchLine.closest(".brr"));
+    t.truthy(commentLine?.closest(".brr")?.textContent?.includes("My own comment on the branch"));
+    t.is(outbox(), null, "the lines show both, so the toast is gone");
+
+    fireEvent.click(within(commentLine as HTMLElement).getByRole("button", { name: "Discard" }));
+    t.deepEqual(discarded, ["L2"]);
+    t.truthy(node);
+  },
+);
+
 test.serial("another person's comment has no Delete", async (t) => {
   prepare = (replica) => {
     const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
@@ -1139,6 +1398,29 @@ test.serial("a non-member sees Join on an open channel, and none once it is froz
   await renderApp(`/c/${channel.name}`);
   await screen.findByText(new RegExp(`^#${channel.name} is frozen:`));
   t.is(screen.queryByRole("button", { name: "Join" }), null);
+});
+
+test.serial("the strip under All offers no Join on a frozen channel", async (t) => {
+  const channel = unjoinedChannel();
+  useNavigationStore.getState().setScope("all");
+  t.teardown(() => useNavigationStore.getState().setScope("joined"));
+  const strip = () => screen.getByRole("navigation", { name: "Channels" });
+  const app = await renderApp("/");
+  await waitUntil(
+    t,
+    () => within(strip()).queryByRole("link", { name: `#${channel.name}` }) !== null,
+    "the chip",
+  );
+  t.truthy(within(strip()).getByRole("button", { name: `Join #${channel.name}` }));
+  app.unmount();
+  prepare = (replica) => rewrite(replica, space(replica, channel.name), { frozen: true });
+  await renderApp("/");
+  await waitUntil(
+    t,
+    () => within(strip()).queryByRole("link", { name: `#${channel.name}` }) !== null,
+    "the chip",
+  );
+  t.is(within(strip()).queryByRole("button", { name: `Join #${channel.name}` }), null);
 });
 
 test.serial("Browse: a frozen channel is by Deleted account and has no Join (04 B6)", async (t) => {

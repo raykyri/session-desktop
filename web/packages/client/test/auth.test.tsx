@@ -9,6 +9,7 @@ import test from "ava";
 import { treeRows } from "../src/features/auth/InvitesPage.js";
 import { openAuthDialog } from "../src/features/auth/authDialog.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
+import { COPY_FAILED } from "../src/lib/clipboard.js";
 import { clearPendingInvite } from "../src/lib/pendingInvite.js";
 
 import { renderApp, resetDocumentRoot, testUser, waitUntil, waitingTestUser } from "./helpers.js";
@@ -103,6 +104,38 @@ test.serial(
   },
 );
 
+test.serial(
+  "a code the server refuses puts focus back in the field, in the dialog and on Invite required",
+  async (t) => {
+    await renderApp("/", {
+      user: null,
+      responses: { "auth.checkInvite": checkFor("SESS-9TQ2-X8") },
+    });
+    openAuthDialog({ step: "code" });
+    await screen.findByRole("heading", { name: "Join with invite?" });
+    const field = within(dialog()).getByRole("textbox", { name: "Invite code" });
+    const go = within(dialog()).getByRole("button", { name: "Continue" });
+    fireEvent.change(field, { target: { value: "SESS-4KQ7-M2" } });
+    go.focus();
+    fireEvent.click(go);
+    await waitUntil(t, () => alertTexts().includes(UNUSABLE_INVITE_MESSAGE), "refused");
+    t.is(document.activeElement, field);
+    cleanup();
+
+    await renderApp("/welcome", {
+      user: waitingTestUser({ login: "rheaok" }),
+      responses: { "accountInvites.redeem": { status: "unusable" } },
+    });
+    const code = await screen.findByRole("textbox", { name: "Invite code" });
+    const use = screen.getByRole("button", { name: "Use code" });
+    fireEvent.change(code, { target: { value: "SESS-4KQ7-M2" } });
+    use.focus();
+    fireEvent.click(use);
+    await waitUntil(t, () => alertTexts().includes(UNUSABLE_INVITE_MESSAGE), "refused");
+    t.is(document.activeElement, code);
+  },
+);
+
 test.serial("Continue to GitHub posts the code to the start route, not a URL", async (t) => {
   const posted: { url: string; body: string }[] = [];
   const realFetch = globalThis.fetch;
@@ -192,6 +225,42 @@ test.serial("a waiting account holding an invite gets the profile step", async (
     handle: "rhea",
   });
 });
+
+test.serial(
+  "Create account in the profile step the shell opens on Invite required goes Home",
+  async (t) => {
+    let me: object = {
+      ...waitingTestUser({ login: "rheaok" }),
+      pendingInvite: INES,
+    };
+    const app = await renderApp("/welcome", {
+      user: me as never,
+      responses: {
+        "auth.me": () => me,
+        "account.checkHandle": { valid: true, available: true },
+        "account.create": (input: unknown) => {
+          const { handle } = input as { handle: string };
+          me = { ...testUser({ login: "rheaok" }), handle };
+          return { me, inviter: INES };
+        },
+      },
+    });
+    // under the modal dialog the page is inert, hence `hidden`
+    t.truthy(await screen.findByRole("heading", { name: "Invite required", hidden: true }));
+    t.truthy(await screen.findByRole("heading", { name: "Create your account" }));
+    fireEvent.change(within(dialog()).getByRole("textbox", { name: /Handle on Session/ }), {
+      target: { value: "rhea" },
+    });
+    fireEvent.click(within(dialog()).getByRole("button", { name: "Create account" }));
+    await waitUntil(
+      t,
+      () => currentToast() === "Account created. Ines Vidal invited you.",
+      "toast",
+    );
+    await waitUntil(t, () => app.router.state.location.pathname === "/", "goes Home");
+    t.is(screen.queryByRole("heading", { name: "Invite required", hidden: true }), null);
+  },
+);
 
 test.serial("a new waiting account sees No Session account, then Invite required", async (t) => {
   const app = await renderApp("/welcome?new=1", {
@@ -393,6 +462,33 @@ test.serial("Invites: create, copy and revoke toast", async (t) => {
   fireEvent.click(screen.getByRole("button", { name: "Copy" }));
   await waitUntil(t, () => currentToast() === "Link copied.", "copied");
   t.deepEqual(copied, ["http://localhost/i#SESS-AAA2-BB"]);
+});
+
+test.serial("Invites: a copy the browser refuses shows the copy-failed alert", async (t) => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: () => Promise.reject(new Error("denied")) },
+  });
+  const exec = Object.getOwnPropertyDescriptor(document, "execCommand");
+  document.execCommand = () => false;
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  process.on("unhandledRejection", onRejection);
+  t.teardown(() => {
+    Reflect.deleteProperty(navigator, "clipboard");
+    if (exec) Object.defineProperty(document, "execCommand", exec);
+    else Reflect.deleteProperty(document, "execCommand");
+    process.off("unhandledRejection", onRejection);
+  });
+  await renderApp("/invites", {
+    user: testUser({ login: "ines.v" }),
+    responses: { "members.tree": treeNodes(), "accountInvites.list": invitesView(1) },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Copy" }));
+  await waitUntil(t, () => currentToast() === COPY_FAILED, "the copy failure");
+  t.true(alertTexts().some((text) => text.includes(COPY_FAILED)));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  t.deepEqual(rejections, []);
 });
 
 test.serial("a waiting account is sent from Invites to Invite required", async (t) => {

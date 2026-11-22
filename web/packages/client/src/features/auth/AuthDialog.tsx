@@ -24,7 +24,7 @@ import {
   startSignIn,
   useCreateAccount,
 } from "../../api/membership.js";
-import { keepChannelInviteForSignIn } from "../../lib/pendingInvite.js";
+import { keepChannelInviteForSignIn, pendingInviteChannel } from "../../lib/pendingInvite.js";
 import { trpcErrorCode } from "../../lib/toast.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { GitHubMark } from "../../ui/GitHubMark.js";
@@ -275,6 +275,7 @@ function CodeStep({ headingId, back }: { headingId: string; back: ReactNode }) {
   const [value, setValue] = useState(state.code);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
   const inviter = state.codeInviter;
 
   const submit = async (event: FormEvent) => {
@@ -289,6 +290,12 @@ function CodeStep({ headingId, back }: { headingId: string; back: ReactNode }) {
     const code = parseInviteCode(typed);
     setPending(true);
     setError(null);
+    // Continue is disabled while the check runs, which drops focus to the
+    // page; a refused code puts it back in the field with the error.
+    const refused = (message: string) => {
+      setError(message);
+      field.current?.focus();
+    };
     try {
       // A malformed code is sent all the same: the server answers it as it
       // answers an unknown one, and counts it as a failed check.
@@ -296,7 +303,7 @@ function CodeStep({ headingId, back }: { headingId: string; back: ReactNode }) {
         ? await redeemInvite(code ?? typed)
         : await checkInvite(code ?? typed);
       if (check.status !== "open") {
-        setError(UNUSABLE_INVITE_MESSAGE);
+        refused(UNUSABLE_INVITE_MESSAGE);
         state.set({ codeInviter: null, code: typed });
       } else if (state.redeem) {
         state.set({ step: "profile", profileInviter: check.inviter, code: code ?? typed });
@@ -304,7 +311,7 @@ function CodeStep({ headingId, back }: { headingId: string; back: ReactNode }) {
         state.set({ codeInviter: check.inviter, code: code ?? typed });
       }
     } catch (failure) {
-      setError(checkErrorMessage(failure));
+      refused(checkErrorMessage(failure));
     } finally {
       setPending(false);
     }
@@ -319,6 +326,7 @@ function CodeStep({ headingId, back }: { headingId: string; back: ReactNode }) {
       <p>Paste the code or link a member sent you.</p>
       <form className="code-f" onSubmit={(event) => void submit(event)} noValidate>
         <input
+          ref={field}
           value={value}
           onChange={(event) => {
             setValue(event.currentTarget.value);
@@ -473,7 +481,9 @@ function ProfileStep({ headingId }: { headingId: string }) {
           state.close();
           if (state.origin === "welcome") {
             showToast(`You're in. ${by} invited you.`);
-            void navigate({ to: "/" });
+            const channel = pendingInviteChannel();
+            if (channel) void navigate({ to: "/c/$name", params: { name: channel } });
+            else void navigate({ to: "/" });
           } else {
             showToast(`Account created. ${by} invited you.`);
           }

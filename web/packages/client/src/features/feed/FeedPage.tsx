@@ -34,7 +34,7 @@ import { keepBar } from "../shell/useBarAutoHide.js";
 import { useFeedViewer } from "./FeedContext.js";
 import { ThreadRow } from "./ThreadRow.js";
 import { EmptySaveIcon } from "./icons.js";
-import { FLASH_MS, useRevealStore } from "./reveal.js";
+import { FLASH_MS, THREAD_UNAVAILABLE, useRevealStore } from "./reveal.js";
 
 export interface FeedPageProps {
   kind: "home" | "saved" | "channel";
@@ -237,7 +237,7 @@ function useReveal(
       if (status === "absent") {
         handled.current = key;
         if (target.n >= 0) done(target.n);
-        showToast("This thread is not available.");
+        showToast(THREAD_UNAVAILABLE);
       }
       return;
     }

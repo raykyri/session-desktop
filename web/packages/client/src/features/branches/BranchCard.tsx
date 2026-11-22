@@ -29,6 +29,7 @@ import { authorName, clip, noun, relTime } from "../feed/format.js";
 import { BranchIcon, BubbleIcon, ContinueIcon, SearchIcon } from "../feed/icons.js";
 import { revealThread } from "../feed/reveal.js";
 import { ReplyText } from "../replies/ReplyText.js";
+import { NotSentLine } from "../shell/NotSent.js";
 
 import { RunNote, RunProgress, isStoppedRun } from "./RunStatus.js";
 import { isActiveRun, othersUnder, type TreeIndex } from "./tree.js";
@@ -76,7 +77,10 @@ export function BranchCard({
   const mine = me !== null && node.u === me;
 
   const actions: MoreAction[] = [];
-  if (writer && !pending && !promoted)
+  // Where the server's `promote` accepts it (03 G5): a branch with an
+  // answer that is not hidden, removed or deleted, and not yet promoted.
+  const promotable = answer !== undefined && node.mod === null && !node.del;
+  if (writer && !pending && !promoted && promotable)
     actions.push({
       label: "Open as its own thread",
       onSelect: () =>
@@ -142,6 +146,7 @@ export function BranchCard({
           <MoreMenu actions={actions} />
         </span>
       </div>
+      <NotSentLine item={node.id} />
       {node.look !== null ? (
         <div className="lookh">
           <SearchIcon />
@@ -367,6 +372,7 @@ function BranchComments({
                 </button>
               ) : null}
             </div>
+            <NotSentLine item={c.id} />
             {replying ? (
               <InlineComposer
                 draftKey={composerKey(thread, { kind: "comment", node, parent: c.id })}
@@ -391,7 +397,13 @@ function BranchComments({
         }}
         title="Delete this comment and your replies under it?"
         onConfirm={() => {
-          if (deleting !== null) void writes.deleteComment(deleting);
+          if (deleting === null) return;
+          // The comment and its "…" button are gone: focus goes to the
+          // selected row of the tree, the branch the comment was on (the
+          // mock's `deleteItem`).
+          void writes.deleteComment(deleting).then((ok) => {
+            if (ok) focusSoon(selectedRowOr(thread, `#card-${thread} .rcount`));
+          });
         }}
       />
     </div>

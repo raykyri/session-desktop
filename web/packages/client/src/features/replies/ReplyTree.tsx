@@ -124,7 +124,15 @@ export function ReplyTree({
           className="rhid-btn"
           tabIndex={-1}
           aria-label={`Show ${hidden} more ${hidden === 1 ? "reply" : "replies"}`}
-          onClick={() => toggleCollapsed(thread.id, reply.id)}
+          onClick={(event) => {
+            // The button goes with the expansion; focus stays on the
+            // reply's row, as it does when Right expands it.
+            const tree = event.currentTarget.closest('[role="tree"]');
+            toggleCollapsed(thread.id, reply.id);
+            focusSoon(() =>
+              tree?.querySelector<HTMLElement>(`[data-row="${CSS.escape(reply.id)}"]`),
+            );
+          }}
         />
       ) : undefined,
     };

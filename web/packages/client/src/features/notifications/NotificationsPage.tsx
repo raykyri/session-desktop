@@ -26,6 +26,7 @@ import {
   RemovedIcon,
   ReplyArrowIcon,
 } from "../feed/icons.js";
+import { THREAD_UNAVAILABLE } from "../feed/reveal.js";
 import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
 
@@ -111,6 +112,9 @@ function NotificationRow({ row }: { row: NotifRow }) {
     if (!row.read) void writes.send("notifications.markRead", { id: row.id });
     const target = row.target;
     if (target?.kind === "invites") void navigate({ to: "/invites" });
+    // the feed's message for an absent thread (02 §2.1), without sending
+    // the reader to its address
+    else if (target?.kind === "gone") showToast(THREAD_UNAVAILABLE);
     else if (target)
       void navigate({
         to: "/c/$name",
@@ -126,7 +130,7 @@ function NotificationRow({ row }: { row: NotifRow }) {
       onClick={open}
     >
       <span className="nav-av">
-        <Avatar handle={row.actor} size="sm" />
+        <Avatar handle={row.actor} />
         <span className={`nk nk-${row.type}`} aria-hidden="true">
           <Icon />
         </span>
