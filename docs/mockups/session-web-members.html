@@ -484,9 +484,6 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 #bar { position: absolute; top: 0; left: 0; right: 0; z-index: 30; transition: transform .2s ease; }
 /* the app bar slides up out of view while the feed scrolls down, and back on any scroll up */
 #bar.hid { transform: translateY(-100%); }
-/* layout A: the app bar spans only the main column; alignBar() sets --bl and --bw from that column's position */
-#shell.colbar #bar { left: var(--bl); right: auto; width: var(--bw); }
-#shell.colbar .appbar { padding: 0 8px 0 10px; gap: 8px; border: 1px solid var(--divider); border-top: 0; border-radius: 0 0 var(--r-lg) var(--r-lg); }
 #page .mg-inner { padding-top: 49px; }
 #page .page-in { padding-top: calc(24px + 49px); }
 #page > .page { scroll-padding-top: 49px; }
@@ -3062,7 +3059,6 @@ function renderInner() {
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
   else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' ? (isAdmin() ? adminPage() : notFoundPage()) : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page .page-in')?.insertAdjacentHTML('beforeend', siteFoot()); $('#k-page').scrollTop = keep; }
-  alignBar();
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #sellook, :scope > #citepop, :scope > .toast').forEach(x => x.remove());
   citeReady();
   if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
@@ -3076,20 +3072,6 @@ function renderInner() {
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : k0 === 'c' ? 'this comment and your replies under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const siteFoot = () => '<footer class="sfoot">Session · Report abuse: <a href="mailto:abuse@session.dev">abuse@session.dev</a></footer>';
-/* In layout A on screens wider than the one-column breakpoint, the app bar lines up with the feed's columns
-   (measured on the first row whose first cell is not a full-width channel header):
-   - above 1320px the main column is centred on its own, so the bar takes the main column's left edge and width;
-   - from 861px to 1320px the main and side columns are centred as a pair, so the bar spans both. */
-function alignBar() {
-  const sh = $('#shell'); if (!sh) return;
-  const cell = st.screen === 'network' && (st.ui.pl || 'a') === 'a' && innerWidth > 860
-    ? [...app.querySelectorAll('#k-mg .row')].map(r => r.firstElementChild).find(e => e && !e.classList.contains('wide')) : null;
-  if (!cell) { sh.classList.remove('colbar'); return; }
-  const side = matchMedia('(max-width: 1320px)').matches ? cell.nextElementSibling : null;
-  const a = sh.getBoundingClientRect(), b = cell.getBoundingClientRect(), right = side ? side.getBoundingClientRect().right : b.right;
-  sh.style.setProperty('--bl', (b.left - a.left) + 'px'); sh.style.setProperty('--bw', (right - b.left) + 'px'); sh.classList.add('colbar');
-}
-addEventListener('resize', alignBar);
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="${st.toastAlert ? 'alert' : 'status'}">${esc(st.toast)}</div>` : '';
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
