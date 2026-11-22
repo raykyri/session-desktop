@@ -76,6 +76,27 @@ export function useThreadUi(thread: string): ThreadUiEntry {
 }
 
 /** The key of a composer, for its draft (02 §9.4 `drafts`). */
+/** The reply or comment composer a draft key names (`composerKey`), with the
+ * row it shows under; null for any other key (an ask's composer depends on
+ * the row it was opened from, which its key does not name). */
+export function replyComposerOfKey(
+  key: string,
+): { thread: string; composer: InlineComposer; selected: string | null } | null {
+  const [kind, thread, a, b] = key.split(":");
+  if (!thread) return null;
+  if (kind === "reply" && a && b === undefined) {
+    const parent = a === "top" ? null : a;
+    return { thread, composer: { kind: "reply", parent }, selected: parent };
+  }
+  if (kind === "comment" && a && b)
+    return {
+      thread,
+      composer: { kind: "comment", node: a, parent: b === "top" ? null : b },
+      selected: a,
+    };
+  return null;
+}
+
 export function composerKey(thread: string, c: InlineComposer): string {
   switch (c.kind) {
     case "ask":

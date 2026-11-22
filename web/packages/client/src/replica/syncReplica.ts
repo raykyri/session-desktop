@@ -112,8 +112,9 @@ export interface SyncReplicaOptions {
   ) => Promise<ClaimResult>;
   /** A client id the sync client registered after WRONG_CLIENT. */
   keepClientId?: (userId: string, clientId: string, lastSeq: number) => void;
-  /** Put a write's text back in its composer (a discard or a refusal). */
-  restoreDraft?: (draft: DraftRef) => void;
+  /** Put a write's text back in its composer (a discard or a refusal).
+   * `discarded`: the person chose Discard on the "Not sent" write. */
+  restoreDraft?: (draft: DraftRef, how?: { discarded: boolean }) => void;
   /** Keep the text of a "Not sent" write for a reload (`drafts`), and drop
    * it once the write is applied, refused or discarded. */
   unsentDrafts?: {
@@ -1183,7 +1184,7 @@ export class SyncReplica implements ReplicaSource {
     if (!client.discard(local)) return;
     const draft = this.drafts.get(local);
     this.drafts.delete(local);
-    if (draft) this.options.restoreDraft?.(draft);
+    if (draft) this.options.restoreDraft?.(draft, { discarded: true });
   }
 
   /** Whether a thread's records could not be fetched (offline, a refused

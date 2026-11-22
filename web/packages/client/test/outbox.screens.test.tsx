@@ -17,6 +17,7 @@ import { restoreDraft } from "../src/replica/live.js";
 import type { DraftRef } from "../src/replica/source.js";
 import { SyncReplica } from "../src/replica/syncReplica.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
+import { composerKey, replyComposerOfKey } from "../src/stores/threadUi.js";
 
 import { renderApp, testUser, waitUntil } from "./helpers.js";
 import { FakeLocks, FakeStorage, FakeSync } from "./syncFake.js";
@@ -78,9 +79,9 @@ function serve(
             locks: new FakeLocks(),
             register,
           }),
-        restoreDraft: (d) => {
+        restoreDraft: (d, how) => {
           restored.push(d);
-          restoreDraft(d);
+          restoreDraft(d, how);
         },
         clock: f.clock,
         maxBackoffMs: 50,
@@ -171,6 +172,46 @@ test.serial(
     t.true(
       [...f.store.records.values()].some((r) => r.kind === "reply" && r.t === "See you there"),
     );
+  },
+);
+
+test("a reply's and a comment's draft key name their composer and row; an ask's does not", (t) => {
+  const th = "T";
+  for (const [composer, selected] of [
+    [{ kind: "reply", parent: null }, null],
+    [{ kind: "reply", parent: "R" }, "R"],
+    [{ kind: "comment", node: "N", parent: null }, "N"],
+    [{ kind: "comment", node: "N", parent: "C" }, "N"],
+  ] as const)
+    t.deepEqual(replyComposerOfKey(composerKey(th, composer)), { thread: th, composer, selected });
+  t.is(replyComposerOfKey(composerKey(th, { kind: "ask", parent: "r" })), null);
+  t.is(replyComposerOfKey("thread:space"), null);
+});
+
+test.serial(
+  "Discard on a reply that was not sent opens its composer again with the text, focused",
+  async (t) => {
+    const { f, post } = serve();
+    await renderApp("/", { user: testUser({ login: ME }) });
+    await waitUntil(t, () => card(post) !== null, "the post renders");
+    const row = () => card(post)?.closest(".feed-row") as HTMLElement;
+    fireEvent.click(within(card(post) as HTMLElement).getByRole("button", { name: "Reply" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Reply to @olga" }), {
+      target: { value: "See you there" },
+    });
+    f.offline = true;
+    fireEvent.click(row().querySelector("form.icomp button[type=submit]") as HTMLElement);
+    await waitUntil(t, () => row().querySelector("[data-not-sent]") !== null, "Not sent");
+    t.is(screen.queryByRole("textbox", { name: "Reply to @olga" }), null, "the composer closed");
+    fireEvent.click(
+      within(row().querySelector("[data-not-sent]") as HTMLElement).getByRole("button", {
+        name: "Discard",
+      }),
+    );
+    await waitUntil(t, () => row().querySelector("[data-not-sent]") === null, "discarded");
+    const field = await screen.findByRole("textbox", { name: "Reply to @olga" });
+    t.is((field as HTMLTextAreaElement).value, "See you there");
+    await waitUntil(t, () => document.activeElement === field, "the field has focus");
   },
 );
 
