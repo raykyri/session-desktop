@@ -111,29 +111,20 @@ read ("Read its question and 2 parts above"); clicking marks those parts. A re-r
 
 ## Advisor log
 
-**Round 1 (v1: Cell, Stack, Reference; live `above`).** Said: overwriting answers breaks what people built on; Stack
-order, `Stack.from` and references are three relations, not one; the question was hidden in an expression string;
-positional refs break on insert; four model functions are redundant. Changed: `prev` links replace Stack; the question
-is a text cell; read sets record hashes; ids only, shown as chips; Save leaves the model. Rejected: one model function,
-because the brief asks what computable means beyond an ask.
+**Round 1 (v1: Cell, Stack, Reference).** Said: overwriting answers breaks what people built on; Stack order,
+`Stack.from` and references are three relations; the question was hidden in an expression; positional refs break on
+insert. Changed: `prev` links replace Stack, the question is a text cell, read sets record hashes, ids shown as chips,
+Save leaves the model. Rejected: a single model function.
 
 **Round 2 (v2: Cell, Placement).** Said: "oldest child continues the column" breaks after an insert (I had hit the
-same bug); the read set must be visible before anything goes wrong; one reference type; anchor-relative branches.
-Changed: explicit column heads, the "Read …" footer, `quote` as the only free function, relative branches. Adopted,
-later removed: unlinked asides with "Merge", per-cause badge kinds, an answer pager, Pin. Rejected: author-only post
-chains (permission is a social rule, not structure).
+same bug); show the read set before anything goes wrong. Changed: explicit column heads, the "Read …" footer,
+relative branches. Rejected: author-only post chains (permission is social, not structural).
 
-**Round 3 (mock walkthrough).** Most useful: the passage gesture was missing; Enter did opposite things in the two
-composer modes; one root edit badged twenty answers; seven run verbs. Changed: selection popover; one composer (Enter
-adds a part, Ctrl+Enter runs the primary button); outcome and preflight labels; the summary on the cause with
-"Re-run n"; one verb; "Model answer" labels; reference edges only on selection; Fold.
+**Round 3 (mock walkthrough).** Most useful: no passage gesture; Enter did opposite things in two composer modes; one
+edit badged twenty answers; seven run verbs. Changed: selection popover, one composer, outcome and preflight labels,
+"Re-run n" on the cause, one verb, reference edges on selection, Fold.
 
-**Steer from the parent session (after round 3).** One stale state; no Merge (an insert is a cell in the series and
-goes stale by the same rule); at most the previous answer; three or fewer primitives; show `summarize`, `compare` and
-`filter` to stay distinct from variant B. All adopted, reversing my round 2 asides and my round 1 cut of the model
-functions.
-
-**Second steer from the parent session (on the user's behalf).** Columns default to one person's multi-turn exchange
-with the model; the seed now gives ines.v five turns and mira_k three, with jun.park's branch as the only other asker
-in a thread. The model is one workspace setting, named once at the top left and as a short mark on each card;
-`out.model` records it.
+**Parent-session steers.** (1) One stale state; inserts join the series instead of unlinked asides with Merge; only
+the previous answer; at most three primitives; show `summarize`, `compare`, `filter`. This reversed my round 2 asides
+and round 1 function cut. (2) A column is one person's multi-turn exchange (ines.v five turns, mira_k three, jun.park
+the only other asker, by branching); one workspace model, named once, `out.model` recorded.
