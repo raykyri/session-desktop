@@ -71,10 +71,14 @@ compaction was used and which parts it covered. The mock doesn't implement this.
 - **Inserting.** A draft opens in the gap and the parts below slide down (FLIP, 300 ms). The draft is a text field
   and one row: [⊕ add a part] [Post] [Ask]. An X at the top right discards it, and the Ask shortcut is in the button's
   title. An insert adds one faint line: "Answers below won't read this."
-- **Inside an answer.** Hovering a passage (or tapping it on touch) shows "Fork here". It opens an inline fork at that
-  block, folded to one line when idle; "Move out" turns it into a lane fork.
-- **Forks.** "Fork" on any part, or "Fork from selection", opens a stack in the next lane. Hovering a fork highlights
-  its anchor.
+- **The part menu.** Branching lives in one place: right-click a part, or long-press it on touch. Nothing appears on
+  hover. Both items read the same context (the part and everything above it); each item's second line says where the
+  result goes:
+  - "Ask about this paragraph" (on an answer's paragraph): an inline fork under that paragraph, which is its focus.
+    While the menu is open, the paragraph is tinted. With text selected, the item reads "Ask about the selection".
+  - "Branch from this answer / question / post": a new stack in the next lane, about the whole part.
+  Inline forks fold to one line when idle; "Move out" turns one into a lane fork. Hovering a fork highlights its
+  anchor.
 - **Units.** A root and its lane forks form a unit, and only the root stores x and y.
   - Forks start level with their anchor, and siblings stack by subtree extent, so connectors don't cross.
   - Overlaps between units are resolved downward and never stored.

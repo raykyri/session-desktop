@@ -218,9 +218,13 @@ body[data-hl="tint"] .prose > .bhov { background: var(--accent-soft); border-rad
 #tweaks .note { font-size: 11px; color: var(--t-faint); line-height: 1.4; }
 #tweaks:not(.open) .tw { display: none; }
 #bmenu { position: fixed; z-index: 40; min-width: 200px; padding: 4px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
-#bmenu button { display: flex; width: 100%; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 5px; font-size: 12.5px; color: var(--t-heading); text-align: left; }
+#bmenu button { display: flex; width: 100%; gap: 8px; align-items: flex-start; padding: 6px 10px; border-radius: 5px; font-size: 12.5px; color: var(--t-heading); text-align: left; }
 #bmenu button:hover, #bmenu button:focus-visible { background: var(--control); outline: none; }
-#bmenu button span { color: var(--accent); width: 14px; }
+#bmenu button .mi { color: var(--accent); width: 14px; flex: none; text-align: center; line-height: 18px; }
+#bmenu button .mt { display: grid; gap: 1px; line-height: 18px; }
+/* the paragraph a part menu would ask about: the earlier tint, 40% weaker */
+.prose > .menu-on { --menu-tint: color-mix(in srgb, var(--accent-soft) 60%, transparent); background: var(--menu-tint); border-radius: 3px; box-shadow: 0 0 0 3px var(--menu-tint); }
+#bmenu button small { font-size: 11px; line-height: 14px; color: var(--t-faint); }
 @media (pointer: coarse) { #bfork { height: 34px; padding: 0 12px; border-radius: 17px; } }
 .sbody > .draft:first-child { border-top: 0; border-radius: 10px 10px 0 0; }
 .draft .dp { position: relative; }
@@ -362,7 +366,7 @@ const stacksEl = $('#stacks'), world = $('#world'), vp = $('#vp'), links = $('#l
    the text only when there is something to say: inserted, asked by someone else, or what an answer read. */
 function head(p, s) {
   const nw = isNew(p) ? '<span class="dot" title="New"></span>' : '';
-  const acts = `<span class="acts"><button class="ab" data-a="fork" data-id="${p.id}" title="Start a stack beside this part that sees everything up to here">Fork</button></span>`;
+  const acts = '';
   const late = insertedLater(p) ? '<span class="late" title="Written after the parts below it">Inserted</span>' : '';
   if (!isModel(p)) {
     const who = esc(NAMES[p.by.u] || p.by.u);
@@ -824,24 +828,53 @@ function showBfork(blockEl) {
     b.style.left = (fits ? last.right + 6 : pb.right - w) + 'px'; b.style.top = (fits ? last.top + (last.height - 20) / 2 : last.bottom + 2) + 'px';
   } else { b.style.left = (Math.min(r.right, pb.right) - b.offsetWidth + 4) + 'px'; b.style.top = (Math.min(r.bottom, pb.bottom) - 8) + 'px'; }
 }
-/* menu: right-click a passage (or any part) for a small menu; Escape or a click elsewhere closes it */
-function closeBmenu() { $('#bmenu')?.remove(); if (TW.fh === 'menu') markBlock(null); }
-document.addEventListener('contextmenu', e => {
-  if (TW.fh !== 'menu') return;
-  const partEl = e.target.closest?.('.part[data-part]'); if (!partEl || e.target.closest('textarea, input') || V.z < 0.5) return;
-  e.preventDefault(); closeBmenu();
-  const blk = e.target.closest('.part.m > .pb > .prose[data-p] > *');
+/* The part menu: right-click a part (or long-press it on touch). It is the only place to branch from a part. Both
+   actions read the same context (the part and everything above it); they differ in what the question is about and
+   where it goes, and each item says so on its second line:
+     Ask about this paragraph   on an answer's paragraph: inline, under that paragraph, with the paragraph as focus
+     Branch from this answer    (or question, post): a new stack to the right, about the whole part
+   With text selected, the first item asks about the selection instead. */
+function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
+function openPartMenu(target, x, y) {
+  const partEl = target.closest?.('.part[data-part]'); if (!partEl || target.closest('textarea, input') || V.z < 0.5) return false;
+  closeBmenu(); $('#bfork')?.remove();
+  const p = P[partEl.dataset.part]; if (!p) return false;
+  const list = partsOf(p.st), next = list[list.indexOf(p) + 1];
+  const kind = isModel(p) ? 'answer' : pairedWith(p, next) ? 'question' : 'post';
+  const blk = target.closest('.part.m > .pb > .prose[data-p] > *');
   const ok = blk && !blk.closest('.ifork') && !blk.classList.contains('ifork') && !/^H\d/.test(blk.tagName);
+  const selText = getSelection()?.toString().replace(/\s+/g, ' ').trim();
+  const item = (attrs, icon, title, sub) => `<button role="menuitem" ${attrs}><span class="mi" aria-hidden="true">${icon}</span><span class="mt"><span>${title}</span><small>${sub}</small></span></button>`;
   const items = [];
-  if (ok) { markBlock(blk); items.push(`<button data-a="bfork" data-id="${blk.parentElement.dataset.p}" data-b="${blocksOf(blk.parentElement).indexOf(blk)}"><span aria-hidden="true">↳</span>Ask about this passage</button>`); }
-  items.push(`<button data-a="fork" data-id="${partEl.dataset.part}"><span aria-hidden="true">⑂</span>Fork from here</button>`);
-  const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.innerHTML = items.join(''); document.body.append(m);
-  m.querySelectorAll('button').forEach(b => b.setAttribute('role', 'menuitem'));
-  m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + 'px';
+  if (ok) { blk.classList.add('menu-on');
+    const pr = blk.parentElement, i = blocksOf(pr).indexOf(blk);
+    items.push(selText && partEl.contains(getSelection().anchorNode)
+      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, '↳', 'Ask about the selection', 'Inline, under this paragraph')
+      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, '↳', 'Ask about this paragraph', 'Inline, under it')); }
+  items.push(item(`data-a="fork" data-id="${p.id}"`, '→', `Branch from this ${kind}`, 'New stack to the right'));
+  const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Part actions');
+  m.innerHTML = items.join(''); m.dataset.sel = selText || ''; document.body.append(m);
+  m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
   m.querySelector('button').focus();
-});
-document.addEventListener('click', e => { if ($('#bmenu')) setTimeout(closeBmenu, 0); }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#bmenu')) { e.stopPropagation(); closeBmenu(); } }, true);
+  return true;
+}
+document.addEventListener('contextmenu', e => { if (openPartMenu(e.target, e.clientX, e.clientY)) e.preventDefault(); });
+/* touch: a long press opens the same menu (iOS does not fire contextmenu) */
+let lp = null;
+document.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') return; clearTimeout(lp?.t);
+  const t = e.target, x = e.clientX, y = e.clientY; lp = { x, y, t: setTimeout(() => { lp = null; if (openPartMenu(t, x, y)) vp.dataset.justPanned = '1', setTimeout(() => delete vp.dataset.justPanned, 400); }, 500) }; });
+document.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) { clearTimeout(lp.t); lp = null; } });
+document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
+document.addEventListener('click', e => {
+  const b = e.target.closest?.('#bmenu [data-a="selask"]');
+  if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q, inline: true }); return; }
+  if ($('#bmenu')) setTimeout(closeBmenu, 0);
+}, true);
+document.addEventListener('keydown', e => {
+  const m = $('#bmenu'); if (!m) return;
+  if (e.key === 'Escape') { e.stopPropagation(); closeBmenu(); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const bs = [...m.querySelectorAll('button')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus(); }
+}, true);
 vp.addEventListener('wheel', closeBmenu, { passive: true });
 /* click: a row under the picked passage */
 function pickBlock(pid, i) {
