@@ -4,6 +4,8 @@
 // was deleted (`handle: null`) reads "Deleted account" with the neutral
 // avatar, as its content does elsewhere.
 
+import { inviteLimitMessage } from "@session/shared";
+
 import { useMe } from "../../api/account.js";
 import {
   useAccountInvites,
@@ -126,14 +128,17 @@ function InviteBox() {
   }
   const view = invites.data;
   const open = view.links.filter((link) => link.state === "open");
-  const limit = view.openLimit;
-  const canCreate = limit === null || view.openCount < limit;
+  // null for site admins, who have no invite limit (04 I2)
+  const allowance = view.allowance;
+  const canCreate = allowance === null || allowance.left > 0;
   return (
     <section className="invbox" aria-labelledby="inv-h">
       <div className="ishead">
         <h3 id="inv-h">Invite someone</h3>
         <small>
-          {limit === null ? `${view.openCount} open` : `${limit - view.openCount} of ${limit} left`}
+          {allowance === null
+            ? `${view.openCount} open`
+            : `${allowance.left} of ${allowance.total} left`}
         </small>
       </div>
       {open.map((link) => (
@@ -186,7 +191,7 @@ function InviteBox() {
           {open.length > 0 ? "Create a new link" : "Create an invite link"}
         </button>
       ) : (
-        <p className="fine">You have {limit} open invites. One frees when it is used or revoked.</p>
+        <p className="fine">{inviteLimitMessage(allowance.total)}</p>
       )}
       {view.invited.length > 0 ? (
         <>

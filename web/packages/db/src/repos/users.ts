@@ -201,6 +201,16 @@ export function findByHandle(db: SessionDatabase, handle: string): User | null {
   return row ? toUser(row) : null;
 }
 
+/** The active, not deleted account holding `handle`, or null. */
+export function findActiveByHandle(db: SessionDatabase, handle: string): User | null {
+  const row = db
+    .select()
+    .from(users)
+    .where(and(eq(users.handle, handle), eq(users.status, "active"), isNull(users.deletedAt)))
+    .get();
+  return row ? toUser(row) : null;
+}
+
 /** Whether `handle` is well-formed and held by no account, deleted ones
  * included: handles are never reused (04 §3.1). */
 export function handleAvailable(db: SessionDatabase, handle: string): boolean {

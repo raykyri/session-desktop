@@ -2263,6 +2263,14 @@
   margin: 0 0 10px;
 }
 
+/* Site Admin's Invites section: the line after a lookup, between the two
+   forms */
+.adm .ainv {
+  margin: 12px 0 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
 .amrows {
   display: flex;
   flex-direction: column;

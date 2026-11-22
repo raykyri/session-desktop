@@ -82,7 +82,8 @@ to them.
   moderation log ("Moderation log") lists the owner's removals and bans.
   There is no reporting. The owner is the only person who moderates
   (`isMod` is the owner). Channel rules were tried and removed.
-- Membership: invite-only, with an invite tree and at most 3 open links;
+- Membership: invite-only, with an invite tree and 3 invites per member in
+  all, which a site admin can add to;
   sign-in with GitHub or X. Two deliberate departures from the mockup: the
   invite link carries the code in the fragment (`/i#<code>`), and sign-in
   offers GitHub as well as X.
@@ -161,8 +162,9 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   created with (04 I1, Z2). Launch is with both: X access ready on staging
   before M6 and on production before launch is a launch blocker, and the
   launch smoke test signs in with both (Q8).
-- Account invites are online-only tRPC calls, at most 3 open links per
-  member, with a 30-bit code (`SESS-XXXX-XX`) in the URL fragment
+- Account invites are online-only tRPC calls, 3 per member in all
+  (`SESSION_INVITES_PER_MEMBER`, plus any a site admin gives; a used link
+  spends one, an open one holds one), with a 30-bit code (`SESS-XXXX-XX`) in the URL fragment
   (`/i#<code>`), stored hashed and encrypted for its creator, and one
   failure answer for used, revoked and unknown codes; waiting accounts are
   kept 90 days (01 C8; 04 I1-I4).
@@ -216,8 +218,8 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   `mods` list (replaced by `owner`) and the `invite` setting, and
   replica-proto drops or rewrites the tests for them (01 C18, U6; 04 §4.3).
   `users.is_admin` stays for the people who run Session: site admins seed
-  the roots of the invite tree, are exempt from the 3-open-invites limit,
-  set the default model and effort, and delete accounts and channels by
+  the roots of the invite tree, have no invite limit, give members more
+  invites, set the default model and effort, and delete accounts and channels by
   operator job (04 §1); they have no channel role. There is no suspension:
   no `admin.suspend` and no `suspended` status (04 I6 removed). A channel
   is frozen only when its owner's account is deleted: readable as before,

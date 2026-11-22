@@ -64,15 +64,16 @@ client security), so that `05-delivery.md` (M4 and M6) can schedule them.
 The mockup uses one word for two mechanisms; they are separate records with
 separate limits.
 
-1. **Account invites** admit a person to Session. Each active member holds at
-   most 3 open links; redeeming one activates the account and records the
+1. **Account invites** admit a person to Session. Each active member gets 3
+   invites in all (`SESSION_INVITES_PER_MEMBER`), plus any a site admin
+   gives them (§3.2); redeeming one activates the account and records the
    inviter. They extend the existing sign-up codes (`invites`,
    `users.invited_by`, `02-domain-model-and-database.md` §3.1; `01` C8) and
    are online-only tRPC calls (ADR-19), not replicated records.
 2. **Channel invite links** admit an active account to a private channel. They
    are the replicated `invite` records (`threadInviteSchema`) made by
    `invites.create` and consumed by `spaces.join { invite }`. They do not count
-   against the 3 account-invite slots.
+   against a member's account invites.
 
 ## 3. Account invites and access to Session
 
@@ -86,8 +87,9 @@ separate limits.
   link is used or revoked), `created_by`, `created_at`, `used_by`, `used_at`, `revoked_at`.
   Today the table stores `code` in plain text and `redeemInvite` matches on
   it (`db/src/repos/auth.ts`); the migration hashes existing codes and drops
-  the column. `users.invites_remaining` is dropped in favour of the open-slot
-  rule.
+  the column. `users.invites_remaining` is dropped: a member's invites are
+  counted from their links (§3.2), and the invites site admins gave them are
+  `user_limits.extra_invites` (integer, not null, default 0; `01` §2).
 - `users.status`: `waiting | active` (`01` C8; there is no `suspended`,
   §3.6). Sign-in identity (`05` §6 P1): `github_id` becomes `provider`
   (`github` or `x`) and `provider_user_id`, unique together; `login` is the
@@ -138,12 +140,32 @@ that account and refuses an unknown handle; a root invite has no
 - `list`: the caller's links (`open | used | revoked`), who used each, the
   code of each open link (decrypted from `code_enc`; served only to its
   creator), and "You invited" (accounts whose `invited_by` is the caller),
-  newest first.
-- `create`: `PRECONDITION_FAILED` when the caller has 3 open links. Count and
-  insert run in one transaction, so concurrent creates cannot reach 4. Admins
-  (`users.is_admin`) are exempt, so the tree's roots can seed it.
-- `revoke`: the caller's own open link; frees the slot and nulls `code_enc`.
-  No restore. A revoked code answers `unusable` from then on.
+  newest first, and the caller's invites: `allowance { total, used, left }`
+  (null for a site admin) and `perMember`.
+- Invites are a lifetime grant, not a number of open links. A member's
+  total is `SESSION_INVITES_PER_MEMBER` (default 3) plus
+  `user_limits.extra_invites`, the invites site admins gave them. A used
+  link spends one invite; an open link (neither used nor revoked) holds
+  one; revoking an unused link gives its invite back. Account links do not
+  expire. Left = total − used − open (`accountInvites.allowance`).
+- `create`: `PRECONDITION_FAILED` "You have used your <total> invites. An
+  admin can give you more." when the caller has 0 left. Count and insert run
+  in one immediate transaction, so two concurrent creates with 1 left make
+  one link. Site admins (`users.is_admin`) have no limit, so the tree's
+  roots can seed it. The 10 created a day (Z1) apply to everyone, site
+  admins included: "You can make 10 invite links a day. Try again in N
+  hours."
+- `revoke`: the caller's own open link; gives its invite back and nulls
+  `code_enc`. No restore. A revoked code answers `unusable` from then on.
+- `admin.invites.lookup { handle }` and `admin.invites.grant { handle,
+  count }` (site admins only, the `admin.models.*` bucket of Z1): the lookup
+  answers `{ handle, displayName, total, used, open, left, extra }` for an
+  active account, and `NOT_FOUND` "No account with that handle." for an
+  unknown or deleted one; the grant adds `count` (an integer from 1 to 100)
+  to `extra_invites` and answers the new lookup. Each grant is logged at
+  info with the admin's id, the member's id and the count, nothing else.
+  The operator's equivalent is `db:admin -- --grant-invites <handle> <n>`
+  (also `node dist/admin.mjs --grant-invites <handle> <n>` in the image).
 - Codes come from a CSPRNG (`crypto.randomInt`) over the mockup's alphabet
   (no `0`, `O`, `1`, `I`), in the mockup's form `SESS-XXXX-XX` (30 bits,
   decision S2). Input is normalized (upper-cased, spaces and dashes removed)
@@ -159,22 +181,28 @@ that account and refuses an unknown handle; a root invite has no
   log redacts any path under `/i/`.
 
 The members page (`membersPage`, `invSection`) uses the mockup's copy: the
-box "Invite someone" with "N of 3 left", each open link with Copy and a
-revoke button ("Revoke this link"), "Create an invite link" (or "Create a
-new link" when one is open), and "You invited" with "Joined <date>" per
-person. At 3 open links the button becomes "You have 3 open invites. One
-frees when it is used or revoked."; a waiting account sees "You can invite
-once your account is active." The tree section is headed "Invite tree"
-with the mockup's line "Session is invite-only. You can have 3 open invite
-links at a time. Each link works for one person. A slot frees when a link
-is used or revoked." Links are shown in the fragment form above, not the
-mockup's `session.app/i/<code>`.
+box "Invite someone" with "<left> of <total> left" ("<n> open" for a site
+admin), each open link with Copy and a revoke button ("Revoke this link"),
+"Create an invite link" (or "Create a new link" when one is open), and "You
+invited" with "Joined <date>" per person. At 0 left the button is replaced
+by the line "You have used your <total> invites. An admin can give you
+more."; a waiting account sees "You can invite once your account is
+active." The tree section is headed "Invite tree" with the line "Session is
+invite-only. Each user starts with 3 invites which they can use to add
+other members.", its number taken from `SESSION_INVITES_PER_MEMBER`. Links
+are shown in the fragment form above, not the mockup's
+`session.app/i/<code>`.
 
-Acceptance: server tests for 3 open and a 4th refused, revoke and use each
-freeing a slot, two concurrent creates at 2 open, the admin exemption,
-another account's `list` never containing the caller's codes; a client test
-that the button becomes the explanation at 3 open and that the address bar
-holds no fragment after `/i#<code>` loads.
+Acceptance: server tests that used links spend, open links hold and
+revoked links give back an invite, the refusal at 0 left with the member's
+total (extras included), the setting, two concurrent creates with 1 left,
+site admins unlimited, another account's `list` never containing the
+caller's codes, and `admin.invites.*` (non-admins refused, the count bounds,
+an unknown or deleted handle, the shared rate limit, the log line); db tests
+for `extra_invites` and `db:admin -- --grant-invites`; client tests for the
+header, the button replaced by the line at 0 left, and that the address bar
+holds no fragment after `/i#<code>` loads; an e2e test in which a site admin
+gives invites to a member at 0 left, who then makes a link.
 
 ### 3.3 Invite tree
 
@@ -714,7 +742,7 @@ key counts waiting accounts in `signup_attempts` (§3.1).
 | Replicated writes | 60/min per user (the existing mutation bucket; a batch of 20 counts 20) | `/api/sync/apply` (`01` A3) |
 | Snapshots | 30/min per user; 30/min per IP signed out | `/api/sync/snapshot` |
 | SSE | one connection per client id; 10 per user | `/api/sync/events` |
-| `accountInvites.create` | 3 open; 10 created per day | procedure |
+| `accountInvites.create` | `SESSION_INVITES_PER_MEMBER` (3) invites per member in all, plus those site admins give; site admins unlimited; 10 created per day, site admins included | procedure |
 | `accountInvites.list`, `members.tree` | 60/min per user | procedure |
 | `auth.checkInvite`, `accountInvites.redeem`, `account.create` | 20/min per IP (the `/auth/*` bucket); 10 failed checks per hour per IP and per user | Hono middleware |
 | `POST /auth/github/start`, `POST /auth/x/start` | the `/auth/*` bucket | Hono middleware |
@@ -728,7 +756,7 @@ key counts waiting accounts in `signup_attempts` (§3.1).
 | Envelope size | `TOO_LARGE` above 256 KB, unrecorded (`01` Y1) | `/api/sync` |
 | Text | About 300, removal note 300 characters; `BAD_REQUEST`, recorded (`R8`) | input schemas |
 | Runs | Weekly allowance plus the per-member overdraft limit (`SESSION_OVERDRAFT_TOKENS`, 200,000 a week); 20 queued per user, beyond which `pre` refuses with `PRECONDITION_FAILED` (`reason: "queue_full"`), recorded and not a rate refusal | `03-agents-and-research.md` |
-| `admin.models.*` | 60/min per site admin | procedure |
+| `admin.models.*`, `admin.invites.*` | 60/min per site admin, one bucket | procedure |
 
 The report row and the device pairing row are removed (no reporting;
 web-only build). Buckets are in memory in the single process (`06` §8).
@@ -738,8 +766,9 @@ when the write commits a change: a refused write, recorded or not, and one
 that changes nothing (a join of a channel already joined) take none. Their
 refusal names the limit and when a use is free again ("You can create 5
 channels a day. Try again in 22 hours."). The invite tree lets
-a site admin find who invited an abusive account. Site admins have no
-`/admin` control over accounts: deleting an account (which revokes its open
+a site admin find who invited an abusive account. The only `/admin` control
+site admins have over accounts is giving a member more invites (§3.2):
+deleting an account (which revokes its open
 links and sessions) or a channel is an operator job (§8, §4.5); there is no
 suspension (§3.6).
 
@@ -943,7 +972,8 @@ none of them.
 6. Decided: no site-wide moderators and no channel admins or moderators.
    A channel has one owner, not transferable (§4.3, `01` C18);
    `users.is_admin` stays for the people who run Session (tree roots, the
-   invite-limit exemption, the Site Admin settings); there is no suspension
+   invite-limit exemption, the Site Admin settings and its invite grants);
+   there is no suspension
    (§3.6).
 7. Decided (P1): GitHub and X, both at launch (`05` §6 Q8); an account
    stays bound to the provider it was created with; no linking and no

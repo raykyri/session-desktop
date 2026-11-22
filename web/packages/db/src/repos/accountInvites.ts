@@ -33,10 +33,12 @@ import { newId } from "../ids.js";
 import { invites, users } from "../schema/users.js";
 import { now } from "../time.js";
 
+import * as usage from "./usage.js";
 import { toUser } from "./users.js";
 
-/** Open links a member may hold at once (04 I2, Z1). */
-export const DEFAULT_OPEN_INVITE_LIMIT = 3;
+/** Account invites each member gets in total, before any a site admin gives
+ * (`SESSION_INVITES_PER_MEMBER`, 04 I2, Z1). */
+export const DEFAULT_INVITES_PER_MEMBER = 3;
 
 /** How a root invite's creator is shown: it has none. */
 export const ROOT_INVITER: Inviter = { name: "Session", handle: null };
@@ -102,36 +104,84 @@ export function checkCode(db: SessionDatabase, input: string): InviteCheck {
   return open ? { status: "open", inviter: open.inviter } : { status: "unusable" };
 }
 
+/**
+ * A member's account invites (04 I2): a lifetime total, `perMember`
+ * (`SESSION_INVITES_PER_MEMBER`) plus the `extra_invites` site admins gave
+ * them. A used link spends one invite and an open link holds one; a revoked
+ * link counts for neither, so revoking an unused link gives its invite back.
+ * Account links do not expire.
+ */
+export interface InviteAllowance {
+  total: number;
+  /** The member's links someone used. */
+  used: number;
+  /** The member's links neither used nor revoked. */
+  open: number;
+  /** `total - used - open`, never below 0 (a lowered setting, or links made
+   * while a site admin). */
+  left: number;
+  /** `user_limits.extra_invites`. */
+  extra: number;
+}
+
+export function allowance(
+  db: SessionDatabase,
+  userId: string,
+  perMember: number = DEFAULT_INVITES_PER_MEMBER,
+): InviteAllowance {
+  const { extraInvites: extra } = usage.memberLimits(db, userId);
+  const used =
+    db
+      .select({ value: count() })
+      .from(invites)
+      .where(and(eq(invites.createdBy, userId), isNotNull(invites.usedBy)))
+      .get()?.value ?? 0;
+  const open = openCount(db, userId);
+  const total = perMember + extra;
+  return { total, used, open, left: Math.max(0, total - used - open), extra };
+}
+
+/** A site admin's grant (`admin.invites.grant`, `db:admin --
+ * --grant-invites`): adds `count` to the member's `extra_invites` and
+ * answers their invites after it, in one transaction. */
+export function grant(
+  db: SessionDatabase,
+  userId: string,
+  count: number,
+  perMember?: number,
+): InviteAllowance {
+  return transact(db, (tx) => {
+    usage.addExtraInvites(tx, userId, count);
+    return allowance(tx, userId, perMember);
+  });
+}
+
 export type CreateInviteResult =
   { ok: true; id: string; code: string; createdAt: number } | { ok: false; reason: "limit" };
 
 /**
  * Makes an invite for `createdBy` (null: a root invite, `db:admin --
- * --invite`). The count of open links and the insert run in one immediate
- * transaction, so two concurrent creates at 2 open cannot reach 4.
- * `exempt` (site admins) skips the limit.
+ * --invite`). The count of the member's invites (`allowance`) and the insert
+ * run in one immediate transaction, so two concurrent creates with one
+ * invite left cannot both succeed. `exempt` (site admins) skips the count.
  */
 export function create(
   db: SessionDatabase,
   input: {
     createdBy: string | null;
     exempt?: boolean;
-    openLimit?: number;
+    /** `SESSION_INVITES_PER_MEMBER`. */
+    perMember?: number;
     encrypt?: ((code: string) => string) | null;
   },
 ): CreateInviteResult {
-  const limit = input.openLimit ?? DEFAULT_OPEN_INVITE_LIMIT;
   return db.transaction(
     (raw) => {
       const tx = raw as unknown as SessionDatabase;
       if (input.createdBy !== null && input.exempt !== true) {
-        const open =
-          tx
-            .select({ value: count() })
-            .from(invites)
-            .where(and(eq(invites.createdBy, input.createdBy), isOpen))
-            .get()?.value ?? 0;
-        if (open >= limit) return { ok: false, reason: "limit" } as const;
+        if (allowance(tx, input.createdBy, input.perMember).left <= 0) {
+          return { ok: false, reason: "limit" } as const;
+        }
       }
       const at = now();
       // 2^30 codes: a collision with a stored hash is rare but possible, and
@@ -229,7 +279,8 @@ export function invitedBy(db: SessionDatabase, userId: string): { user: User; jo
     .map((row) => ({ user: toUser(row), joinedAt: row.activatedAt ?? row.createdAt }));
 }
 
-/** Revokes the caller's own open link: frees the slot and nulls `code_enc`.
+/** Revokes the caller's own open link: gives its invite back and nulls
+ * `code_enc`.
  * Answers false for a link that is not the caller's or not open. */
 export function revoke(db: SessionDatabase, userId: string, inviteId: string): boolean {
   const row = db

@@ -39,6 +39,11 @@
 // heartbeat's constants and timer, the reset script, `0000_initial.sql`, the
 // boot check of a pre-squash database, the operator bundles); M8a-21 on
 // undo one fix of the M8a squash and reset-tool review (R1-R10) each.
+// INV-1 on cover the lifetime invite grant (`04` I2): the counting of used,
+// open and revoked links, the setting and the extra invites, the refusal's
+// total, the site-admin exemption, and `admin.invites.*`'s admin check, rate
+// limit, count bounds, handle lookup and log line, and `db:admin
+// --grant-invites`.
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -2223,6 +2228,97 @@ const MUTATIONS: Mutation[] = [
     from: "-- is replaced (docs/runbooks/reset-database.md).",
     to: "-- is replaced (web/docs/runbooks/reset-database.md).",
   },
+  // ---- the lifetime invite grant (04 I2): the counting rule and the admin check ----
+  {
+    name: "INV-1 a used link spends no invite",
+    file: "../db/src/repos/accountInvites.ts",
+    from: "  return { total, used, open, left: Math.max(0, total - used - open), extra };",
+    to: "  return { total, used, open, left: Math.max(0, total - open), extra };",
+  },
+  {
+    name: "INV-2 an open link holds no invite",
+    file: "../db/src/repos/accountInvites.ts",
+    from: "  return { total, used, open, left: Math.max(0, total - used - open), extra };",
+    to: "  return { total, used, open, left: Math.max(0, total - used), extra };",
+  },
+  {
+    name: "INV-3 a revoked link keeps its invite",
+    file: "../db/src/repos/accountInvites.ts",
+    from: "      .where(and(eq(invites.createdBy, userId), isOpen))\n      .get()?.value ?? 0\n  );",
+    to: "      .where(and(eq(invites.createdBy, userId), isNull(invites.usedBy)))\n      .get()?.value ?? 0\n  );",
+  },
+  {
+    name: "INV-4 the extra invites are left out of the total",
+    file: "../db/src/repos/accountInvites.ts",
+    from: "  const total = perMember + extra;",
+    to: "  const total = perMember;",
+  },
+  {
+    name: "INV-5 a link is made with 0 left",
+    file: "../db/src/repos/accountInvites.ts",
+    from: "perMember).left <= 0) {",
+    to: "perMember).left < 0) {",
+  },
+  {
+    name: "INV-6 the setting is not passed: every member gets the default",
+    file: "src/trpc/routers/membership.ts",
+    from: "      exempt: ctx.user.isAdmin,\n      perMember,\n",
+    to: "      exempt: ctx.user.isAdmin,\n",
+  },
+  {
+    name: "INV-7 site admins are counted",
+    file: "src/trpc/routers/membership.ts",
+    from: "      exempt: ctx.user.isAdmin,\n      perMember,\n",
+    to: "      exempt: false,\n      perMember,\n",
+  },
+  {
+    name: "INV-8 the refusal names the setting, not the member's total",
+    file: "src/trpc/routers/membership.ts",
+    from: "message: inviteLimitMessage(total)",
+    to: "message: inviteLimitMessage(total && perMember)",
+  },
+  {
+    name: "INV-9 admin.invites.* has no admin check",
+    file: "src/trpc/routers/adminInvites.ts",
+    from: 'import { adminModelsProcedure } from "./models.js";',
+    to: 'import { memberProcedure as adminModelsProcedure } from "../base.js";',
+  },
+  {
+    name: "INV-10 admin.invites.* has no rate limit",
+    file: "src/trpc/routers/adminInvites.ts",
+    from: 'import { adminModelsProcedure } from "./models.js";',
+    to: 'import { adminProcedure as adminModelsProcedure } from "../base.js";',
+  },
+  {
+    name: "INV-11 a grant takes any count",
+    file: "src/trpc/routers/adminInvites.ts",
+    from: "count: z.number().int().min(1).max(INVITE_GRANT_MAX)",
+    to: "count: z.number().max(INVITE_GRANT_MAX * 10)",
+  },
+  {
+    name: "INV-12 a deleted account's handle is found",
+    file: "src/trpc/routers/adminInvites.ts",
+    from: "users.findActiveByHandle(ctx.db, handle)",
+    to: "users.findByHandle(ctx.db, handle)",
+  },
+  {
+    name: "INV-13 a grant logs the member's handle",
+    file: "src/trpc/routers/adminInvites.ts",
+    from: "{ adminId: ctx.user.id, userId: member.id, count: input.count }",
+    to: "{ adminId: ctx.user.id, userId: member.id, count: input.count, handle: member.handle }",
+  },
+  {
+    name: "INV-14 the grant leaves extra_invites as it was",
+    file: "../db/src/repos/usage.ts",
+    from: "set: { extraInvites: sql`${userLimits.extraInvites} + ${count}`, updatedAt: at },",
+    to: "set: { extraInvites: sql`${userLimits.extraInvites}`, updatedAt: at },",
+  },
+  {
+    name: "INV-15 db:admin --grant-invites takes any count",
+    file: "../db/bin/admin.ts",
+    from: "if (count === null || count < 1 || count > INVITE_GRANT_MAX) {",
+    to: "if (count === null) {",
+  },
 ];
 
 /** The tests that must fail for a mutation to count as killed, by id: the
@@ -2814,6 +2910,27 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M8a-31": { in: "db", tests: ["R7: a heartbeat dated ahead of this machine's clock says so"] },
   "M8a-32": { tests: ["R9: neither bundle starts with a #! line naming tsx"] },
   "M8a-33": { in: "db", tests: ["R10: 0000_initial.sql is the file deployed databases recorded"] },
+  "INV-1": { tests: ["I2: 3 invites in all; a used link spends one"] },
+  "INV-2": { tests: ["I2: 3 invites in all; a used link spends one"] },
+  "INV-3": { tests: ["I2: 3 invites in all; a used link spends one"] },
+  "INV-4": {
+    tests: [
+      "I2: the refusal at 0 left names the member's total",
+      "I2: admin.invites.lookup answers a member's invites",
+      "I2: a member at 0 left can make a link once an admin gives them more",
+    ],
+  },
+  "INV-5": { tests: ["I2: 3 invites in all; a used link spends one"] },
+  "INV-6": { tests: ["I2: SESSION_INVITES_PER_MEMBER is each member's total"] },
+  "INV-7": { tests: ["I2: site admins have no invite limit"] },
+  "INV-8": { tests: ["I2: the refusal at 0 left names the member's total"] },
+  "INV-9": { tests: ["I2: admin.invites.* refuses members, waiting accounts"] },
+  "INV-10": { tests: ["limit: admin.invites.* shares the admin.models.* bucket"] },
+  "INV-11": { tests: ["I2: admin.invites.grant takes a whole count from 1 to 100"] },
+  "INV-12": { tests: ["I2: an unknown, deleted or malformed handle answers not found"] },
+  "INV-13": { tests: ["I2: a grant is logged with the admin's and the member's ids"] },
+  "INV-14": { in: "db", tests: ["I2: extra_invites starts at 0, grows by each grant"] },
+  "INV-15": { in: "db", tests: ["I2: db:admin --grant-invites gives a member more invites"] },
 };
 
 /** What one suite said about a mutation. */

@@ -13,11 +13,17 @@
 //
 // Limits (04 Z1): the check, redeem and create calls share the `/auth/*`
 // per-IP bucket and count failed checks per IP and per user; list and tree
-// are 60 a minute per user; handle checks 30; creates 3 open and 10 a day.
+// are 60 a minute per user; handle checks 30; creates 10 a day, within the
+// member's invites (`SESSION_INVITES_PER_MEMBER` plus what site admins gave).
 
 import { accountInvites, users } from "@session/db";
 import type { Inviter, InviteCheck, Me } from "@session/shared";
-import { accountInviteLink, cleanDisplayName, isAccountHandle } from "@session/shared";
+import {
+  accountInviteLink,
+  cleanDisplayName,
+  inviteLimitMessage,
+  isAccountHandle,
+} from "@session/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -163,8 +169,12 @@ export interface InvitesView {
   links: InviteLinkView[];
   invited: InvitedMember[];
   openCount: number;
-  /** Open links allowed at once; null for site admins, who are exempt. */
-  openLimit: number | null;
+  /** The caller's invites (04 I2): the total, those used and those left
+   * (a used link spends one, an open one holds one); null for site admins,
+   * who have no limit. */
+  allowance: { total: number; used: number; left: number } | null;
+  /** `SESSION_INVITES_PER_MEMBER`, the invites each member starts with. */
+  perMember: number;
 }
 
 export interface TreeMember {
@@ -192,6 +202,12 @@ export const accountInvitesRouter = router({
         usedBy: link.usedBy,
       };
     });
+    const perMember = ctx.config.abuse.invitesPerMember;
+    let allowance: InvitesView["allowance"] = null;
+    if (!ctx.user.isAdmin) {
+      const { total, used, left } = accountInvites.allowance(ctx.db, ctx.user.id, perMember);
+      allowance = { total, used, left };
+    }
     return {
       links,
       invited: accountInvites.invitedBy(ctx.db, ctx.user.id).map(({ user, joinedAt }) => ({
@@ -201,13 +217,14 @@ export const accountInvitesRouter = router({
         joinedAt,
       })),
       openCount: links.filter((link) => link.state === "open").length,
-      openLimit: ctx.user.isAdmin ? null : ctx.config.abuse.openInvites,
+      allowance,
+      perMember,
     };
   }),
 
   create: memberProcedure.mutation(({ ctx }) => {
     // 10 created a day (04 Z1): counted when a link is made, so a create
-    // refused at 3 open does not use up the day.
+    // refused at 0 invites left does not use up the day.
     const daily = abuseBuckets(ctx.config.abuse).invitesCreated;
     const dailyKey = `invitesCreated:user:${ctx.user.id}`;
     // `take` on the refusal path records it for `session_rate_limited_total`.
@@ -216,17 +233,16 @@ export const accountInvitesRouter = router({
       if (!refused.allowed)
         throw tooManyRequests(limitMessage("make", "invite links", daily, refused.retryAfter));
     }
+    const perMember = ctx.config.abuse.invitesPerMember;
     const made = accountInvites.create(ctx.db, {
       createdBy: ctx.user.id,
       exempt: ctx.user.isAdmin,
-      openLimit: ctx.config.abuse.openInvites,
+      perMember,
       encrypt: (code) => ctx.box.seal(code, codeContext(ctx.user.id)),
     });
     if (!made.ok) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: `You have ${ctx.config.abuse.openInvites} open invites. One frees when it is used or revoked.`,
-      });
+      const { total } = accountInvites.allowance(ctx.db, ctx.user.id, perMember);
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: inviteLimitMessage(total) });
     }
     ctx.limiter.take(dailyKey, daily);
     ctx.logger.info({ userId: ctx.user.id, inviteId: made.id }, "account invite created");

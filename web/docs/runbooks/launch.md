@@ -102,6 +102,7 @@ provider needs its deployment credential above.
 | `SESSION_WEEKLY_TOKENS` | `2000000` | Included tokens per member per week, reset Fridays 00:00 UTC (`03` K3); a member's own allowance is a `user_limits` row |
 | `SESSION_OVERDRAFT_TOKENS` | `200000` | Tokens past the allowance a member's included-token runs may spend in a week together, then they stop (`03` K9) |
 | `SESSION_RUN_MAX_TOKENS` | `400000` | Counted tokens one run may spend, whoever pays (`03` L1) |
+| `SESSION_INVITES_PER_MEMBER` | `3` | Account invites each member gets in all (`04` I2): a used link spends one, an open link holds one, revoking an unused link gives it back. Site admins have no limit; the invites they give a member are `user_limits.extra_invites`, set on Site Admin or with `db:admin -- --grant-invites <handle> <n>` |
 | `SESSION_RUNS_PER_USER`, `SESSION_QUEUED_PER_USER` | `2`, `20` | Running and queued runs per member |
 | `SESSION_RUNS_GEMINI`, `SESSION_RUNS_OPENROUTER`, `SESSION_RUNS_ANTHROPIC` | `8`, `8`, `2` | Concurrent runs per provider |
 | `SESSION_RUN_TIMEOUT_SECONDS` | `900` | Wall-clock limit per run |

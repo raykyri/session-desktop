@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { closeDatabase, openDatabase } from "@session/db";
+import { closeDatabase, openDatabase, users } from "@session/db";
 import test from "ava";
 import SqliteDatabase from "better-sqlite3";
 
@@ -68,6 +68,31 @@ test("A1: the image's admin.mjs, beside the migrations, prints a root invite", a
   t.deepEqual(db.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get(), { n: 1 });
   t.deepEqual(db.prepare("SELECT count(*) AS n FROM invites").get(), { n: 1 });
   db.close();
+});
+
+test("I2: the image's admin.mjs gives a member more invites with --grant-invites", async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "session-bundles-data-"));
+  t.teardown(() => rmSync(data, { recursive: true, force: true }));
+  const db = openDatabase(join(data, "session.db"));
+  users.createActive(
+    db,
+    { provider: "github", providerUserId: "grant-1", login: "mira", name: "Mira" },
+    { handle: "mira_k", displayName: "Mira" },
+  );
+  closeDatabase(db);
+  const out = await bundle("admin.mjs", ["--grant-invites", "mira_k", "2"], {
+    SESSION_DATA_DIR: data,
+    SESSION_INVITES_PER_MEMBER: "4",
+  });
+  t.is(out.stdout, "Gave @mira_k 2 more invites. @mira_k: 6 of 6 invites left (0 used)\n");
+  const file = new SqliteDatabase(join(data, "session.db"), { readonly: true });
+  t.deepEqual(file.prepare("SELECT extra_invites AS extra FROM user_limits").all(), [{ extra: 2 }]);
+  file.close();
+  const failed = (await t.throwsAsync(
+    bundle("admin.mjs", ["--grant-invites", "mira_k", "101"], { SESSION_DATA_DIR: data }),
+  )) as Failed;
+  t.is(failed.code, 1);
+  t.regex(failed.stderr ?? "", /whole number from 1 to 100/);
 });
 
 test("A1: the image's reset-database.mjs runs on an empty data directory", async (t) => {
