@@ -101,7 +101,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 
 /* ---- stacks ---- */
 .stack { position: absolute; width: var(--sw); display: flex; flex-direction: column; }
-.stack.sel > .sbody { box-shadow: 0 0 0 2px var(--accent), var(--shadow-pop); }
+.stack.sel > .sbody { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-pop); }
+.stack.fresh { z-index: 4; }
 .sbody { background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
 .sh { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 12px; font-size: 11.5px; color: var(--t-faint);
   border-bottom: 1px solid var(--divider); cursor: grab; user-select: none; touch-action: none; }
@@ -378,7 +379,7 @@ function stackHTML(s) {
     ps.forEach((p, i) => { h += partHTML(p, s, selected, i === 0); if (d && V.draft.after === p.id) h += draftHTML(); else if (i < ps.length - 1) h += pairedWith(p, ps[i + 1]) || !own ? '<div class="pairline"></div>' : seam(s.id, p.id); });
     if (!d && ps.length && own) h += `<button class="addend" data-a="seam" data-st="${s.id}" data-after="${ps[ps.length - 1].id}">${icon('plus')}Continue</button>`;
   }
-  return `<div class="stack${selected ? ' sel' : ''}${collapsed ? ' coll' : ''}" data-stack="${s.id}" data-fl="s:${s.id}" style="--sw:${W()}px"><div class="sbody">${h}</div></div>`;
+  return `<div class="stack${selected ? ' sel' : ''}${collapsed ? ' coll' : ''}${ps.length ? '' : ' fresh'}" data-stack="${s.id}" data-fl="s:${s.id}" style="--sw:${W()}px"><div class="sbody">${h}</div></div>`;
 }
 
 /* ---- layout ----
@@ -401,6 +402,7 @@ function anchorY(f, parentEl) {
   return (el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top) / V.z;
 }
 function layout() {
+  for (const k in POS) delete POS[k];   // only what is drawn now
   const els = {}; stacksEl.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
   const H = id => els[id] ? els[id].offsetHeight : 0;
   const place = (s, x, y) => {
@@ -415,10 +417,12 @@ function layout() {
   /* the unit being edited (selection or draft) goes first and stays put; the rest follow by stored y, then x. Each
      unit moves down until it overlaps no unit already placed, rechecking all of them after every move. */
   const fixedId = (V.draft && S[V.draft.st] && rootOf(S[V.draft.st]).id) || (V.sel && S[V.sel] && rootOf(S[V.sel]).id);
-  units.sort((a, b) => (b.r.id === fixedId) - (a.r.id === fixedId) || a.y - b.y || a.x - b.x);
+  /* a new, still empty stack goes last: if anything has to move, it is the new stack, never the ones already there */
+  const fresh = u => !partsOf(u.r.id).length;
+  units.sort((a, b) => fresh(a) - fresh(b) || (b.r.id === fixedId && !fresh(b)) - (a.r.id === fixedId && !fresh(a)) || a.y - b.y || a.x - b.x);
   const hit = (u, top, v) => u.x < v.x + v.w + 12 && v.x < u.x + u.w + 12 && top < v.y + v.dy + v.h + 20 && top + u.h > v.y + v.dy - 20;
   /* the edited unit keeps the offset it was last drawn with, so selecting it never makes it jump */
-  for (let i = 0; i < units.length; i++) { const u = units[i]; let top = u.r.id === fixedId ? u.y + (LASTDY[u.r.id] || 0) : u.y, moved = true;
+  for (let i = 0; i < units.length; i++) { const u = units[i]; let top = u.r.id === fixedId ? u.y + (LASTDY[u.r.id] || 0) : u.y, moved = !fresh(u);   // a new stack was put in a free spot: it stays there
     while (moved) { moved = false; for (let j = 0; j < i; j++) { const v = units[j]; if (hit(u, top, v)) { top = v.y + v.dy + v.h + 24; moved = true; } } }
     u.dy = top - u.y; }
   for (const u of units) LASTDY[u.r.id] = u.dy;
@@ -443,7 +447,7 @@ function drawLinks() {
     const pr = pst.getBoundingClientRect(), fr = el.getBoundingClientRect();
     const x1 = (pr.right - wr.left) / z, y1 = (ay - wr.top) / z, x2 = (fr.left - wr.left) / z, y2 = (fr.top - wr.top) / z + 16;
     const mx = x2 < x1 ? 40 : Math.max(16, (x2 - x1) / 2);
-    const hotU = [V.sel].some(h => h && S[h] && (h === s.id || rootOf(S[h]) === rootOf(s) || P[s.fork.part]?.st === h));
+    const hotU = V.sel === s.id;   // only the connector that starts the selected stack
     out.push(`<path class="${s.x != null ? 'det' : ''}${hotU ? ' hot' : ''}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="tick${hotU ? ' hot' : ''}" cx="${x1}" cy="${y1}" r="${3 / Math.max(z, .4)}"/>`);
   });
   links.innerHTML = out.join('');
@@ -532,10 +536,20 @@ const endPtr = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
 vp.addEventListener('pointerup', endPtr); vp.addEventListener('pointercancel', endPtr);
 
 /* ---- placement of new root stacks: the free spot nearest the centre of the view ---- */
-function freeSpot(w = W(), h = 220) {
-  const cx = (innerWidth / 2 - V.x) / V.z - w / 2, cy = (innerHeight / 2.6 - V.y) / V.z;
-  const hit = (x, y) => (V.units || []).some(u => x < u.x + u.w + 24 && u.x < x + w + 24 && y < u.y + u.dy + u.h + 24 && u.y + u.dy < y + h + 24);
-  for (let r = 0; r < 4000; r += 60) for (let a = 0; a < (r ? 16 : 1); a++) { const x = Math.round(cx + r * Math.cos(a * Math.PI / 8)), y = Math.round(cy + r * Math.sin(a * Math.PI / 8)); if (!hit(x, y)) return { x, y }; }
+/* the free spot nearest a point (by default the centre of the view), so a new stack displaces nothing */
+function freeSpot(w = W(), h = 220, at = null) {
+  const cx = at ? at.x : (innerWidth / 2 - V.x) / V.z - w / 2, cy = at ? at.y : (innerHeight / 2.6 - V.y) / V.z;
+  /* against each drawn stack, not a unit's bounding box: the empty space between lanes is free */
+  const hit = (x, y) => Object.values(POS).some(q => x < q.x + W() + 24 && q.x < x + w + 24 && y < q.y + q.h + 24 && q.y < y + h + 24);
+    /* the nearest free spot on screen, on a 16px grid; failing that, the nearest free spot anywhere */
+  let best = null;
+  const x0 = (12 - V.x) / V.z, x1 = (innerWidth - 12 - V.x) / V.z - w, y0 = (topInset() - V.y) / V.z, y1 = (innerHeight - 12 - V.y) / V.z - Math.min(h, 160);
+  for (let y = y0; y <= y1; y += 16) for (let x = x0; x <= x1; x += 16) if (!hit(x, y)) { const d = Math.hypot(x - cx, y - cy); if (!best || d < best.d) best = { x: Math.round(x), y: Math.round(y), d }; }
+  /* a double-click puts the stack where you clicked, or within ~240px of it; if the area is full it opens at the
+     pointer, drawn on top, rather than somewhere else on the canvas */
+  if (at && (!best || best.d > 240 / V.z)) return { x: Math.round(cx), y: Math.round(cy) };
+  if (best) return { x: best.x, y: best.y };
+  for (let r = 0; r < 4000; r += 24) for (let a = 0; a < (r ? 16 : 1); a++) { const x = Math.round(cx + r * Math.cos(a * Math.PI / 8)), y = Math.round(cy + r * Math.sin(a * Math.PI / 8)); if (!hit(x, y)) return { x, y }; }
   return { x: cx, y: cy };
 }
 
@@ -652,8 +666,8 @@ document.addEventListener('click', e => {
 });
 vp.addEventListener('dblclick', e => {
   if (e.target.closest('.stack')) return;
-  const x = Math.round((e.clientX - V.x) / V.z), y = Math.round((e.clientY - V.y) / V.z), id = 's' + (++seq);
   if (V.draft) cancelDraft();
+  const { x, y } = freeSpot(W(), 140, { x: Math.round((e.clientX - V.x) / V.z), y: Math.round((e.clientY - V.y) / V.z) }), id = 's' + (++seq);
   S[id] = { id, ch: 'public', fork: null, x, y };
   V.draft = { st: id, after: '', mode: 'post', texts: [''] }; V.sel = id; render({ noAnim: true, focus: '.draft textarea' });
 });
