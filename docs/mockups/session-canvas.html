@@ -83,7 +83,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .tl button, .br button { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06);
   font-size: 12.5px; font-weight: 600; color: var(--t-heading); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tl button:hover, .br button:hover { background: var(--inset); }
-.tl button .pl { color: var(--accent); font-weight: 700; font-size: 15px; line-height: 1; }
+.lc { width: 14px; height: 14px; flex: none; display: block; }
+.tl button .pl { color: var(--accent); width: 15px; height: 15px; }
+.br button .lc { width: 15px; height: 15px; }
 .br { position: fixed; right: 12px; top: 12px; display: flex; gap: 6px; z-index: 20; align-items: center; }
 .br .zv { min-width: 52px; justify-content: center; font-variant-numeric: tabular-nums; }
 .br .nn b { color: var(--new); }
@@ -106,6 +108,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .sh .grow { flex: 1; }
 .sh .newc { color: var(--new); font-weight: 600; }
 .sh .ib { width: 24px; height: 24px; border-radius: 6px; display: inline-grid; place-items: center; color: var(--t-faint); }
+.sh .ib .lc { width: 15px; height: 15px; }
 .sh .ib:hover { background: var(--control); color: var(--t-heading); }
 .fq { padding: 7px 12px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: 10px 10px 0 0; }
 .fq i { font-style: normal; color: var(--t-faint); }
@@ -159,7 +162,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* seams: the gap between two parts. Desktop: a "+" in the left gutter of the hovered gap. Touch, or a selected stack:
    every gap shows its "+" (44px target). Inside an answer, gaps between blocks are fainter and make an inline fork. */
 .seam { position: relative; height: 1px; background: var(--divider); }
-.seam .sp { position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
+.seam .sp .lc { width: 13px; height: 13px; }
+.seam .sp { display: grid; place-items: center; position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
   box-shadow: var(--shadow); font-weight: 700; font-size: 15px; line-height: 22px; text-align: center; opacity: 0; transition: opacity .1s, transform .1s; z-index: 3; }
 .seam .hz { position: absolute; left: -26px; right: 0; top: -7px; height: 14px; z-index: 2; }
 .seam:hover .sp, .seam .sp:focus-visible, .seam.near .sp { opacity: 1; }
@@ -171,7 +175,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stack.sel .bseam .sp:hover { opacity: 1; color: var(--accent); }
 @media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; }
   .stack.sel .bseam .sp { width: 28px; height: 28px; line-height: 28px; top: -14px; } .seam .hz { display: none; } }
-.addend { display: block; width: 100%; text-align: left; padding: 6px 12px 7px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
+.addend { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 6px 12px 7px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
 .addend:hover { color: var(--accent); background: var(--inset); }
 @media (pointer: coarse) { .addend { padding: 11px 12px; } }
 
@@ -195,37 +199,19 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .ifork.folded { border-left-color: var(--border-strong); }
 .iffold { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; font-size: 12px; color: var(--t-secondary); padding: 3px 4px; border-radius: 5px; }
 .iffold:hover { background: var(--control); }
-.iffold .ar { color: var(--t-faint); } .iffold b { color: var(--t-heading); font-weight: 600; white-space: nowrap; } .iffold .n { color: var(--t-faint); white-space: nowrap; }
+.iffold .ar { color: var(--t-faint); } .iffold .ar .lc { width: 13px; height: 13px; } .iffold b { color: var(--t-heading); font-weight: 600; white-space: nowrap; } .iffold .n { color: var(--t-faint); white-space: nowrap; }
 .ifh button { margin-left: 0; }
-#bfork { position: fixed; z-index: 24; height: 24px; padding: 0 8px 0 6px; border-radius: 12px; background: var(--card); color: var(--accent); font-size: 11.5px; font-weight: 600; box-shadow: var(--shadow), 0 2px 8px rgba(0,0,0,.08); display: inline-flex; align-items: center; gap: 4px; }
-#bfork:hover { background: var(--accent); color: var(--on-accent); }
 .part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
 .prose > .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
-body[data-hl="bar"] .prose > .bhov { box-shadow: -8px 0 0 -5px var(--accent); }
-body[data-hl="tint"] .prose > .bhov { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
-#bfork.round { width: 22px; height: 22px; padding: 0; justify-content: center; border-radius: 50%; font-size: 12px; }
-#bfork.chip { height: 20px; padding: 0 6px; border-radius: 10px; font-size: 11px; }
-.bseam.bpick { height: auto; margin: 2px 0 10px; }
-.bpick button { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px 0 8px; border-radius: 13px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
-.bpick button:hover { background: var(--accent); color: var(--on-accent); }
-/* mock-only: the Tweaks box, for trying the Fork here variants */
-#tweaks { position: fixed; left: 12px; bottom: 12px; z-index: 22; width: 250px; background: var(--card); border-radius: 10px; box-shadow: var(--shadow), var(--shadow-pop); font-size: 12px; color: var(--t-secondary); }
-#tweaks > button { width: 100%; display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-weight: 600; color: var(--t-heading); }
-#tweaks > button .sub { font-weight: 400; color: var(--t-faint); }
-#tweaks .tw { padding: 2px 12px 12px; display: grid; gap: 8px; }
-#tweaks label { display: grid; gap: 3px; font-size: 11.5px; color: var(--t-faint); }
-#tweaks select { height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--inset); color: var(--t-heading); font: inherit; font-size: 12px; padding: 0 6px; }
-#tweaks .note { font-size: 11px; color: var(--t-faint); line-height: 1.4; }
-#tweaks:not(.open) .tw { display: none; }
 #bmenu { position: fixed; z-index: 40; min-width: 200px; padding: 4px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
 #bmenu button { display: flex; width: 100%; gap: 8px; align-items: flex-start; padding: 6px 10px; border-radius: 5px; font-size: 12.5px; color: var(--t-heading); text-align: left; }
 #bmenu button:hover, #bmenu button:focus-visible { background: var(--control); outline: none; }
-#bmenu button .mi { color: var(--accent); width: 14px; flex: none; text-align: center; line-height: 18px; }
+#bmenu button .mi { color: var(--accent); width: 15px; flex: none; padding-top: 2px; }
+#bmenu button .mi .lc { width: 15px; height: 15px; }
 #bmenu button .mt { display: grid; gap: 1px; line-height: 18px; }
 /* the paragraph a part menu would ask about: the earlier tint, 40% weaker */
 .prose > .menu-on { --menu-tint: color-mix(in srgb, var(--accent-soft) 60%, transparent); background: var(--menu-tint); border-radius: 3px; box-shadow: 0 0 0 3px var(--menu-tint); }
 #bmenu button small { font-size: 11px; line-height: 14px; color: var(--t-faint); }
-@media (pointer: coarse) { #bfork { height: 34px; padding: 0 12px; border-radius: 17px; } }
 .sbody > .draft:first-child { border-top: 0; border-radius: 10px 10px 0 0; }
 .draft .dp { position: relative; }
 .draft .dp + .dp { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-strong); }
@@ -238,7 +224,7 @@ body[data-hl="tint"] .prose > .bhov { background: var(--accent-soft); border-rad
 .draft .dp:first-child textarea { padding-right: 26px; }
 .draft .dx { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--t-dim); }
 .draft .dx:hover { background: var(--control); color: var(--t-heading); }
-.draft .dx svg, .draft .ibtn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.draft .dx svg, .draft .ibtn svg { width: 15px; height: 15px; }
 .draft .ibtn { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--t-secondary); }
 .draft .ibtn svg { width: 17px; height: 17px; }
 .draft .ibtn:hover { background: var(--control); color: var(--accent); }
@@ -269,7 +255,7 @@ body[data-hl="tint"] .prose > .bhov { background: var(--accent-soft); border-rad
 #pop h3 { margin: 0 0 6px; font-size: 13px; color: var(--t-heading); display: flex; align-items: center; gap: 8px; }
 #pop h3 .q { width: 20px; height: 20px; border-radius: 50%; background: var(--control); color: var(--t-secondary); font-size: 11.5px; font-weight: 700; }
 #pop h3 .q[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
-#pop h3 .x { margin-left: auto; width: 24px; height: 24px; border-radius: 6px; color: var(--t-faint); }
+#pop h3 .x { margin-left: auto; width: 24px; height: 24px; border-radius: 6px; color: var(--t-faint); display: grid; place-items: center; }
 #pop h3 .x:hover { background: var(--control); }
 #pop .lbl { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); margin: 10px 0 4px; }
 #pop .rc { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--t-heading); background: var(--inset); padding: 1px 5px; border-radius: 4px; }
@@ -295,8 +281,8 @@ body[data-hl="tint"] .prose > .bhov { background: var(--accent-soft); border-rad
 </style>
 
 <div id="vp" aria-label="Canvas"><div id="world"><svg id="links" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></div></div>
-<div class="tl"><button id="add-post" type="button"><span class="pl">+</span>Add post</button><button id="add-ask" type="button"><span class="pl">+</span>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
-<div class="br"><button class="nn" id="nextnew" type="button" title="Go to the next stack with new parts">Next new <b id="nncount"></b></button><button id="zout" type="button" aria-label="Zoom out">−</button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in">+</button><button id="fit" type="button">Fit</button></div>
+<div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
+<div class="br"><button class="nn" id="nextnew" type="button" title="Go to the next stack with new parts">Next new <b id="nncount"></b></button><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button">Fit</button></div>
 <div class="hint" id="hint">Click a stack, then + between two parts to insert. Double-click the canvas to write. Drag the canvas to move; Ctrl+scroll or pinch to zoom.</div>
 <div id="pop" hidden role="dialog" aria-label="Context rule"></div>
 
@@ -319,6 +305,9 @@ const words = (p, n = 6) => clip(strip(p.text), n * 7);
 const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; const h = m / 60; if (h < 24) return Math.round(h) + 'h'; return Math.round(h / 24) + 'd'; };
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
 const av = u => `<span class="av" style="background:var(--av${AVN[u] || (u.length % 6) + 1})" aria-hidden="true">${initials(u)}</span>`;
+/* Lucide icons (lucide.dev, ISC licence), inlined */
+const LUCIDE = { 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>' };
+const icon = (n, cls = '') => `<svg class="lc${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]}</svg>`;
 const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -415,29 +404,29 @@ function partHTML(p, s, selected, first = false) {
 }
 /* a question and the answer it prompted are read as one: no seam between them (Fork here covers that position) */
 const pairedWith = (p, next) => !isModel(p) && next && isModel(next) && next.run.by === p.by.u;
-const seam = (sid, after) => `<div class="seam"><span class="hz"></span><button class="sp" data-a="seam" data-st="${sid}" data-after="${after}" title="Insert a part here" aria-label="Insert a part here">+</button></div>`;
+const seam = (sid, after) => `<div class="seam"><span class="hz"></span><button class="sp" data-a="seam" data-st="${sid}" data-after="${after}" title="Insert a part here" aria-label="Insert a part here">${icon('plus')}</button></div>`;
 function draftHTML() {
   const d = V.draft, list = partsOf(d.st), after = list.findIndex(p => p.id === d.after), below = d.after && after >= 0 && after < list.length - 1;
   return `<div class="draft fresh" data-fl="draft">${d.texts.map((t, i) => `<div class="dp"><textarea data-di="${i}" rows="2" placeholder="${i ? 'Next part' : d.mode === 'ask' ? 'Ask a question' : 'Write a post'}" aria-label="Part ${i + 1}">${esc(t)}</textarea></div>`).join('')}
     ${below ? '<div class="below">Answers below won’t read this.</div>' : ''}
-    <div class="drow"><span class="grow"></span><button class="ibtn" data-a="dpart" type="button" aria-label="Add a part" title="Add a part"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 5.2v5.6M5.2 8h5.6"/></svg></button><button class="btn${d.mode === 'post' ? ' pri' : ''}" data-a="dpost" type="button" title="Post">Post</button><button class="btn${d.mode === 'ask' ? ' pri' : ''}" data-a="dask" type="button" title="Ask (⌘/Ctrl+Enter)">Ask</button></div>
-    <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button></div>`;
+    <div class="drow"><span class="grow"></span><button class="ibtn" data-a="dpart" type="button" aria-label="Add a part" title="Add a part">${icon('circle-plus')}</button><button class="btn${d.mode === 'post' ? ' pri' : ''}" data-a="dpost" type="button" title="Post">Post</button><button class="btn${d.mode === 'ask' ? ' pri' : ''}" data-a="dask" type="button" title="Ask (⌘/Ctrl+Enter)">Ask</button></div>
+    <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft">${icon('x')}</button></div>`;
 }
 function ifork(f, selected) {
   const ps = partsOf(f.id), d = V.draft?.st === f.id, open = d || V.openIn.has(f.id), own = authorOf(f) === ME;
   if (!open) { const q = ps[0], nw = ps.filter(isNew).length;
-    return `<div class="ifork folded" data-stack="${f.id}" data-fl="s:${f.id}"><button class="iffold" data-a="ifopen" data-id="${f.id}">${nw ? '<span class="dot"></span>' : ''}<span class="ar">↳</span><b>${esc(NAMES[q.by.u] || q.by.u)}</b> ${esc(clip(strip(q.text), 60))}<span class="n">${ps.length > 1 ? ` · ${ps.length} parts` : ''}</span></button></div>`; }
+    return `<div class="ifork folded" data-stack="${f.id}" data-fl="s:${f.id}"><button class="iffold" data-a="ifopen" data-id="${f.id}">${nw ? '<span class="dot"></span>' : ''}<span class="ar">${icon('corner-down-right')}</span><b>${esc(NAMES[q.by.u] || q.by.u)}</b> ${esc(clip(strip(q.text), 60))}<span class="n">${ps.length > 1 ? ` · ${ps.length} parts` : ''}</span></button></div>`; }
   return `<div class="ifork" data-stack="${f.id}" data-fl="s:${f.id}"><div class="ifh">Inline fork${f.fork.block != null ? ' on this passage' : ''}<button data-a="ifclose" data-id="${f.id}">Fold</button><button data-a="moveout" data-id="${f.id}">Move out</button></div>
     ${ps.map((q, i) => partHTML(q, f, selected) + (d && V.draft.after === q.id ? draftHTML() : '') + (selected && own && i < ps.length - 1 && !pairedWith(q, ps[i + 1]) ? seam(f.id, q.id) : '')).join('')}${d && !V.draft.after ? draftHTML() : ''}
-    ${!d && own ? `<button class="addend" data-a="seam" data-st="${f.id}" data-after="${ps.length ? ps[ps.length - 1].id : ''}">+ Add to this fork</button>` : ''}</div>`;
+    ${!d && own ? `<button class="addend" data-a="seam" data-st="${f.id}" data-after="${ps.length ? ps[ps.length - 1].id : ''}">${icon('plus')}Add to this fork</button>` : ''}</div>`;
 }
 function stackHTML(s) {
   const ps = partsOf(s.id), selected = V.sel === s.id, isRoot = !s.fork || s.x != null, collapsed = isRoot && V.collapsed.has(s.id);
   let h = '';
   if (isRoot) { const n = unitNew(s);
     h += `<div class="sh" data-a="grip" data-id="${s.id}"><span class="ov" aria-hidden="true">#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}</span><span class="ch">#${esc(CH[s.ch] || s.ch)}</span>${s.fork ? '<span>· opened from a fork</span>' : ''}<span class="grow"></span>${n ? `<span class="newc">${n} new</span>` : ''}
-      <button class="ib" data-a="collapse" data-id="${s.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▸' : '▾'}</button></div>`; }
-  if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : ''; h += `<div class="fq"><i>Fork of</i> ${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
+      <button class="ib" data-a="collapse" data-id="${s.id}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button></div>`; }
+  if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : ''; h += `<div class="fq"><i>From</i> ${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
   if (collapsed) {
     const u = unitStacks(s), np = u.reduce((n, x) => n + partsOf(x.id).length, 0);
     h += ps[0] ? partHTML(ps[0], s, false, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') : '';
@@ -447,7 +436,7 @@ function stackHTML(s) {
     if (d && V.draft.after === '') h += draftHTML();
     const own = authorOf(s) === ME;
     ps.forEach((p, i) => { h += partHTML(p, s, selected, i === 0); if (d && V.draft.after === p.id) h += draftHTML(); else if (i < ps.length - 1) h += pairedWith(p, ps[i + 1]) || !own ? '<div class="pairline"></div>' : seam(s.id, p.id); });
-    if (!d && ps.length && own) h += `<button class="addend" data-a="seam" data-st="${s.id}" data-after="${ps[ps.length - 1].id}">+ Add to this stack</button>`;
+    if (!d && ps.length && own) h += `<button class="addend" data-a="seam" data-st="${s.id}" data-after="${ps[ps.length - 1].id}">${icon('plus')}Add to this stack</button>`;
   }
   return `<div class="stack${selected ? ' sel' : ''}${collapsed ? ' coll' : ''}" data-stack="${s.id}" data-fl="s:${s.id}" style="--sw:${W()}px"><div class="sbody">${h}</div></div>`;
 }
@@ -514,7 +503,7 @@ function drawLinks() {
     const pr = pst.getBoundingClientRect(), fr = el.getBoundingClientRect();
     const x1 = (pr.right - wr.left) / z, y1 = (ay - wr.top) / z, x2 = (fr.left - wr.left) / z, y2 = (fr.top - wr.top) / z + 16;
     const mx = x2 < x1 ? 40 : Math.max(16, (x2 - x1) / 2);
-    const hotU = [V.hot, V.sel].some(h => h && S[h] && (h === s.id || rootOf(S[h]) === rootOf(s) || P[s.fork.part]?.st === h));
+    const hotU = [V.sel].some(h => h && S[h] && (h === s.id || rootOf(S[h]) === rootOf(s) || P[s.fork.part]?.st === h));
     out.push(`<path class="${s.x != null ? 'det' : ''}${hotU ? ' hot' : ''}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="tick${hotU ? ' hot' : ''}" cx="${x1}" cy="${y1}" r="${3 / Math.max(z, .4)}"/>`);
   });
   links.innerHTML = out.join('');
@@ -675,7 +664,7 @@ function renderPop() {
   const p = P[V.pop], s = S[p.st], parts = readParts(p), list = partsOf(s.id), idx = list.findIndex(x => x.id === p.id) + 1;
   const fp = s.fork && P[s.fork.part], fk = forksOf(p.id), mine = p.run.by === ME;
   const ctxList = parts.map(x => `<li>${isModel(x) ? `<b>Answer</b>` : `<b>${esc(NAMES[x.by.u] || x.by.u)}</b>`}: ${esc(clip(strip(x.text), 70))}${s.fork && x.id === s.fork.part && s.fork.block != null ? ' <i>(passage marked)</i>' : ''}</li>`).join('');
-  el.innerHTML = `<h3>${p.run.status === 'complete' ? 'Read' : 'Reads'} ${parts.length} part${parts.length === 1 ? '' : 's'}<button class="x" data-a="popclose" aria-label="Close">✕</button></h3>
+  el.innerHTML = `<h3>${p.run.status === 'complete' ? 'Read' : 'Reads'} ${parts.length} part${parts.length === 1 ? '' : 's'}<button class="x" data-a="popclose" aria-label="Close">${icon('x')}</button></h3>
     <div class="reads">Everything above it${s.fork ? ', up to and including the part its fork starts from' : ' in its stack'}${s.fork?.block != null || s.fork?.quote ? '; the passage is marked as the focus' : ''}. Outlined on the canvas.</div>
     ${ctxList ? `<ol style="margin-top:8px">${ctxList}</ol>` : '<div class="reads">Nothing.</div>'}
     <div class="lbl">Relations</div><div class="rel">Part ${idx} of ${list.length} in its stack.${fp ? ` The stack is a fork of “${esc(words(fp, 6))}”${s.fork.block != null ? ', at a passage' : ''}. <button data-a="goto" data-id="${fp.id}">Show</button>` : ' The stack is a root.'}${fk.length ? ` ${fk.length} fork${fk.length > 1 ? 's' : ''} start${fk.length > 1 ? '' : 's'} here.` : ''}</div>
@@ -730,7 +719,7 @@ document.addEventListener('click', e => {
   const partEl = e.target.closest('[data-part]');
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
   if (a === 'seam') { e.stopPropagation(); const st = S[d.st]; V.collapsed.delete(rootOf(st).id); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }
-  if (a === 'bfork') { $('#bfork')?.remove(); newFork(d.id, { block: +d.b, inline: true }); return; }
+  if (a === 'bfork') { newFork(d.id, { block: +d.b, inline: true }); return; }
   if (a === 'ifopen') { V.openIn.add(d.id); for (const p of partsOf(d.id)) V.seen.add(p.id); render(); return; }
   if (a === 'ifclose') { V.openIn.delete(d.id); render(); return; }
   if (a === 'fork') { newFork(d.id); return; }
@@ -785,49 +774,13 @@ document.addEventListener('mouseup', () => setTimeout(() => {
   const n = sel.anchorNode?.nodeType === 1 ? sel.anchorNode : sel.anchorNode?.parentElement, pr = n?.closest('.prose[data-p]'); if (!pr) return;
   const kids = [...pr.children].filter(c => !c.classList.contains('bseam') && !c.classList.contains('ifork')), block = kids.findIndex(k => k.contains(n));
   const r = sel.getRangeAt(0).getBoundingClientRect(), b = document.createElement('button');
-  b.id = 'selfork'; b.textContent = TW.lb === 'fork' ? 'Fork from selection' : 'Ask about this'; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 160)) + 'px'; b.style.top = (r.bottom + 8) + 'px';
+  b.id = 'selfork'; b.textContent = 'Ask about this'; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 160)) + 'px'; b.style.top = (r.bottom + 8) + 'px';
   b.onclick = ev => { ev.stopPropagation(); b.remove(); getSelection().removeAllRanges(); newFork(pr.dataset.p, { block: block >= 0 ? block : null, quote: t }); };
   document.body.append(b);
 }));
 
-/* "Fork here": a control for asking about one passage (block) of an answer. It opens an inline fork after the block,
-   anchored to it, with the full context up to the answer. Its form is a mock tweak (the Tweaks box, bottom left):
-     pill    a "Fork here" pill at the block's lower right (the first version)
-     edge    a round ↳ on the card's right edge, level with the block's first line
-     gutter  a round ↳ in the left gutter, level with the block's first line
-     end     a small chip after the block's last word
-     click   click a passage: an "Ask about this passage" row opens under it
-     select  no passage control: select text, then "Ask about this"
-     menu    no visible control: right-click (or long-press) a passage for a small menu (the default)"
-   The hovered or picked passage is marked with a bar, a tint, or nothing. */
-const TW = (() => { const d = { fh: 'menu', hl: 'none', lb: 'ask' }; try { return Object.assign(d, JSON.parse(localStorage.getItem('session-canvas:tweaks') || '{}')); } catch { return d; } })();
-const forkLabel = () => TW.lb === 'fork' ? 'Fork here' : 'Ask about this';
-let bTimer;
+/* an answer's blocks (paragraphs, list items), not counting inline forks */
 const blocksOf = pr => [...pr.children].filter(c => !c.classList.contains('ifork') && !c.classList.contains('bseam'));
-function markBlock(blockEl) { document.querySelectorAll('.bhov').forEach(x => x.classList.remove('bhov')); blockEl?.classList.add('bhov'); }
-function showBfork(blockEl) {
-  if (TW.fh === 'click' || TW.fh === 'select' || TW.fh === 'menu') return;
-  const pr = blockEl.parentElement, pid = pr.dataset.p, i = blocksOf(pr).indexOf(blockEl);
-  if (i < 0 || /^H\d/.test(blockEl.tagName) || V.z < 0.5) return;
-  const r = blockEl.getBoundingClientRect(), pb = pr.getBoundingClientRect();
-  if (r.top + 12 > pb.bottom) { $('#bfork')?.remove(); return; }   // hidden under the clamp
-  markBlock(blockEl);
-  let b = $('#bfork'); if (!b) { b = document.createElement('button'); b.id = 'bfork'; b.dataset.a = 'bfork'; document.body.append(b);
-    b.addEventListener('mouseenter', () => clearTimeout(bTimer)); b.addEventListener('mouseleave', hideBforkSoon); }
-  const round = TW.fh === 'edge' || TW.fh === 'gutter';
-  b.className = round ? 'round' : TW.fh === 'end' ? 'chip' : '';
-  b.innerHTML = round ? '<span aria-hidden="true">↳</span>' : `<span aria-hidden="true">↳</span>${TW.fh === 'end' && TW.lb === 'icon' ? '' : forkLabel()}`;
-  b.title = 'Ask about this passage'; b.setAttribute('aria-label', 'Ask about this passage');
-  b.dataset.id = pid; b.dataset.b = i;
-  const line = r.top + 10;   // the middle of the block's first line
-  if (TW.fh === 'edge') { const st = blockEl.closest('.stack, .ifork').getBoundingClientRect(); b.style.left = (st.right - 11) + 'px'; b.style.top = (line - 11) + 'px'; }
-  else if (TW.fh === 'gutter') { const pt = blockEl.closest('.part').getBoundingClientRect(); b.style.left = (pt.left + 11) + 'px'; b.style.top = (line - 11 + (i === 0 ? 26 : 0)) + 'px'; }
-  else if (TW.fh === 'end') {
-    const rg = document.createRange(); rg.selectNodeContents(blockEl); const rs = [...rg.getClientRects()].filter(x => x.width > 0), last = rs[rs.length - 1] || r;
-    const w = b.offsetWidth, fits = last.right + 6 + w <= pb.right;
-    b.style.left = (fits ? last.right + 6 : pb.right - w) + 'px'; b.style.top = (fits ? last.top + (last.height - 20) / 2 : last.bottom + 2) + 'px';
-  } else { b.style.left = (Math.min(r.right, pb.right) - b.offsetWidth + 4) + 'px'; b.style.top = (Math.min(r.bottom, pb.bottom) - 8) + 'px'; }
-}
 /* The part menu: right-click a part (or long-press it on touch). It is the only place to branch from a part. Both
    actions read the same context (the part and everything above it); they differ in what the question is about and
    where it goes, and each item says so on its second line:
@@ -837,7 +790,7 @@ function showBfork(blockEl) {
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
 function openPartMenu(target, x, y) {
   const partEl = target.closest?.('.part[data-part]'); if (!partEl || target.closest('textarea, input') || V.z < 0.5) return false;
-  closeBmenu(); $('#bfork')?.remove();
+  closeBmenu();
   const p = P[partEl.dataset.part]; if (!p) return false;
   const list = partsOf(p.st), next = list[list.indexOf(p) + 1];
   const kind = isModel(p) ? 'answer' : pairedWith(p, next) ? 'question' : 'post';
@@ -849,9 +802,9 @@ function openPartMenu(target, x, y) {
   if (ok) { blk.classList.add('menu-on');
     const pr = blk.parentElement, i = blocksOf(pr).indexOf(blk);
     items.push(selText && partEl.contains(getSelection().anchorNode)
-      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, '↳', 'Ask about the selection', 'Inline, under this paragraph')
-      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, '↳', 'Ask about this paragraph', 'Inline, under it')); }
-  items.push(item(`data-a="fork" data-id="${p.id}"`, '→', `Branch from this ${kind}`, 'New stack to the right'));
+      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, icon('corner-down-right'), 'Ask about the selection', 'Inline, under this paragraph')
+      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, icon('corner-down-right'), 'Ask about this paragraph', 'Inline, under it')); }
+  items.push(item(`data-a="fork" data-id="${p.id}"`, icon('arrow-right'), `Branch from this ${kind}`, 'New stack to the right'));
   const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Part actions');
   m.innerHTML = items.join(''); m.dataset.sel = selText || ''; document.body.append(m);
   m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
@@ -876,34 +829,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const bs = [...m.querySelectorAll('button')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus(); }
 }, true);
 vp.addEventListener('wheel', closeBmenu, { passive: true });
-/* click: a row under the picked passage */
-function pickBlock(pid, i) {
-  document.querySelectorAll('.bpick').forEach(x => x.remove()); markBlock(null);
-  const pr = pid && document.querySelector(`.prose[data-p="${pid}"]`), blk = pr && blocksOf(pr)[i];
-  if (blk) { const row = document.createElement('div'); row.className = 'bseam bpick';
-    row.innerHTML = `<button data-a="bfork" data-id="${pid}" data-b="${i}" title="Ask about this passage"><span aria-hidden="true">↳</span>${TW.lb === 'icon' ? '' : forkLabel()}</button>`;
-    blk.after(row); markBlock(blk); }
-  layout(); drawLinks();
-}
-document.addEventListener('click', e => {
-  if (TW.fh !== 'click' || e.target.closest('.bpick, #tweaks')) return;
-  const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *');
-  const ok = blk && !blk.closest('.ifork') && !blk.classList.contains('ifork') && !/^H\d/.test(blk.tagName) && !getSelection()?.toString().trim();
-  const pid = ok ? blk.parentElement.dataset.p : null, i = ok ? blocksOf(blk.parentElement).indexOf(blk) : -1;
-  setTimeout(() => pickBlock(pid, i), 0);   // after the click has re-rendered the stack, if it did
-});
-const hideBforkSoon = () => { if (TW.fh === 'click') return; clearTimeout(bTimer); bTimer = setTimeout(() => { $('#bfork')?.remove(); markBlock(null); }, 250); };
-document.addEventListener('mouseover', e => {
-  if (matchMedia('(pointer: coarse)').matches) return;
-  const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || blk.classList.contains('ifork')) { if (!e.target.closest?.('#bfork')) hideBforkSoon(); return; }
-  clearTimeout(bTimer); showBfork(blk);
-});
-document.addEventListener('click', e => {
-  if (!matchMedia('(pointer: coarse)').matches) return;
-  const blk = e.target.closest?.('.part.m > .pb > .prose[data-p] > *'); if (!blk || blk.closest('.ifork') || !blk.closest('.stack.sel')) return;
-  setTimeout(() => showBfork(blk), 0);
-});
-vp.addEventListener('wheel', () => $('#bfork')?.remove(), { passive: true });
 
 /* the "+" insert controls show only in the gaps directly above and below the hovered part; a question and its answer
    count as one */
@@ -917,24 +842,6 @@ let nearPart = null;
 document.addEventListener('mouseover', e => { if (e.target.closest?.('.seam')) return; const p = e.target.closest?.('.sbody > .part, .ifork > .part') || null; if (p === nearPart) return; nearPart = p; nearSeams(p); });
 document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').matches) return; const p = e.target.closest?.('.sbody > .part, .ifork > .part'); if (p) setTimeout(() => { const live = document.querySelector(`[data-part="${p.dataset.part}"]`); nearPart = live; nearSeams(live); }, 0); });
 
-/* ---- mock-only: Tweaks ---- */
-function renderTweaks() {
-  let el = $('#tweaks'); const open = el?.classList.contains('open');
-  if (!el) { el = document.createElement('div'); el.id = 'tweaks'; document.body.append(el); }
-  el.className = open ? 'open' : '';
-  const opt = (k, v, t) => `<option value="${v}"${TW[k] === v ? ' selected' : ''}>${t}</option>`;
-  el.innerHTML = `<button type="button" data-tw="toggle" aria-expanded="${!!open}">Tweaks <span class="sub">· mock only</span></button><div class="tw">
-    <label>Passage control<select data-k="fh">${opt('fh', 'menu', 'Right-click menu')}${opt('fh', 'edge', 'Round ↳ on the card edge')}${opt('fh', 'gutter', 'Round ↳ in the left gutter')}${opt('fh', 'end', 'Chip after the last word')}${opt('fh', 'pill', 'Pill at the lower right (first version)')}${opt('fh', 'click', 'Click a passage, then a row under it')}${opt('fh', 'select', 'Text selection only')}</select></label>
-    <label>Passage highlight<select data-k="hl">${opt('hl', 'none', 'None')}${opt('hl', 'tint', 'Tint')}${opt('hl', 'bar', 'Bar on the left')}</select></label>
-    <label>Label<select data-k="lb">${opt('lb', 'ask', '“Ask about this”')}${opt('lb', 'fork', '“Fork here”')}${opt('lb', 'icon', 'Icon only')}</select></label>
-    <div class="note">Hover an answer's paragraph${TW.fh === 'click' ? ' and click it' : TW.fh === 'select' ? ' and select some text' : TW.fh === 'menu' ? ' and right-click it' : ''}. Kept in this browser.</div></div>`;
-  document.body.dataset.hl = TW.hl;
-}
-document.addEventListener('change', e => { const k = e.target.closest?.('#tweaks select')?.dataset.k; if (!k) return; TW[k] = e.target.value;
-  try { localStorage.setItem('session-canvas:tweaks', JSON.stringify(TW)); } catch {}
-  $('#bfork')?.remove(); closeBmenu(); pickBlock(null); renderTweaks(); });
-document.addEventListener('click', e => { if (e.target.closest?.('[data-tw="toggle"]')) { $('#tweaks').classList.toggle('open'); renderTweaks(); } });
-renderTweaks();
 
 /* ---- initial placement: units ordered by last activity, packed into columns ---- */
 function initialLayout() {
