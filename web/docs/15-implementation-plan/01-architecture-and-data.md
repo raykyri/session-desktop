@@ -78,10 +78,10 @@ replication window of R1, and the run and allowance settings of
 per member per week, shared by all of the member's included-token runs, 03
 K9) and `SESSION_QUEUED_PER_USER` (20); the abuse limits of 04 Z1. The
 default model and the default effort are not configuration: a site admin
-sets them at runtime (03 K15). The abuse address of the site footer,
-`abuse@<host>`, is derived from the hostname of `SESSION_PUBLIC_ORIGIN`
-and is not a separate setting; the mailbox must exist before launch (a
-launch prerequisite in 05).
+sets them at runtime (03 K15). The abuse mailbox, `abuse@<host>` with
+`<host>` the hostname of `SESSION_PUBLIC_ORIGIN`, is not a setting and is
+not linked from the app; it must exist before launch and the site admins
+read it (a launch prerequisite in 05).
 `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
 `SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
 Acceptance: boot refuses a cursor key that is not 32 bytes of base64;

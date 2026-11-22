@@ -1,6 +1,6 @@
 // The app shell end to end (02 §2.2, W2.2, W2.3, W2.7; 05 M4): the app bar
 // spanning the window in both layouts and at every width, the bar hiding on
-// scroll without moving the page, the site footer on feeds and pages, the
+// scroll without moving the page, no site footer on feeds and pages, the
 // signed-out bar, and the tab's client id across a reload and in a
 // duplicated tab (01 Y3).
 //
@@ -256,11 +256,11 @@ test.describe("signed in", () => {
     expect(await place()).toEqual(up);
   });
 
-  test("the site footer ends every feed and page", async ({ page }) => {
+  test("no feed or page has a site footer", async ({ page }) => {
     for (const [path, screen] of screens()) {
       await page.goto(path);
       await expectScreen(page, path, screen);
-      await expectSiteFooter(page, path);
+      await expectNoSiteFooter(page, path);
     }
   });
 
@@ -560,27 +560,25 @@ test.describe("signed out", () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test("the site footer ends the feeds and Browse", async ({ page }) => {
+  test("the feeds and Browse have no site footer", async ({ page }) => {
     // Usage needs an account: signed out it goes to the sign-in page.
     for (const [path, screen] of screens().filter(([target]) => target !== "/usage")) {
       await page.goto(path);
       await expectScreen(page, path, screen);
-      await expectSiteFooter(page, path);
+      await expectNoSiteFooter(page, path);
     }
   });
 });
 
-/** "Session · Report abuse: abuse@<host>" with a mailto link, as the last
- * thing in the screen's column. */
-async function expectSiteFooter(page: Page, path: string) {
-  const footer = page.getByRole("contentinfo");
-  await expect(footer, path).toHaveText(`Session · Report abuse: ${ABUSE_ADDRESS}`);
-  await expect(footer.getByRole("link", { name: ABUSE_ADDRESS }), path).toHaveAttribute(
-    "href",
-    `mailto:${ABUSE_ADDRESS}`,
-  );
-  expect(
-    await footer.evaluate((element) => element.parentElement?.lastElementChild === element),
-    `${path}: the footer ends the column`,
-  ).toBe(true);
+/** No footer and no link to the abuse mailbox (02 W2.7); the column ends
+ * with its own bottom padding. */
+async function expectNoSiteFooter(page: Page, path: string) {
+  await expect(page.getByRole("contentinfo"), path).toHaveCount(0);
+  await expect(page.locator(`a[href="mailto:${ABUSE_ADDRESS}"]`), path).toHaveCount(0);
+  await expect(page.getByText("Report abuse"), path).toHaveCount(0);
+  const bottom = await page
+    .locator(".feed-inner, .page-inner")
+    .first()
+    .evaluate((el) => getComputedStyle(el).paddingBottom);
+  expect(bottom, `${path}: the column's bottom padding`).toBe("60px");
 }

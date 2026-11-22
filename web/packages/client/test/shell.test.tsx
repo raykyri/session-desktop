@@ -504,7 +504,7 @@ test.serial("off the feeds the bar does not hide", async (t) => {
 
 // ------------------------------------------------------------ W2.7
 
-test.serial("every feed and page ends with the footer, signed in and out", async (t) => {
+test.serial("no feed or page has a site footer, signed in and out", async (t) => {
   const cases: [string, ReturnType<typeof testUser> | null][] = [
     ["/", testUser()],
     ["/c/ml", testUser()],
@@ -520,15 +520,11 @@ test.serial("every feed and page ends with the footer, signed in and out", async
   ];
   for (const [path, user] of cases) {
     const app = await renderApp(path, { user });
-    const footer = await screen.findByRole("contentinfo");
-    t.is(
-      footer.textContent,
-      "Session · Report abuse: abuse@session.dev",
-      `${path} ${user ? "signed in" : "signed out"}`,
-    );
-    t.is(within(footer).getByRole("link").getAttribute("href"), "mailto:abuse@session.dev");
-    // Last in its screen.
-    t.is(footer.nextElementSibling, null, path);
+    await waitUntil(t, () => document.querySelector(".feed-inner, .page-inner") !== null, path);
+    const label = `${path} ${user ? "signed in" : "signed out"}`;
+    t.is(screen.queryByRole("contentinfo"), null, label);
+    t.is(document.querySelector('a[href^="mailto:"]'), null, `${label}: no abuse link`);
+    t.is(screen.queryByText(/Report abuse/), null, label);
     app.unmount();
   }
 });

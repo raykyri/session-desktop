@@ -62,8 +62,7 @@ New code:
 
 ```
 src/replica/              ReplicaProvider, adapters/, queries.ts, writes.ts, viewer.ts, runStream.ts, fixtureReplica.ts
-src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide,
-                          SiteFooter
+src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide
 src/features/feed/        FeedPage, FeedRow, ThreadCard, TitleRow, AnswerProse, CardFooter, RunStatus, RemovedCard, BranchedFrom
 src/features/branches/    BranchTree, BranchCard, BranchActions, BranchComments, SelectionActions, lookPhrase.ts, geometry.ts
 src/features/replies/     ReplyTree, ReplyCard
@@ -302,17 +301,14 @@ appearing, staying after the page is opened, and clearing after the last
 reply; the flash class removed after 1.6 s; a test that a mention in a
 private channel the viewer left is not listed.
 
-**W2.7 Site footer** (`siteFoot`, 05 §6 Q10). Every feed (after the last row)
-and every page (`/saved`, Browse, Invites, Usage, Notifications, Site Admin,
-`/welcome`, `/settings`) ends with a centred footer: "Session · Report abuse:
-abuse@<host>", the address a `mailto:` link, where `<host>` is the hostname of
-`SESSION_PUBLIC_ORIGIN` (in production `abuse@session.dev`); 40 px above it,
-a 1 px divider rule on top, extra-small faint text. The address comes from
-the client's build-time config of the public origin, not from a literal.
-Signed-out readers see it too. Scheduled in M4. Acceptance: a component test
-that the address follows the configured origin; `spaces-shell.spec.ts` finds
-the footer at the end of Home, a channel, Browse and Usage, signed in and
-signed out.
+**W2.7 No site footer** (05 §6 Q10). Feeds and pages have no site footer
+and no abuse link: a feed ends after its last row with the feed's bottom
+padding (60 px, 30 px at 860 px and below), a page with the page's (60 px).
+The abuse mailbox, abuse@<host> (`abuse@session.dev` in production), still
+exists and is read by the site admins, but is no longer linked from the app.
+Acceptance: a component test and `spaces-shell.spec.ts` find no
+`contentinfo` and no `mailto:` link on Home, a channel, Browse and Usage,
+signed in and signed out.
 
 ## 3. Feed
 
@@ -323,7 +319,7 @@ have an invite yet. You can read every open channel. Asking, posting and
 replying open once you enter an invite code.", button "Enter a code"), the
 channel header (W6.1), the frozen-channel banner (W6.10), the composer (§5;
 not rendered in a channel the signed-in viewer has not joined), the empty
-state, one row `[card | side column]` per thread, and the site footer (W2.7).
+state, and one row `[card | side column]` per thread (no site footer, W2.7).
 
 - **`centred`** (mock layout A, `pl-a`): above 1320 px a grid
   `1fr | 600px | 1fr` (at most 1340 px wide), card in the middle track, side
@@ -1135,8 +1131,7 @@ Tab order follows DOM order: the app bar (home, scope picker, strip chips,
 New channel, ring, Saved, layout toggle, account menu), then the main column:
 banner, channel header, composer, then each row as card (Branched from,
 the title row's "…", citations and passage count buttons, footer: follow-up or Reply, Save) followed by its side column (each
-branch tree, the open card's controls, its composer), and last the site
-footer's address link. A branch or reply
+branch tree, the open card's controls, its composer). A branch or reply
 tree is one tab stop with a roving `tabindex`. Opening a menu, dialog or
 composer moves focus as follows:
 
@@ -1239,8 +1234,7 @@ test passes in CI and names the failing pair when it does not.
 
 AVA, jsdom and Testing Library under `packages/client/test/`, on the fixture
 replica: `lookPhrase`, `railGeometry`, `placePins`, `useBarAutoHide`,
-count and footer-meta formatting, notification text, the site
-footer address, viewer fields, scope lists, invite-code parsing, run states,
+count and footer-meta formatting, notification text, viewer fields, scope lists, invite-code parsing, run states,
 focus table, Escape stack, contrast pairs, one-composer rule, write rollback,
 stream gaps, "Not sent" states, the upgrade reload timer, client id
 storage, and each screen's viewer states. Tests of the deleted features go
@@ -1254,7 +1248,7 @@ delivers them.
 
 | Spec (`web/e2e/`) | Milestone | Drives |
 |---|---|---|
-| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the strip folded into the scope menu at 400 px (W2.5), the site footer (W2.7) on feeds and pages, signed in and out |
+| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the strip folded into the scope menu at 400 px (W2.5), no site footer (W2.7) on feeds and pages, signed in and out |
 | `spaces-feed.spec.ts` | M4, M5a | post, save and the Saved count, the footer meta and no model or effort text, a second context seeing a post without a reload, delete, the removed placeholder; the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload); from M5a, an ask streaming with a reload mid-stream, the queue-full refusal |
 | `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions and the mention toast |
 | `spaces-signed-out.spec.ts` | M4 | signed-out reading of a thread, its branches and replies (§9.5); write controls open the auth dialog |

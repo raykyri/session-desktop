@@ -116,8 +116,9 @@ provider needs its deployment credential above.
   load check (§4.5) records a window snapshot above 5 MB.
 - The abuse limits `SESSION_LIMIT_*` of `04` Z1 and `01` A3, documented in
   `web/.env.example`.
-- The abuse address is not a setting: the site footer shows `abuse@` and
-  the hostname of `SESSION_PUBLIC_ORIGIN`, `abuse@session.dev` (Q10).
+- The abuse mailbox is not a setting: it is `abuse@` and the hostname of
+  `SESSION_PUBLIC_ORIGIN`, `abuse@session.dev` (Q10). The app does not link
+  it; there is no site footer.
 
 ### 2.5 Secrets of the current app to remove
 
@@ -777,7 +778,7 @@ and from it on failures are fixed forward (step 8 no longer applies).
 | A post in an open channel | |
 | An ask paid with included tokens streams an answer; `/usage` shows the tokens | |
 | Litestream replicates to the new prefix: `aws s3 ls --endpoint-url <endpoint> <new replica URL>/ --recursive` lists files written after the post above | |
-| The site footer reads "Session · Report abuse: abuse@session.dev" | |
+| No page shows a site footer; abuse@session.dev receives the test message of §4.8 | |
 | A site admin creates an account invite on `/invites` | |
 | A second account redeems it (the first member invite used) | |
 | The inviter has the `invite_used` notification on `/notifications` | |

@@ -28,7 +28,7 @@ import {
   type BarState,
 } from "../src/features/shell/useBarAutoHide.js";
 import { accountLine, viewerOf } from "../src/features/shell/viewer.js";
-import { abuseAddress, PUBLIC_ORIGIN } from "../src/lib/publicOrigin.js";
+import { PUBLIC_ORIGIN } from "../src/lib/publicOrigin.js";
 
 import { testUser } from "./helpers.js";
 
@@ -251,9 +251,6 @@ test("the account menu's header line", (t) => {
 
 // ------------------------------------------------------------ W2.7
 
-test("the footer's address follows the configured origin", (t) => {
-  t.is(abuseAddress("https://session.dev"), "abuse@session.dev");
-  t.is(abuseAddress("https://staging.session.dev"), "abuse@staging.session.dev");
-  t.is(abuseAddress("http://localhost:1480"), "abuse@localhost");
+test("the public origin outside a Vite build", (t) => {
   t.is(PUBLIC_ORIGIN, "https://session.dev", "outside a Vite build: the production origin");
 });

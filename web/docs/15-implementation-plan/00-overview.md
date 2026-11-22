@@ -86,9 +86,10 @@ to them.
   sign-in with GitHub or X. Two deliberate departures from the mockup: the
   invite link carries the code in the fragment (`/i#<code>`), and sign-in
   offers GitHub as well as X.
-- Site footer on every feed and page: "Session · Report abuse:
-  abuse@<host>", with `<host>` the hostname of `SESSION_PUBLIC_ORIGIN`
-  (`abuse@session.dev` in production).
+- No site footer: feeds and pages end with their own bottom padding. The
+  abuse mailbox, `abuse@<host>` with `<host>` the hostname of
+  `SESSION_PUBLIC_ORIGIN` (`abuse@session.dev` in production), still exists
+  and is read by the site admins, but is no longer linked from the app.
 - Notifications: a page in the account menu and an unread dot on the
   account avatar.
 - Usage and API keys page: weekly allowance, recent runs, what happens when
@@ -227,9 +228,9 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
 - Account deletion deletes the provider identity (`provider`,
   `provider_user_id`); the handle stays reserved, and the person can sign
   in again as a new waiting identity (04 I1).
-- Abuse reaches site admins by email: the site footer reads "Session ·
-  Report abuse: abuse@<host>" on every feed and page (a client item in 02,
-  scheduled in M4), and the mailbox must exist before launch (Q10).
+- Abuse reaches site admins by email at abuse@<host>; the mailbox must
+  exist before launch (Q10). The app no longer links it: there is no site
+  footer.
 - The product owner's answers to `05-delivery.md` §6, recorded there as
   "Decided" and in each file where the question was:
   - Scope: web only (above); no "Run on this Mac" (P15), no phone app
@@ -291,10 +292,10 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
     printed by `npm run db:admin -- --invite`, chooses a handle, and is
     promoted with `npm run db:admin -- <handle>`). Q8: launch with both GitHub and X; X access
     ready on staging before M6 and on production before launch is a launch
-    blocker, and the launch smoke test signs in with both. Q10: the site
-    footer reads "Session · Report abuse: abuse@<host>" (`<host>` from
-    `SESSION_PUBLIC_ORIGIN`) on every feed and page, the mailbox exists
-    before launch, and there is no community guidelines page. Q3: the
+    blocker, and the launch smoke test signs in with both. Q10: the mailbox
+    abuse@<host> (`<host>` from `SESSION_PUBLIC_ORIGIN`) exists before
+    launch and the site admins read it; the app has no site footer and no
+    longer links it; there is no community guidelines page. Q3: the
     branch is `session-web` and `main` is kept as it is. Q7: each account's email from the provider
     is stored and updated on every sign-in, never used to match, deduplicate
     or merge accounts; the handle stays the only unique name (04 I1, Z2).
