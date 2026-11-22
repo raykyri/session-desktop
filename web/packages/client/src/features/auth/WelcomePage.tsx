@@ -6,7 +6,7 @@
 import { UNUSABLE_INVITE_MESSAGE, parseInviteCode } from "@session/shared";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useMe } from "../../api/account.js";
 import { redeemInvite } from "../../api/membership.js";
@@ -24,6 +24,7 @@ export function WelcomePage() {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
 
   // The route's guard sends a member Home only on entry. An account that
   // becomes a member while this page shows (Create account in the profile
@@ -48,16 +49,22 @@ export function WelcomePage() {
     if (typed === "") return setError(EMPTY_CODE_MESSAGE);
     setPending(true);
     setError(null);
+    // Use code is disabled while the redeem runs, which drops focus to the
+    // page; a refused code puts it back in the field with the error.
+    const refused = (message: string) => {
+      setError(message);
+      field.current?.focus();
+    };
     try {
       const check = await redeemInvite(parseInviteCode(typed) ?? typed);
       if (check.status === "open") {
         setValue("");
         openAuthDialog({ step: "profile", profileInviter: check.inviter, origin: "welcome" });
       } else {
-        setError(UNUSABLE_INVITE_MESSAGE);
+        refused(UNUSABLE_INVITE_MESSAGE);
       }
     } catch (failure) {
-      setError(
+      refused(
         trpcErrorCode(failure) === "TOO_MANY_REQUESTS"
           ? "Too many attempts. Wait a while and try again."
           : UNUSABLE_INVITE_MESSAGE,
@@ -76,6 +83,7 @@ export function WelcomePage() {
         </p>
         <form className="code-f" onSubmit={(event) => void submit(event)} noValidate>
           <input
+            ref={field}
             value={value}
             onChange={(event) => setValue(event.currentTarget.value)}
             placeholder="SESS-XXXX-XX"

@@ -104,6 +104,38 @@ test.serial(
   },
 );
 
+test.serial(
+  "a code the server refuses puts focus back in the field, in the dialog and on Invite required",
+  async (t) => {
+    await renderApp("/", {
+      user: null,
+      responses: { "auth.checkInvite": checkFor("SESS-9TQ2-X8") },
+    });
+    openAuthDialog({ step: "code" });
+    await screen.findByRole("heading", { name: "Join with invite?" });
+    const field = within(dialog()).getByRole("textbox", { name: "Invite code" });
+    const go = within(dialog()).getByRole("button", { name: "Continue" });
+    fireEvent.change(field, { target: { value: "SESS-4KQ7-M2" } });
+    go.focus();
+    fireEvent.click(go);
+    await waitUntil(t, () => alertTexts().includes(UNUSABLE_INVITE_MESSAGE), "refused");
+    t.is(document.activeElement, field);
+    cleanup();
+
+    await renderApp("/welcome", {
+      user: waitingTestUser({ login: "rheaok" }),
+      responses: { "accountInvites.redeem": { status: "unusable" } },
+    });
+    const code = await screen.findByRole("textbox", { name: "Invite code" });
+    const use = screen.getByRole("button", { name: "Use code" });
+    fireEvent.change(code, { target: { value: "SESS-4KQ7-M2" } });
+    use.focus();
+    fireEvent.click(use);
+    await waitUntil(t, () => alertTexts().includes(UNUSABLE_INVITE_MESSAGE), "refused");
+    t.is(document.activeElement, code);
+  },
+);
+
 test.serial("Continue to GitHub posts the code to the start route, not a URL", async (t) => {
   const posted: { url: string; body: string }[] = [];
   const realFetch = globalThis.fetch;
