@@ -144,7 +144,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .more { margin-top: 2px; color: var(--accent); font-size: 11.5px; font-weight: 500; }
 .more:hover { text-decoration: underline; }
 .pf { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--t-faint); }
-.sawbtn { color: var(--saw); font-weight: 500; }
+.sawbtn { color: var(--saw); font-weight: 500; text-align: left; }
+.toln { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 10.5px; color: var(--t-faint); }
+.pf { flex-wrap: wrap; row-gap: 2px; }
+.fail { margin-top: 4px; font-size: 11px; color: var(--bad); }
+.mk.code { font: 600 9px var(--mono); }
+.ph { cursor: grab; }
+.stack.dragging { opacity: .85; z-index: 5; }
+.stack.dragging .ph { cursor: grabbing; }
 .sawbtn:hover { text-decoration: underline; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--warn); }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
@@ -252,7 +259,7 @@ const XI = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
 /* ---- the store: parts and the canvas ---- */
 const P = {};          // id -> part
 let K = 0;             // creation order; also the default order key
-const CANVAS = { id: 'public', name: 'public', code: {} };
+const CANVAS = { id: 'public', name: 'public', code: {}, codeBy: {} };
 function add(p) { p.k ??= ++K; p.t = ++K; p.canvas = CANVAS.id; P[p.id] = p; return p; }
 let idSeq = 0; const newId = pre => pre + (++idSeq);
 
@@ -294,7 +301,8 @@ function lookupAll(id, sel) {
   return chain(id).filter(x => x.owner === null || codeOf(x.owner)[sel] != null)
     .map(x => ({ ...x, src: x.owner === null ? DEFAULTS[sel] : codeOf(x.owner)[sel] }));
 }
-const ERR = {};    // 'owner:sel' -> message from the last failure
+const ERR = {};
+let FAILS = null;    // while an ask is being sent: the handlers that threw    // 'owner:sel' -> message from the last failure
 function compile(src, sel) {
   const f = new Function('ancestors', 'part', 'stack', 'reply', 'model', `"use strict"; return ({ ${src} });`);
   const o = f(ancestorIds, view, stackIds, text => ({ reply: String(text) }), () => ({ model: true }));
@@ -310,7 +318,7 @@ function view(id) {
 function call(id, sel, args, thisId = id) {
   for (const h of lookupAll(id, sel)) {
     try { const r = compile(h.src, sel).apply(view(thisId), args); delete ERR[h.owner + ':' + sel]; return { value: r, from: h }; }
-    catch (e) { ERR[h.owner + ':' + sel] = e.message; }
+    catch (e) { ERR[h.owner + ':' + sel] = e.message; FAILS?.push(`${sel} on ${h.owner} failed`); }
   }
   return { value: null, from: null };
 }
@@ -335,20 +343,25 @@ function resolve(a, extra = null) {
   return msg;
 }
 function send(askId) {
+  FAILS = []; try { return send_(askId); } finally { P[askId].fail = FAILS.length ? FAILS : undefined; FAILS = null; }
+}
+function send_(askId) {
   const a = P[askId], msg = resolve(a); a.saw = msg.context;
   let answer = null;
   for (const r of msg.to) { const res = callOn(r, 'ask', [msg]).value; if (res && typeof res.reply === 'string') { answer = { text: res.reply, via: r === 'canvas' ? 'canvas' : headOf(base(r)).id }; break; } }
   let pos = call(a.id, 'place', [{ by: answer ? 'code' : MODEL }, msg]).value;
   pos = normPos(pos, a.id);
   const rep = add({ id: newId('r'), prev: a.id, pos, to: undefined });
-  if (answer) { const owner = answer.via === 'canvas' ? null : P[answer.via]; Object.assign(rep, { by: owner ? owner.by : ME, via: answer.via, text: answer.text }); }
+  if (answer) { const owner = answer.via === 'canvas' ? null : P[answer.via]; a.answeredBy = answer.via;
+    Object.assign(rep, { by: answer.via === 'canvas' ? (CANVAS.codeBy?.ask || 'canvas') : (owner.codeBy?.ask || owner.by), via: answer.via, text: answer.text }); }
   else { Object.assign(rep, { model: MODEL, html: '', run: { status: 'queued', step: 0 } }); runModel(rep.id, a, msg); }
   return rep;
 }
 /* one `next` per part: a second Continue on the same part becomes a branch beside it */
 function normPos(pos, prevId) {
   if (pos === 'inline') return 'inline';
-  if (pos && typeof pos === 'object' && pos.beside) return { beside: { dx: +pos.beside.dx || 314, dy: +pos.beside.dy || 0 } };
+  if (pos && typeof pos === 'object' && pos.at) return { at: { x: +pos.at.x || 0, y: +pos.at.y || 0 } };
+  if (pos && typeof pos === 'object' && pos.beside) return { beside: { dx: Number.isFinite(+pos.beside.dx) ? +pos.beside.dx : 314, dy: +pos.beside.dy || 0 } };
   if (nextOf(prevId)) return { beside: { dx: 314, dy: 0 } };
   return 'next';
 }
@@ -380,7 +393,7 @@ function seed() {
   add({ id: 'h3', by: S.hal.rp[1].kids[0].u, text: S.hal.rp[1].kids[0].t, prev: 'h2', pos: 'next' });
   /* Dagen H: an ask, its answer and two follow-ups continuing the series. The head's context handler keeps the
      other follow-up answers out of what each follow-up sees. */
-  add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 330 } }, code: { context:
+  add({ id: 'd0', by: 'jun.park', text: S.dagen.q, to: [], pos: { at: { x: 24, y: 330 } }, codeBy: { context: 'jun.park' }, code: { context:
 `context(msg) {
   // Follow-ups see the people's questions and the first
   // answer, not the answers to other follow-ups.
@@ -410,7 +423,7 @@ function seed() {
   add({ id: 's0', by: 'sol', text: s1, pos: { at: { x: 966, y: 64 } } });
   add({ id: 's1', by: 'sol', text: s2, prev: 's0', pos: 'next' });
   /* the Glossary: a card whose ask handler answers "define <term>" from its own lines */
-  add({ id: 'g0', by: 'lettie', text: 'Glossary for #public. Ask this card “define <term>” and it answers from the lines below, without a model. Other questions go to the model as usual.', pos: { at: { x: 966, y: 250 } }, code: { ask:
+  add({ id: 'g0', by: 'lettie', text: 'Glossary for #public, one term per part. Ask this card “define <term>” and it answers from its parts, without a model. Other questions go to the model as usual.', pos: { at: { x: 966, y: 250 } }, codeBy: { ask: 'lettie' }, code: { ask:
 `ask(msg) {
   const m = msg.text.match(/^(?:define|look up)\\s+(.+?)[?.]*$/i);
   if (!m) return model(msg);
@@ -420,39 +433,49 @@ function seed() {
     .find(l => l.toLowerCase().startsWith(term + ' —'));
   return line ? reply(line) : model(msg);
 }` } });
-  add({ id: 'g1', by: 'lettie', text: 'axiom of choice — for any collection of non-empty sets, a set containing one element of each exists.\nfree group — the group of reduced words in its generators, with no relations between them.\namenable — a group is amenable if it has a finitely additive, translation-invariant mean. The isometry groups of the line and the plane are amenable.\nrisk compensation — people adjust how they behave to the risk they perceive, for example driving more carefully under unfamiliar rules.', prev: 'g0', pos: 'next' });
+  ['axiom of choice — for any collection of non-empty sets, a set containing one element of each exists.',
+   'free group — the group of reduced words in its generators, with no relations between them.',
+   'amenable — a group is amenable if it has a finitely additive, translation-invariant mean. The isometry groups of the line and the plane are amenable.',
+   'risk compensation — people adjust how they behave to the risk they perceive, for example driving more carefully under unfamiliar rules.']
+    .forEach((text, i) => add({ id: 'g' + (i + 1), by: 'lettie', text, prev: 'g' + i, pos: 'next' }));
   /* Banach–Tarski */
-  add({ id: 't0', by: 'lettie', text: S.bt.q, to: [], pos: { at: { x: 966, y: 560 } } });
+  add({ id: 't0', by: 'lettie', text: S.bt.q, to: [], pos: { at: { x: 966, y: 660 } } });
   add({ id: 't1', model: MODEL, html: S.bt.a, prev: 't0', pos: 'next' });
   add({ id: 't2', by: S.bt.f[0].u, text: S.bt.f[0].q, to: [], prev: 't1', pos: 'next' });
   add({ id: 't3', model: MODEL, html: S.bt.f[0].a, prev: 't2', pos: 'next' });
-  /* the canvas: every ask in #public also sees the Glossary (a head's own context handler, as on Dagen H, wins) */
+  /* the canvas: every ask in #public also sees the Glossary terms it mentions (a head's own context handler, as on
+     Dagen H, wins) */
+  CANVAS.codeBy.context = 'sol';
   CANVAS.code.context =
 `context(msg) {
-  // Every ask in #public also sees the Glossary card.
-  return [...ancestors(this.id), ...stack('g0')];
+  // Every ask in #public also sees the Glossary
+  // entries whose term it mentions.
+  const q = msg.text.toLowerCase();
+  const terms = stack('g0').filter(id =>
+    part(id).text.includes(' — ') &&
+    q.includes(part(id).text.split(' — ')[0]));
+  return [...ancestors(this.id), ...terms];
 }`;
   for (const p of Object.values(P)) if (isAsk(p)) p.saw = resolve(p).context;
 }
 
 /* ---- view state ---- */
-const st = { pan: { x: 0, y: 0 }, sel: new Set(), draft: null, insp: null, open: {}, inlOpen: {}, boxes: [], hl: null };
+const st = { zoom: 1, pan: { x: 0, y: 0 }, sel: new Set(), draft: null, insp: null, open: {}, inlOpen: {}, boxes: [], hl: null };
 
 /* ---- render ---- */
 const $ = s => document.querySelector(s);
 const stacksEl = $('#stacks'), world = $('#world'), wires = $('#wires'), view_ = $('#view');
 function partHtml(p) {
   const ask = isAsk(p), rep = !!p.model || !!p.via, run = p.run;
-  const addr = ask && p.to.length ? p.to.map(t => t === 'canvas' ? 'canvas' : t.includes('#') ? 'passage of ' + base(t) : t).join(', ') : '';
-  const authorHead = p.model ? `${MARK}<b>${esc(p.model.split(' ')[0])}</b><span>reply</span>` : p.via ? `${av(p.by)}<b>${esc(p.by)}</b><span>reply from code on ${esc(p.via)}</span>` : `${av(p.by)}<b>${esc(p.by)}</b>`;
-  const kind = ask ? `<span class="to" title="An ask: a message sent to ${esc(receivers(p).join(', '))}">ask →${addr ? ' ' + esc(addr) : !p.prev ? ' #' + esc(CANVAS.name) : ''}</span>` : '';
+  const authorHead = p.model ? `${MARK}<b>${esc(p.model.split(' ')[0])}</b><span>reply</span>` : p.via ? `<span class="mk code" aria-hidden="true">{}</span><b>code on ${esc(p.via)}</b><span>by ${esc(p.by)}</span>` : `${av(p.by)}<b>${esc(p.by)}</b>`;
+  const kind = ask ? `<span class="to" title="An ask: a part that sends ask to ${esc(receivers(p).join(', '))}">ask</span>` : '';
   const hasCode = p.code && Object.keys(p.code).length;
   const acts = `<span class="acts"><button class="act" data-a="branch" data-id="${p.id}" title="Ask a question beside this part, with this part and everything above it as context">Branch</button><button class="act" data-a="select" data-id="${p.id}" aria-pressed="${st.sel.has(p.id)}" title="Add to the selection (or Shift+click)">Select</button><button class="act code${hasCode ? ' has' : ''}" data-a="inspect" data-id="${p.id}" title="Inspect: fields, messages and handlers">{ }</button></span>`;
   let body;
   if (run) body = `<div class="status" role="status">${run.status === 'queued' ? 'Queued' : `Researching · step ${run.step + 1} of 4`}</div>`;
   else if (p.html != null) { const long = strip(p.html).length > 420, open = st.open[p.id]; body = `<div class="prose${long && !open ? ' clamp' : ''}">${p.html}</div>${long ? `<button class="more" data-a="more" data-id="${p.id}">${open ? 'Show less' : 'Show all'}</button>` : ''}`; }
   else body = `${p.quote ? `<div class="quote">${esc(clip(p.quote, 160))}</div>` : ''}<div class="ptext">${esc(p.text)}</div>`;
-  const foot = ask && p.saw ? `<div class="pf"><button class="sawbtn" data-a="saw" data-id="${p.id}" title="Highlight what this ask sent as context">saw ${p.saw.length}</button></div>` : '';
+  const foot = ask ? `<div class="pf"><span class="toln">to ${receivers(p).map(r => esc(rcvLabel(r))).join(', ')}</span>${sawChip(p)}</div>${p.fail ? `<div class="fail">${esc(p.fail.join('; '))}; the next level was used</div>` : ''}` : '';
   const cls = ['part', ask ? 'is-ask' : '', rep ? 'is-reply' : '', st.sel.has(p.id) ? 'sel' : '', st.insp === p.id ? 'insp' : '', p.fresh ? 'fadein' : ''].filter(Boolean).join(' ');
   p.fresh = false;
   return `<div class="${cls}" data-part="${p.id}" tabindex="-1"><div class="ph">${authorHead}${kind}<span class="grow"></span>${acts}</div>${body}${foot}</div>`;
@@ -465,6 +488,20 @@ function draftHtml() {
     <button class="b3" data-a="dcancel">${d.cont ? 'Done' : 'Cancel'}</button>
     <button class="${ask ? 'b2' : 'b1'}" data-a="dpost" ${d.text?.trim() ? '' : 'disabled'} title="Post: a part that sends nothing">Post</button>
     <button class="${ask ? 'b1' : 'b2'}" data-a="dask" ${d.text?.trim() ? '' : 'disabled'} title="Ask: a part that sends ask to the part above (or the selection), and gets a reply">Ask</button></div></div>`;
+}
+/* "to d1 · Gemini reply": the receiver, by id and by what it is */
+function rcvLabel(r) {
+  if (r === 'canvas') return '#' + CANVAS.name;
+  const q = P[base(r)]; if (!q) return r;
+  const what = q.model ? q.model.split(' ')[0] + ' reply' : q.via ? 'code reply' : isAsk(q) ? q.by + "'s ask" : q.by + "'s post";
+  return (r.includes('#') ? 'a passage of ' : '') + base(r) + ' · ' + what;
+}
+/* saw: how many objects went to the model, and how many of them came from outside the receivers' own stacks */
+function sawChip(p) {
+  if (!p.saw) return '';
+  if (p.answeredBy) return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="A handler replied; no model ran">answered by code on ${esc(p.answeredBy)} · no model</button>`;
+  const own = new Set(receivers(p).flatMap(r => r === 'canvas' ? [] : ancestorIds(base(r)))), extra = p.saw.filter(x => !own.has(x)).length;
+  return `<button class="sawbtn" data-a="saw" data-id="${p.id}" title="The objects this ask sent as context; click for the list">saw ${p.saw.length - extra}${extra ? ` + ${extra} from elsewhere` : ''}</button>`;
 }
 const draftAt = (prev, pos) => st.draft && st.draft.prev === prev && (pos === 'any' || st.draft.pos === pos);
 /* one stack, from its head: each part, its interjections, then the part that continues it */
@@ -493,9 +530,19 @@ function render() {
 /* positions: heads with `at` go where they were put; branches go at their offset from the part they hang from,
    once that part is placed; a stack that would overlap one placed before it moves down. */
 const elOf = id => stacksEl.querySelector(`[data-part="${CSS.escape(id)}"]`);
-const boxOf = el => { const w = world.getBoundingClientRect(), r = el.getBoundingClientRect(); return { x: r.left - w.left, y: r.top - w.top, w: r.width, h: r.height }; };
+const boxOf = el => { const w = world.getBoundingClientRect(), r = el.getBoundingClientRect(), z = st.zoom; return { x: (r.left - w.left) / z, y: (r.top - w.top) / z, w: r.width / z, h: r.height / z }; };
+function layoutOrder(els) {
+  const byRoot = new Map(els.map(e => [e.dataset.root, e])), out = [], seen = new Set();
+  const visit = id => { const el = byRoot.get(id); if (!el || seen.has(id)) return; seen.add(id); out.push(el);
+    const ids = id === '__draft' ? [] : stackIds(id), br = ids.flatMap(besideOf).sort((a, b) => a.t - b.t).map(p => p.id);
+    if (st.draft?.pos?.beside && ids.includes(st.draft.prev)) br.push('__draft');
+    br.forEach(visit); };
+  els.filter(e => e.dataset.root === '__draft' ? st.draft.pos.at : P[e.dataset.root].pos.at).forEach(e => visit(e.dataset.root));
+  els.forEach(e => visit(e.dataset.root));
+  return out;
+}
 function layout() {
-  const els = [...stacksEl.children], placed = [], todo = els.slice();
+  const els = [...stacksEl.children], placed = [], todo = layoutOrder(els);
   const posOf = el => { const id = el.dataset.root; return id === '__draft' ? st.draft.pos : P[id].pos; };
   const anchorOf = el => { const id = el.dataset.root; return id === '__draft' ? st.draft.prev : P[id].prev; };
   for (let guard = 0; todo.length && guard < 200; guard++) {
@@ -504,8 +551,11 @@ function layout() {
     if (pos.at) { x = pos.at.x; y = pos.at.y; }
     else { const a = elOf(anchorOf(el)), ar = a && placed.includes(a.closest('.stack')) ? boxOf(a) : null; if (!ar) { todo.push(el); continue; } x = ar.x + pos.beside.dx; y = ar.y + pos.beside.dy; }
     const h = el.offsetHeight, w = el.offsetWidth;
-    for (let moved = true, n = 0; moved && n < 50; n++) { moved = false;
-      for (const o of placed) { const b = o._box; if (x < b.x + b.w && x + w > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y) { y = b.y + b.h + 24; moved = true; } } }
+    const settle = (x, y) => { for (let moved = true, n = 0; moved && n < 50; n++) { moved = false;
+      for (const o of placed) { const b = o._box; if (x < b.x + b.w && x + w > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y) { y = b.y + b.h + 24; moved = true; } } } return y; };
+    const y0 = y; y = settle(x, y);
+    /* a branch that would be pushed far from its anchor tries the next lane to the right */
+    if (!pos.at && y - y0 > 160) { const y2 = settle(x + 314, y0); if (y2 - y0 < y - y0) { x += 314; y = y2; } }
     el.style.left = x + 'px'; el.style.top = y + 'px'; el._box = { x, y, w, h }; placed.push(el);
   }
   st.boxes = placed.map(e => e._box);
@@ -518,7 +568,7 @@ function drawWires() {
   const line = (aEl, bEl, label, cls = '') => {
     if (!aEl || !bEl) return;
     const a = boxOf(aEl), b = boxOf(bEl);
-    const right = b.x >= a.x + a.w - 4, x1 = right ? a.x + a.w : a.x, y1 = a.y + 16, x2 = right ? b.x : b.x + b.w, y2 = b.y + 16;
+    const right = b.x >= a.x + a.w - 4, x1 = right ? a.x + a.w : a.x, y1 = a.y + Math.min(a.h / 2, 60), x2 = right ? b.x : b.x + b.w, y2 = b.y + Math.min(b.h / 2, 24);
     const dx = Math.max(30, Math.abs(x2 - x1) / 2) * (right ? 1 : -1);
     out += `<path class="${cls}" d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}"/><circle cx="${x1}" cy="${y1}" r="3"/>`;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, tw = label.length * 6.2 + 10;
@@ -534,7 +584,7 @@ function drawWires() {
   else if (d && d.pos?.beside) line(elOf(d.prev), elOf('__draft'), 'ask');
   wires.innerHTML = out;
 }
-function applyPan() { world.style.transform = `translate(${st.pan.x}px, ${st.pan.y}px)`; view_.style.backgroundPosition = `${st.pan.x}px ${st.pan.y}px`; }
+function applyPan() { world.style.transform = `translate(${st.pan.x}px, ${st.pan.y}px) scale(${st.zoom})`; view_.style.backgroundPosition = `${st.pan.x}px ${st.pan.y}px`; view_.style.backgroundSize = `${22 * st.zoom}px ${22 * st.zoom}px`; }
 function renderTools() {
   const n = st.sel.size;
   $('#tools').innerHTML = `<button class="tb" data-a="addpost">+ Add post</button><button class="tb" data-a="addask">+ Add ask</button>`
@@ -572,7 +622,7 @@ function renderInsp() {
   if (isC) fields = `<dl class="kv"><dt>id</dt><dd>${CANVAS.id}</dd><dt>name</dt><dd>#${CANVAS.name}</dd><dt>stacks</dt><dd>${Object.values(P).filter(isHead).length}</dd></dl>`;
   else {
     const pos = typeof p.pos === 'string' ? p.pos : p.pos.at ? `at {x:${Math.round(p.pos.at.x)}, y:${Math.round(p.pos.at.y)}}` : `beside {dx:${p.pos.beside.dx}, dy:${p.pos.beside.dy}}`;
-    fields = `<dl class="kv"><dt>id</dt><dd>${p.id}</dd><dt>by</dt><dd>${p.model ? 'model ' + esc(p.model) : esc(p.by)}${p.via ? ' (code on ' + ref(p.via) + ')' : ''}</dd><dt>prev</dt><dd>${p.prev ? ref(p.prev) : '—'}</dd><dt>pos</dt><dd>${esc(pos)}</dd><dt>head</dt><dd>${ref(headOf(p.id).id)}</dd>${isAsk(p) ? `<dt>to</dt><dd>${p.to.length ? p.to.map(ref).join(', ') : '[] (the part above' + (p.prev ? ': ' + ref(p.prev) : ', none: the canvas') + ')'}</dd><dt>saw</dt><dd>${(p.saw || []).map(ref).join(', ') || '—'}</dd>` : ''}</dl>`;
+    fields = `<dl class="kv"><dt>id</dt><dd>${p.id}</dd><dt>by</dt><dd>${p.model ? 'model ' + esc(p.model) : esc(p.by)}${p.via ? ' (code on ' + ref(p.via) + ')' : ''}</dd><dt>prev</dt><dd>${p.prev ? ref(p.prev) : '—'}</dd><dt>pos</dt><dd>${esc(pos)}</dd><dt>head</dt><dd>${ref(headOf(p.id).id)}</dd>${isAsk(p) ? `<dt>to</dt><dd>${p.to.length ? p.to.map(ref).join(', ') : '[] (the part above' + (p.prev ? ': ' + ref(p.prev) : ', none: the canvas') + ')'}</dd><dt>saw</dt><dd>${(p.saw || []).map(ref).join(', ') || '—'}${p.answeredBy ? ' (not used: code on ' + ref(p.answeredBy) + ' replied)' : ''}</dd>` : ''}</dl>${isAsk(p) && p.saw?.length ? `<h3>What this ask sent</h3><div class="pv"><ol>${p.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol><p class="note">Click an id to go to it.</p></div>` : ''}`;
   }
   /* messages: what this object sent and what was sent to it */
   let msgs = '';
@@ -580,7 +630,7 @@ function renderInsp() {
     const sent = isAsk(p) ? [`<li><code>ask</code> → ${receivers(p).map(r => r === 'canvas' ? 'canvas' : ref(r)).join(', ')}${kids(p.id).find(c => c.model || c.via) ? ' · reply ' + ref(kids(p.id).find(c => c.model || c.via).id) : ''}</li>`] : [];
     const recv = Object.values(P).filter(q => isAsk(q) && receivers(q).some(r => base(r) === p.id)).map(q => `<li><code>ask</code> ← ${ref(q.id)} “${esc(clip(plain(q), 50))}”</li>`);
     const seen = Object.values(P).filter(q => q.saw?.includes(p.id)).length;
-    msgs = `<h3>Messages</h3><ul class="msgs">${sent.join('')}${recv.join('')}${!sent.length && !recv.length ? `<li>${p.model || p.via ? 'A reply: it sends nothing.' : 'A post part: it sends nothing and nothing was sent to it.'}</li>` : ''}<li class="note">In the context of ${seen} ${seen === 1 ? 'ask' : 'asks'}.</li></ul>`;
+    msgs = `<h3>Messages</h3><ul class="msgs">${sent.join('')}${recv.join('')}${!sent.length && !recv.length ? `<li>${p.model || p.via ? 'A reply: it sends nothing.' : 'A post part: it sends nothing and nothing was sent to it.'}</li>` : ''}<li class="note">${seen ? `Sent as context by ${seen} ${seen === 1 ? 'ask' : 'asks'}.` : 'No ask has seen this part.'}</li></ul>`;
   }
   /* handlers: each selector, resolved through the lookup chain */
   const hs = SELECTORS.map(sel => {
@@ -588,7 +638,8 @@ function renderInsp() {
     const res = isC ? (own != null ? { owner: 'canvas', from: 'canvas', src: own } : { owner: null, from: 'default', src: DEFAULTS[sel] }) : lookupAll(id, sel)[0];
     const key = (isC ? 'canvas' : id) + ':' + sel, editing = INSP.edit[key] != null, err = ERR[(res.owner ?? 'default') + ':' + sel];
     const mine = res.from === 'own' || (isC && res.from === 'canvas');
-    const head = `<div class="hd-h"><b>${sel}</b><span class="from${mine ? ' own' : ''}">${mine ? 'defined here' : 'from ' + fromLabel(res)}</span><span class="grow"></span>`
+    const author = res.owner === 'canvas' ? CANVAS.codeBy[sel] : res.owner ? P[res.owner].codeBy?.[sel] : null;
+    const head = `<div class="hd-h"><b>${sel}</b><span class="from${mine ? ' own' : ''}">${mine ? 'defined here' : 'from ' + fromLabel(res)}${author ? ' · by ' + esc(author) : ''}</span><span class="grow"></span>`
       + (editing ? '' : mine ? `<button class="lnk" data-a="hedit" data-k="${key}">Edit</button>` : `${res.owner && res.owner !== 'canvas' ? `<button class="lnk" data-a="inspect" data-id="${res.owner}">Open ${res.owner}</button>` : res.owner === 'canvas' && !isC ? `<button class="lnk" data-a="inspect" data-id="canvas">Open canvas</button>` : ''}<button class="lnk" data-a="hedit" data-k="${key}">Override here</button>`) + '</div>';
     const bodyH = editing ? `<textarea id="ed-${key}" data-k="${key}" spellcheck="false" aria-label="${sel} handler">${esc(INSP.edit[key])}</textarea><div class="hd-f"><button class="b1" data-a="happly" data-k="${key}">Apply</button><button class="b3" data-a="hcancel" data-k="${key}">Cancel</button><span class="grow"></span>${mine ? `<button class="b3" data-a="hremove" data-k="${key}">Remove</button>` : ''}</div>` : `<pre>${esc(res.src)}</pre>`;
     return `<div class="hd">${head}${bodyH}${err ? `<div class="err">${esc(err)}</div>` : ''}</div>`;
@@ -598,14 +649,14 @@ function renderInsp() {
   const placeTxt = pv ? (pv.place === 'inline' ? 'inline, under the ask' : pv.place && pv.place.beside ? `beside the ask (dx ${pv.place.beside.dx}, dy ${pv.place.beside.dy})` : 'next, directly under the ask') : '';
   const pvH = pv ? `<h3>Next ask sent to this part</h3><div class="pv">The model would see ${pv.saw.length} ${pv.saw.length === 1 ? 'object' : 'objects'} (dashed on the canvas):<ol>${pv.saw.map(x => `<li>${ref(x)} ${esc(who(P[x]))}: ${esc(clip(plain(P[x]), 46))}</li>`).join('')}</ol><p class="note">The reply would land ${placeTxt} (place from ${fromLabel(pv.placeFrom)}).</p></div>` : `<h3>Canvas</h3><p class="note">Handlers here apply to every part in #public that has none of its own and whose heads have none. Editing one changes the preview of every part at once.</p>`;
   const title = isC ? `Canvas <small>#${CANVAS.name}</small>` : `${isAsk(p) ? 'Ask' : p.model || p.via ? 'Reply' : 'Post part'} <small>${p.id}</small>`;
-  el.innerHTML = `<header><h2>${title}</h2><button class="x" data-a="iclose" aria-label="Close inspector" title="Close (Esc)">${XI}</button></header><div class="ib"><h3>Fields</h3>${fields}${msgs}${pvH}<h3>Handlers</h3>${hs}<p class="note">Lookup: this part, its head, the head of the part that head hangs from, the canvas, the default. Handlers run once when an ask is sent; the result is stored as <code>saw</code> and is not recomputed.</p></div>`;
+  el.innerHTML = `<header><h2>${title}</h2><button class="x" data-a="iclose" aria-label="Close inspector" title="Close (Esc)">${XI}</button></header><div class="ib"><h3>Fields</h3>${fields}${msgs}${pvH}<h3>Handlers</h3>${hs}<p class="note">In the app only a part's author can change its handlers, and only the channel owner can change the canvas's; the mock lets anyone edit. Lookup: this part, its head, the head of the part that head hangs from, the canvas, the default. Handlers run once when an ask is sent; the result is stored as <code>saw</code> and is not recomputed.</p></div>`;
 }
 /* edits to a handler: compiled before saving; a syntax error stays in the editor */
 function applyHandler(key) {
   const [owner, sel] = key.split(':'), ta = document.getElementById('ed-' + key), src = ta.value;
   try { compile(src, sel); } catch (e) { ERR[owner + ':' + sel] = e.message; renderInsp(); return; }
   const target = owner === 'canvas' ? CANVAS.code : (P[owner].code ||= {});
-  target[sel] = src; delete ERR[owner + ':' + sel]; delete INSP.edit[key];
+  target[sel] = src; (owner === 'canvas' ? CANVAS.codeBy : (P[owner].codeBy ||= {}))[sel] = ME; delete ERR[owner + ':' + sel]; delete INSP.edit[key];
   toast(`${sel} handler saved on ${owner === 'canvas' ? 'the canvas' : owner}. The next ask uses it; earlier answers keep what they saw.`);
   render(); renderInsp();
 }
@@ -622,7 +673,7 @@ function ensureVisible(el) {
 }
 /* a free spot for a new stack inside the visible area: scan a grid against the placed stacks */
 function freeSpot(h = 170) {
-  const x0 = -st.pan.x + 24, y0 = -st.pan.y + 64, W = innerWidth - ($('#insp').hidden || innerWidth <= 640 ? 0 : 404);
+  const z = st.zoom, x0 = (-st.pan.x + 24) / z, y0 = (-st.pan.y + 64) / z, W = innerWidth / z - ($('#insp').hidden || innerWidth <= 640 ? 0 : 404);
   for (let y = y0; y < y0 + 2000; y += 30) for (let x = x0; x + 290 < x0 + Math.max(320, W - 40); x += 314) {
     if (!st.boxes.some(b => x < b.x + b.w + 20 && x + 290 + 20 > b.x && y < b.y + b.h + 20 && y + h + 20 > b.y)) return { x, y };
   }
@@ -668,8 +719,8 @@ document.addEventListener('click', e => {
   if (a === 'dask') { commitDraft(true); return; }
   if (a === 'more') { st.open[id] = !st.open[id]; render(); return; }
   if (a === 'inlmore') { st.inlOpen[id] = true; render(); return; }
-  if (a === 'saw') { const ids = P[id].saw || []; st.hl = st.hl && st.hlFrom === id ? null : ids; st.hlFrom = st.hl ? id : null; highlight(); return; }
-  if (a === 'inspect') { inspect(id); return; }
+  if (a === 'saw') { inspect(id); return; }
+  if (a === 'inspect') { inspect(id); if (t.classList.contains('ref')) ensureVisible(elOf(id)); return; }
   if (a === 'iclose') { st.insp = null; render(); renderInsp(); return; }
   if (a === 'hedit') { const [owner, sel] = t.dataset.k.split(':'); const own = owner === 'canvas' ? CANVAS.code[sel] : P[owner]?.code?.[sel]; INSP.edit[t.dataset.k] = own ?? (owner === 'canvas' ? DEFAULTS[sel] : lookupAll(owner, sel)[0].src); renderInsp(); document.getElementById('ed-' + t.dataset.k)?.focus(); return; }
   if (a === 'hcancel') { delete INSP.edit[t.dataset.k]; renderInsp(); return; }
@@ -706,26 +757,51 @@ document.addEventListener('mouseup', e => setTimeout(() => {
   const s = pre.toString().length; st.selAsk = { id: partEl.dataset.part, s, e: s + range.toString().length, text };
   const r = range.getBoundingClientRect();
   const b = document.createElement('button'); b.id = 'selask'; b.dataset.a = 'selask'; b.textContent = 'Ask about this';
-  const wr = world.getBoundingClientRect(); b.style.left = (r.left - wr.left) + 'px'; b.style.top = (r.bottom - wr.top + 6) + 'px'; world.appendChild(b);
+  const wr = world.getBoundingClientRect(); b.style.left = (r.left - wr.left) / st.zoom + 'px'; b.style.top = (r.bottom - wr.top + 6) / st.zoom + 'px'; world.appendChild(b);
 }));
 /* pan: drag the background (or drag anywhere with a finger); the wheel pans too */
-let drag = null;
+let drag = null, move = null;
+stacksEl.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.target.closest('button, textarea, a')) return;
+  const ph = e.target.closest('.ph'), stack = ph?.closest('.stack'); if (!stack || stack.dataset.root === '__draft') return;
+  e.stopPropagation();
+  move = { el: stack, id: stack.dataset.root, x: e.clientX, y: e.clientY, l: parseFloat(stack.style.left), t: parseFloat(stack.style.top), moved: false, pid: e.pointerId };
+});
+window.addEventListener('pointermove', e => {
+  if (!move || e.pointerId !== move.pid) return;
+  const dx = (e.clientX - move.x) / st.zoom, dy = (e.clientY - move.y) / st.zoom;
+  if (!move.moved && Math.hypot(dx, dy) < 4) return;
+  move.moved = true; move.el.classList.add('dragging');
+  move.el.style.left = move.l + dx + 'px'; move.el.style.top = move.t + dy + 'px'; drawWires();
+});
+window.addEventListener('pointerup', () => {
+  if (!move) return; const m = move; move = null; m.el.classList.remove('dragging'); if (!m.moved) return;
+  const p = P[m.id], x = parseFloat(m.el.style.left), y = parseFloat(m.el.style.top);
+  if (p.pos.at) p.pos = { at: { x, y } };
+  else { const a = boxOf(elOf(p.prev)); p.pos = { beside: { dx: Math.round(x - a.x), dy: Math.round(y - a.y) } }; }
+  render();
+});
 view_.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   const onBg = !e.target.closest('.part, button, textarea, #selask');
   if (!onBg && e.pointerType === 'mouse') return;
+  if (e.target.closest('.ph')) return;
   if (e.target.closest('button, textarea')) return;
   drag = { x: e.clientX, y: e.clientY, px: st.pan.x, py: st.pan.y, moved: false, id: e.pointerId, bg: onBg };
 });
 window.addEventListener('pointermove', e => {
-  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag || move || e.pointerId !== drag.id) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (!drag.moved && Math.hypot(dx, dy) < 6) return;
   if (!drag.moved) { drag.moved = true; view_.classList.add('panning'); try { view_.setPointerCapture(e.pointerId); } catch {} }
   st.pan.x = drag.px + dx; st.pan.y = drag.py + dy; applyPan();
 });
 window.addEventListener('pointerup', () => { if (drag?.moved) { view_.classList.remove('panning'); } drag = null; });
-view_.addEventListener('wheel', e => { if (e.target.closest('textarea')) return; e.preventDefault(); st.pan.x -= e.deltaX; st.pan.y -= e.deltaY; applyPan(); $('#selask')?.remove(); }, { passive: false });
+/* Ctrl or Cmd + wheel (and a trackpad pinch) zooms around the pointer; the wheel alone pans */
+view_.addEventListener('wheel', e => { if (e.target.closest('textarea')) return; e.preventDefault(); $('#selask')?.remove();
+  if (e.ctrlKey || e.metaKey) { const z0 = st.zoom, z = Math.min(1.4, Math.max(.3, z0 * Math.exp(-e.deltaY * .0025)));
+    st.pan.x = e.clientX - (e.clientX - st.pan.x) * z / z0; st.pan.y = e.clientY - (e.clientY - st.pan.y) * z / z0; st.zoom = z; applyPan(); return; }
+  st.pan.x -= e.deltaX; st.pan.y -= e.deltaY; applyPan(); }, { passive: false });
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
 
 seed();
