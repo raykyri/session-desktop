@@ -302,7 +302,7 @@ test("K3, K9: the overdraft counts in the week it happened and does not carry ov
   const budget = new RunBudget(deps, { userId: "u1", runId: "next", attempt: 1 });
   t.true(budget.allowanceSpent());
   t.is(budget.stopReason("included"), "overdraft");
-  t.is(OVERDRAFT_STOP_NOTE, "Stopped: out of tokens.");
+  t.is(OVERDRAFT_STOP_NOTE, "Stopped: Out of tokens.");
   c.at = RESET;
   t.false(budget.allowanceSpent(), "a new week");
   t.is(budget.stopReason("included"), null);

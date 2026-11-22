@@ -273,11 +273,11 @@ test("C2: another reader reads the author's failure, not the asker's", (t) => {
   t.is(failedRunText(failed({ why: "access" }), other), ACCESS_OTHER_TEXT);
   t.is(
     failedRunText(failed({ why: "rate", at: 0 }), other),
-    "Stopped: rate limited by model provider.",
+    "Stopped: Rate limited by model provider.",
   );
   t.is(
     failedRunText(failed({ why: "error", cls: "timeout" }), other),
-    "Stopped: exceeded maximum duration.",
+    "Stopped: Exceeded maximum duration.",
     "a provider error reads the same for everyone",
   );
 });

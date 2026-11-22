@@ -1038,7 +1038,7 @@ notified of one's own action" and the coalescing rule; a test that a
 **C17. Runs streamed.** The mock API's note "Answers are not streamed" is
 superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
 03 §1, with `model`, `effort` and an optional `note` (the stop note of
-a run that ends `complete` early, such as "Stopped: out of tokens.", 03 E5). The run record with status `queued` is the run
+a run that ends `complete` early, such as "Stopped: Out of tokens.", 03 E5). The run record with status `queued` is the run
 queue; the dispatcher claims it with a compare-and-set (03 E2).
 
 **C18. Channel roles: owner and member.** Product decision (00, "Decisions

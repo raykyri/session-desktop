@@ -28,7 +28,7 @@ export const RUN_ERROR_COPY: Readonly<Record<RunErrorCopyClass, string>> = {
   provider_unavailable:
     "This model isn't available right now. Try again in a few minutes, or choose another model.",
   network: "The connection to the model provider was interrupted before the answer finished.",
-  timeout: "Stopped: exceeded maximum duration.",
+  timeout: "Stopped: Exceeded maximum duration.",
   unknown: "The model provider returned an error.",
 };
 

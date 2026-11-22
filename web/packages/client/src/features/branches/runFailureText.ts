@@ -26,10 +26,10 @@ export interface FailureView {
 export const TOKENS_PAST_TEXT =
   "This ask did not run: included tokens had run out. Run again to start it.";
 export const TOKENS_OTHER_TEXT = "This ask did not run: its author had no included tokens left.";
-export const KEY_OTHER_TEXT = "Stopped: author's API key could not be used.";
+export const KEY_OTHER_TEXT = "Stopped: Author's API key could not be used.";
 export const ACCESS_OTHER_TEXT =
   "This ask did not run: its author could no longer read this channel.";
-export const RATE_OTHER_TEXT = "Stopped: rate limited by model provider.";
+export const RATE_OTHER_TEXT = "Stopped: Rate limited by model provider.";
 /** The asker's key copy for a record written without `detail`. */
 export const KEY_TEXT =
   "The API key for this run was rejected or removed. Check your keys in Usage.";

@@ -67,9 +67,9 @@ export function configAllowances(config: Pick<Config, "limits">): Allowances {
 }
 
 /** `03` K9, E5. */
-export const OVERDRAFT_STOP_NOTE = "Stopped: out of tokens.";
+export const OVERDRAFT_STOP_NOTE = "Stopped: Out of tokens.";
 /** `03` L1, E5. */
-export const RUN_CAP_NOTE = "Stopped: reached token limit for a single run.";
+export const RUN_CAP_NOTE = "Stopped: Reached token limit for a single run.";
 
 export type StopReason = "overdraft" | "run_cap";
 

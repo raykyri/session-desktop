@@ -420,8 +420,8 @@ cards:
 |---|---|
 | `queued` | "Queued" |
 | `running` | "Researching · Step N of 4" (`step` 0-3, 03 E3) with a pulsing dot, replaced by streamed text as it arrives (ADR-22) |
-| `complete` | the answer, then the run record's `note` when it has one (03 §1, E5): "Stopped: reached token limit for a single run." (per-run cap, L1) or "Stopped: out of tokens." (the member's overdraft limit, K9) |
-| `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`'s `resetAt` in the viewer's time zone, while nothing can pay now, else "This ask did not run: included tokens had run out. Run again to start it."; `key` by `fail.detail`; `rate`, `access`, `error`). A reader who is not the asker reads the author's failure ("This ask did not run: its author had no included tokens left.", "Stopped: author's API key could not be used.", "Stopped: rate limited by model provider.") |
+| `complete` | the answer, then the run record's `note` when it has one (03 §1, E5): "Stopped: Reached token limit for a single run." (per-run cap, L1) or "Stopped: Out of tokens." (the member's overdraft limit, K9) |
+| `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`'s `resetAt` in the viewer's time zone, while nothing can pay now, else "This ask did not run: included tokens had run out. Run again to start it."; `key` by `fail.detail`; `rate`, `access`, `error`). A reader who is not the asker reads the author's failure ("This ask did not run: its author had no included tokens left.", "Stopped: Author's API key could not be used.", "Stopped: Rate limited by model provider.") |
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
 While `queued` or `running` the asker gets Stop (`research.cancelNode`; a plan

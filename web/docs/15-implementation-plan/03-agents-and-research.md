@@ -266,9 +266,9 @@ at 0.
 | Deployment credential rejected (`401`/`403` on included tokens) | `failed { why: "error", cls: "auth" }`; logged with the class, and a new `session_run_failures_total{cls}` counter alerts on any `auth` | closed at 0 |
 | Person's key rejected mid-run (`401`/`403`, or key removed, replaced, or billing moved from `key` to `pause`) | `failed { why: "key" }` at that step; a rejected key becomes `invalid` (K4) | closed at 0 (key removed, replaced or billing moved: the call in progress finishes and closes normally; the run ends at its next step, K4, K7) |
 | Wall clock (`SESSION_RUN_TIMEOUT_SECONDS`, 900) | `failed { why: "error", cls: "timeout" }`, as now | stream aborted; closed with the last counts |
-| Per-run token cap (L1) | `complete`, with the note "Stopped: reached token limit for a single run." after the answer | stream aborted at the checkpoint that reaches the cap; closed with the last counts |
+| Per-run token cap (L1) | `complete`, with the note "Stopped: Reached token limit for a single run." after the answer | stream aborted at the checkpoint that reaches the cap; closed with the last counts |
 | Allowance reached mid-run | continues: the next step uses the person's Anthropic key, or the run continues on overdraft (K9) | the step's row closes normally; the next step's row carries the new payer |
-| Overdraft limit reached (K9) | `complete`; the partial step's text is committed as the last turn, with the note "Stopped: out of tokens." | stream aborted at the next checkpoint; closed with the last counts |
+| Overdraft limit reached (K9) | `complete`; the partial step's text is committed as the last turn, with the note "Stopped: Out of tokens." | stream aborted at the next checkpoint; closed with the last counts |
 | Server deploy (drain) | `interrupted`, auto-resumed (E2) | stream aborted; closed with the last counts |
 | Server crash | `interrupted` at boot, auto-resumed (E2) | closed at boot with its last checkpoint (K1) |
 | Thread removed or node deleted | `superseded`, no record written (E1) | stream aborted; closed with the last counts (ledger writes are not fenced) |

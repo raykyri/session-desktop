@@ -173,7 +173,7 @@ metered, admins included.
   The overdraft is `SESSION_OVERDRAFT_TOKENS` (200,000) per member per week,
   shared by all of the member's included-token runs; when it is reached each
   of them stops at its next ledger checkpoint and ends `complete` with
-  "Stopped: out of tokens." It does not carry over.
+  "Stopped: Out of tokens." It does not carry over.
 - Per run: `SESSION_RUN_MAX_TOKENS` (400,000), whoever pays, and at most
   `SESSION_QUEUED_PER_USER` (20) queued runs per member (L1).
 

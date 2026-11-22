@@ -353,7 +353,7 @@ export const nodeRecordSchema = z
 /** A run of an ask (`run:<id>`, C17; `03` §1). A run record with status
  * `queued` is the run queue: the dispatcher claims it with a compare-and-set
  * (`03` E2). `node`: `r` for the thread's root ask. `note`: the stop note of
- * a run that ended `complete` before the model finished ("Stopped: out of
+ * a run that ended `complete` before the model finished ("Stopped: Out of
  * tokens."). In-flight text is not in the record:
  * it travels as `run.delta` events (`spaceRunDeltaSchema`). */
 export const runRecordSchema = z.object({

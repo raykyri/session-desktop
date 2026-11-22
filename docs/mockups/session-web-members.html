@@ -3001,7 +3001,7 @@ function invSection() {
   /* deleted accounts are left out here; they stay in the invite tree as "Deleted account" */
   const ppl = MEMBERS.filter(m => m.inviter === st.user && !gone(m.u)).sort((a, b) => a.joined < b.joined ? 1 : -1);
   const revokeBtn = x => `<button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button>`;
-  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${invitesLeft(st.user)} of ${total} left</small></div>
+  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${isAdmin() ? `${openCount()} open` : `${invitesLeft(st.user)} of ${total} left`}</small></div>
     ${open.map(x => x.unreadable ? `<div class="ilink"><code>Code unavailable</code>${revokeBtn(x)}</div>` : `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button>${revokeBtn(x)}</div>`).join('')}
     ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
     ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
