@@ -721,6 +721,9 @@ function newFork(pid, { block = null, quote = null, inline = false } = {}) {
 }
 document.addEventListener('click', e => {
   if (vp.dataset.justPanned) { e.preventDefault(); e.stopPropagation(); return; }
+  /* the gap between two parts (the line that turns blue on hover) inserts there, like its "+"; it does not select the stack */
+  const gapEl = e.target.closest('.seam');
+  if (gapEl && !e.target.closest('.sp')) { gapEl.querySelector('.sp')?.click(); return; }
   if (!e.target.closest('#selfork')) $('#selfork')?.remove();
   const partEl = e.target.closest('[data-part]');
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
