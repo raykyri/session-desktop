@@ -230,11 +230,11 @@ test("the ring's label", (t) => {
 // ------------------------------------------------------ scopes and strip
 
 const CHANNELS: ShellChannel[] = [
-  { id: "1", name: "ml", private: false, joined: true, owned: true },
-  { id: "2", name: "history", private: false, joined: true, owned: false },
-  { id: "3", name: "open-house", private: false, joined: false, owned: false },
-  { id: "4", name: "secret", private: true, joined: false, owned: false },
-  { id: "5", name: "club", private: true, joined: true, owned: false },
+  { id: "1", name: "ml", private: false, joined: true, owned: true, frozen: false },
+  { id: "2", name: "history", private: false, joined: true, owned: false, frozen: false },
+  { id: "3", name: "open-house", private: false, joined: false, owned: false, frozen: false },
+  { id: "4", name: "secret", private: true, joined: false, owned: false, frozen: false },
+  { id: "5", name: "club", private: true, joined: true, owned: false, frozen: false },
 ];
 
 test("scopes per viewer: signed out only All, writers also Channels you manage", (t) => {

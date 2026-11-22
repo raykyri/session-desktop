@@ -43,6 +43,7 @@ import {
 import { channelByName, channelsOf } from "../src/replica/queries.js";
 import { UNKNOWN, type ReplicaSource, type WriteOutcome } from "../src/replica/source.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
+import { useNavigationStore } from "../src/stores/navigation.js";
 import { useThreadUiStore } from "../src/stores/threadUi.js";
 
 import { renderApp, waitUntil, waitingTestUser } from "./helpers.js";
@@ -1214,6 +1215,29 @@ test.serial("a non-member sees Join on an open channel, and none once it is froz
   await renderApp(`/c/${channel.name}`);
   await screen.findByText(new RegExp(`^#${channel.name} is frozen:`));
   t.is(screen.queryByRole("button", { name: "Join" }), null);
+});
+
+test.serial("the strip under All offers no Join on a frozen channel", async (t) => {
+  const channel = unjoinedChannel();
+  useNavigationStore.getState().setScope("all");
+  t.teardown(() => useNavigationStore.getState().setScope("joined"));
+  const strip = () => screen.getByRole("navigation", { name: "Channels" });
+  const app = await renderApp("/");
+  await waitUntil(
+    t,
+    () => within(strip()).queryByRole("link", { name: `#${channel.name}` }) !== null,
+    "the chip",
+  );
+  t.truthy(within(strip()).getByRole("button", { name: `Join #${channel.name}` }));
+  app.unmount();
+  prepare = (replica) => rewrite(replica, space(replica, channel.name), { frozen: true });
+  await renderApp("/");
+  await waitUntil(
+    t,
+    () => within(strip()).queryByRole("link", { name: `#${channel.name}` }) !== null,
+    "the chip",
+  );
+  t.is(within(strip()).queryByRole("button", { name: `Join #${channel.name}` }), null);
 });
 
 test.serial("Browse: a frozen channel is by Deleted account and has no Join (04 B6)", async (t) => {

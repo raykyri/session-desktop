@@ -188,8 +188,8 @@ test.serial("the layout toggle is on feeds only", async (t) => {
 // ------------------------------------------------------------ strip, ring, account dot
 
 const CHANNELS: ShellChannel[] = [
-  { id: "1", name: "ml", private: false, joined: true, owned: false },
-  { id: "2", name: "history", private: false, joined: false, owned: false },
+  { id: "1", name: "ml", private: false, joined: true, owned: false, frozen: false },
+  { id: "2", name: "history", private: false, joined: false, owned: false, frozen: false },
 ];
 
 test.serial("strip chips: the current one, Join on unjoined chips under All", async (t) => {
@@ -212,6 +212,23 @@ test.serial("strip chips: the current one, Join on unjoined chips under All", as
   fireEvent.click(join);
   t.deepEqual(joined, ["history"]);
   t.truthy(screen.getByRole("button", { name: "New channel" }));
+});
+
+test.serial("no Join on a frozen channel's chip, as in Browse and the header", async (t) => {
+  await renderInRouter(
+    <ChannelStrip
+      channels={[
+        ...CHANNELS,
+        { id: "3", name: "fz-d", private: false, joined: false, owned: false, frozen: true },
+      ]}
+      scope="all"
+      current={null}
+      canWrite
+    />,
+  );
+  t.truthy(screen.getByRole("link", { name: "#fz-d" }));
+  t.is(screen.queryByRole("button", { name: "Join #fz-d" }), null);
+  t.truthy(screen.getByRole("button", { name: "Join #history" }));
 });
 
 test.serial("no Join outside All, and none for readers who cannot write", async (t) => {
