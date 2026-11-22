@@ -1218,6 +1218,54 @@ test.serial(
   },
 );
 
+test.serial("after deleting one's comment, focus is on the selected branch row", async (t) => {
+  let node = "";
+  prepare = (replica) => {
+    const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
+    if (!n) throw new Error("no branch");
+    node = n.id;
+    replica.write([
+      {
+        kind: "comment",
+        id: OWN_COMMENT,
+        th: BRANCHED,
+        s: n.s,
+        node: n.id,
+        parent: null,
+        u: "ines.v",
+        t: "My own comment on the branch",
+        edited: false,
+        del: false,
+        mod: null,
+        createdAt: "2026-11-16T09:40:00Z",
+      },
+    ]);
+  };
+  await renderApp("/");
+  await waitUntil(t, () => side(BRANCHED) !== null, "the side column renders");
+  fireEvent.click(within(side(BRANCHED)).getByRole("treeitem", { name: /how does the darknet/ }));
+  const comment = (await within(side(BRANCHED)).findByText("My own comment on the branch")).closest(
+    ".brr",
+  ) as HTMLElement;
+  fireEvent.click(within(comment).getByRole("button", { name: "More" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete comment" }));
+  const confirm = await screen.findByRole("alertdialog", {
+    name: "Delete this comment and your replies under it?",
+  });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+  await waitUntil(
+    t,
+    () => within(side(BRANCHED)).queryByText("My own comment on the branch") === null,
+    "the comment is gone",
+  );
+  const row = side(BRANCHED).querySelector<HTMLElement>(`[data-row="${node}"]`);
+  t.is(row?.getAttribute("aria-selected"), "true");
+  await waitUntil(t, () => document.activeElement === row, "focus on the selected row");
+  // and it stays there once the dialog has finished closing
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  t.is(document.activeElement, row);
+});
+
 test.serial("another person's comment has no Delete", async (t) => {
   prepare = (replica) => {
     const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));

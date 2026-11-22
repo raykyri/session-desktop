@@ -394,7 +394,13 @@ function BranchComments({
         }}
         title="Delete this comment and your replies under it?"
         onConfirm={() => {
-          if (deleting !== null) void writes.deleteComment(deleting);
+          if (deleting === null) return;
+          // The comment and its "…" button are gone: focus goes to the
+          // selected row of the tree, the branch the comment was on (the
+          // mock's `deleteItem`).
+          void writes.deleteComment(deleting).then((ok) => {
+            if (ok) focusSoon(selectedRowOr(thread, `#card-${thread} .rcount`));
+          });
         }}
       />
     </div>
