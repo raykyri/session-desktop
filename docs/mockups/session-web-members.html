@@ -3653,7 +3653,7 @@ app.addEventListener('submit', e => {
     if (kind === 'admlook') { a.h = $('#adm-h').value.trim().replace(/^@/, '').toLowerCase(); const m = member(a.h); a.found = m && !gone(m.u) ? m.u : null;
       if (!a.found) st.admErr = { inv: 'No account with that handle.' }; render(); $(a.found ? '#adm-n' : '#adm-h')?.focus(); return; }
     a.n = $('#adm-n').value.trim(); const n = Number(a.n);
-    if (!Number.isInteger(n) || n < 1 || n > 100) { st.admErr = { inv: 'Give between 1 and 100 invites.' }; render(); $('#adm-n')?.focus(); return; }
+    if (!Number.isInteger(n) || n < 1 || n > 100) { st.admErr = { inv: 'Enter a whole number from 1 to 100.' }; render(); $('#adm-n')?.focus(); return; }
     if (admRefused('inv')) return;
     INVITE_EXTRA[a.found] = (INVITE_EXTRA[a.found] || 0) + n; toast(`Gave @${a.found} ${n} more ${n === 1 ? 'invite' : 'invites'}.`); render(); $('#adm-n')?.focus(); return;
   }
