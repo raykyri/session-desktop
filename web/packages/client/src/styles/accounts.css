@@ -69,6 +69,7 @@
 .auth-c h2 {
   margin: 6px 0 0;
   font-size: 22px;
+  font-weight: 700;
   line-height: 1.25;
   color: var(--text-heading);
   letter-spacing: -0.015em;
@@ -351,12 +352,14 @@
 .mcols h3 {
   margin: 0 0 4px;
   font-size: var(--fs-md);
+  font-weight: 700;
   color: var(--text-heading);
 }
 
 .mcols h4 {
   margin: 18px 0 6px;
   font-size: var(--fs-sm);
+  font-weight: 700;
   color: var(--text-heading);
 }
 

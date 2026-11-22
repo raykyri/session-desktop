@@ -2020,6 +2020,7 @@
 .box h3 {
   margin: 0 0 4px;
   font-size: var(--fs-md);
+  font-weight: 700;
   color: var(--text-heading);
 }
 

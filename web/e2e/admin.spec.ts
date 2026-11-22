@@ -7,7 +7,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import { mutation, query, signIn, signedInContext } from "./helpers.js";
-import { toast } from "./spaces.js";
+import { fontWeight, toast } from "./spaces.js";
 import { channelName, person } from "./world.js";
 
 /** The registry's models payable with included tokens, in registry order. */
@@ -72,6 +72,9 @@ test("a site admin sets the default model and effort; a member's composer starts
 
   const models = page.getByRole("radiogroup", { name: "Default model" });
   const efforts = page.getByRole("radiogroup", { name: "Default effort" });
+  for (const name of ["Default model", "Default effort"]) {
+    expect(await fontWeight(page.getByRole("heading", { name, exact: true })), name).toBe(700);
+  }
   const modelRadios = models.getByRole("radio");
   await expect(modelRadios).toHaveCount(INCLUDED_MODELS.length);
   for (const label of INCLUDED_MODELS) {

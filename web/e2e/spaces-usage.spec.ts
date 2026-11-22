@@ -10,7 +10,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { query, signIn } from "./helpers.js";
-import { toast } from "./spaces.js";
+import { fontWeight, toast } from "./spaces.js";
 
 const ACCEPTED = "sk-ant-e2e-accepted-key-0000000000a1f9";
 const HELD = "sk-ant-e2e-held-key-00000000000000b2c3";
@@ -62,6 +62,10 @@ test("the week's usage and no runs yet", async ({ page }) => {
   await expect(page.getByText("No runs yet this week.")).toBeVisible();
   await expect(keyRow(page, "anthropic")).toContainText("Not set");
   await expect(keyRow(page, "openai")).toContainText("Not set");
+  // the boxes' section headings are bold, as in the mock
+  for (const name of ["Recent runs", "When included tokens run out", "API keys"]) {
+    expect(await fontWeight(page.getByRole("heading", { name, exact: true })), name).toBe(700);
+  }
 });
 
 test("a key is checked during the request: Checking…, then Valid and the toast", async ({

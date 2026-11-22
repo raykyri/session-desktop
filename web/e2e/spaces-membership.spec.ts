@@ -14,6 +14,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 
 import { APP_ORIGIN } from "./constants.js";
 import { e2eLogin, mutation, signIn } from "./helpers.js";
+import { fontWeight } from "./spaces.js";
 import { channelName, person } from "./world.js";
 
 const UNUSABLE = "This invite code doesn't work. Ask the person who invited you for a new one.";
@@ -104,6 +105,9 @@ test("a member's link signs a new person up, who appears under the member", asyn
   await joiner.goto(`/i#${code}`);
   const dialog = joiner.getByRole("dialog", { name: "Sign in to Session" });
   await expect(dialog.getByText(`${inviter.login} invited you to Session`)).toBeVisible();
+  // the dialog's step heading is bold, as in the mock (Tailwind's reset
+  // would leave it at 400)
+  expect(await fontWeight(dialog.locator("h2"))).toBe(700);
   await expect(dialog.getByText(`@${handleFor("inviter")}`)).toBeVisible();
   // The code left the address bar before anything else read the URL.
   expect(joiner.url()).not.toContain("#");
@@ -124,6 +128,9 @@ test("a member's link signs a new person up, who appears under the member", asyn
   await page.reload();
   const box = page.locator(".invbox");
   await expect(box.getByRole("heading", { name: "You invited" })).toBeVisible();
+  for (const name of ["Invite tree", "Invite someone", "You invited"]) {
+    expect(await fontWeight(page.getByRole("heading", { name, exact: true })), name).toBe(700);
+  }
   await expect(box.locator(".ip", { hasText: joinerHandle })).toContainText("Joined");
   const tree = page.getByRole("list", { name: "Invite tree" });
   await expect(tree.getByRole("listitem").filter({ hasText: joinerHandle })).toHaveAttribute(
