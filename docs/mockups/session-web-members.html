@@ -639,7 +639,7 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 /* moderation log */
 .mlist { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .mlist li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.4; }
-.mlist li > span:not(.mlkind):not(.acts):not(.av):not(.chip):not(.mpick) { flex: 1; min-width: 0; }
+.mlist li > span:not(.mlkind):not(.acts):not(.av):not(.chip):not(.mpick):not(.mlbadges):not(.mlmore) { flex: 1; min-width: 0; }
 .mlist li b { color: var(--t-heading); font-weight: 500; }
 .mlist li small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
 .mlist .acts { display: flex; gap: 6px; flex: none; }
@@ -1140,6 +1140,8 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 /* ---- members and invite links of a channel ---- */
 .mbdlg .mlist li, .ildlg .mlist li { align-items: center; }
 .mbdlg .mlist li > .mpick.more { margin-left: 0; }
+.mbdlg .mlbadges { display: inline-flex; flex: none; gap: 4px; }
+.mbdlg .mlmore { flex: none; width: 24px; }
 .mbdlg h4.mbhead { margin: 10px 0 0; }
 .mlist.ilist { grid-template-columns: minmax(0, 1fr); }
 .ilist code.ilink { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); color: var(--t-heading); }
@@ -2047,7 +2049,10 @@ function membersDlg(x) {
   const nm = esc(spName(x.id)), own = isMod(x.id);
   const list = (MEMBERSHIP[x.id] || []).slice().sort((a, b) => (b.role === 'owner') - (a.role === 'owner') || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0) || (a.u < b.u ? -1 : 1));
   const act = (k, u, label) => `<button type="button" class="mi danger" role="menuitem" data-a="memask" data-k="${k}" data-id="${esc(u)}" data-sp="${x.id}"><span>${label}</span></button>`;
-  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}${m.u === me() ? '<small>You</small>' : ''}</span>${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : ''}</li>`;
+  /* the badges ("You", "Owner") sit at the row's end, before the "…" menu; a row without a menu keeps its place
+     empty when other rows have one, so every row's badges end at the same edge */
+  const badges = m => m.u === me() || m.role === 'owner' ? `<span class="mlbadges">${m.u === me() ? '<span class="chip">You</span>' : ''}${m.role === 'owner' ? '<span class="chip">Owner</span>' : ''}</span>` : '';
+  const row = m => `<li>${av(m.u, 'sm')}<span>@${esc(m.u)}</span>${badges(m)}${own && m.u !== me() ? moreMenu('m:' + x.id + ':' + m.u, false, '', act('ban', m.u, `Ban from ${nm}`) + (isPrivate(x.id) ? act('remove', m.u, 'Remove from channel') : ''), false) : own ? '<span class="mlmore" aria-hidden="true"></span>' : ''}</li>`;
   const bans = (BANS[x.id] || []).slice().sort((a, b) => b.at - a.at);
   return `<div class="scrim ce-scrim" data-a="membersclose"></div><div class="dialog chdlg cedlg mbdlg" role="dialog" aria-modal="true" aria-labelledby="mb-h" tabindex="-1">
     <div class="chdlg-h">${glyph(x)}<h3 id="mb-h">Members of ${nm}</h3><button class="iconbtn" data-a="membersclose" aria-label="Close">${I.x}</button></div>

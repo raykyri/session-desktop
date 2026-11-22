@@ -485,8 +485,18 @@ test.serial(
     const list = within(dialog).getByRole("list", { name: "Members" });
     const rows = within(list).getAllByRole("listitem");
     t.is(rows[0]?.getAttribute("data-member"), "ines.v");
-    t.truthy(within(rows[0] as HTMLElement).getByText("Owner"));
-    t.is(within(rows[0] as HTMLElement).queryByRole("button", { name: "More" }), null);
+    // the owner viewing their own row: "You" then "Owner", both chips, at
+    // the row's end; the menu's place is kept so the badges end where the
+    // other rows' menus start
+    const own = rows[0] as HTMLElement;
+    t.deepEqual(
+      [...own.querySelectorAll(".mlbadges > .chip")].map((c) => c.textContent),
+      ["You", "Owner"],
+    );
+    t.is(own.querySelector(".mltext")?.textContent, "@ines.v", "no You after the handle");
+    t.is(own.lastElementChild?.className, "mlmore");
+    t.is(within(own).queryByRole("button", { name: "More" }), null);
+    t.is((rows[1] as HTMLElement).lastElementChild?.classList.contains("more"), true);
     const other = rows[1] as HTMLElement;
     fireEvent.click(within(other).getByRole("button", { name: "More" }));
     const menu = await screen.findByRole("menu");
@@ -510,6 +520,15 @@ test.serial(
 test.serial("a member's list has no menus and no Banned section", async (t) => {
   const dialog = await openMembers("/c/public", "public");
   t.is(within(dialog).queryByRole("button", { name: "More" }), null);
+  // "You" is a chip at the row's end, as "Owner" on the owner's row; with no
+  // menus there is no kept place
+  const mine = dialog.querySelector('[data-member="ines.v"]') as HTMLElement;
+  t.deepEqual(
+    [...mine.querySelectorAll(".mlbadges > .chip")].map((c) => c.textContent),
+    ["You"],
+  );
+  t.is(mine.lastElementChild?.className, "mlbadges");
+  t.is(dialog.querySelector(".mlmore"), null);
   t.is(within(dialog).queryByRole("list", { name: "Banned" }), null);
   t.is(within(dialog).queryByRole("heading", { name: "Banned" }), null);
   t.is(within(dialog).queryByText(/^Nobody is banned/), null);

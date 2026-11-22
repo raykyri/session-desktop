@@ -734,8 +734,14 @@ other member: "Ban from #name", and in private channels "Remove from
 channel"; the owner sees a Banned list with Unban. Writes `members.ban`,
 `members.unban` and `members.remove` (with `base.adm`; STALE reloads the
 row). The whole list is a plan addition; the mock has none. There are no role
-controls: a channel has only its owner and members (01 C18).
-Acceptance: menu items for a member and for the owner; a STALE answer to
+controls: a channel has only its owner and members (01 C18). Each row is the
+avatar and "@handle", then its badges as chips at the row's end: "You" on the
+viewer's own row, "Owner" on the owner's, both ("You" then "Owner") when the
+owner views their own channel; then the "…" menu where there is one. When any
+row has a menu, a row without one keeps the menu's 24 px empty, so the badges
+end at the same edge on every row.
+Acceptance: menu items for a member and for the owner; the badges and the
+kept place of the menu; a STALE answer to
 `members.remove` reloads the row and shows the toast; the owner's header
 offers no Leave.
 
