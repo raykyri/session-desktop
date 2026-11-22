@@ -12,7 +12,7 @@ import { Profiler } from "react";
 
 import { useNewChannelDialog } from "../src/features/channels/NewChannelDialog.js";
 import { ThreadRow } from "../src/features/feed/ThreadRow.js";
-import { currentToast } from "../src/features/shell/Toast.js";
+import { clearToast, currentToast } from "../src/features/shell/Toast.js";
 import { ReplicaProvider, configureReplica } from "../src/replica/ReplicaProvider.js";
 import {
   createFixtureReplica,
@@ -175,6 +175,24 @@ test.serial("a run is refused before it is sent while the queue is full", async 
   t.is(await writes.ask(space.id, "one too many", "gemini-flash", "low"), null);
   t.is(sent, 0);
   t.is(currentToast(), QUEUE_FULL_MESSAGE);
+  replica.dispose();
+});
+
+test.serial("Open as its own thread confirms only a write that was sent", async (t) => {
+  const replica = createFixtureReplica("ines.v", { runMs: null });
+  const writes = makeWrites(replica);
+  const answers: WriteOutcome[] = [
+    { ok: true, result: undefined, unsent: true },
+    { ok: true, result: undefined },
+  ];
+  replica.mutate = () => Promise.resolve(answers.shift() as WriteOutcome);
+  clearToast();
+  // Not sent: the new card's Not sent line tells the person, not a toast.
+  t.truthy(await writes.promote(FIRST, "n1"));
+  t.is(currentToast(), null);
+  t.truthy(await writes.promote(FIRST, "n1"));
+  t.is(currentToast(), "Opened as its own thread.");
+  clearToast();
   replica.dispose();
 });
 
