@@ -215,6 +215,38 @@ test.serial(
   },
 );
 
+test.serial(
+  "a not-sent reply whose card is closed moves to the outbox toast, whose Retry sends it",
+  async (t) => {
+    const { f, post } = serve();
+    await renderApp("/", { user: testUser({ login: ME }) });
+    await waitUntil(t, () => card(post) !== null, "the post renders");
+    const row = () => card(post)?.closest(".feed-row") as HTMLElement;
+    fireEvent.click(within(card(post) as HTMLElement).getByRole("button", { name: "Reply" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Reply to @olga" }), {
+      target: { value: "Kept while away" },
+    });
+    f.offline = true;
+    fireEvent.click(row().querySelector("form.icomp button[type=submit]") as HTMLElement);
+    await waitUntil(t, () => row().querySelector("[data-not-sent]") !== null, "Not sent");
+    t.is(outboxToast(), null, "shown under the reply");
+    // deselect the reply: its card, and the line, go
+    fireEvent.click(within(row()).getByRole("treeitem", { name: /Kept while away/ }));
+    await waitUntil(t, () => row().querySelector("[data-not-sent]") === null, "the card closes");
+    await waitUntil(
+      t,
+      () => outboxToast()?.textContent?.startsWith("Not sent.") === true,
+      "the toast",
+    );
+    f.offline = false;
+    fireEvent.click(within(outboxToast() as HTMLElement).getByRole("button", { name: "Retry" }));
+    await waitUntil(t, () => outboxToast() === null, "sent");
+    t.true(
+      [...f.store.records.values()].some((r) => r.kind === "reply" && r.t === "Kept while away"),
+    );
+  },
+);
+
 /** Choose Post in the new-thread composer and type `text`. */
 async function writePost(text: string) {
   const field = await screen.findByRole("textbox", { name: "Ask or post" });

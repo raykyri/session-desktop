@@ -29,6 +29,7 @@ import { authorName, clip, noun, relTime } from "../feed/format.js";
 import { BranchIcon, BubbleIcon, ContinueIcon, SearchIcon } from "../feed/icons.js";
 import { revealThread } from "../feed/reveal.js";
 import { ReplyText } from "../replies/ReplyText.js";
+import { NotSentLine } from "../shell/NotSent.js";
 
 import { RunNote, RunProgress, isStoppedRun } from "./RunStatus.js";
 import { isActiveRun, othersUnder, type TreeIndex } from "./tree.js";
@@ -145,6 +146,7 @@ export function BranchCard({
           <MoreMenu actions={actions} />
         </span>
       </div>
+      <NotSentLine item={node.id} />
       {node.look !== null ? (
         <div className="lookh">
           <SearchIcon />
@@ -370,6 +372,7 @@ function BranchComments({
                 </button>
               ) : null}
             </div>
+            <NotSentLine item={c.id} />
             {replying ? (
               <InlineComposer
                 draftKey={composerKey(thread, { kind: "comment", node, parent: c.id })}

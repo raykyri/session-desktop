@@ -41,7 +41,12 @@ import {
   type FixtureReplica,
 } from "../src/replica/fixtureReplica.js";
 import { channelByName, channelsOf } from "../src/replica/queries.js";
-import { UNKNOWN, type ReplicaSource, type WriteOutcome } from "../src/replica/source.js";
+import {
+  UNKNOWN,
+  type ReplicaSource,
+  type UnsentWrite,
+  type WriteOutcome,
+} from "../src/replica/source.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 import { useThreadUiStore } from "../src/stores/threadUi.js";
@@ -1296,6 +1301,63 @@ test.serial("clicking a collapsed reply's +N expands it and keeps focus on its r
   const row = side(SEED_POST).querySelector<HTMLElement>(`[data-row="${TOP}"]`);
   await waitUntil(t, () => document.activeElement === row, "focus on the reply's row");
 });
+
+test.serial(
+  "a branch and a comment that were not sent show Not sent under them while shown, else in the outbox toast",
+  async (t) => {
+    let node = "";
+    const discarded: string[] = [];
+    prepare = (replica) => {
+      const n = replica.rawAll("node").find((x) => x.th === BRANCHED && /darknet/.test(x.q));
+      if (!n) throw new Error("no branch");
+      node = n.id;
+      replica.write([
+        {
+          kind: "comment",
+          id: OWN_COMMENT,
+          th: BRANCHED,
+          s: n.s,
+          node: n.id,
+          parent: null,
+          u: "ines.v",
+          t: "My own comment on the branch",
+          edited: false,
+          del: false,
+          mod: null,
+          createdAt: "2026-11-16T09:40:00Z",
+        },
+      ]);
+      // the fixture replica sends every write at once: these two read as
+      // the sync replica's "Not sent" writes
+      const unsent: UnsentWrite[] = [
+        { local: "L1", name: "research.forkNode", input: {}, item: n.id, error: null },
+        { local: "L2", name: "comments.create", input: {}, item: OWN_COMMENT, error: null },
+      ];
+      Object.assign(replica, {
+        unsent: () => unsent,
+        discard: (local: string) => discarded.push(local),
+      });
+    };
+    const outbox = () => document.querySelector<HTMLElement>("[data-outbox-toast]");
+    await renderApp("/");
+    await waitUntil(t, () => side(BRANCHED) !== null, "the side column renders");
+    await waitUntil(t, () => outbox() !== null, "neither is on screen: the toast lists both");
+    t.is(outbox()?.textContent?.startsWith("2 changes not sent."), true);
+
+    fireEvent.click(within(side(BRANCHED)).getByRole("treeitem", { name: /how does the darknet/ }));
+    const card = side(BRANCHED).querySelector<HTMLElement>(".preview") as HTMLElement;
+    await waitUntil(t, () => card.querySelectorAll("[data-not-sent]").length === 2, "two lines");
+    const [branchLine, commentLine] = [...card.querySelectorAll<HTMLElement>("[data-not-sent]")];
+    t.is(branchLine?.previousElementSibling?.classList.contains("who"), true, "under the author");
+    t.truthy(branchLine?.closest(".preview") === card && !branchLine.closest(".brr"));
+    t.truthy(commentLine?.closest(".brr")?.textContent?.includes("My own comment on the branch"));
+    t.is(outbox(), null, "the lines show both, so the toast is gone");
+
+    fireEvent.click(within(commentLine as HTMLElement).getByRole("button", { name: "Discard" }));
+    t.deepEqual(discarded, ["L2"]);
+    t.truthy(node);
+  },
+);
 
 test.serial("another person's comment has no Delete", async (t) => {
   prepare = (replica) => {

@@ -964,7 +964,9 @@ replica and enqueues the envelope.
   comment) shows "Not sent · Retry · Discard" under that item. A write with
   no item or composer (`saved.set`, `spaces.join`, `spaces.leave`,
   `prefs.set`, `notifications.markRead`, `notifications.markAllRead`,
-  `research.cancelNode`) shows a persistent toast (`role="alert"`) "Not
+  `research.cancelNode`), and a write whose item is not on screen with its
+  line (a branch or reply that is not selected, a comment on such a
+  branch), shows a persistent toast (`role="alert"`) "Not
   sent." with Retry and Discard; while several such writes are unsent it
   reads "N changes not sent." and its Retry and Discard act on all of them
   in outbox order. A reload drops unsent writes and their predictions; typed
