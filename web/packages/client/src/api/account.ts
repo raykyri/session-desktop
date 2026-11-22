@@ -98,6 +98,18 @@ export function setDefaultEffort(effort: string) {
   return trpc().admin.models.setDefaultEffort.mutate({ effort });
 }
 
+/** A member's account invites by handle (Site Admin's Invites section). */
+export function lookupInvites(handle: string) {
+  return trpc().admin.invites.lookup.query({ handle });
+}
+
+/** Gives the member `count` more invites; answers the new lookup. */
+export function grantInvites(input: { handle: string; count: number }) {
+  return trpc().admin.invites.grant.mutate(input);
+}
+
+export type InviteLookup = Awaited<ReturnType<typeof lookupInvites>>;
+
 /* -------------------------------------------------------------------------
  * Options, shared with the router's `beforeLoad`
  * ---------------------------------------------------------------------- */
@@ -251,6 +263,16 @@ export function useSetDefaultModel() {
       ),
     onSettled: () => client.invalidateQueries({ queryKey: queryKeys.models() }),
   });
+}
+
+/** A lookup runs when the admin presses "Look up", so it is a mutation in
+ * TanStack's terms: nothing caches it. */
+export function useLookupInvites() {
+  return useMutation({ mutationFn: lookupInvites });
+}
+
+export function useGrantInvites() {
+  return useMutation({ mutationFn: grantInvites });
 }
 
 export function useSetDefaultEffort() {

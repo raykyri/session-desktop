@@ -13,8 +13,8 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
-import { e2eLogin, mutation, signIn } from "./helpers.js";
-import { fontWeight } from "./spaces.js";
+import { e2eLogin, mutation, signIn, signedInContext, type SignedInUser } from "./helpers.js";
+import { fontWeight, toast } from "./spaces.js";
 import { channelName, person } from "./world.js";
 
 const UNUSABLE = "This invite code doesn't work. Ask the person who invited you for a new one.";
@@ -266,4 +266,53 @@ test("signed out, a private channel's link survives the provider sign-in: the ne
   // the page load back from the provider took the code out of storage
   expect(await joiner.evaluate(() => sessionStorage.getItem("session.channelInvite"))).toBeNull();
   await context.close();
+});
+
+test("a site admin gives invites to a member who has none left, and the member makes a link", async ({
+  browser,
+  page,
+}) => {
+  // The member uses all 3 of their invites.
+  const member = await signedInContext(browser, "e2e-grant-member");
+  const handle = (member.user as SignedInUser & { handle: string }).handle;
+  for (let index = 0; index < 3; index += 1) {
+    await mutation(member.request, "accountInvites.create", {});
+  }
+  await member.page.goto("/invites");
+  const box = member.page.locator(".invbox");
+  await expect(box.locator(".ishead small")).toHaveText("0 of 3 left");
+  await expect(box.getByRole("button", { name: /^Create/ })).toHaveCount(0);
+  await expect(
+    box.getByText("You have used your 3 invites. An admin can give you more."),
+  ).toBeVisible();
+
+  // A site admin looks the member up on Site Admin and gives them 2 more.
+  await signIn(page, { login: "e2e-grant-admin", isAdmin: true });
+  await page.goto("/admin");
+  const invites = page.locator("section", {
+    has: page.getByRole("heading", { name: "Invites", exact: true }),
+  });
+  await invites.getByRole("textbox", { name: "Handle" }).fill(`@${handle}`);
+  await invites.getByRole("button", { name: "Look up" }).click();
+  await expect(invites.getByRole("status")).toHaveText(`@${handle}: 0 of 3 invites left (0 used)`);
+  await invites.getByRole("spinbutton", { name: "Number of invites" }).fill("2");
+  await invites.getByRole("button", { name: "Give invites" }).click();
+  await expect(toast(page)).toHaveText(`Gave @${handle} 2 more invites.`);
+  await expect(invites.getByRole("status")).toHaveText(`@${handle}: 2 of 5 invites left (0 used)`);
+
+  // An unknown handle answers the server's message.
+  await invites.getByRole("textbox", { name: "Handle" }).fill("nobody.here.e2e");
+  await invites.getByRole("button", { name: "Look up" }).click();
+  await expect(invites.locator(".ferr")).toHaveText("No account with that handle.");
+
+  // The member can make a link again.
+  await member.page.reload();
+  await expect(box.locator(".ishead small")).toHaveText("2 of 5 left");
+  await box.getByRole("button", { name: "Create a new link" }).click();
+  await expect(member.page.locator(".feed-toast")).toContainText(
+    /Invite SESS-[A-Z2-9]{4}-[A-Z2-9]{2} created\. Send the link to one person\./,
+  );
+  await expect(box.locator(".ishead small")).toHaveText("1 of 5 left");
+  await expect(box.locator(".ilink")).toHaveCount(4);
+  await member.context.close();
 });

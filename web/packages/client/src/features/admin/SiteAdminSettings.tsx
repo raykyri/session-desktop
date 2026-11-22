@@ -3,7 +3,9 @@
 // member's composer starts. The model group lists the registry models
 // payable with included tokens; key-only models are not listed. The effort
 // group is Low, Medium, High and Max, none disabled. No prices, no model
-// descriptions, no availability switches and no per-member overrides.
+// descriptions, no availability switches and no per-member model overrides.
+// After them, the Invites section (`InviteGrants.tsx`): a member's account
+// invites by handle, and giving them more (04 I2).
 //
 // Online-only through TanStack Query (`models.list`,
 // `admin.models.setDefault`, `admin.models.setDefaultEffort`). A change shows
@@ -17,6 +19,8 @@ import { useModels, useSetDefaultEffort, useSetDefaultModel } from "../../api/ac
 import { refusalMessage } from "../../lib/toast.js";
 import { effortLabel } from "../../replica/online.js";
 import { showToast } from "../shell/Toast.js";
+
+import { InviteGrants } from "./InviteGrants.js";
 
 const PROVIDER_NAME: Record<string, string> = {
   vertex: "Google",
@@ -157,6 +161,7 @@ export function SiteAdminSettings() {
           </p>
         ) : null}
       </section>
+      <InviteGrants />
     </>
   );
 }
