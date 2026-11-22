@@ -327,7 +327,7 @@ anyone with its link or name (§3.5, §13).
   name sent (`R10`); the dialog shows "#name already exists."
 - Creation is online-only (`inv4`: a queued `spaces.create` answers
   `EXPIRED`). The New channel dialog disables Create while the sync connection
-  is down: "Creating a channel needs a connection."
+  is down: "Can't create a channel while offline."
 - The creator is owner and only member. The client sends `name`, `desc` and
   `vis`; never `rules`.
 
@@ -589,8 +589,9 @@ Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
   the channel's owner and to the banned person, in their user log, and to
   nobody else; it names nobody but the banned person (who banned them is in
   the moderation log, which only the owner reads). The banned person's
-  client tells them "You are banned from #name." when that record arrives,
-  and not for a membership that ends any other way (a Leave in another tab).
+  client tells them "You can no longer post in #name." (an open channel) or
+  "You no longer have access to #name." (a private one) when that record
+  arrives, and not for a membership that ends any other way (a Leave in another tab).
 - "Remove from #name" is offered only in private channels. In open channels it
   would be STALE after the person leaves and rejoins (`AGENTS.md`), so Ban is
   the tool there.

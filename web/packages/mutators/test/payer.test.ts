@@ -185,5 +185,5 @@ test("K8, K11: the payer rule for each kind of model", (t) => {
   t.is(payerFor(openaiOnly, { ...SPENT, keys: ["openai"] }), "key:openai");
   t.is(payerFor(openaiOnly, { ...LEFT, keys: ["anthropic"] }), "no_key");
   t.is(payerFor(openaiOnly, SPENT_KEY), "no_key");
-  t.is(NO_KEY_TEXT, "This model runs on your own API key. Add the key in Usage.");
+  t.is(NO_KEY_TEXT, "This model requires your own API key. Add one in Usage.");
 });

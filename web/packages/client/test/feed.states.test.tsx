@@ -250,7 +250,7 @@ test.serial("New channel offline says it needs a connection and cannot submit", 
   fireEvent.click(await screen.findByRole("button", { name: "New channel" }));
   const dialog = await screen.findByRole("dialog", { name: "New channel" });
   t.truthy(within(dialog).getByRole("status"));
-  t.regex(within(dialog).getByRole("status").textContent ?? "", /needs a connection/);
+  t.is(within(dialog).getByRole("status").textContent, "Can't create a channel while offline.");
   t.true(within(dialog).getByRole("button", { name: "Create channel" }).hasAttribute("disabled"));
 });
 

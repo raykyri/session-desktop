@@ -399,9 +399,7 @@ same account applies it.
 
 Signed out, the follow-up, Reply and Save controls open the auth dialog and
 focus returns to the control on close; without an invite they are disabled
-with the titles "Ask a follow-up opens once you have an invite", "Reply opens
-once you have an invite" and "Saving opens once you have an invite" (the
-mock's "Liking opens …" on Save is a leftover of removed likes).
+with the title "Available once you have an invite".
 
 **W3.2 `ThreadCard` and parts.** Acceptance: tests for no zero counts, no
 save count below 3 in a private channel, footer meta omissions ("2 sources ·
@@ -421,7 +419,7 @@ cards:
 | `queued` | "Queued" |
 | `running` | "Researching · Step N of 4" (`step` 0-3, 03 E3) with a pulsing dot, replaced by streamed text as it arrives (ADR-22) |
 | `complete` | the answer, then the run record's `note` when it has one (03 §1, E5): "Stopped: Reached token limit for a single run." (per-run cap, L1) or "Stopped: Out of tokens." (the member's overdraft limit, K9) |
-| `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`'s `resetAt` in the viewer's time zone, while nothing can pay now, else "This ask did not run: included tokens had run out. Run again to start it."; `key` by `fail.detail`; `rate`, `access`, `error`). A reader who is not the asker reads the author's failure ("This ask did not run: its author had no included tokens left.", "Stopped: Author's API key could not be used.", "Stopped: Rate limited by model provider.") |
+| `failed` | the reason for `fail.why` (`tokens`: "Out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`'s `resetAt` in the viewer's time zone, while nothing can pay now, else "Did not run: Out of included tokens."; `key` by `fail.detail`; `rate`, `access`, `error`). A reader who is not the asker reads the author's failure ("Did not run: Author was out of tokens.", "Stopped: Author's API key could not be used.", "Stopped: Rate limited by model provider.") |
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
 While `queued` or `running` the asker gets Stop (`research.cancelNode`; a plan
@@ -635,7 +633,7 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   refused by the `pre` stage; 03 L1, 01 Y2; the toast copy is a plan
   addition, the mock has no queue): when the replica already holds 20 of the member's own run records
   with status `queued`, a run-starting write is not sent and shows the toast
-  "You have 20 asks waiting to run. Try again when one starts." with the
+  "You can have up to 20 asks waiting to run. Try again when one starts." with the
   text kept; if the server refuses it anyway with `PRECONDITION_FAILED`
   (`reason: "queue_full"`, recorded), the client rolls the prediction back,
   restores the text to its composer and shows the same toast.
@@ -770,7 +768,7 @@ test for create, copy, revoke and restore; `spaces-channels.spec.ts` covers the 
 
 **W6.10 Frozen and refused states** (04 §8, §9): a channel the viewer was
 removed or banned from is dropped from the replica at the resync that
-follows, with the toast "You are no longer a member of #name."; the
+follows, with the toast "You no longer have access to #name."; the
 desktop's frozen copy is not built (removed: web-only build; no copy after a
 voluntary Leave either, decision P8). Refusals of queued writes show the 04 §9 messages (the ban message, "#name is
 unavailable because its owner's account is deactivated.", the expired-link

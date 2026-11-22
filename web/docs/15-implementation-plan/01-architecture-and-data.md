@@ -711,7 +711,7 @@ to and nothing else of any closed space (AGENTS.md). The server keeps the
 prototype's rule that a removed member may still delete their own threads in
 a closed space (the frozen-copy test). The web client persists nothing, so
 it keeps no frozen copy: on the resync that follows a removal or ban it drops
-the channel's records and shows "You are no longer a member of #name." (02
+the channel's records and shows "You no longer have access to #name." (02
 W6.10; decision P8 for a voluntary Leave). Acceptance: `inv7` and the
 frozen-copy test pass against the server.
 

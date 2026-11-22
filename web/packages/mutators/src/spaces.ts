@@ -71,7 +71,7 @@ export const SPACES = {
       // admits nobody: kept as a standing pass, it would let a removed
       // member join again.
       if (i.invite === undefined)
-        throw refuse("FORBIDDEN", `#${s.name} is private: joining it needs an invite link.`);
+        throw refuse("FORBIDDEN", `#${s.name} is private. You need an invite link to join.`);
       // the link is the owner's record: checked on the server only
       if (!tx.server) return;
       const link = tx.unique("invite.code", i.invite);

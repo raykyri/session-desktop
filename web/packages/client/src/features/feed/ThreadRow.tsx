@@ -395,14 +395,14 @@ function ThreadCard({
       ? { onClick: followUp }
       : frozen !== null
         ? { disabled: true, title: `#${frozen} is unavailable` }
-        : { disabled: true, title: `${label} opens once you have an invite` };
+        : { disabled: true, title: "Available once you have an invite" };
 
   // a save is the viewer's own record: a frozen channel allows it (04 B6)
   const saveGate = signedOut
     ? { onClick: signIn }
     : active
       ? { onClick: () => void writes.save(thread.id, !saved) }
-      : { disabled: true, title: "Saving opens once you have an invite" };
+      : { disabled: true, title: "Available once you have an invite" };
 
   return (
     <article

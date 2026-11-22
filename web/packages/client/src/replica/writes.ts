@@ -23,7 +23,7 @@ type SpaceMutatorName = Spaces.SpaceMutatorName;
 
 /** The toast of a run-starting write refused for a full queue (02 §5; at
  * most `QUEUED_RUNS_MAX` runs wait per person, 03 L1). */
-export const QUEUE_FULL_MESSAGE = `You have ${QUEUED_RUNS_MAX} asks waiting to run. Try again when one starts.`;
+export const QUEUE_FULL_MESSAGE = `You can have up to ${QUEUED_RUNS_MAX} asks waiting to run. Try again when one starts.`;
 
 /** The mention toast (02 §4.3, N16): "Notified @a, @b." and "@c isn't a
  * member." ("@c, @d aren't members."), joined when both apply. */

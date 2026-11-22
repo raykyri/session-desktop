@@ -309,7 +309,7 @@ test("removed from a private channel while one of its rows is being fetched: the
   t.false(client(r).logs().includes(`space:${lab}`), "the log is gone");
   t.false(internals(r).streamed.has(`space:${lab}`));
   t.false(internals(r).loadedLogs.has(`space:${lab}`));
-  t.deepEqual(left, ["lab"], "You are no longer a member of #lab.");
+  t.deepEqual(left, ["lab"], "You no longer have access to #lab.");
   t.is(r.list("thread", { sp: lab }), UNKNOWN);
 });
 

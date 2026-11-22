@@ -132,8 +132,9 @@ export interface SyncReplicaOptions {
   beforeReload?: (keep: () => void) => () => void;
   /** The person lost access to a private channel (01 R4). */
   onLeft?: (name: string) => void;
-  /** The owner banned the person: their ban record arrived (04 §6.4). */
-  onBanned?: (name: string) => void;
+  /** The owner banned the person: their ban record arrived (04 §6.4).
+   * `open`: the channel is open, so the person still reads it. */
+  onBanned?: (name: string, open: boolean) => void;
   /** The event stream opened or closed. */
   onConnection?: (status: "open" | "closed") => void;
   clock?: Clock;
@@ -794,9 +795,10 @@ export class SyncReplica implements ReplicaSource {
   /**
    * A ban (04 §6.4): the server serves the banned person their own
    * `ban:<space>:<user>` record, in their user log, and the client tells
-   * them once it arrives ("You are banned from #name."). The bans the first
-   * read of the user log holds are not news, and a membership that ends any
-   * other way (a Leave from another tab of the same account, a removal) is
+   * them once it arrives ("You can no longer post in #name." in an open
+   * channel, "You no longer have access to #name." in a private one). The
+   * bans the first read of the user log holds are not news, and a membership
+   * that ends any other way (a Leave from another tab of the same account, a removal) is
    * not told as a ban. A ban is told once its channel's name is held: in a
    * private channel the resync of its log (`left`) may come first and names
    * it (`tellLeft`).
@@ -822,13 +824,13 @@ export class SyncReplica implements ReplicaSource {
       const s = this.get(`space:${sp}`);
       if (s === UNKNOWN || s?.kind !== "space") continue;
       this.bansUntold.delete(sp);
-      this.options.onBanned?.(s.name);
+      this.options.onBanned?.(s.name, s.vis === "open");
     }
   }
 
   /**
    * A private channel the person lost without a Leave from this tab (01 R4):
-   * "You are no longer a member of #name.", unless a ban removed them, which
+   * "You no longer have access to #name.", unless a ban removed them, which
    * is told as the ban. The space log's resync and the ban in the user log
    * arrive in either order, so the user log is read first.
    */
@@ -841,8 +843,9 @@ export class SyncReplica implements ReplicaSource {
       } catch {
         // not read: told as a lost membership
       }
+    // `left` is emitted for a private channel only (`@session/sync`)
     if (this.ownBans?.has(space)) {
-      if (this.bansUntold.delete(space)) this.options.onBanned?.(name);
+      if (this.bansUntold.delete(space)) this.options.onBanned?.(name, false);
       return;
     }
     this.options.onLeft?.(name);

@@ -55,7 +55,7 @@ export function runDay(at: number, timeZone?: string): string {
  * instead. */
 export function outOfTokensText(resetAt: number | null, timeZone?: string): string {
   const until = resetAt === null ? "the weekly reset" : weekdayOf(resetAt, false, timeZone);
-  return `You're out of tokens until ${until}. You can still post, or add an API key in Usage.`;
+  return `Out of tokens until ${until}. You can still post, or add an API key in Usage.`;
 }
 
 export type RunBill = "included" | "key:anthropic" | "key:openai" | "included+key:anthropic";

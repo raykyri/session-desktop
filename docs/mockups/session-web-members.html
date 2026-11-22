@@ -1455,15 +1455,15 @@ const RUN_ERR = { auth: 'Provider authentication failed for this model. Please c
 /* the reason a failed run shows, worded for its asker or for any other reader */
 function failText(r) {
   const f = r.fail || { why: 'error', cls: 'unknown' }, asker = mine(r.u), name = r.pay === 'key:openai' ? 'OpenAI' : r.pay ? 'Anthropic' : null;
-  if (f.why === 'tokens') return !asker ? 'This ask did not run: its author had no included tokens left.' : outOfTokens(r.model) ? outMsg() : 'This ask did not run: included tokens had run out. Run again to start it.';
+  if (f.why === 'tokens') return !asker ? 'Did not run: Author was out of tokens.' : outOfTokens(r.model) ? outMsg() : 'Did not run: Out of included tokens.';
   if (f.why === 'key') return !asker ? "Stopped: Author's API key could not be used." : ({
-    key_only: 'This model runs on your own API key. Add the key in Usage.',
+    key_only: 'This model requires your own API key. Add one in Usage.',
     key_unset: `No valid ${name || 'API'} key was set when this run started. Add a key in Usage.`,
     key_changed: `${name ? `Your ${name} key` : 'Your API key'} was removed, replaced or marked invalid during this run. See Usage for more details.`,
     key_rejected: `${name || 'The provider'} rejected your API key. Add a new key in Usage.`,
     key_forbidden: `${name || 'The provider'} rejected this request with a permission error.`,
-  }[f.detail] || 'The API key for this run was rejected or removed. Check your keys in Usage.');
-  if (f.why === 'access') return asker ? 'You can no longer read this channel, so the ask did not run.' : 'This ask did not run: its author could no longer read this channel.';
+  }[f.detail] || 'Your API key was rejected or removed during this run. See Usage for more details.');
+  if (f.why === 'access') return asker ? 'Did not run: You no longer have access to this channel.' : 'Did not run: Author no longer has access to this channel.';
   if (f.why === 'rate') return asker ? 'The model provider is rate limiting this deployment. Try again in a minute.' : 'Stopped: Rate limited by model provider.';
   return RUN_ERR[f.cls] || RUN_ERR.unknown;
 }
@@ -1622,13 +1622,13 @@ function card(p) {
   const count = c => `<span class="notes">${c}</span>`;
   const tail = '';
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'} tt-c`;
-  const off = st.auth === 'in' && !canWrite() ? ' disabled title="Saving opens once you have an invite"' : '';
+  const off = st.auth === 'in' && !canWrite() ? ' disabled title="Available once you have an invite"' : '';
   /* no likes on threads; the bookmark carries how many people saved it (the fixtures' like counts stand in for save counts) */
   const ns = (p.likesBase || 0) + (SAVED()[p.id] ? 1 : 0), showN = ns && !(isPrivate(p.s) && ns < 3);  /* private channels: no count below 3, so a save is not traceable to one person */
   const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}${showN ? `, saved by ${ns}` : ''}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${showN ? `<span>${ns}</span>` : ''}</button>`;
   /* reply / follow-up button carries its count, like the like button */
   /* in a frozen channel nothing new can be added: Reply and the follow-up button are disabled; Save stays */
-  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${fz ? `disabled title="${esc(spName(p.s))} is unavailable"` : canWrite() ? `${attrs} title="${label}"` : st.auth === 'out' ? `data-ma="openauth" title="${label}"` : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
+  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${fz ? `disabled title="${esc(spName(p.s))} is unavailable"` : canWrite() ? `${attrs} title="${label}"` : st.auth === 'out' ? `data-ma="openauth" title="${label}"` : 'disabled title="Available once you have an invite"'} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   const art = `<article class="${cls}${st.flash === p.id ? ' flash' : ''}" id="card-${p.id}" aria-labelledby="title-${p.id}" tabindex="-1">`, unsent = p.unsent ? notSentLine(p.unsent) : '';
   if (p.k === 'post') {
     const n = replyCount(p);
@@ -1929,6 +1929,8 @@ const spaceList = () => D.spaces.filter(x => SPACE_META[x.id]);
 const metaOf = id => SPACE_META[id] || {};
 const ownerOf = id => metaOf(id).owner;
 const isPrivate = id => metaOf(id).vis === 'private';
+/* what a banned person reads: an open channel stays readable, so only posting is gone */
+const bannedMsg = id => isPrivate(id) ? `You no longer have access to ${spName(id)}.` : `You can no longer post in ${spName(id)}.`;
 const joinedIds = () => st.auth === 'out' ? [] : spaceList().filter(x => isMemberOf(x.id, st.user)).map(x => x.id);
 const isJoined = id => st.auth !== 'out' && isMemberOf(id, st.user);
 const memberCount = id => (MEMBERSHIP[id] || []).length;
@@ -2077,7 +2079,7 @@ function membersDlg(x) {
 function memberActDlg() {
   const m = st.memberAct; if (!m) return '';
   const nm = esc(spName(m.sp)), who = '@' + esc(m.u), ban = m.k === 'ban';
-  const text = !ban ? `${who} stops being a member of ${nm} and can no longer read it. A new invite link lets them join again.`
+  const text = !ban ? `${who} is removed from ${nm}. Send them a new invite link to add them back.`
     : isPrivate(m.sp) ? `${who} is removed from ${nm} and can't read it, write in it or join it again with a link. You can unban them in the member list.`
     : `${who} can no longer write in ${nm} or join it. Anyone can still read an open channel. You can unban them in the member list.`;
   return `<div class="scrim" style="z-index:46" data-a="memno"></div><div class="dialog" style="z-index:47" role="alertdialog" aria-modal="true" aria-labelledby="mact-h" aria-describedby="mact-p"><h3 id="mact-h">${ban ? 'Ban' : 'Remove'} ${who} from ${nm}?</h3><p id="mact-p">${text}</p><div class="dacts"><button class="btn2" data-a="memno">Cancel</button><button class="btn1 danger" data-a="memyes">${ban ? 'Ban' : 'Remove'}</button></div></div>`;
@@ -2094,7 +2096,7 @@ const tick = () => ++modT;
 function banMember(sp, u) {
   const at = tick(); dropMember(sp, u); (BANS[sp] ||= []).push({ u, at });
   MODLOG.push({ k: 'ban', s: sp, u, by: me(), at });
-  (PENDING[u] ||= []).push({ text: `You are banned from ${spName(sp)}.`, sp });
+  (PENDING[u] ||= []).push({ text: bannedMsg(sp), sp });
   toast(`Banned @${u} from ${spName(sp)}.`);
 }
 /* `adm`: the admission the owner saw when the confirm opened; a person let in again since then has a new one, and
@@ -2103,7 +2105,7 @@ const admissionOf = (sp, u) => (MEMBERSHIP[sp] || []).find(m => m.u === u)?.adm 
 function removeMember(sp, u, adm) {
   if (!isMemberOf(sp, u)) { toast(`@${u} had already left ${spName(sp)}.`); return; }
   if (adm != null && admissionOf(sp, u) !== adm) { toast('This changed after you opened it. Check it and try again.', { alert: true }); return; }
-  dropMember(sp, u); (PENDING[u] ||= []).push({ text: `You are no longer a member of ${spName(sp)}.`, sp });
+  dropMember(sp, u); (PENDING[u] ||= []).push({ text: `You no longer have access to ${spName(sp)}.`, sp });
   toast(`Removed @${u} from ${spName(sp)}.`);
 }
 /* Invite links of a private channel, stacked over the info dialog. An open link past its expiry is left out; a
@@ -2173,7 +2175,7 @@ function newSpaceDlg() {
     <form class="pform" data-form="newspace:x"><label>Name<span class="hwrap"><span>#</span><input id="ns-name" value="${esc(c.name)}" placeholder="reading-group" autocomplete="off" spellcheck="false"${c.err ? ' aria-invalid="true" aria-describedby="ns-err"' : ''}></span><small>Lowercase letters, numbers and dashes.</small></label>
     <label>What is it for?<textarea id="ns-desc" rows="2" placeholder="One or two sentences shown at the top of the channel">${esc(c.desc)}</textarea></label>
     <div class="nsvis" role="radiogroup" aria-label="Visibility">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people invited with a link can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
-    ${c.err ? `<p class="ferr" id="ns-err" role="alert">${esc(c.err)}</p>` : ''}${st.offline ? '<p class="ferr" role="status">Creating a channel needs a connection.</p>' : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1"${st.offline ? ' disabled' : ''}>Create channel</button></div></form></div>`;
+    ${c.err ? `<p class="ferr" id="ns-err" role="alert">${esc(c.err)}</p>` : ''}${st.offline ? '<p class="ferr" role="status">Can\'t create a channel while offline.</p>' : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1"${st.offline ? ' disabled' : ''}>Create channel</button></div></form></div>`;
 }
 function createSpace() {
   const c = st.creating, name = $('#ns-name').value.trim().toLowerCase().replace(/^#/, ''), desc = $('#ns-desc').value.trim(), vis = $('input[name="nsvis"]:checked')?.value || 'open';
@@ -2266,7 +2268,7 @@ app.addEventListener('click', e => {
   if (a === 'chlinknew') { const sp = st.chInfo, mk = () => { CH_LINKS.push({ id: 'cl' + (++seq), sp, code: newChCode(), created: new Date(NOW).toISOString(), expires: new Date(NOW + 7 * 864e5).toISOString(), state: 'open' }); toast('Invite link created.'); };
     /* the server makes the code, so a link that is not sent shows nothing in the list */
     sendOrHold({ kind: 'chlink', send: mk }); render(); return; }
-  if (a === 'chlinkcopy') { const l = CH_LINKS.find(x => x.id === d.id), t = chLinkUrl(SP[l.sp].name, l.code), fail = () => { toast('The link could not be copied. Select it and copy it by hand.', { alert: true }); render(); };
+  if (a === 'chlinkcopy') { const l = CH_LINKS.find(x => x.id === d.id), t = chLinkUrl(SP[l.sp].name, l.code), fail = () => { toast('Couldn\'t copy the link. Select it and copy it manually.', { alert: true }); render(); };
     try { navigator.clipboard.writeText(t).then(() => { toast('Link copied.'); render(); }, fail); } catch { fail(); } return; }
   if (a === 'chlinkrevoke') { CH_LINKS.find(x => x.id === d.id).state = 'revoked'; toast('Link revoked.'); render(); return; }
   if (a === 'chlinkundo') { CH_LINKS.find(x => x.id === d.id).state = 'open'; toast('Invite link restored.'); render(); return; }
@@ -2705,7 +2707,7 @@ const used = () => usage().reduce((a, b) => a + b, 0);
 const left = () => Math.max(0, ALLOWANCE - used());
 const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
-const outMsg = () => `You're out of tokens until ${weekdayOf(RESET)}. You can still post, or add an API key in Usage.`;
+const outMsg = () => `Out of tokens until ${weekdayOf(RESET)}. You can still post, or add an API key in Usage.`;
 /* true when nothing can pay for a run on `model` now: included tokens are spent, the model takes included tokens,
    and the key rule does not hold (billing on the key, a model the Anthropic key can pay for, a valid key). Unknown
    while the usage reading failed. */
@@ -2752,14 +2754,14 @@ function saveThread(id) {
 }
 /* refusals before or at send: a ban in the channel stops every write there; the mock bar's Writes: Refuse refuses */
 function refused(space) {
-  if (space && st.auth === 'in' && isBanned(space, st.user)) { toast(`You are banned from ${spName(space)}.`, { alert: true }); return true; }
+  if (space && st.auth === 'in' && isBanned(space, st.user)) { toast(bannedMsg(space), { alert: true }); return true; }
   if (st.mw === 'refuse') { toast("You don't have permission to do this.", { alert: true }); return true; }
   return false;
 }
 /* run-starting writes: not sent when nothing can pay for the model, or with 20 of the member's runs queued */
 function runBlocked(model) {
   if (outOfTokens(model)) { toast(outMsg(), { alert: true }); return true; }
-  if (st.mq === 'full') { toast('You have 20 asks waiting to run. Try again when one starts.', { alert: true }); return true; }
+  if (st.mq === 'full') { toast('You can have up to 20 asks waiting to run. Try again when one starts.', { alert: true }); return true; }
   return false;
 }
 /* ---- connection and "Not sent" ----
@@ -2809,7 +2811,7 @@ function paintNotices() {
 }
 /* join: refused when banned or frozen; with a limit reached the join shows as done until Discard */
 function joinChannel(id) {
-  if (isBanned(id, st.user)) { toast(`You are banned from ${spName(id)}.`, { alert: true }); return false; }
+  if (isBanned(id, st.user)) { toast(bannedMsg(id), { alert: true }); return false; }
   if (isFrozen(id)) { toast(`${spName(id)} is unavailable because its owner's account is deactivated.`, { alert: true }); return false; }
   const u = st.user; addMember(id, u); SEEN[u + ':' + id] = true;
   if (sendOrHold({ kind: 'join', undo: () => dropMember(id, u), send: () => toast(`Joined ${spName(id)}.`) })) return true;
@@ -3471,7 +3473,7 @@ function renderInner() {
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
   if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
   if (st.memberAct) app.insertAdjacentHTML('beforeend', memberActDlg());
-  if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : k0 === 'c' ? 'this comment and your replies under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
+  if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : k0 === 'c' ? 'this comment and your replies' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
@@ -3510,7 +3512,7 @@ function openChLink(lid) {
 function useChLink(lid) {
   const l = CH_LINKS.find(x => x.id === lid), sp = l.sp; st.chLink = null; st.chLinkId = null; st.screen = 'network'; st.space = sp; st.authOpen = false;
   if (isJoined(sp)) { render(); return; }  /* already a member: the code is dropped */
-  if (isBanned(sp, st.user)) toast(`You are banned from ${spName(sp)}.`, { alert: true });
+  if (isBanned(sp, st.user)) toast(bannedMsg(sp), { alert: true });
   else if (l.state !== 'open' || Date.parse(l.expires) <= NOW || isFrozen(sp)) toast('This invite link no longer works. Ask the channel owner for a new one.', { alert: true });
   else { addMember(sp, st.user); l.state = 'used'; l.usedBy = st.user; toast(`Joined ${spName(sp)}.`); }
   render();
@@ -3523,7 +3525,7 @@ document.addEventListener('click', e => {
   const o = e.target.closest('[data-mo]');
   if (o) st.codeTyped = null;
   if (o && (o.dataset.mo === 'chlink' || o.dataset.mo === 'chlinkused')) { openChLink(o.dataset.mo === 'chlink' ? 'cl-open' : 'cl-used'); return; }
-  /* a banned person opens a working link: "You are banned from #grant-review.", and the channel stays locked */
+  /* a banned person opens a working link: "You no longer have access to #grant-review.", and the channel stays locked */
   if (o && o.dataset.mo === 'chlinkbanned') { st.chLink = null; st.chLinkId = null; if (st.auth !== 'in' || st.user !== 'ines.v') signIn('ines.v');
     if (!isBanned('grants', 'ines.v')) { const at = tick(); (BANS.grants ||= []).push({ u: 'ines.v', at }); MODLOG.push({ k: 'ban', s: 'grants', u: 'ines.v', by: ownerOf('grants'), at }); }
     dropMember('grants', 'ines.v'); openChLink('cl-open'); return; }

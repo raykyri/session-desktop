@@ -33,12 +33,11 @@ import { card, compose, toast } from "./spaces.js";
 import { Writer, channelName, person, ulid } from "./world.js";
 
 const ALLOWANCE = 2_000_000;
-const OUT_MSG =
-  "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
+const OUT_MSG = "Out of tokens until Friday. You can still post, or add an API key in Usage.";
 const OUT_MSG_LOS_ANGELES =
-  "You're out of tokens until Thursday. You can still post, or add an API key in Usage.";
-const TOKENS_PAST = "This ask did not run: included tokens had run out. Run again to start it.";
-const TOKENS_OTHER = "This ask did not run: its author had no included tokens left.";
+  "Out of tokens until Thursday. You can still post, or add an API key in Usage.";
+const TOKENS_PAST = "Did not run: Out of included tokens.";
+const TOKENS_OTHER = "Did not run: Author was out of tokens.";
 const STOP_NOTE = "Stopped: Out of tokens.";
 const ACCEPTED = "sk-ant-e2e-billing-key-00000000000000a1f9";
 

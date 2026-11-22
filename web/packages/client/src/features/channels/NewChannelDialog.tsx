@@ -156,7 +156,7 @@ export function NewChannelDialog({ online = true }: { online?: boolean }) {
         ) : null}
         {!online ? (
           <p className="ferr" role="status">
-            Creating a channel needs a connection.
+            Can't create a channel while offline.
           </p>
         ) : null}
         <div className="dacts">

@@ -197,6 +197,12 @@ export const define = <I>(def: MutatorDef<I>) => def as unknown as AnyMutator;
 export const frozenMessage = (name: string) =>
   `#${name} is unavailable because its owner's account is deactivated.`;
 
+/** The message of a write refused for a ban (`04` §6.4), and of the client's
+ * toast when the ban arrives: an open space stays readable to a banned
+ * person, so only posting is gone; a private one is not served at all. */
+export const bannedMessage = (name: string, open: boolean) =>
+  open ? `You can no longer post in #${name}.` : `You no longer have access to #${name}.`;
+
 /** The ban check, the frozen-space check, the `who` check and `can` (the
  * mock's `authorize`). */
 export function authorize(tx: Tx, def: AnyMutator, input: unknown): void {
@@ -213,7 +219,7 @@ export function authorize(tx: Tx, def: AnyMutator, input: unknown): void {
     // rolls a banned person's prediction back. A write of the person's own
     // user-log records only is not stopped by a ban.
     if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))
-      throw refuse("FORBIDDEN", `You are banned from #${s.name}.`);
+      throw refuse("FORBIDDEN", bannedMessage(s.name, !isClosed(s)));
     if (s.frozen && def.frozen !== "allowed") throw refuse("FORBIDDEN", frozenMessage(s.name));
     const who = def.who;
     if (who === "member") {

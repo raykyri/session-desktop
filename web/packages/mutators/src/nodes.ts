@@ -98,9 +98,12 @@ export const NODES = {
       // `03` G7: a run's context is its path as its asker may read it, and a
       // hidden ask is read by its author and the space's owner only
       if (parent.mod === "hidden" && parent.u !== tx.me && !isOwnerOf(tx, p.s, tx.me))
-        throw refuse("PRECONDITION_FAILED", "This ask is hidden.");
+        throw refuse("PRECONDITION_FAILED", "This ask is no longer available.");
       if (active(runOf(tx, parent)))
-        throw refuse("PRECONDITION_FAILED", "This ask is still running: wait for its answer.");
+        throw refuse(
+          "PRECONDITION_FAILED",
+          "This ask is still running. Try again after it answers.",
+        );
       let q: string;
       let look: string | null = null;
       if (i.kind === "ask") q = text(i.q, "q");

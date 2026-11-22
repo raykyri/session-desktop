@@ -198,7 +198,8 @@ function promote(tx: Tx, id: string, th: string, nodeId: string) {
   if (p.mod === "removed" || n.mod === "removed") throw removed();
   notGone(p);
   if (n.del) throw deleted();
-  if (n.mod !== null) throw refuse("PRECONDITION_FAILED", "This branch is hidden.");
+  if (n.mod !== null)
+    throw refuse("PRECONDITION_FAILED", "This branch was hidden by the channel owner.");
   if (n.promoted !== null)
     throw refuse("PRECONDITION_FAILED", "This branch is already its own thread.");
   const a = tx.byKey(answerKey(n.id));

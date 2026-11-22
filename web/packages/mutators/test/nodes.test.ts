@@ -127,7 +127,7 @@ test("L1: the 21st queued run of a person is PRECONDITION_FAILED with reason que
     "PRECONDITION_FAILED",
   );
   t.is(e?.reason, "queue_full");
-  t.is(e?.message, "You have 20 asks waiting to run.");
+  t.is(e?.message, "You can have up to 20 asks waiting to run.");
   // a post starts no run; another person's queue is their own
   ok(t, w.apply("mel", "threads.create", { id: w.id(), space: open, kind: "post", q: "x" }));
   const th = ask(t, w, "mona", open);

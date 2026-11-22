@@ -48,7 +48,7 @@ export const threadDeleted = () =>
 export function notGone(p: ThreadRec): void {
   if (p.gone) throw threadDeleted();
 }
-export const notAuthor = () => refuse("FORBIDDEN", "Only the person who wrote this can change it.");
+export const notAuthor = () => refuse("FORBIDDEN", "Only the author can change this.");
 
 /** The shared id schema, narrowed to ULIDs whose time fits 48 bits. */
 export const ulidS = spaces.spaceUlidSchema.regex(ULID_RE);
@@ -391,7 +391,7 @@ export function checkQueue(ctx: PreCtx): void {
   if (ctx.queuedRuns() >= QUEUED_RUNS_MAX)
     throw new Refusal(
       "PRECONDITION_FAILED",
-      `You have ${QUEUED_RUNS_MAX} asks waiting to run.`,
+      `You can have up to ${QUEUED_RUNS_MAX} asks waiting to run.`,
       undefined,
       "queue_full",
     );
@@ -458,7 +458,7 @@ export function firstPayer(model: string): Payer {
 
 /** The message of a run on a key-only model that ended `failed { why:
  * "key" }` because the person holds no valid key for it (`03` K11, E5). */
-export const NO_KEY_TEXT = "This model runs on your own API key. Add the key in Usage.";
+export const NO_KEY_TEXT = "This model requires your own API key. Add one in Usage.";
 
 /**
  * The payer of a run on `model` the actor queues (`03` K8, K11), decided

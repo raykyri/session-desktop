@@ -64,7 +64,7 @@ process.env.TZ = "America/Los_Angeles";
 const RESET = Date.UTC(2026, 10, 27);
 const SPENT = 2_000_000;
 const THURSDAY_TOAST =
-  "You're out of tokens until Thursday. You can still post, or add an API key in Usage.";
+  "Out of tokens until Thursday. You can still post, or add an API key in Usage.";
 const KEY = "sk-ant-api03-a-whole-key-from-the-console-a1f9";
 
 /** @ines.v's ask in #public; the fixture member reads as @ines.v. */
@@ -288,7 +288,7 @@ test("C3, C4: the asker's tokens copy: out now names the reset's weekday here; e
   t.is(failedRunText(tokens, view({ outOfTokens: false })), TOKENS_PAST_TEXT);
   t.is(
     failedRunText(tokens, view({ outOfTokens: true, resetAt: null })),
-    "You're out of tokens until the weekly reset. You can still post, or add an API key in Usage.",
+    "Out of tokens until the weekly reset. You can still post, or add an API key in Usage.",
   );
 });
 
@@ -296,7 +296,7 @@ test("CD6: the asker's key copy for each detail, with the key's provider", (t) =
   const asker = view();
   const text = (detail: NonNullable<RunRec["fail"]>["detail"], pay: RunRec["pay"]) =>
     failedRunText(failed({ why: "key", detail }, pay), asker);
-  t.is(text("key_only", null), "This model runs on your own API key. Add the key in Usage.");
+  t.is(text("key_only", null), "This model requires your own API key. Add one in Usage.");
   t.is(
     text("key_unset", "key:openai"),
     "No valid OpenAI key was set when this run started. Add a key in Usage.",
@@ -388,7 +388,7 @@ test("C4: the weekday and dates are the viewer's zone's", (t) => {
   t.is(outOfTokensText(RESET), THURSDAY_TOAST);
   t.is(
     outOfTokensText(RESET, "UTC"),
-    "You're out of tokens until Friday. You can still post, or add an API key in Usage.",
+    "Out of tokens until Friday. You can still post, or add an API key in Usage.",
   );
 });
 

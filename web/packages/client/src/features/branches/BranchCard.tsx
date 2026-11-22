@@ -395,7 +395,7 @@ function BranchComments({
         onOpenChange={(open) => {
           if (!open) setDeleting(null);
         }}
-        title="Delete this comment and your replies under it?"
+        title="Delete this comment and your replies?"
         onConfirm={() => {
           if (deleting === null) return;
           // The comment and its "…" button are gone: focus goes to the

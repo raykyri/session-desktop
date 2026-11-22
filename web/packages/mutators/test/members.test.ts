@@ -3,6 +3,8 @@
 
 import test from "ava";
 
+import { bannedMessage } from "../src/index.js";
+
 import { admission } from "./scenario.js";
 import { admit, cast, ok, refused } from "./world.js";
 
@@ -47,9 +49,29 @@ test("a ban stops every write in its space, the author's own included", (t) => {
   ok(t, w.apply("mel", "threads.create", { id: p, space: open, kind: "post", q: "x" }));
   ok(t, w.apply("olga", "members.ban", { space: open, user: "mel" }));
   const e = refused(t, w.apply("mel", "threads.delete", { id: p }), "FORBIDDEN");
-  // the message names the channel
-  t.is(e?.message, "You are banned from #lounge.");
+  // the message names the channel; an open channel stays readable
+  t.is(e?.message, "You can no longer post in #lounge.");
   refused(t, w.apply("mel", "saved.set", { kind: "thread", id: p, on: true }), "FORBIDDEN");
+});
+
+test("a ban's refusal in a private channel says access is gone", (t) => {
+  const { w, closed } = cast(t);
+  const p = w.id();
+  ok(t, w.apply("ada", "threads.create", { id: p, space: closed, kind: "post", q: "x" }));
+  ok(t, w.apply("olga", "members.ban", { space: closed, user: "ada" }));
+  const e = refused(t, w.apply("ada", "threads.delete", { id: p }), "FORBIDDEN");
+  t.is(e?.message, "You no longer have access to #lab.");
+  const again = refused(
+    t,
+    w.apply("ada", "threads.create", { id: w.id(), space: closed, kind: "post", q: "y" }),
+    "FORBIDDEN",
+  );
+  t.is(again?.message, "You no longer have access to #lab.");
+});
+
+test("bannedMessage words an open and a private channel apart", (t) => {
+  t.is(bannedMessage("lounge", true), "You can no longer post in #lounge.");
+  t.is(bannedMessage("lab", false), "You no longer have access to #lab.");
 });
 
 test("a ban does not stop a person's own user-log writes: marking read, taking a save back (M1b review 11)", (t) => {

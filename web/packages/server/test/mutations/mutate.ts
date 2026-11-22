@@ -1771,8 +1771,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-20 B8: the ban message names no channel",
     file: "../mutators/src/tx.ts",
-    from: '      throw refuse("FORBIDDEN", `You are banned from #${s.name}.`);',
-    to: '      throw refuse("FORBIDDEN", "You are banned from this space.");',
+    from: '      throw refuse("FORBIDDEN", bannedMessage(s.name, !isClosed(s)));',
+    to: '      throw refuse("FORBIDDEN", bannedMessage("this space", !isClosed(s)));',
   },
   {
     name: "M6-21 G4: a failed invite_used write is ignored",
