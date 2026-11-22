@@ -365,15 +365,14 @@ same account applies it.
   branch selected.
 - **Title row** (`titleRow`), drawn as a tree row: an 11 px hollow node centred
   on the first line; the title in regular weight at the title size (16.5 px in
-  the mock); on the right a post's channel (`#name`, extra-small, faint), then
-  the author's 20 px avatar with the tooltip "handle · 3h", then the "…" menu.
-  An ask's title is the question as typed; an ask's channel is in the footer
-  meta, not the title row.
+  the mock); on the right the author's 20 px avatar with the tooltip "handle ·
+  3h", then the "…" menu. An ask's title is the question as typed. The
+  channel of an ask or a post is in the footer meta, not the title row.
 - **Answer prose** (asks, §4.4).
-- **Footer** (`card-f`): on the left, for an ask, the meta
-  "N sources · Nk tokens · #channel" (`fmeta`; "1 source", tokens as
-  `ktok`: "41k tokens", or the exact number below 1,000), omitting empty
-  parts; then the follow-up button (reply-arrow icon, label and title "Ask a
+- **Footer** (`card-f`): on the left the meta (`fmeta`), for an ask
+  "N sources · Nk tokens · #channel" ("1 source", tokens as `ktok`: "41k
+  tokens", or the exact number below 1,000), omitting empty parts, and for a
+  post "#channel"; then the follow-up button (reply-arrow icon, label and title "Ask a
   follow-up", `aria-label` "Ask a follow-up, N branches") with the total
   branch count for an ask (hidden while the root answer runs), or Reply
   (label "Reply, N replies") with the total reply count for a post; then Save

@@ -37,7 +37,8 @@ export function clip(s: string, n: number): string {
   return `${s.slice(0, n - 1).replace(/[\s,;:.]+\S*$/, "")}…`;
 }
 
-/** An ask's footer meta (`fmeta`): "N sources · Nk tokens · #channel",
+/** A card's footer meta (`fmeta`): "N sources · Nk tokens · #channel" for an
+ * ask, "#channel" for a post (no sources or tokens),
  * empty parts left out. */
 export function footerMeta(sources: number, tokens: number, channel: string | null): string {
   return [

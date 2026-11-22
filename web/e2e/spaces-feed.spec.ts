@@ -92,13 +92,13 @@ test.beforeEach(async ({ page }) => {
   await signInAndOpen(page, LOGIN);
 });
 
-test("a post goes to the top of Home with its channel beside the avatar", async ({ page }) => {
+test("a post goes to the top of Home with its channel in the footer", async ({ page }) => {
   await compose(page, "Reading list for the winter, suggestions welcome.", "Post");
   const first = page.locator(".tcard").first();
   await expect(first.locator(".tt-title")).toHaveText(
     "Reading list for the winter, suggestions welcome.",
   );
-  await expect(first.locator(".ttm")).toHaveText(`#${w.feed.name}`);
+  await expect(first.locator(".card-f .fmeta")).toHaveText(`#${w.feed.name}`);
   await expect(first.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
   // The composer empties and its send button is disabled again.
   await expect(page.getByRole("textbox", { name: "Ask or post" })).toHaveValue("");

@@ -67,8 +67,8 @@ to them.
   the right, name and time in the avatar's tooltip). An ask card has no
   byline: "N sources · Nk tokens · #channel" (empty parts omitted) sits on
   the left of the card footer, followed by the follow-up button with its
-  count and Save with its count; a post shows its channel beside the avatar
-  and a reply count. Model and effort are stored on node and run records
+  count and Save with its count; a post's footer has "#channel" in the same
+  place and a reply count. Model and effort are stored on node and run records
   (03 K12) and shown nowhere in the UI. There are no likes. Answers are
   plain Markdown; widgets and artifacts are not built.
 - Branches: a tree beside each answer; selecting a row shows its card with

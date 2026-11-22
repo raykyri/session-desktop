@@ -58,6 +58,25 @@ test.serial("a member's footer: counts, the follow-up and Save with its toasts",
   await waitUntil(t, () => currentToast() === "Removed from saved.", "the unsave toast");
 });
 
+test.serial(
+  "a post's channel is in its footer, as an ask's is, not beside its title",
+  async (t) => {
+    await renderApp("/");
+    await waitUntil(t, () => document.querySelector(".tcard") !== null, "threads render");
+    const cards = [...document.querySelectorAll<HTMLElement>(".tcard")];
+    const post = cards.find((c) => within(c).queryByRole("button", { name: /^Reply/ }) !== null);
+    const ask = cards.find((c) => within(c).queryByRole("button", { name: /^Ask a follow-up/ }));
+    if (!post || !ask) throw new Error("no post or ask card");
+    t.regex(post.querySelector(".card-f .fmeta")?.textContent ?? "", /^#[a-z0-9-]+$/);
+    t.regex(ask.querySelector(".card-f .fmeta")?.textContent ?? "", / · #[a-z0-9-]+$/);
+    t.is(
+      post.querySelector(".tt")?.textContent?.includes("#"),
+      false,
+      "no channel in the title row",
+    );
+  },
+);
+
 test.serial("without an invite: the banner, no composer, disabled write controls", async (t) => {
   await renderApp("/", { user: waiting() });
   await waitUntil(t, () => document.querySelector(".tcard") !== null, "threads render");

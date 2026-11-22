@@ -3,9 +3,9 @@
 //
 // The card (`card`): "Branched from …" on a thread opened from a branch; the
 // title drawn as a tree row (hollow node, the question as typed or the
-// post's text, the post's channel, the author's avatar with "handle · 3h",
-// the "…" menu); an ask's answer; the footer: the ask's meta ("N sources ·
-// Nk tokens · #channel"), the follow-up or Reply button with its count, Save
+// post's text, the author's avatar with "handle · 3h", the "…" menu); an
+// ask's answer; the footer: the meta ("N sources · Nk tokens · #channel" for
+// an ask, "#channel" for a post), the follow-up or Reply button with its count, Save
 // with its count. A removed thread is its placeholder; a hidden one shows
 // its text to its author and the owner under "Hidden by the channel owner".
 
@@ -435,7 +435,6 @@ function ThreadCard({
         <h3 className="tt-title" id={`title-${thread.id}`}>
           {deleted ? "[deleted]" : rowText(thread, thread.q)}
         </h3>
-        {!ask ? <span className="ttm">#{space?.name ?? ""}</span> : null}
         <span
           className="ttav"
           title={`${authorName(thread.u)} · ${relTime(thread.createdAt, now)}`}
@@ -504,9 +503,11 @@ function ThreadCard({
       ) : null}
       <div className="card-f">
         <span className="notes">
-          {ask ? (
-            <span className="fmeta">{footerMeta(thread.src, thread.tok, space?.name ?? null)}</span>
-          ) : null}
+          <span className="fmeta">
+            {ask
+              ? footerMeta(thread.src, thread.tok, space?.name ?? null)
+              : footerMeta(0, 0, space?.name ?? null)}
+          </span>
         </span>
         {ask && pending ? null : (
           <button

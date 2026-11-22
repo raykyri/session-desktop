@@ -268,8 +268,6 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .ttn { flex: none; width: 11px; height: 11px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 11px) / 2); border-radius: 50%; border: 1.5px solid var(--t-dim); background: var(--card); position: relative; z-index: 1; }
 .ttav { flex: none; display: inline-flex; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 20px) / 2); }
 .tt .more { margin-left: -4px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 24px) / 2); align-self: flex-start; }
-.ttm { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
-.tt > .ttm { margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 16px) / 2); line-height: 16px; }
 /* the title reads as a tree row: regular weight, the tree's text colour */
 .card.tt-c .tt > .ask, .card.tt-c .tt > .post { font-weight: 400; color: var(--t-primary); }
 .card.tt-c .byline, .card.tt-c > .prose { margin-left: 21px; }
@@ -1603,9 +1601,9 @@ function card(p) {
   const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) && !p.del ? moreMenu('t:' + p.id, !active && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, active ? 'Available when the answer finishes' : undefined) : '';
   /* the post title drawn like a row of the branch tree: a hollow node, the title in the tree's regular
      weight, the author's avatar on the right (name and time in its tooltip). An ask's source count, token
-     count and channel sit on the left of the footer; a plain post shows its channel beside the avatar. */
+     count and channel sit on the left of the footer; a plain post's channel sits there too. */
   const ttAv = `<span class="ttav" title="${esc(authorName(p.u))} · ${rel(p.createdAt)}">${av(p.u, 'sm')}</span>`;
-  const titleRow = (cls, text) => `${p.hidden && !hid ? '<p class="hiddenln">Hidden by the channel owner</p>' : ''}<div class="tt"><span class="ttn" aria-hidden="true"></span><h3 class="${cls}" id="title-${p.id}">${p.del ? '[deleted]' : hid ? 'Hidden by the channel owner' : text}</h3>${cls === 'post' ? `<span class="ttm">${spName(p.s)}</span>` : ''}${ttAv}${more}</div>`;
+  const titleRow = (cls, text) => `${p.hidden && !hid ? '<p class="hiddenln">Hidden by the channel owner</p>' : ''}<div class="tt"><span class="ttn" aria-hidden="true"></span><h3 class="${cls}" id="title-${p.id}">${p.del ? '[deleted]' : hid ? 'Hidden by the channel owner' : text}</h3>${ttAv}${more}</div>`;
   const head = '', lead = '';
   const count = c => `<span class="notes">${c}</span>`;
   const tail = '';
@@ -1620,7 +1618,7 @@ function card(p) {
   const art = `<article class="${cls}${st.flash === p.id ? ' flash' : ''}" id="card-${p.id}" aria-labelledby="title-${p.id}" tabindex="-1">`, unsent = p.unsent ? notSentLine(p.unsent) : '';
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `${art}${head}${titleRow('post', esc(p.q))}<div class="card-f">${lead}${count('')}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div>${unsent}</article>`;
+    return `${art}${head}${titleRow('post', esc(p.q))}<div class="card-f">${lead}${count(`<span class="fmeta">${spName(p.s)}</span>`)}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div>${unsent}</article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;

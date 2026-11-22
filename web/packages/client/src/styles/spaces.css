@@ -266,14 +266,6 @@
   margin-top: calc((var(--fs-title) * 1.44 - 20px) / 2);
 }
 
-.tt > .ttm {
-  margin-top: calc((var(--fs-title) * 1.44 - 16px) / 2);
-  line-height: 16px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-
 .tt > .more {
   margin-left: -4px;
   margin-top: calc((var(--fs-title) * 1.44 - 24px) / 2);
