@@ -1152,6 +1152,16 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .mkdd-l:focus { outline: none; }
 .mkdd-l .mi.cur { background: var(--fill-hover); }
 .mkdd-l:focus-visible .mi.cur { box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* ---- mock bar: the "Errors and connectivity" module ---- */
+.mkmod { flex-basis: 100%; min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--chrome); padding: 4px 10px; }
+.mkmod-h { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-height: 30px; }
+.mkmod-b { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px; margin-left: -6px; border-radius: var(--r-md); color: var(--t-heading); font-size: var(--fs-sm); font-weight: 600; }
+.mkmod-b:hover { background: var(--fill-hover); }
+.mkmod-b svg.i { width: 12px; height: 12px; color: var(--t-muted); transition: transform .15s; }
+.mkmod-b[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .mkmod-b svg.i { transition: none; } }
+.mkmod-sum { min-width: 0; color: var(--t-secondary); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.mkmod-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 4px 0 6px; }
 @media (max-width: 520px) { .mockbar { gap: 6px 10px; } .mk { flex-wrap: wrap; max-width: 100%; } .seg button { padding: 4px 8px; } }
 </style>
 
@@ -3280,6 +3290,49 @@ const STAGE = {
   leave() { show('.mbdlg .mlist'); },
   rejoin() { show('#toast'); },
 };
+/* ---- the "Errors and connectivity" module of the mock bar: the error-related controls in one bordered box whose
+   header row collapses it. Collapsed, the header lists every control that is not at its normal value. The collapsed
+   state is kept per viewer in localStorage; it starts expanded. ---- */
+const ERR_OPTS = {
+  conn: [['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14'], ['prev', 'Offline, reading from Nov 12']],
+  reads: [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail'], ['invites', 'Invites fail'], ['loading', 'Loading'], ['runsloading', 'Runs loading']],
+  mrun: [['answer', 'Answer'], ['interrupt', 'Interrupt'], ['fail', 'Fail']],
+  mq: [['as', 'As is'], ['full', 'Full']],
+  ml: [['as', 'As is'], ['reached', 'Reached']],
+  mw: [['accept', 'Accept'], ['refuse', 'Refuse'], ['rate', 'Rate limited']],
+};
+const ERR_KEY = 'session-mock:errors-collapsed';
+st.errCollapsed = (() => { try { return localStorage.getItem(ERR_KEY) === '1'; } catch { return false; } })();
+const optLabel = (k, v) => ERR_OPTS[k].find(([x]) => x === v)?.[1] || v;
+/* "Offline · Writes: Refuse": each control away from its normal value; Connection names only its option */
+function errSummary(conn) {
+  const out = [];
+  if (conn !== 'on') out.push(optLabel('conn', conn));
+  for (const [k, name, normal] of [['reads', 'Reads', 'ok'], ['mrun', 'Runs', 'answer']]) if (st[k] !== normal) out.push(`${name}: ${optLabel(k, st[k])}`);
+  if (st.mfail !== FAIL_OPTS[0][0]) out.push(`Run failure: ${FAIL_OPTS[failIdx()][1]}`);
+  for (const [k, name, normal] of [['mq', 'Queue', 'as'], ['ml', 'Limits', 'as'], ['mw', 'Writes', 'accept']]) if (st[k] !== normal) out.push(`${name}: ${optLabel(k, st[k])}`);
+  if (st.upgrade) out.push('Notices: Upgrade');
+  return out.join(' · ');
+}
+function errModule(sw, conn, leaver, rejoiner) {
+  const col = !!st.errCollapsed, sum = col ? errSummary(conn) : '';
+  return `<section class="mkmod" aria-labelledby="mkmod-btn"><div class="mkmod-h"><button type="button" class="mkmod-b" id="mkmod-btn" data-mkx="toggle" aria-expanded="${!col}" aria-controls="mkmod-body">${I.down}<span>Errors and connectivity</span></button>${sum ? `<span class="mkmod-sum">${esc(sum)}</span>` : ''}</div>
+    <div class="mkmod-body" id="mkmod-body"${col ? ' hidden' : ''}>
+    <span class="mk"><span class="mkl">Connection</span><span class="seg">${ERR_OPTS.conn.map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
+    ${sw('reads', 'Reads', ERR_OPTS.reads)}
+    ${sw('mrun', 'Runs', ERR_OPTS.mrun)}
+    ${failDropdown()}
+    ${sw('mq', 'Queue', ERR_OPTS.mq)}
+    ${sw('ml', 'Limits', ERR_OPTS.ml)}
+    ${sw('mw', 'Writes', ERR_OPTS.mw)}
+    <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}${rejoiner ? `<button data-mx="rejoin" title="@${esc(rejoiner.u)} leaves and joins again with a new link">Member rejoins</button>` : ''}</span></span></div></section>`;
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest?.('[data-mkx="toggle"]')) return;
+  st.errCollapsed = !st.errCollapsed; st.failOpen = false;
+  try { localStorage.setItem(ERR_KEY, st.errCollapsed ? '1' : '0'); } catch {}
+  renderMock(); $('#mkmod-btn')?.focus({ preventScroll: true });
+});
 /* the mock-bar control that has focus, as a selector, so a re-render can put focus back on it */
 const mockSig = el => { if (!el?.closest?.('#mock')) return null; if (el.id) return '#' + CSS.escape(el.id);
   const parts = ['mx', 'x', 'mt', 'mp', 'mo', 'mkx'].filter(k => el.dataset[k] != null).map(k => `[data-${k}="${CSS.escape(el.dataset[k])}"]`); return parts.length ? parts.join('') : null; };
@@ -3304,14 +3357,7 @@ function renderMock() {
     <span class="mk"><span class="mkl">Jump to</span><span class="seg">${st.auth === 'in' ? (isActive() ? '' : '<button data-mo="link" title="Open an account invite link">Invited</button>') : `<button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button>`}<button data-mo="chlink" title="Open an invite link to #grant-review">Channel link</button><button data-mo="chlinkused" title="Open a used invite link to #grant-review">Used channel link</button><button data-mo="chlinkbanned" title="As @ines.v, banned from #grant-review, open an invite link to it">Channel link, banned</button><button data-mo="chlinknm" title="As @jun.park, who is not in #grant-review, open a used invite link to it">Used link, not a member</button></span></span>
     ${fold ? `<button class="fsbtn" data-mx="mkopen" aria-expanded="${!!st.mkopen}">${st.mkopen ? 'Hide states' : 'Show states'}</button>` : ''}${!shown ? '' : `
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>
-    ${sw('reads', 'Reads', [['ok', 'OK'], ['usage', 'Usage fails'], ['runs', 'Runs fail'], ['invites', 'Invites fail'], ['loading', 'Loading'], ['runsloading', 'Runs loading']])}
-    ${sw('mrun', 'Runs', [['answer', 'Answer'], ['interrupt', 'Interrupt'], ['fail', 'Fail']])}
-    ${failDropdown()}
-    ${sw('mq', 'Queue', [['as', 'As is'], ['full', 'Full']])}
-    ${sw('ml', 'Limits', [['as', 'As is'], ['reached', 'Reached']])}
-    <span class="mk"><span class="mkl">Connection</span><span class="seg">${[['on', 'Online'], ['off', 'Offline'], ['old', 'Offline, reading from Nov 14'], ['prev', 'Offline, reading from Nov 12']].map(([v, l]) => `<button data-mx="conn" data-x="${v}" aria-pressed="${conn === v}">${l}</button>`).join('')}</span></span>
-    ${sw('mw', 'Writes', [['accept', 'Accept'], ['refuse', 'Refuse'], ['rate', 'Rate limited']])}
-    <span class="mk"><span class="mkl">Notices</span><span class="seg"><button data-mx="upgrade" aria-pressed="${!!st.upgrade}">Upgrade</button>${leaver ? `<button data-mx="leave" title="@${esc(leaver.u)} leaves the channel">Member leaves</button>` : ''}${rejoiner ? `<button data-mx="rejoin" title="@${esc(rejoiner.u)} leaves and joins again with a new link">Member rejoins</button>` : ''}</span></span>`}`;
+    ${errModule(sw, conn, leaver, rejoiner)}`}`;
   findMock(focusSig)?.focus({ preventScroll: true });
   /* keep the open list inside the window */
   { const l = $('#mk-fail-list'); if (l) { const r = l.getBoundingClientRect(), over = r.right - (innerWidth - 16); if (over > 0) l.style.left = -over + 'px'; } }
