@@ -12,9 +12,10 @@ Data model (in memory; a reload starts over)
   run (model parts only) { by (the person who asked), model (a record; the model is a workspace setting), ctx (ids
   of the parts it read, frozen when the run started), status queued|running|complete|stopped, step, src }.
   Context is set by position: everything above in the stack, plus the fork part and everything it read.
-- Stack { id, ch (channel), fork? { part, block?, quote? }, x?, y?, inline? }.
+- Stack { id, ch (channel), fork? { part, block?, quote? }, x?, y? }. A fork's block (or quote) targets one paragraph of
+  the part it forks from: the connector starts at that paragraph, which is marked.
   A stack with x,y is placed by itself (a root, or a fork opened as its own thread); otherwise it is placed in a lane
-  beside its anchor part, or drawn inside its parent stack when inline is true.
+  beside its anchor part (or anchor paragraph).
   A stack's author is the person who wrote its first part. Only the author adds to or inserts into it; others fork.
 - View state, per viewer, not content: collapsed units, expanded answers, selection, zoom, seen parts.
 -->
@@ -158,7 +159,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stalebox button { font-weight: 600; color: var(--accent); }
 
 /* seams: the gap between two parts. Desktop: a "+" in the left gutter of the hovered gap. Touch, or a selected stack:
-   every gap shows its "+" (44px target). Inside an answer, gaps between blocks are fainter and make an inline fork. */
+   every gap shows its "+" (44px target). */
 .seam { position: relative; height: 1px; background: var(--divider); }
 .seam .sp .lc { width: 13px; height: 13px; }
 .seam .sp { display: grid; place-items: center; position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
@@ -167,41 +168,18 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .seam:hover .sp, .seam .sp:focus-visible, .seam.near .sp { opacity: 1; }
 .seam:hover { background: var(--accent); }
 .seam .sp:hover { transform: scale(1.12); }
-.bseam { position: relative; height: 0; }
-.bseam .sp { position: absolute; left: -26px; top: -10px; width: 20px; height: 20px; border-radius: 50%; color: var(--t-faint); background: var(--card); box-shadow: var(--shadow); font-size: 13px; line-height: 20px; text-align: center; font-weight: 700; opacity: 0; z-index: 3; }
-.stack.sel .bseam .sp { opacity: .75; }
-.stack.sel .bseam .sp:hover { opacity: 1; color: var(--accent); }
 @media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; }
-  .stack.sel .bseam .sp { width: 28px; height: 28px; line-height: 28px; top: -14px; } .seam .hz { display: none; } }
+  .seam .hz { display: none; } }
 .addend { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
 .addend .lc, .cmeta .gutsp { width: 22px; flex: none; }
 .addend .lc { height: 14px; }
 .addend:hover { color: var(--accent); background: var(--inset); }
 @media (pointer: coarse) { .addend { padding: 11px 12px 11px 11px; } }
 
-/* inline forks: a stack drawn inside its parent, at its anchor */
-.stack.coll .ifork { display: none; }
-.ifork { margin: 6px 0 8px 8px; border-left: 2px solid var(--link); padding-left: 8px; }
-.ifork .part { padding: 6px 4px 6px 5px; gap: 7px; background: transparent; }
-.ifork .part > .gut { width: 18px; }
-.ifork .part > .gut .av { width: 16px; height: 16px; font-size: 7px; }
-.ifork .part > .gut .mk { width: 17px; height: 17px; border-radius: 5px; }
-.ifork .part > .gut .mk svg { width: 11px; height: 11px; }
-.ifork .part.m { background: var(--inset); border-radius: 6px; }
-.ifork .ifh { font-size: 11px; color: var(--t-faint); display: flex; gap: 8px; align-items: center; }
-.ifork .ifh button { color: var(--accent); font-weight: 500; }
-.ifork .addend { border: 0; padding: 4px 4px 4px 5px; gap: 7px; }
-.ifork .addend .lc { width: 18px; }
-.ifork .seam .sp { left: -24px; }
 
 /* draft: a small stack of part fields */
 .draft { padding: 8px 10px 10px; margin: 6px 8px; background: var(--card); border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--border-strong)); border-radius: 8px; }
 .pairline { height: 1px; background: var(--divider); margin: 0 12px; }
-.ifork.folded { border-left-color: var(--border-strong); }
-.iffold { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; font-size: 12px; color: var(--t-secondary); padding: 3px 4px; border-radius: 5px; }
-.iffold:hover { background: var(--control); }
-.iffold .ar { color: var(--t-faint); } .iffold .ar .lc { width: 13px; height: 13px; } .iffold b { color: var(--t-heading); font-weight: 600; white-space: nowrap; } .iffold .n { color: var(--t-faint); white-space: nowrap; }
-.ifh button { margin-left: 0; }
 .part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
 .prose > .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
 #bmenu { position: fixed; z-index: 40; min-width: 200px; padding: 4px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
@@ -242,11 +220,10 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .far .sh .ov.off { display: block; position: absolute; left: 0; bottom: 100%; margin-bottom: 4px; font-size: calc(11px / var(--z, 1)); font-weight: 600; color: var(--t-secondary); white-space: nowrap; line-height: 1.2; }
 .far .sh .ov b { color: var(--new); }
 .far .sh { position: relative; }
-.far .prose, .far .ph, .far .part > .gut, .far .part > .acts, .far .cmeta, .far .fq, .far .ifork, .far .addend, .far .more, .far .seam .sp, .far .bseam { visibility: hidden; }
+.far .prose, .far .ph, .far .part > .gut, .far .part > .acts, .far .cmeta, .far .fq, .far .addend, .far .more, .far .seam .sp { visibility: hidden; }
 .part .hl { display: none; }
 .far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.far .ifork .hl { display: none; }
 .far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
 .far .hl small b { color: var(--new); }
 .far .sh .ib { visibility: hidden; }
@@ -306,8 +283,6 @@ const rootOf = s => { while (s.fork && s.x == null) s = S[P[s.fork.part].st]; re
 /* a stack's author is the person who wrote its first part; only they add to it or insert into it */
 const authorOf = s => partsOf(s.id).find(q => !isModel(q))?.by.u ?? ME;
 const insertedLater = p => partsOf(p.st).some(q => q.key > p.key && q.at < p.at);
-/* the seed's reply-to-reply forks are drawn inline */
-for (const s of Object.values(S)) if (s.fork && !partsOf(s.id).some(isModel)) s.inline = true;
 
 /* ---- context ----
    Context is set by position, with no rule to edit: a model part reads every part above it in its stack and, if the
@@ -323,7 +298,7 @@ const sameCtx = (a, b) => a.length === b.length && a.every(([id, r], i) => b[i][
 for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 
 /* ---- view state (per viewer) ---- */
-const V = { openIn: new Set(), x: 0, y: 0, z: 1, sel: null, collapsed: new Set(), full: new Set(), seen: new Set(), draft: null, hot: null };
+const V = { x: 0, y: 0, z: 1, sel: null, collapsed: new Set(), full: new Set(), seen: new Set(), draft: null, hot: null };
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
 const unitStacks = root => { const out = []; const walk = s => { out.push(s); for (const p of partsOf(s.id)) for (const f of forksOf(p.id)) if (f.x == null) walk(f); }; walk(root); return out; };
@@ -353,23 +328,18 @@ function proseHTML(p, s, selected) {
     const label = r.status === 'stopped' ? 'Stopped' : r.status === 'queued' ? 'Queued' : `Step ${r.step + 1} of 4 · ${steps[r.step + 1]}`;
     return `<div class="pending"><span>${label} · reading ${ctxOf(p).length} part${ctxOf(p).length === 1 ? "" : "s"}</span><span class="bar"><i style="width:${r.status === 'queued' ? 4 : (r.step + 1) * 25}%"></i></span></div>${p.text ? `<div class="prose" style="margin-top:6px">${p.text}</div>` : ''}`;
   }
-  const inl = Object.values(S).filter(f => f.inline && f.fork?.part === p.id && f.x == null);
   const anchored = new Set(Object.values(S).filter(f => f.fork?.part === p.id && f.fork.block != null).map(f => f.fork.block));
   const tmp = document.createElement('div'); tmp.innerHTML = p.text;
   const blocks = [...tmp.children];
-  const draftHere = V.draft && V.draft.newFork && V.draft.newFork.part === p.id && V.draft.newFork.block != null;
   let html = '';
   blocks.forEach((b, i) => {
     if (anchored.has(i)) b.classList.add('anc');
     html += b.outerHTML;
-    for (const f of inl.filter(f => f.fork.block === i)) html += ifork(f, selected);
   });
-  const openIn = inl.some(f => V.openIn.has(f.id) || V.draft?.st === f.id);
-  const long = isModel(p) && strip(p.text).length > 520 && p.run.status === 'complete', big = long && !V.full.has(p.id) && !openIn;
+  const long = isModel(p) && strip(p.text).length > 520 && p.run.status === 'complete', big = long && !V.full.has(p.id);
   let out = `<div class="prose${big ? ' clamp' : ''}" data-p="${p.id}">${html}</div>`;
-  if (big) out += `<button class="more" data-a="full" data-id="${p.id}">Show all${inl.length ? ` · ${inl.length} inline fork${inl.length > 1 ? 's' : ''}` : ''}</button>`;
+  if (big) out += `<button class="more" data-a="full" data-id="${p.id}">Show all</button>`;
   else if (long) out += `<button class="more" data-a="full" data-id="${p.id}">Show less</button>`;
-  for (const f of inl.filter(f => f.fork.block == null)) out += ifork(f, selected);
   return out;
 }
 function partHTML(p, s, selected, first = false) {
@@ -388,14 +358,6 @@ function draftHTML() {
     ${below ? '<div class="below">Answers below won’t read this.</div>' : ''}
     <div class="drow"><span class="grow"></span><button class="ibtn" data-a="dpart" type="button" aria-label="Add a part" title="Add a part">${icon('circle-plus')}</button><button class="btn${d.mode === 'post' ? ' pri' : ''}" data-a="dpost" type="button" title="Post">Post</button><button class="btn${d.mode === 'ask' ? ' pri' : ''}" data-a="dask" type="button" title="Ask (⌘/Ctrl+Enter)">Ask</button></div>
     <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft">${icon('x')}</button></div>`;
-}
-function ifork(f, selected) {
-  const ps = partsOf(f.id), d = V.draft?.st === f.id, open = d || V.openIn.has(f.id), own = authorOf(f) === ME;
-  if (!open) { const q = ps[0], nw = ps.filter(isNew).length;
-    return `<div class="ifork folded" data-stack="${f.id}" data-fl="s:${f.id}"><button class="iffold" data-a="ifopen" data-id="${f.id}">${nw ? '<span class="dot"></span>' : ''}<span class="ar">${icon('corner-down-right')}</span><b>${esc(NAMES[q.by.u] || q.by.u)}</b> ${esc(clip(strip(q.text), 60))}<span class="n">${ps.length > 1 ? ` · ${ps.length} parts` : ''}</span></button></div>`; }
-  return `<div class="ifork" data-stack="${f.id}" data-fl="s:${f.id}"><div class="ifh">Inline fork${f.fork.block != null ? ' on this passage' : ''}<button data-a="ifclose" data-id="${f.id}">Fold</button><button data-a="moveout" data-id="${f.id}">Move out</button></div>
-    ${ps.map((q, i) => partHTML(q, f, selected) + (d && V.draft.after === q.id ? draftHTML() : '') + (selected && own && i < ps.length - 1 && !pairedWith(q, ps[i + 1]) ? seam(f.id, q.id) : '')).join('')}${d && !V.draft.after ? draftHTML() : ''}
-    ${!d && own ? `<button class="addend" data-a="seam" data-st="${f.id}" data-after="${ps.length ? ps[ps.length - 1].id : ''}">${icon('plus')}Continue</button>` : ''}</div>`;
 }
 function stackHTML(s) {
   const ps = partsOf(s.id), selected = V.sel === s.id, isRoot = !s.fork || s.x != null, collapsed = isRoot && V.collapsed.has(s.id);
@@ -428,13 +390,13 @@ const POS = {}, LASTDY = {};
 function visibleLaneForks(s) {
   if (V.collapsed.has(s.id) && (!s.fork || s.x != null)) return [];
   const out = [];
-  const walkParts = st => { for (const p of partsOf(st.id)) for (const f of forksOf(p.id)) { if (f.x != null) continue; if (f.inline) walkParts(f); else out.push(f); } };
+  const walkParts = st => { for (const p of partsOf(st.id)) for (const f of forksOf(p.id)) { if (f.x != null) continue; out.push(f); } };
   walkParts(s);
   return out;
 }
 function anchorY(f, parentEl) {
   const fp = P[f.fork.part]; let el = parentEl.querySelector(`[data-part="${fp.id}"]`); if (!el) return 0;
-  if (f.fork.block != null) { const pr = el.querySelector(`.prose[data-p="${fp.id}"]`); const kids = pr ? [...pr.children].filter(c => !c.classList.contains('bseam') && !c.classList.contains('ifork')) : []; const b = kids[f.fork.block];
+  if (f.fork.block != null) { const pr = el.querySelector(`.prose[data-p="${fp.id}"]`); const kids = pr ? [...pr.children] : []; const b = kids[f.fork.block];
     if (b) { const top = b.getBoundingClientRect().top, max = pr.getBoundingClientRect().bottom; return (Math.min(top, max - 20) - parentEl.getBoundingClientRect().top) / V.z; } }
   return (el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top) / V.z;
 }
@@ -464,7 +426,7 @@ function layout() {
   for (const id in els) { const p = POS[id]; if (p) { els[id].style.left = p.x + 'px'; els[id].style.top = p.y + 'px'; } }
   return units;
 }
-const visible = s => { if (!s.fork || s.x != null) return true; const parent = S[P[s.fork.part].st]; if (s.inline) return visible(parent); const r = rootOf(s); return !V.collapsed.has(r.id) && visible(parent); };
+const visible = s => { if (!s.fork || s.x != null) return true; const parent = S[P[s.fork.part].st]; const r = rootOf(s); return !V.collapsed.has(r.id) && visible(parent); };
 
 /* connectors: from the anchor on the parent's right edge to the fork's top-left. Recomputed each frame during an
    animation, from the live positions of the elements. */
@@ -476,7 +438,7 @@ function drawLinks() {
     const fp = P[s.fork.part], pst = fp && stacksEl.querySelector(`:scope > .stack[data-stack="${rootLane(S[fp.st]).id}"]`); if (!pst) return;
     const pe = pst.querySelector(`[data-part="${fp.id}"]`); if (!pe) return;
     let ay;
-    if (s.fork.block != null) { const pr = pe.querySelector(`.prose[data-p="${fp.id}"]`), kids = pr ? [...pr.children].filter(c => !c.classList.contains('bseam') && !c.classList.contains('ifork')) : [], b = kids[s.fork.block]; ay = b ? Math.min(b.getBoundingClientRect().top + 9, pr.getBoundingClientRect().bottom - 8) : pe.getBoundingClientRect().top + 16; }
+    if (s.fork.block != null) { const pr = pe.querySelector(`.prose[data-p="${fp.id}"]`), kids = pr ? [...pr.children] : [], b = kids[s.fork.block]; ay = b ? Math.min(b.getBoundingClientRect().top + 9, pr.getBoundingClientRect().bottom - 8) : pe.getBoundingClientRect().top + 16; }
     else ay = pe.getBoundingClientRect().top + 16;
     const pr = pst.getBoundingClientRect(), fr = el.getBoundingClientRect();
     const x1 = (pr.right - wr.left) / z, y1 = (ay - wr.top) / z, x2 = (fr.left - wr.left) / z, y2 = (fr.top - wr.top) / z + 16;
@@ -486,8 +448,7 @@ function drawLinks() {
   });
   links.innerHTML = out.join('');
 }
-/* the lane stack that contains a stack (an inline fork is drawn inside its parent) */
-const rootLane = s => { while (s.inline && s.fork && s.x == null) s = S[P[s.fork.part].st]; return s; };
+const rootLane = s => s;
 
 /* FLIP: record where things were, render, then animate each from its old place to its new one */
 function snapshot() { const m = {}; document.querySelectorAll('[data-fl]').forEach(e => { m[e.dataset.fl] = e.getBoundingClientRect(); }); return m; }
@@ -495,7 +456,7 @@ let animUntil = 0;
 function render(opts = {}) {
   const before = opts.noAnim || reduced() ? null : snapshot();
   const visRoots = roots();
-  const list = []; for (const r of visRoots) for (const s of unitStacks(r)) if (!s.inline && (s === r || visible(s))) list.push(s);
+  const list = []; for (const r of visRoots) for (const s of unitStacks(r)) if (s === r || visible(s)) list.push(s);
   stacksEl.innerHTML = list.map(stackHTML).join('');
   world.classList.toggle('far', V.z < 0.5);
   const units = layout();
@@ -658,11 +619,11 @@ function centerOnNew(id) { const p = POS[id]; if (!p) return; if (V.z < 0.7) V.z
 function hideHint() { $('#hint').hidden = true; }
 $('#add-post').onclick = () => newRoot('post');
 $('#add-ask').onclick = () => newRoot('ask');
-function newFork(pid, { block = null, quote = null, inline = false } = {}) {
+function newFork(pid, { block = null, quote = null } = {}) {
   const fp = P[pid], id = 's' + (++seq);
-  S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) }, ...(inline ? { inline: true } : {}) };
+  S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) } };
   const r = rootOf(S[id]); V.collapsed.delete(r.id);
-  V.draft = { st: id, after: '', mode: 'ask', texts: [''] }; V.sel = inline ? rootLane(S[id]).id : id; if (inline) V.openIn.add(id); hideHint();
+  V.draft = { st: id, after: '', mode: 'ask', texts: [''] }; V.sel = id; hideHint();
   render({ focus: '.draft textarea' });
   const de = draftEl(); if (de) { const b = de.getBoundingClientRect(); if (b.right > innerWidth - 10 || b.bottom > innerHeight - 10 || b.left < 0) { V.x -= Math.max(0, b.right - innerWidth + 40) - Math.max(0, 20 - b.left); V.y -= Math.max(0, b.bottom - innerHeight + 60); applyView(); drawLinks(); } }
 }
@@ -675,9 +636,7 @@ document.addEventListener('click', e => {
   const partEl = e.target.closest('[data-part]');
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
   if (a === 'seam') { e.stopPropagation(); const st = S[d.st]; V.collapsed.delete(rootOf(st).id); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }
-  if (a === 'bfork') { newFork(d.id, { block: +d.b, inline: true }); return; }
-  if (a === 'ifopen') { V.openIn.add(d.id); for (const p of partsOf(d.id)) V.seen.add(p.id); render(); return; }
-  if (a === 'ifclose') { V.openIn.delete(d.id); render(); return; }
+  if (a === 'bfork') { newFork(d.id, { block: +d.b }); return; }
   if (a === 'fork') { newFork(d.id); return; }
   if (a === 'dpart') { V.draft.texts.push(''); render({ focus: `.draft textarea[data-di="${V.draft.texts.length - 1}"]` }); return; }
   if (a === 'dcancel') { cancelDraft(); return; }
@@ -685,7 +644,6 @@ document.addEventListener('click', e => {
   if (a === 'dask') { commitDraft(true); return; }
   if (a === 'collapse') { const id = d.id; V.collapsed.has(id) ? V.collapsed.delete(id) : V.collapsed.add(id); render(); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
-  if (a === 'moveout') { const s = S[d.id]; s.inline = false; V.sel = s.id; render(); return; }
   const stEl = e.target.closest('.stack');
   if (stEl && getSelection()?.toString().trim()) return;
   if (stEl && !e.target.closest('textarea, button')) { const sid = stEl.dataset.stack; if (V.sel !== sid) { V.sel = sid; for (const p of partsOf(sid)) V.seen.add(p.id); render({ noAnim: true });
@@ -700,10 +658,10 @@ vp.addEventListener('dblclick', e => {
   V.draft = { st: id, after: '', mode: 'post', texts: [''] }; V.sel = id; render({ noAnim: true, focus: '.draft textarea' });
 });
 /* hovering a fork marks where it starts: the anchor part, or the anchor block, in the parent */
-document.addEventListener('mouseover', e => { const s = e.target.closest('.stack, .ifork'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks();
+document.addEventListener('mouseover', e => { const s = e.target.closest('.stack'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks();
   document.querySelectorAll('.anchor-hot').forEach(x => x.classList.remove('anchor-hot'));
   const f = id && S[id]; if (!f?.fork) return; const pe = document.querySelector(`[data-part="${f.fork.part}"]`); if (!pe) return;
-  if (f.fork.block != null) { const pr = pe.querySelector('.prose[data-p]'), kids = pr ? [...pr.children].filter(c => !c.classList.contains('ifork')) : []; kids[f.fork.block]?.classList.add('anchor-hot'); }
+  if (f.fork.block != null) { const pr = pe.querySelector('.prose[data-p]'), kids = pr ? [...pr.children] : []; kids[f.fork.block]?.classList.add('anchor-hot'); }
   else pe.classList.add('anchor-hot'); });
 
 /* keys: Cmd/Ctrl+Enter asks, Shift+Cmd/Ctrl+Enter posts; Escape closes the innermost thing. In a draft, a blank
@@ -722,19 +680,20 @@ document.addEventListener('mouseup', () => setTimeout(() => {
   const sel = getSelection(), t = sel?.toString().replace(/\s+/g, ' ').trim(); $('#selfork')?.remove();
   if (!t || t.length < 3 || !sel.rangeCount) return;
   const n = sel.anchorNode?.nodeType === 1 ? sel.anchorNode : sel.anchorNode?.parentElement, pr = n?.closest('.prose[data-p]'); if (!pr) return;
-  const kids = [...pr.children].filter(c => !c.classList.contains('bseam') && !c.classList.contains('ifork')), block = kids.findIndex(k => k.contains(n));
+  const kids = [...pr.children], block = kids.findIndex(k => k.contains(n));
   const r = sel.getRangeAt(0).getBoundingClientRect(), b = document.createElement('button');
   b.id = 'selfork'; b.textContent = 'Ask about this'; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 160)) + 'px'; b.style.top = (r.bottom + 8) + 'px';
   b.onclick = ev => { ev.stopPropagation(); b.remove(); getSelection().removeAllRanges(); newFork(pr.dataset.p, { block: block >= 0 ? block : null, quote: t }); };
   document.body.append(b);
 }));
 
-/* an answer's blocks (paragraphs, list items), not counting inline forks */
-const blocksOf = pr => [...pr.children].filter(c => !c.classList.contains('ifork') && !c.classList.contains('bseam'));
+/* an answer's blocks: its paragraphs and lists */
+const blocksOf = pr => [...pr.children];
 /* The part menu: right-click a part (or long-press it on touch). It is the only place to branch from a part. Both
    actions read the same context (the part and everything above it); they differ in what the question is about and
    where it goes, and each item says so on its second line:
-     Ask about this paragraph   on an answer's paragraph: inline, under that paragraph, with the paragraph as focus
+     Ask about this paragraph   on an answer's paragraph: a new stack to the right, targeting that paragraph (the
+                                connector starts at it, and it is marked)
      Branch from this answer    (or question, post): a new stack to the right, about the whole part
    With text selected, the first item asks about the selection instead. */
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
@@ -745,16 +704,16 @@ function openPartMenu(target, x, y) {
   const list = partsOf(p.st), next = list[list.indexOf(p) + 1];
   const kind = isModel(p) ? 'answer' : pairedWith(p, next) ? 'question' : 'post';
   const blk = target.closest('.part.m > .pb > .prose[data-p] > *');
-  const ok = blk && !blk.closest('.ifork') && !blk.classList.contains('ifork') && !/^H\d/.test(blk.tagName);
+  const ok = blk && !/^H\d/.test(blk.tagName);
   const selText = getSelection()?.toString().replace(/\s+/g, ' ').trim();
   const item = (attrs, icon, title, sub) => `<button role="menuitem" ${attrs}><span class="mi" aria-hidden="true">${icon}</span><span class="mt"><span>${title}</span><small>${sub}</small></span></button>`;
   const items = [];
   if (ok) { blk.classList.add('menu-on');
     const pr = blk.parentElement, i = blocksOf(pr).indexOf(blk);
     items.push(selText && partEl.contains(getSelection().anchorNode)
-      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, icon('corner-down-right'), 'Ask about the selection', 'Inline, under this paragraph')
-      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, icon('corner-down-right'), 'Ask about this paragraph', 'Inline, under it')); }
-  items.push(item(`data-a="fork" data-id="${p.id}"`, icon('arrow-right'), `Branch from this ${kind}`, 'New stack to the right'));
+      ? item(`data-a="selask" data-id="${pr.dataset.p}" data-b="${i}"`, icon('arrow-right'), 'Ask about the selection', 'New stack, from this paragraph')
+      : item(`data-a="bfork" data-id="${pr.dataset.p}" data-b="${i}"`, icon('arrow-right'), 'Ask about this paragraph', 'New stack, from this paragraph')); }
+  items.push(item(`data-a="fork" data-id="${p.id}"`, icon('arrow-right'), `Branch from this ${kind}`, `New stack, from the whole ${kind}`));
   const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Part actions');
   m.innerHTML = items.join(''); m.dataset.sel = selText || ''; document.body.append(m);
   m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
@@ -770,7 +729,7 @@ document.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX -
 document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
 document.addEventListener('click', e => {
   const b = e.target.closest?.('#bmenu [data-a="selask"]');
-  if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q, inline: true }); return; }
+  if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q }); return; }
   if ($('#bmenu')) setTimeout(closeBmenu, 0);
 }, true);
 document.addEventListener('keydown', e => {
@@ -789,8 +748,8 @@ function nearSeams(partEl) {
   walk(partEl, 'previousElementSibling')?.classList.add('near'); walk(partEl, 'nextElementSibling')?.classList.add('near');
 }
 let nearPart = null;
-document.addEventListener('mouseover', e => { if (e.target.closest?.('.seam')) return; const p = e.target.closest?.('.sbody > .part, .ifork > .part') || null; if (p === nearPart) return; nearPart = p; nearSeams(p); });
-document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').matches) return; const p = e.target.closest?.('.sbody > .part, .ifork > .part'); if (p) setTimeout(() => { const live = document.querySelector(`[data-part="${p.dataset.part}"]`); nearPart = live; nearSeams(live); }, 0); });
+document.addEventListener('mouseover', e => { if (e.target.closest?.('.seam')) return; const p = e.target.closest?.('.sbody > .part') || null; if (p === nearPart) return; nearPart = p; nearSeams(p); });
+document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').matches) return; const p = e.target.closest?.('.sbody > .part'); if (p) setTimeout(() => { const live = document.querySelector(`[data-part="${p.dataset.part}"]`); nearPart = live; nearSeams(live); }, 0); });
 
 
 /* ---- initial placement: units ordered by last activity, packed into columns ---- */
@@ -804,7 +763,7 @@ function initialLayout() {
   /* measure each unit at the origin, one at a time */
   const size = {};
   for (const r of rs) {
-    stacksEl.innerHTML = unitStacks(r).filter(s => !s.inline && (s === r || visible(s))).map(stackHTML).join('');
+    stacksEl.innerHTML = unitStacks(r).filter(s => s === r || visible(s)).map(stackHTML).join('');
     const els = {}; stacksEl.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
     let maxX = 0; const place = (s, x, y) => { let ext = els[s.id].offsetHeight, cursor = y; maxX = Math.max(maxX, x + W());
       const fs = visibleLaneForks(s).map(f => ({ f, want: y + anchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want);

@@ -32,7 +32,6 @@ The editor has two buttons, Post and Ask; nothing else distinguishes them.
 - `id`, `canvas`.
 - `fork?`: `{ part, block?, quote? }`, the part the stack starts from. A block or quote marks a passage as the focus.
 - `x?`, `y?`: set only on stacks placed by themselves (roots, and forks opened as their own thread).
-- `inline?`: draw this fork inside its parent, at its anchor.
 
 A stack's **author** is the person who wrote its first part. Only the author continues a stack, by adding to its end
 or inserting between its parts; everyone else forks. By default a stack is one person's multi-turn exchange with the
@@ -74,11 +73,11 @@ compaction was used and which parts it covered. The mock doesn't implement this.
 - **The part menu.** Branching lives in one place: right-click a part, or long-press it on touch. Nothing appears on
   hover. Both items read the same context (the part and everything above it); each item's second line says where the
   result goes:
-  - "Ask about this paragraph" (on an answer's paragraph): an inline fork under that paragraph, which is its focus.
+  - "Ask about this paragraph" (on an answer's paragraph): a new stack in the next lane that targets that paragraph
+    (`fork.block`). Its connector starts at the paragraph, which keeps a small mark, and the fork's header quotes it.
     While the menu is open, the paragraph is tinted. With text selected, the item reads "Ask about the selection".
   - "Branch from this answer / question / post": a new stack in the next lane, about the whole part.
-  Inline forks fold to one line when idle; "Move out" turns one into a lane fork. Hovering a fork highlights its
-  anchor.
+  Every fork is a lane fork; there are no inline forks. Hovering a fork highlights its anchor (part or paragraph).
 - **Units.** A root and its lane forks form a unit, and only the root stores x and y.
   - Forks start level with their anchor, and siblings stack by subtree extent, so connectors don't cross.
   - Overlaps between units are resolved downward and never stored.
@@ -95,13 +94,13 @@ compaction was used and which parts it covered. The mock doesn't implement this.
 |---|---|
 | channel | canvas |
 | post thread | root stack; the author's own follow-ups are appended parts |
-| reply, reply to a reply | inline fork by the replier, at the post or at the reply |
+| reply, reply to a reply | a fork by the replier, from the post or the reply |
 | ask thread | root stack: person part, then model part |
 | node | person part plus the model part under it |
 | Continue | the author's next turn in the same stack (append or insert) |
 | Branch here, ask about a passage, Look up | fork with `block` or `quote` as focus; full context |
 | Branch beside | fork at the parent's model part |
-| comment on a node | the author's part after the answer, or anyone's inline fork |
+| comment on a node | the author's part after the answer, or anyone's fork from it (or from one paragraph) |
 | run record | `run` on the model part |
 | save, counts | per-viewer state; counts as today |
 | Open as its own thread | give the fork its own x, y; `fork` stays, so its context is unchanged |
@@ -112,7 +111,7 @@ compaction was used and which parts it covered. The mock doesn't implement this.
 2. Two inserts by the author on two devices into one gap both survive (fractional keys). Is that the right merge?
 3. Asks at the end of a stack can't skip parts above them. Does compaction need to drop parts the author marks as
    asides first?
-4. `x`, `y` and `inline` are shared, so one person's drag rearranges everyone's canvas.
+4. `x` and `y` are shared, so one person's drag rearranges everyone's canvas.
 
 ## Advisor log
 
