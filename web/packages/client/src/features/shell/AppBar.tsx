@@ -23,7 +23,7 @@ import type { ShellChannel } from "./shellData.js";
 import type { UsageReading } from "./usage.js";
 import { canWrite, type Viewer } from "./viewer.js";
 
-/** The app's name as the home button (`brandBtn`). Below 520 px only the
+/** The app's name as the home button (`brandBtn`). At 520 px and below only the
  * mark shows, so the strip has room. */
 export function BrandButton() {
   return (
@@ -42,7 +42,7 @@ export function BrandButton() {
       >
         <AgentIcon />
       </span>
-      <b className="max-[520px]:hidden">Session</b>
+      <b className="phone:hidden">Session</b>
     </Link>
   );
 }
@@ -78,9 +78,9 @@ export function AppBar(props: AppBarProps) {
   const { viewer } = props;
   const writer = canWrite(viewer);
   return (
-    <header className="app-bar bg-surface-header border-border-divider flex h-12 items-center border-b max-[520px]:gap-2">
+    <header className="app-bar bg-surface-header border-border-divider flex h-12 items-center border-b phone:gap-2">
       <BrandButton />
-      <div className="ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5 max-[520px]:ml-0">
+      <div className="ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5 phone:ml-0">
         {props.showStrip ? (
           <>
             <ScopePicker

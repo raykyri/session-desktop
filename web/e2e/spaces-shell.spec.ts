@@ -355,6 +355,24 @@ test.describe("narrow widths", () => {
     }
   });
 
+  test("the breakpoints include their own width", async ({ page }) => {
+    await signIn(page, { login: LOGIN });
+    const brand = page.getByRole("link", { name: "Session home" }).locator("b");
+    const ring = page.getByRole("link", { name: /included tokens left/ });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openHome(page);
+    // 520 px is a phone width, as the composer's `max-width: 520px` rule
+    // has it: only the mark shows.
+    await page.setViewportSize({ width: 520, height: 900 });
+    await expect(brand).toBeHidden();
+    await page.setViewportSize({ width: 521, height: 900 });
+    await expect(brand).toBeVisible();
+    // 860 px is one column (`shell.css`): the ring's tighter padding.
+    await page.setViewportSize({ width: 860, height: 900 });
+    await expect(ring).toHaveCSS("padding-left", "6px");
+    await page.setViewportSize({ width: 861, height: 900 });
+    await expect(ring).toHaveCSS("padding-left", "10px");
+  });
 });
 
 test.describe("signed out", () => {

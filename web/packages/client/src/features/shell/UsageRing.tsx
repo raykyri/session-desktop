@@ -39,7 +39,7 @@ export function UsageRing({
       aria-label={usageLabel(reading, now, { offline })}
       data-tone={tone}
       className={cn(
-        "text-fg-secondary hover:bg-surface-fill-hover relative inline-flex h-[30px] shrink-0 items-center rounded-[15px] px-2.5 max-[860px]:px-1.5",
+        "text-fg-secondary hover:bg-surface-fill-hover relative inline-flex h-[30px] shrink-0 items-center rounded-[15px] px-2.5 narrow:px-1.5",
         FOCUS_RING,
       )}
     >

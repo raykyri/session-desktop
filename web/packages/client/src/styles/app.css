@@ -218,6 +218,12 @@
 @custom-variant light (&:where([data-appearance="light"], [data-appearance="light"] *));
 @custom-variant warm (&:where([data-color-theme="orange-blob"], [data-color-theme="orange-blob"] *));
 
+/* The layout's width breakpoints, inclusive as in the stylesheets'
+   `max-width` rules (`shell.css`, `spaces.css`): `max-[520px]:` would
+   compile to `width < 520px` and miss a window exactly 520 px wide. */
+@custom-variant phone (@media (max-width: 520px));
+@custom-variant narrow (@media (max-width: 860px));
+
 @layer base {
   html,
   body,
