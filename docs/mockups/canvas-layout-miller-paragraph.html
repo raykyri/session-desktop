@@ -703,6 +703,8 @@ function back(ci) {
     render(); setActive(ci); focusRow(ci, 'l:' + st); return; }
   if (ci > 0) { setActive(ci - 1); focusRow(ci - 1, null); ensureVisible(ci - 1); }
 }
+/* scroll each column so its chosen row is in view (after a jump that opened several columns at once) */
+function revealTrail() { track.querySelectorAll('.col .row.on').forEach(el => { const r = el.getBoundingClientRect(), b = el.closest('.colbody').getBoundingClientRect(); if (r.bottom < b.top + 20 || r.top > b.bottom - 20) scrollRowIntoView(el, true); }); drawLinks(); }
 /* open the path to a stack: the thread, then every anchor down to it */
 function pathTo(sid) {
   const chain = []; let s = S[sid];
@@ -712,7 +714,7 @@ function pathTo(sid) {
 function goToStack(sid, pid) {
   const t = pathTo(sid); if (!navigate(() => { V.thread = t.thread; V.steps = t.steps; })) return;
   markSeen(sid); render();
-  const ci = V.cols.findIndex(c => c.type === 'stack' && c.st === sid); setActive(ci);
+  const ci = V.cols.findIndex(c => c.type === 'stack' && c.st === sid); setActive(ci); revealTrail();
   const pe = colEl(ci)?.querySelector(`[data-part="${pid}"]`), row = pe && (pe.matches('.row') ? pe : pe.querySelector('.row'));
   focusRow(ci, row?.dataset.row, { center: true }); ensureVisible(ci);
   const t0 = colEl(0)?.querySelector(`[data-row="t:${t.thread}"]`); if (t0) scrollRowIntoView(t0);
@@ -849,7 +851,7 @@ function newFork(pid, { block = null, quote = null } = {}) {
   if (ci < 0) { const t = pathTo(fp.st); V.thread = t.thread; V.steps = t.steps; ci = columns().findIndex(c => c.type === 'stack' && c.st === fp.st); }
   V.steps.length = ci - 1; V.steps.push({ row: anchorRow(S[id]), pick: id, last: id });
   V.draft = { st: id, after: '', mode: 'ask', texts: [''] };
-  render(); setActive(ci + 1); ensureVisible(ci + 1);
+  render(); setActive(ci + 1); revealTrail(); ensureVisible(ci + 1);
   $('.draft textarea')?.focus({ preventScroll: true });
 }
 let noClickUntil = 0;
