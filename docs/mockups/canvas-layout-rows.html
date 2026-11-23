@@ -802,7 +802,9 @@ document.addEventListener('click', e => {
   if (a === 'dask') { commitDraft(true); return; }
   if (a === 'collapse') { const id = d.id; if (V.collapsed.has(id)) V.collapsed.delete(id); else { V.collapsed.add(id); if (V.sel && rootOf(S[V.sel]).id === id) V.sel = id; } render(); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
-  if (a === 'pip') { selectStack(d.id); return; }
+  /* a dot selects its stack; a stack low in its column may be below the page's view, so the page follows it */
+  if (a === 'pip') { selectStack(d.id); const el = stackEl(d.id), r = el?.getBoundingClientRect();
+    if (r && (r.top > innerHeight - 80 || r.bottom < TOPGAP + 40)) revealY(el, smooth()); return; }
   if (a === 'anchor') { revealAnchor(d.id); return; }
   if (a === 'prev' || a === 'next') { pageRow(d.id, a === 'next' ? 1 : -1); return; }
   const stEl = e.target.closest('.stack');
