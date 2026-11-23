@@ -7,8 +7,9 @@ Mock: `docs/mockups/canvas-layout-columns-depth.html`.
 - Column *d* holds the visible stacks at fork depth *d*. Column 0 holds the roots, by last activity at load. Add post and Add ask insert a root at the top.
 - A branch sits level with its anchor (part or paragraph), so its connector is one horizontal line across the gap. If its place is taken, it sits lower and the connector bends once.
 - Siblings stack downward without overlap. Nothing is placed by hand; `x` and `y` are ignored.
-- Depth 3 and deeper are 44px strips of chips (author, part count) until one is chosen.
-- One vertical scroll. Horizontal scroll only when open columns exceed the window. Below 720px, one column at a time, with a depth switcher.
+- Columns have no labels. Above the columns there is only the top bar (Add post, Add ask, the bell).
+- Depth 3 and deeper are 44px strips of chips (author, part count). Choosing a chip opens the column and selects that stack. In an opened deep column, the From row of each stack has a "Narrow this column" button (chevron left) that turns the column back into a strip.
+- One vertical scroll. Horizontal scroll only when open columns exceed the window. Below 720px, one column at a time, with a depth switcher under the top bar. Its tabs read "Roots", "1", "2", ...; the stack count is in each tab's title and accessible name.
 
 ## Navigation
 

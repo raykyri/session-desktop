@@ -24,9 +24,12 @@ Layout (derived on every render, never stored)
   horizontal line across the column gap. Siblings stack downward. When earlier units already fill a column at that
   height, the branch sits lower, by at most MAXDRIFT for the first branch of a unit in each column; past that, the
   root moves down instead, which leaves empty space in column 0.
-- Columns from depth 3 on are narrow strips of chips (author and part count) until one is chosen.
+- Columns have no labels; the top bar holds only Add post, Add ask and the bell.
+- Columns from depth 3 on are narrow strips of chips (author and part count). Choosing a chip opens its column and
+  selects that stack; in an opened deep column, each stack's From row has a "Narrow this column" button.
 - One vertical document scroll; horizontal scroll only when the columns are wider than the window. Below 720px,
-  one column is shown at a time, with a depth switcher.
+  one column is shown at a time, with a depth switcher under the top bar: tabs "Roots", "1", "2", ... (the stack
+  count is in each tab's title and accessible name).
 - View state, per viewer, not content: collapsed roots, expanded answers, open deep columns, selection, seen parts.
 -->
 <title>2. Session Canvas: Depth columns</title>
@@ -75,24 +78,18 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 [hidden] { display: none !important; }
 
 /* ---- the document: depth columns under a fixed top bar; the page scrolls vertically as one ---- */
-:root { --bar: 52px; --hdr: 30px; --top: calc(var(--bar) + var(--hdr)); }
-:root.single { --hdr: 44px; }
+/* the columns are not labelled; #top is only the backdrop of the top bar, plus the depth switcher on a narrow window */
+:root { --bar: 52px; --swh: 0px; --top: calc(var(--bar) + var(--swh)); }
+:root.single { --swh: 44px; }
 #top { position: fixed; left: 0; right: 0; top: 0; height: var(--top); z-index: 18; background: color-mix(in srgb, var(--page) 90%, transparent);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-bottom: 1px solid var(--divider); }
-#colhd { position: absolute; left: 0; top: var(--bar); height: var(--hdr); width: 100%; }
-#colhd .ch { position: absolute; top: 0; height: var(--hdr); display: flex; align-items: center; gap: 6px; padding: 0 2px; font-size: 11.5px; color: var(--t-faint); white-space: nowrap; }
-#colhd .ch b { color: var(--t-secondary); font-weight: 600; }
-#colhd .ch .ib { width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center; color: var(--t-faint); margin-left: auto; }
-#colhd .ch .ib:hover { background: var(--control); color: var(--t-heading); }
-#colhd .ch.strip { justify-content: center; gap: 1px; border-radius: 6px; color: var(--t-secondary); font-weight: 600; padding: 0; }
-#colhd .ch.strip:hover { background: var(--control); color: var(--t-heading); }
-/* narrow: one column at a time, chosen with a segmented switcher */
-#colhd.sw { display: flex; align-items: center; gap: 4px; padding: 0 12px 6px; overflow-x: auto; scrollbar-width: none; transform: none !important; }
-#colhd.sw button { height: 32px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--t-secondary); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
-#colhd.sw button span { font-weight: 500; color: var(--t-faint); font-variant-numeric: tabular-nums; }
-#colhd.sw button[aria-selected="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
-#colhd.sw button:hover { background: var(--control); }
-@media (pointer: coarse) { #colhd.sw button { height: 36px; } }
+/* narrow: one column at a time, chosen with a segmented switcher: Roots, 1, 2, ... */
+#depths { position: absolute; left: 0; top: var(--bar); height: var(--swh); width: 100%; display: flex; align-items: center; gap: 4px; padding: 0 12px 6px; overflow-x: auto; scrollbar-width: none; }
+#depths:empty { display: none; }
+#depths button { height: 32px; min-width: 36px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--t-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#depths button[aria-selected="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
+#depths button:hover { background: var(--control); }
+@media (pointer: coarse) { #depths button { height: 36px; } }
 #doc { position: relative; margin-top: var(--top); min-width: 100%; }
 #bands { position: absolute; inset: 0; pointer-events: none; }
 #bands .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--t-heading) 1.6%, transparent); }
@@ -119,6 +116,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .fq i .go:hover { background: var(--control); }
 .fq i .ib { width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center; color: var(--t-faint); margin: -2px -6px -2px auto; }
 .fq i .go + .ib { margin-left: 2px; }
+.fq i .ib.nar { margin-right: 2px; } .fq i .nar + .ib { margin-left: 0; }
 .fq i .ib:hover { background: var(--control); color: var(--t-heading); }
 @media (pointer: coarse) { .fq i .ib, .fq i .go { min-width: 32px; height: 32px; } }
 @keyframes flash { from { background: var(--hl); } to { background: transparent; } }
@@ -297,7 +295,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 @media (prefers-reduced-motion: reduce) { .fresh { animation: none; } }
 </style>
 
-<div id="top"><div id="colhd" aria-label="Columns"></div></div>
+<div id="top"><div id="depths" aria-label="Depth"></div></div>
 <main id="doc" aria-label="Stacks by depth"><div id="bands" aria-hidden="true"></div><svg id="links" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></main>
 <div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
 <div class="br"><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></div>
@@ -448,7 +446,9 @@ function stackHTML(s) {
     /* one column at a time: the source is in the previous column, and "go" leads to it */
     const go = V.single && !isRoot ? `<button type="button" class="go" data-a="gofrom" data-id="${s.id}" title="Show the source in ${colName(dep - 1).toLowerCase()}">${icon('corner-left-up')}${colName(dep - 1)}</button>` : '';
     const tog = !isRoot && ps.length ? `<button type="button" class="ib" data-a="collapse" data-id="${s.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button>` : '';
-    h += `<div class="fq${isRoot ? '' : ' fb'}"><i>${icon('corner-down-right')}From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}${go}${tog}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
+    /* an opened deep column narrows back to a strip from any of its stacks */
+    const nar = !V.single && dep >= 3 ? `<button type="button" class="ib nar" data-a="closecol" data-d="${dep}" title="Narrow this column" aria-label="Narrow this column">${icon('chevron-left')}</button>` : '';
+    h += `<div class="fq${isRoot ? '' : ' fb'}"><i>${icon('corner-down-right')}From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}${go}${nar}${tog}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
   if (collapsed) {
     const u = unitStacks(s), np = u.reduce((n, x) => n + partsOf(x.id).length, 0);
     h += ps[0] ? partHTML(ps[0], s, false, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') : '';
@@ -533,7 +533,7 @@ function layout() {
     const ub = Math.max(...unitStacks(r).filter(s => POS[s.id]).map(s => POS[s.id].y + POS[s.id].h)); STATS.unitSpace += Math.max(0, ub - q.y - q.h); }
   for (const k of ['col0Space', 'maxDrift', 'totalDrift', 'maxOpenDrift', 'unitSpace']) STATS[k] = Math.round(STATS[k]);
   STATS.height = Math.round(bottom + 80); STATS.width = Math.round(right + PADX());
-  headerHTML();
+  switcherHTML();
 }
 /* a stack is drawn when no stack it branches from (its parent, its parent's parent, up to the root) is collapsed */
 const visible = s => { const p = parentOf(s); return !p || (!V.collapsed.has(p.id) && visible(p)); };
@@ -552,21 +552,16 @@ function autoCollapse(rootIds) {
   render({ noAnim: true });
 }
 
-/* the column labels; one column at a time, a depth switcher */
-function headerHTML() {
-  const hd = $('#colhd'), counts = []; for (const s of V.all) { const d = depthOf(s); counts[d] = (counts[d] || 0) + 1; }
-  const many = d => `${counts[d] || 0} stack${counts[d] === 1 ? '' : 's'}`;
+/* one column at a time: the depth switcher. Wide windows have no column labels. */
+function switcherHTML() {
+  const hd = $('#depths');
   document.documentElement.classList.toggle('single', V.single);
-  if (V.single) { hd.className = 'sw'; hd.setAttribute('role', 'tablist');
-    hd.innerHTML = Array.from({ length: Math.max(counts.length, V.depth + 1) }, (_, d) => `<button type="button" role="tab" aria-selected="${d === V.depth}" data-a="depth" data-d="${d}" title="${many(d)}">${colName(d)}<span>${counts[d] || 0}</span></button>`).join('');
-    return; }
-  hd.className = ''; hd.removeAttribute('role');
-  hd.innerHTML = COLX.map((x, d) => isStrip(d)
-    ? `<button type="button" class="ch strip" style="left:${x}px;width:${COLW[d]}px" data-a="opencol" data-d="${d}" title="${colName(d)}: ${many(d)}. Show this column" aria-label="Show ${colName(d).toLowerCase()}, ${many(d)}">${d}${icon('chevron-right')}</button>`
-    : `<div class="ch" style="left:${x}px;width:${COLW[d]}px"><b>${colName(d)}</b><span>${counts[d] || 0}</span>${d >= 3 ? `<button type="button" class="ib" data-a="closecol" data-d="${d}" title="Narrow this column" aria-label="Narrow ${colName(d).toLowerCase()}">${icon('chevron-left')}</button>` : ''}</div>`).join('');
-  syncHeader();
+  if (!V.single) { hd.innerHTML = ''; hd.removeAttribute('role'); return; }
+  const counts = []; for (const s of V.all) { const d = depthOf(s); counts[d] = (counts[d] || 0) + 1; }
+  const many = d => `${counts[d] || 0} stack${counts[d] === 1 ? '' : 's'}`;
+  hd.setAttribute('role', 'tablist');
+  hd.innerHTML = Array.from({ length: Math.max(counts.length, V.depth + 1) }, (_, d) => `<button type="button" role="tab" aria-selected="${d === V.depth}" data-a="depth" data-d="${d}" title="${colName(d)}: ${many(d)}" aria-label="${colName(d)}, ${many(d)}">${d ? d : 'Roots'}</button>`).join('');
 }
-const syncHeader = () => { $('#colhd').style.transform = V.single ? '' : `translateX(${-scrollX}px)`; };
 
 /* connectors: from the anchor on the parent's right edge to the branch's left edge, across one column gap. A level
    line when the branch is aligned; otherwise an elbow in the middle of the gap, which siblings share. */
@@ -658,13 +653,13 @@ function navTarget(key) {
 }
 document.addEventListener('keydown', e => {
   if (!/^Arrow(Up|Down|Left|Right)$/.test(e.key) || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
-  if (e.target.closest?.('textarea, input, select, [contenteditable], #colhd') || $('#bmenu') || $('#nmenu')) return;
+  if (e.target.closest?.('textarea, input, select, [contenteditable], #depths') || $('#bmenu') || $('#nmenu')) return;
   const from = V.sel && S[V.sel], id = navTarget(e.key); if (!id) return;
   e.preventDefault();
   selectStack(id, { part: e.key === 'ArrowLeft' && from?.fork ? from.fork.part : null });
   if (e.key === 'ArrowLeft' && from?.fork) flashAnchor(from);
 });
-addEventListener('scroll', () => { syncHeader(); closeBmenu(); $('#selfork')?.remove(); }, { passive: true });
+addEventListener('scroll', () => { closeBmenu(); $('#selfork')?.remove(); }, { passive: true });
 
 /* ---- drafts ---- */
 function openDraft(st, after, mode = 'post') { if (!leaveDraft()) return; hideHint();
@@ -817,7 +812,7 @@ document.addEventListener('click', e => {
   if (a === 'dask') { commitDraft(true); return; }
   if (a === 'collapse') { const id = d.id; if (!V.collapsed.has(id) && V.draft && unitStacks(S[id]).some(x => x.id === V.draft.st) && !leaveDraft()) return; V.collapsed.has(id) ? V.collapsed.delete(id) : V.collapsed.add(id); render(); if (!parentOf(S[id]) && !V.collapsed.has(id)) autoCollapse([id]); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
-  if (a === 'opencol') { V.openCols.add(+d.d); if (d.id) selectStack(d.id); else render(); return; }
+  if (a === 'opencol') { selectStack(d.id); return; }
   if (a === 'closecol') { V.openCols.delete(+d.d); render(); return; }
   if (a === 'depth') { if (+d.d !== V.depth) { V.depth = +d.d; V.sel = null; render({ noAnim: true }); scrollTo(0, 0); } return; }
   if (a === 'gobr') { const f = forksOf(d.id).find(x => x.x == null); if (f) selectStack(f.id); return; }
