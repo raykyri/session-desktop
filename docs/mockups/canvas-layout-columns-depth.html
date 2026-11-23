@@ -610,7 +610,7 @@ function render(opts = {}) {
       for (const [e] of moved) { e.style.transition = 'transform .3s cubic-bezier(.2,.7,.2,1)'; e.style.transform = ''; }
       animUntil = performance.now() + 340; tick(); }
   }
-  drawLinks(); updateNext();
+  drawLinks(); updateNext(); markHot();
   V.fresh = null;
   if (opts.focus) { const t = document.querySelector(opts.focus); t?.focus({ preventScroll: true }); }
 }
@@ -828,12 +828,13 @@ document.addEventListener('click', e => {
     reveal(stackEl(sid), { y: false }); } return; }
   if (!stEl && !e.target.closest('.tl, .br, #top, #selfork')) { if (V.sel && !V.draft) { V.sel = null; render({ noAnim: true }); } }
 });
-/* hovering a fork marks where it starts: the anchor part, or the anchor block, in the parent */
-document.addEventListener('mouseover', e => { const s = e.target.closest('.stack'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks();
+/* hovering a fork marks where it starts: the anchor part, or the anchor block, in the parent; a render redraws the mark */
+document.addEventListener('mouseover', e => { const s = e.target.closest('.stack'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks(); markHot(); });
+function markHot() { const id = V.hot;
   document.querySelectorAll('.anchor-hot').forEach(x => x.classList.remove('anchor-hot'));
   const f = id && S[id]; if (!f?.fork) return; const pe = document.querySelector(`[data-part="${f.fork.part}"]`); if (!pe) return;
   if (f.fork.block != null) { const pr = pe.querySelector('.prose[data-p]'), kids = pr ? [...pr.children] : []; kids[f.fork.block]?.classList.add('anchor-hot'); }
-  else pe.classList.add('anchor-hot'); });
+  else pe.classList.add('anchor-hot'); }
 
 /* keys: Cmd/Ctrl+Enter asks, Shift+Cmd/Ctrl+Enter posts; Escape closes the innermost thing. In a draft, a blank
    line followed by Enter on an empty line starts the next part. */
