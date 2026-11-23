@@ -797,7 +797,7 @@ function openMarker(b) {
   const r = b.getBoundingClientRect();
   m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px';
   m.style.top = Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 8) + 'px';
-  m.querySelector('button').focus();
+  m.querySelector('button').focus(); menuAt = performance.now();
 }
 /* opening a branch keeps a draft that stays in view (in the branch itself, or in the pane it opens from on a wide
    screen); any other draft is left, which asks first if it has text */
@@ -853,7 +853,7 @@ document.addEventListener('keydown', e => {
   }
 });
 /* pane scroll moves the connector; it also closes the menus, which are placed against what scrolled */
-document.addEventListener('scroll', e => { const t = e.target; if (!t.classList?.contains('psc')) return; if (t.dataset.sc) V.scroll[t.dataset.sc] = t.scrollTop; drawLink(); closeBmenu(); }, true);
+document.addEventListener('scroll', e => { const t = e.target; if (!t.classList?.contains('psc')) return; if (t.dataset.sc) V.scroll[t.dataset.sc] = t.scrollTop; drawLink(); if (performance.now() - menuAt > 250) closeBmenu(); }, true);
 
 /* selecting text in an answer offers a fork that stores the passage (block and quote) */
 document.addEventListener('mouseup', () => setTimeout(() => {
@@ -873,6 +873,7 @@ document.addEventListener('mouseup', () => setTimeout(() => {
      Branch from this answer    (or question, post): a new stack, opened in the next pane, about the whole part
    With text selected, the first item asks about the selection instead. */
 const blocksOf = pr => [...pr.children];
+let menuAt = 0;
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
 function openPartMenu(target, x, y) {
   const partEl = target.closest?.('.part[data-part]'); if (!partEl || target.closest('textarea, input, .bm')) return false;
@@ -893,7 +894,7 @@ function openPartMenu(target, x, y) {
   const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Part actions');
   m.innerHTML = items.join(''); m.dataset.sel = selText || ''; document.body.append(m);
   m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
-  m.querySelector('button').focus();
+  m.querySelector('button').focus(); menuAt = performance.now();
   return true;
 }
 document.addEventListener('contextmenu', e => { if (openPartMenu(e.target, e.clientX, e.clientY)) e.preventDefault(); });

@@ -114,9 +114,13 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* narrow: a part's branches, and a branch's source, live in other columns; these move between them */
 .brs { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--accent); padding: 2px 0; }
 .brs .lc { width: 13px; height: 13px; }
-button.fq { display: block; width: 100%; text-align: left; }
-button.fq:hover { background: var(--control); }
-button.fq i .go { margin-left: auto; color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+.fq.fb i { min-height: 22px; }
+.fq i .go { margin-left: auto; color: var(--accent); font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 6px; }
+.fq i .go:hover { background: var(--control); }
+.fq i .ib { width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center; color: var(--t-faint); margin: -2px -6px -2px auto; }
+.fq i .go + .ib { margin-left: 2px; }
+.fq i .ib:hover { background: var(--control); color: var(--t-heading); }
+@media (pointer: coarse) { .fq i .ib, .fq i .go { min-width: 32px; height: 32px; } }
 @keyframes flash { from { background: var(--hl); } to { background: transparent; } }
 .flash { animation: flash 1.6s ease-out; }
 
@@ -358,7 +362,7 @@ for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 
 /* ---- view state (per viewer) ---- */
 const V = { sel: null, collapsed: new Set(), full: new Set(), seen: new Set(), draft: null, hot: null,
-  openCols: new Set(), depth: 0, single: false, order: [], back: {}, all: [], list: [] };
+  openCols: new Set(), auto: new Set(), depth: 0, single: false, order: [], back: {}, all: [], list: [] };
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
 const unitStacks = root => { const out = []; const walk = s => { out.push(s); for (const p of partsOf(s.id)) for (const f of forksOf(p.id)) if (f.x == null) walk(f); }; walk(root); return out; };
@@ -432,7 +436,7 @@ function draftHTML() {
     <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft">${icon('x')}</button></div>`;
 }
 function stackHTML(s) {
-  const ps = partsOf(s.id), selected = V.sel === s.id, isRoot = !s.fork || s.x != null, collapsed = isRoot && V.collapsed.has(s.id), dep = depthOf(s);
+  const ps = partsOf(s.id), selected = V.sel === s.id, isRoot = !s.fork || s.x != null, collapsed = V.collapsed.has(s.id), dep = depthOf(s);
   /* a stack in a narrow deep column: a chip with its author and part count; choosing it opens the column */
   if (isStrip(dep)) { const u = ps.find(q => !isModel(q))?.by.u, n = ps.filter(isNew).length, who = u ? NAMES[u] || u : 'a new branch', np = `${ps.length} part${ps.length === 1 ? '' : 's'}`;
     return `<div class="stack chip${selected ? ' sel' : ''}" data-stack="${s.id}" data-fl="s:${s.id}" style="--sw:${STRIPW}px" tabindex="-1"><button type="button" class="sbody" data-a="opencol" data-d="${dep}" data-id="${s.id}" title="${esc(who)} · ${np}${n ? ` · ${n} new` : ''}. Show ${colName(dep).toLowerCase()}" aria-label="Branch by ${esc(who)}, ${np}. Show ${colName(dep).toLowerCase()}">${u ? av(u) : MARK}<span>${ps.length}</span>${n ? '<span class="dot"></span>' : ''}</button></div>`; }
@@ -441,9 +445,10 @@ function stackHTML(s) {
     h += `<div class="sh"><span class="ch">#${esc(CH[s.ch] || s.ch)}</span>${n ? `<span class="newc">${n} new</span>` : ''}${s.fork ? '<span>· opened from a fork</span>' : ''}<span class="grow"></span>
       ${ps.length ? `<button class="ib" data-a="collapse" data-id="${s.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button>` : ''}</div>`; }
   if (s.fork) { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : '';
-    const inner = `<i>${icon('corner-down-right')}From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}${V.single && !isRoot ? `<span class="go">${icon('corner-left-up')}${colName(dep - 1)}</span>` : ''}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}`;
-    /* one column at a time: the source is in the previous column, and this header goes to it */
-    h += V.single && !isRoot ? `<button type="button" class="fq" data-a="gofrom" data-id="${s.id}" title="Show the source in ${colName(dep - 1).toLowerCase()}">${inner}</button>` : `<div class="fq">${inner}</div>`; } }
+    /* one column at a time: the source is in the previous column, and "go" leads to it */
+    const go = V.single && !isRoot ? `<button type="button" class="go" data-a="gofrom" data-id="${s.id}" title="Show the source in ${colName(dep - 1).toLowerCase()}">${icon('corner-left-up')}${colName(dep - 1)}</button>` : '';
+    const tog = !isRoot && ps.length ? `<button type="button" class="ib" data-a="collapse" data-id="${s.id}" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'}" title="${collapsed ? 'Expand' : 'Collapse'}">${icon(collapsed ? 'chevron-right' : 'chevron-down')}</button>` : '';
+    h += `<div class="fq${isRoot ? '' : ' fb'}"><i>${icon('corner-down-right')}From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}${go}${tog}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
   if (collapsed) {
     const u = unitStacks(s), np = u.reduce((n, x) => n + partsOf(x.id).length, 0);
     h += ps[0] ? partHTML(ps[0], s, false, true).replace('class="prose', 'class="prose clamp" style="max-height:66px') : '';
@@ -470,7 +475,7 @@ function stackHTML(s) {
 const POS = {}; let COLX = [], COLW = [], STATS = {}, MAXDRIFT = 120;
 const docEl = $('#doc');
 function visibleLaneForks(s) {
-  if (V.collapsed.has(s.id) && (!s.fork || s.x != null)) return [];
+  if (V.collapsed.has(s.id)) return [];
   const out = []; for (const p of partsOf(s.id)) for (const f of forksOf(p.id)) if (f.x == null) out.push(f);
   return out;
 }
@@ -486,7 +491,7 @@ function layout() {
   for (const k in POS) delete POS[k];   // only what is drawn now
   const els = {}; stacksEl.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
   const H = id => els[id] ? els[id].offsetHeight : 0, TOP = 16;
-  STATS = { col0Space: 0, col0Moves: 0, branches: 0, drifted: 0, maxDrift: 0, totalDrift: 0 };
+  STATS = { col0Space: 0, col0Moves: 0, branches: 0, collapsedBranches: 0, drifted: 0, maxDrift: 0, totalDrift: 0, maxOpenDrift: 0 };
   let right, bottom = 0;
   if (V.single) {
     /* one column: its stacks in unit order, a larger gap where the parent changes */
@@ -517,16 +522,35 @@ function layout() {
       place(r, 0, y, cur, POS);
       cur[0] = y + H(r.id) + RGAP;
     }
-    for (const q of Object.values(POS)) if (q.want != null) { const dr = q.y - q.want; STATS.branches++; if (dr > 1) { STATS.drifted++; STATS.totalDrift += dr; STATS.maxDrift = Math.max(STATS.maxDrift, dr); } }
+    for (const [id, q] of Object.entries(POS)) if (q.want != null) { const dr = q.y - q.want, c = V.collapsed.has(id); STATS.branches++; if (c) STATS.collapsedBranches++;
+      if (dr > 1) { STATS.drifted++; STATS.totalDrift += dr; STATS.maxDrift = Math.max(STATS.maxDrift, dr); if (!c) STATS.maxOpenDrift = Math.max(STATS.maxOpenDrift, dr); } }
   }
   for (const id in els) { const p = POS[id]; if (p) { els[id].style.left = p.x + 'px'; els[id].style.top = p.y + 'px'; bottom = Math.max(bottom, p.y + p.h); } }
   docEl.style.width = (right + PADX()) + 'px'; docEl.style.height = (bottom + 80) + 'px';
   $('#bands').innerHTML = V.single ? '' : COLX.map((x, d) => `<div class="band${isStrip(d) ? ' strip' : ''}" style="left:${x - 10}px;width:${COLW[d] + 20}px"></div>`).join('');
-  for (const k of ['col0Space', 'maxDrift', 'totalDrift']) STATS[k] = Math.round(STATS[k]);
+  /* what a layout that kept each unit's rows to itself would leave empty in column 0: unit bottom less root bottom */
+  STATS.unitSpace = 0; if (!V.single) for (const r of orderedRoots()) { const q = POS[r.id]; if (!q) continue;
+    const ub = Math.max(...unitStacks(r).filter(s => POS[s.id]).map(s => POS[s.id].y + POS[s.id].h)); STATS.unitSpace += Math.max(0, ub - q.y - q.h); }
+  for (const k of ['col0Space', 'maxDrift', 'totalDrift', 'maxOpenDrift', 'unitSpace']) STATS[k] = Math.round(STATS[k]);
   STATS.height = Math.round(bottom + 80); STATS.width = Math.round(right + PADX());
   headerHTML();
 }
-const visible = s => { if (!s.fork || s.x != null) return true; const parent = S[P[s.fork.part].st]; const r = rootOf(s); return !V.collapsed.has(r.id) && visible(parent); };
+/* a stack is drawn when no stack it branches from (its parent, its parent's parent, up to the root) is collapsed */
+const visible = s => { const p = parentOf(s); return !p || (!V.collapsed.has(p.id) && visible(p)); };
+/* A branch that cannot start within MAXDRIFT of its anchor is collapsed to its first part, top to bottom, so the
+   stacks under it move up. This runs once per unit, when the unit is first shown open on a wide window; after that,
+   collapsing is the viewer's. The selected stack, the draft and the stacks they branch from stay open. */
+function autoCollapse(rootIds) {
+  if (V.single) return;
+  const keep = new Set(); for (const id of [V.sel, V.draft?.st]) for (let s = S[id]; s; s = parentOf(s)) keep.add(s.id);
+  rootIds = rootIds.filter(id => !V.auto.has(id)); for (const id of rootIds) V.auto.add(id);
+  for (let i = 0; i < 80 && rootIds.length; i++) {
+    render({ noAnim: true });
+    const hit = Object.entries(POS).find(([id, q]) => q.want != null && q.y - q.want > MAXDRIFT && !V.collapsed.has(id) && !keep.has(id) && rootIds.includes(rootOf(S[id]).id));
+    if (!hit) return; V.collapsed.add(hit[0]);
+  }
+  render({ noAnim: true });
+}
 
 /* the column labels; one column at a time, a depth switcher */
 function headerHTML() {
@@ -606,11 +630,12 @@ function reveal(el, { x = true, y = true } = {}) {
 /* select a stack and bring it (or one of its parts) into view: its root opens, a narrow column opens, and on a narrow
    window the switcher moves to its depth */
 function selectStack(id, { part = null } = {}) {
-  const s = S[id]; if (!s) return; const d = depthOf(s), r = rootOf(s);
-  if (r !== s) V.collapsed.delete(r.id);
+  const s = S[id]; if (!s) return; const d = depthOf(s);
+  for (let p = parentOf(s); p; p = parentOf(p)) V.collapsed.delete(p.id);
+  if (part) V.collapsed.delete(id);
   if (V.single) V.depth = d; else if (d >= 3) V.openCols.add(d);
   V.sel = id; for (const p of partsOf(id)) V.seen.add(p.id);
-  render({ noAnim: true });
+  render({ noAnim: true }); if (!parentOf(s) && !V.collapsed.has(id)) autoCollapse([id]);
   const el = stackEl(id); el?.focus({ preventScroll: true });
   reveal(part ? el?.querySelector(`[data-part="${part}"]`) || el : el);
 }
@@ -770,7 +795,7 @@ function newFork(pid, { block = null, quote = null } = {}) {
   if (!leaveDraft()) return;
   const fp = P[pid], id = 's' + (++seq);
   S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) } };
-  const d = depthOf(S[id]); V.collapsed.delete(rootOf(S[id]).id); if (d >= 3) V.openCols.add(d); if (V.single) V.depth = d;
+  const d = depthOf(S[id]); for (let p = fp && S[fp.st]; p; p = parentOf(p)) V.collapsed.delete(p.id); if (d >= 3) V.openCols.add(d); if (V.single) V.depth = d;
   V.draft = { st: id, after: '', mode: 'ask', texts: [''] }; V.sel = id; hideHint();
   render({ noAnim: V.single, focus: '.draft textarea' });
   reveal(stackEl(id));
@@ -783,14 +808,14 @@ document.addEventListener('click', e => {
   if (gapEl && !e.target.closest('.sp')) { gapEl.querySelector('.sp')?.click(); return; }
   if (!e.target.closest('#selfork')) $('#selfork')?.remove();
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
-  if (a === 'seam') { e.stopPropagation(); const st = S[d.st]; V.collapsed.delete(rootOf(st).id); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }
+  if (a === 'seam') { e.stopPropagation(); const st = S[d.st]; for (let p = st; p; p = parentOf(p)) V.collapsed.delete(p.id); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }
   if (a === 'bfork') { newFork(d.id, { block: +d.b }); return; }
   if (a === 'fork') { newFork(d.id); return; }
   if (a === 'dpart') { V.draft.texts.push(''); render({ focus: `.draft textarea[data-di="${V.draft.texts.length - 1}"]` }); return; }
   if (a === 'dcancel') { cancelDraft(); return; }
   if (a === 'dpost') { commitDraft(false); return; }
   if (a === 'dask') { commitDraft(true); return; }
-  if (a === 'collapse') { const id = d.id; if (!V.collapsed.has(id) && V.draft && unitStacks(S[id]).some(x => x.id === V.draft.st) && !leaveDraft()) return; V.collapsed.has(id) ? V.collapsed.delete(id) : V.collapsed.add(id); render(); return; }
+  if (a === 'collapse') { const id = d.id; if (!V.collapsed.has(id) && V.draft && unitStacks(S[id]).some(x => x.id === V.draft.st) && !leaveDraft()) return; V.collapsed.has(id) ? V.collapsed.delete(id) : V.collapsed.add(id); render(); if (!parentOf(S[id]) && !V.collapsed.has(id)) autoCollapse([id]); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
   if (a === 'opencol') { V.openCols.add(+d.d); if (d.id) selectStack(d.id); else render(); return; }
   if (a === 'closecol') { V.openCols.delete(+d.d); render(); return; }
@@ -897,18 +922,22 @@ document.addEventListener('mouseover', e => { if (e.target.closest?.('.seam')) r
 document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').matches) return; const p = e.target.closest?.('.sbody > .part'); if (p) setTimeout(() => { const live = document.querySelector(`[data-part="${p.dataset.part}"]`); nearPart = live; nearSeams(live); }, 0); });
 
 
-/* ---- initial state: roots by last activity; the three featured units open, the rest collapsed ---- */
+/* ---- initial state: roots by last activity; the top four units open, the rest collapsed ---- */
 function initialState() {
-  const featured = ['01M7HWGZJGT7JTFFVSYPX055KV', '01M7HQMDT0RH0G2WHVJHQ6Z8C2', '01M7HM6J60BNFNCYM0WE5BCMK1'];
   const rs = roots(), last = r => Math.max(...unitStacks(r).flatMap(s => partsOf(s.id).map(p => Date.parse(p.at))));
   rs.sort((a, b) => last(b) - last(a)); V.order = rs.map(r => r.id);
-  for (const r of rs) if (!featured.includes(r.src)) V.collapsed.add(r.id);
+  rs.slice(4).forEach(r => V.collapsed.add(r.id));
 }
 initialState();
 render({ noAnim: true });
+autoCollapse(roots().filter(r => !V.collapsed.has(r.id)).map(r => r.id));
 document.fonts?.ready.then(() => render({ noAnim: true }));
 addEventListener('resize', () => { const a = document.activeElement; render({ noAnim: true, focus: a?.matches?.('.draft textarea') ? `.draft textarea[data-di="${a.dataset.di}"]` : null }); });
 /* for measuring (the verification script uses it): the space alignment adds to column 0, and how far branches drift.
-   layoutStats(n) lays the page out again with MAXDRIFT = n. */
-window.layoutStats = n => { if (n != null) { MAXDRIFT = n; render({ noAnim: true }); } return { MAXDRIFT, ...STATS }; };
+   layoutStats(n) lays the page out again with MAXDRIFT = n;
+   layoutStats(n, true) also opens every branch and collapses them again under the new MAXDRIFT. */
+window.layoutStats = (n, again) => { if (n != null) { MAXDRIFT = n;
+    if (again) { for (const id of [...V.collapsed]) if (parentOf(S[id])) V.collapsed.delete(id); V.auto.clear(); autoCollapse(roots().filter(r => !V.collapsed.has(r.id)).map(r => r.id)); }
+    render({ noAnim: true }); }
+  return { MAXDRIFT, ...STATS }; };
 </script>

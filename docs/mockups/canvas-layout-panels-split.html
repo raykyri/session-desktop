@@ -64,7 +64,8 @@ html, body { height: 100%; margin: 0; }
 body { background: var(--page); color: var(--t-body); font: 400 13.5px/1.5 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden;
   display: flex; flex-direction: column; }
 button, input, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; background: none; border: 0; padding: 0; }
+button { cursor: pointer; background: none; border: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+.tbtn, .cr, #seg button, .xb, .bro { user-select: none; -webkit-user-select: none; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 [hidden] { display: none !important; }
 .lc { width: 14px; height: 14px; flex: none; display: block; }
@@ -79,7 +80,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #tsw { flex: 0 1 460px; min-width: 0; padding: 0 8px 0 12px; }
 #tsw .tch { color: var(--t-faint); }
 #tsw .tt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-#tsw .tnew { color: var(--new); font-weight: 600; font-size: 11.5px; }
 #tsw .lc { color: var(--t-faint); }
 #tsw kbd, .khint kbd { font: 500 10.5px/1 var(--font); color: var(--t-faint); padding: 3px 5px; border-radius: 4px; background: var(--control); }
 .modl { font-size: 11.5px; color: var(--t-faint); padding: 0 4px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
@@ -148,6 +148,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .xb:hover { background: var(--control); color: var(--t-heading); }
 .pin { padding: 8px 20px 56px 30px; }
 #panes.single .pin { max-width: 820px; margin: 0 auto; }
+#panes.single .phd { padding-left: max(16px, calc((100% - 820px) / 2 + 30px)); padding-right: max(10px, calc((100% - 820px) / 2 + 20px)); }
 #divider { position: relative; cursor: col-resize; touch-action: none; z-index: 7; }
 #divider::before { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--border-strong); }
 #divider .grip { position: absolute; top: 50%; left: 1px; width: 7px; height: 40px; margin-top: -20px; border-radius: 4px; background: var(--card); box-shadow: var(--shadow); }
@@ -208,7 +209,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 :root { --hl: color-mix(in srgb, var(--accent) 19%, transparent); }
 ::selection { background: var(--hl); }
 .prose > .src-on { position: relative; background: var(--hl); border-radius: 3px; box-shadow: 0 0 0 4px var(--hl); }
-.prose > .src-on::before { content: ''; position: absolute; left: -10px; top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--accent); }
+.prose > .src-on::before { content: ''; position: absolute; left: -8px; top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--accent); }
 .part.src-on { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--part-u)); }
 .part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
 .prose > .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -310,7 +311,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   .pin { padding: 8px 12px 48px 24px; }
   .phd { padding-left: 12px; }
 }
-@media (max-width: 420px) { #tsw .tch { display: none; } #tsw .tnew { display: none; } }
+@media (max-width: 420px) { #tsw .tch { display: none; } }
 @media (pointer: coarse) { .tbtn { height: 40px; } #seg button { height: 36px; } .xb { height: 36px; } }
 </style>
 
@@ -357,6 +358,10 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const narrow = () => matchMedia('(max-width: 700px)').matches;
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || '');
 const KEYK = MAC ? '⌘K' : 'Ctrl K';
+/* a long press that opened the part menu swallows the click its release produces (registered first, so no other
+   click listener sees it) */
+let quietUntil = 0;
+document.addEventListener('click', e => { if (performance.now() < quietUntil) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
 
 /* ---- content: parts and stacks ---- */
 const P = {}, S = {};
@@ -503,8 +508,8 @@ function crumbsHTML() {
   }).join('');
 }
 function topHTML() {
-  const r = S[V.path[0]], n = threads().reduce((a, t) => a + treeNew(t), 0);
-  $('#tsw').innerHTML = `<span class="tch">#${esc(CH[r.ch] || r.ch)}</span><span class="tt">${esc(titleOf(r))}</span>${n ? `<span class="tnew" title="New parts in all threads">${n} new</span>` : ''}${icon('chevron-down')}<kbd>${KEYK}</kbd>`;
+  const r = S[V.path[0]];
+  $('#tsw').innerHTML = `<span class="tch">#${esc(CH[r.ch] || r.ch)}</span><span class="tt">${esc(titleOf(r))}</span>${icon('chevron-down')}<kbd>${KEYK}</kbd>`;
   $('#khint').innerHTML = V.path.length > 1 || V.fwd.length ? `<kbd>Alt ←</kbd><kbd>Alt →</kbd> back, forward` : `<kbd>${KEYK}</kbd> threads`;
   const sg = document.querySelectorAll('#seg button'); sg[0].setAttribute('aria-pressed', V.m === 'l'); sg[1].setAttribute('aria-pressed', V.m === 'r');
   const R = rightId() && S[rightId()], rn = R ? stackNew(R) : 0; sg[1].innerHTML = `Branch${rn ? ` <b>${rn} new</b>` : ''}`;
@@ -860,9 +865,7 @@ function newFork(pid, { block = null, quote = null } = {}) {
 }
 
 /* ---- clicks ---- */
-let quietUntil = 0;   // a long press that opened the part menu swallows the click that follows it
 document.addEventListener('click', e => {
-  if (performance.now() < quietUntil) { e.preventDefault(); e.stopPropagation(); return; }
   /* the gap between two parts (the line that turns blue on hover) inserts there, like its "+" */
   const gapEl = e.target.closest('.seam');
   if (gapEl && !e.target.closest('.sp')) { gapEl.querySelector('.sp')?.click(); return; }
@@ -960,9 +963,9 @@ document.addEventListener('contextmenu', e => { if (openPartMenu(e.target, e.cli
 /* touch: a long press opens the same menu (iOS does not fire contextmenu) */
 let lp = null;
 document.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') return; clearTimeout(lp?.t);
-  const t = e.target, x = e.clientX, y = e.clientY; lp = { x, y, t: setTimeout(() => { lp = null; if (openPartMenu(t, x, y)) quietUntil = performance.now() + 400; }, 500) }; });
+  const t = e.target, x = e.clientX, y = e.clientY; lp = { x, y, t: setTimeout(() => { lp = null; if (openPartMenu(t, x, y)) quietUntil = performance.now() + 60000; }, 500) }; });
 document.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) { clearTimeout(lp.t); lp = null; } });
-document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
+document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } else if (quietUntil > performance.now() + 1000) quietUntil = performance.now() + 350; });
 document.addEventListener('click', e => {
   const b = e.target.closest?.('#bmenu [data-a="selask"]');
   if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q }); return; }

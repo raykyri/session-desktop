@@ -134,7 +134,8 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
 .tr .tx.dr { font-style: italic; color: var(--t-faint); }
 .tr .pil { flex: none; color: var(--accent); display: grid; place-items: center; }
 .tr .pil .lc { width: 13px; height: 13px; }
-.tr .dot { margin-left: 1px; }
+.tr .pil { width: 13px; }
+.tr .dslot { width: 6px; flex: none; display: grid; place-items: center; }
 .tgp { margin-left: 11px; padding-left: 4px; border-left: 1px solid var(--divider); }
 .ta { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px 0 4px; margin-top: 2px; font-size: 11px; color: var(--t-faint); cursor: pointer;
   white-space: nowrap; overflow: hidden; border-radius: 5px; }
@@ -187,7 +188,8 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
   #c1, #c2 { background: var(--page); }
   .back { display: inline-flex; }
   #c3b { padding: 12px 10px 48px; }
-  #c3 .part { padding-right: 40px; }
+  #c3 .part { padding-right: 36px; }
+  .mk2 { right: 5px; }
   .crumbs .cur { max-width: 60vw; }
   .crumbs button, .crumbs .sep { display: none; }
   .crumbs .ch { margin-right: 4px; }
@@ -516,7 +518,7 @@ function nodeHTML(s, level) {
   let h = `<div class="tn${on ? ' on' : ''}" role="treeitem" aria-level="${level}" aria-selected="${on}"${has ? ` aria-expanded="${open}"` : ''} tabindex="${on ? 0 : -1}" data-node="${s.id}" data-fk="n:${s.id}">`;
   h += `<div class="tr" title="${esc(tip)}">${has ? `<button class="tg" type="button" tabindex="-1" data-a="tgl" data-id="${s.id}" aria-label="${open ? 'Collapse' : 'Expand'}">${icon(open ? 'chevron-down' : 'chevron-right')}</button>` : '<span class="tg"></span>'}`;
   h += `${av(u)}<span class="tx${q ? '' : ' dr'}">${q ? `<b>${esc(nameOf(u))}</b>${esc(words(q, 8))}` : 'Draft'}</span>`;
-  h += `${isPara(s) ? `<span class="pil" title="From a paragraph" aria-label="From a paragraph">${icon('pilcrow')}</span>` : ''}${n ? `<span class="dot" title="${n} new"></span>` : ''}${draft && q ? '<span class="tx dr" style="flex:none">· draft</span>' : ''}</div>`;
+  h += `${draft && q ? '<span class="tx dr" style="flex:none">· draft</span>' : ''}<span class="pil"${isPara(s) ? ' title="From a paragraph" aria-label="From a paragraph"' : ''}>${isPara(s) ? icon('pilcrow') : ''}</span><span class="dslot">${n ? `<span class="dot" title="${n} new"></span>` : ''}</span></div>`;
   if (open) {
     h += '<div role="group" class="tgp">';
     for (const g of groups) {

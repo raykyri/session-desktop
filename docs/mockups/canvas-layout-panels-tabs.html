@@ -69,7 +69,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .lc { width: 14px; height: 14px; flex: none; display: block; }
 
 /* ---- frame: threads sidebar | reader (tab bar above one stack) ---- */
-.app { position: fixed; inset: 0; display: grid; grid-template-columns: 296px minmax(0, 1fr); }
+.app { position: fixed; inset: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); }
 #side { display: flex; flex-direction: column; min-height: 0; background: var(--strip); border-right: 1px solid var(--divider); }
 .sideh { padding: 12px 12px 8px; display: grid; gap: 8px; }
 .sideh .row { display: flex; gap: 8px; align-items: center; }
@@ -112,17 +112,18 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .tab.on::before, .tab.on + .tab::before, .tab:hover::before, .tab:hover + .tab::before { opacity: 0; }
 .tab:hover { background: color-mix(in srgb, var(--t-heading) 5%, transparent); }
 .tab.on { background: var(--page); color: var(--t-heading); box-shadow: 0 1px 0 var(--page), 0 0 0 1px var(--divider); clip-path: inset(-2px -2px -1px -2px); z-index: 1; }
-.tab .tb { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 7px; padding: 0 4px 0 calc(10px + var(--dep, 0) * 6px); border-radius: 8px 8px 0 0; text-align: left; font-size: 12.5px; }
+.tab .tb { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; border-radius: 8px 8px 0 0; text-align: left; font-size: 12.5px; }
 .tab .tb:focus-visible { outline-offset: -2px; }
 .tab.on .tb { font-weight: 600; }
-.tab .nst { width: 13px; height: 13px; color: var(--t-faint); margin-right: -3px; }
+.tab .nst { width: 13px; height: 13px; color: var(--t-faint); margin-right: -2px; }
 .tab .av { width: 18px; height: 18px; font-size: 7.5px; }
 .tab .tlab { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tab .dot { margin-left: -2px; }
 .tx { flex: none; width: 22px; height: 22px; margin-right: 6px; border-radius: 6px; display: grid; place-items: center; color: var(--t-faint); }
 .tx .lc { width: 13px; height: 13px; }
 .tx:hover { background: var(--control-hover); color: var(--t-heading); }
-.tab:not(.on):not(:hover):not(:focus-within) .tx { visibility: hidden; }
+.tab:not(.on):not(:hover):not(:focus-within) .tx { display: none; }
+.tab:not(.on):not(:hover):not(:focus-within) .tb { padding-right: 10px; }
 .tab.root .tb { padding-right: 10px; }
 #tovf .lc { width: 14px; height: 14px; }
 
@@ -204,6 +205,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .bmk:hover { color: var(--accent); }
 .bmk.open { color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); }
 .bmk .dot { margin-left: 1px; }
+.bmk.below { box-shadow: none; border: 1px dashed var(--border-strong); background: var(--part-m); }
+.bmk.below.open { border-color: var(--accent); }
 .part.anchor-hot { box-shadow: inset 3px 0 0 var(--accent); }
 .prose > .anchor-hot { background: var(--accent-soft); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent-soft); }
 @keyframes flash { 0%, 35% { background: var(--hl); box-shadow: 0 0 0 4px var(--hl); } 100% { background: transparent; box-shadow: 0 0 0 4px transparent; } }
@@ -284,7 +287,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   .tab.on { background: var(--card); clip-path: none; box-shadow: 0 0 0 1.5px var(--accent); }
   .tab:hover { background: var(--control-hover); }
   .tab.on:hover { background: var(--card); }
-  .tab .tb { border-radius: 16px; padding-left: calc(8px + var(--dep, 0) * 4px); gap: 6px; }
+  .tab .tb { border-radius: 16px; padding-left: 8px; gap: 6px; }
   .tab.root .tb { padding-right: 12px; }
   .tab:not(.on) .tx { display: none; }
   .tab:not(.on) .tb { padding-right: 12px; }
@@ -328,6 +331,7 @@ const NAMES = { 'ines.v': 'Ines V.', hal_b: 'Hal Bryce', mira_k: 'Mira K.', 'jun
 const AVN = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
 const MODEL = 'Gemini 3.8 Flash';  /* a workspace setting: every answer uses it */
 const CH = Object.fromEntries(D.spaces.map(s => [s.id, s.name]));
+const LATEST = Math.max(NOW, ...D.parts.map(p => Date.parse(p.at)));   /* new parts are stamped after every seed part */
 const MAXT = 6;   /* tabs shown in the bar before the rest go to the overflow menu */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -511,8 +515,7 @@ function stackHTML(s) {
 function sideHTML() {
   return sortedRoots().map(r => {
     const u = unitStacks(r), np = u.reduce((n, s) => n + partsOf(s.id).length, 0), nb = u.length - 1, n = unitNew(r), q = lead(r), on = r.id === V.thread;
-    const open = (TABS[r.id]?.list.length || 1) - 1;
-    const meta = `<b>#${esc(CH[r.ch] || r.ch)}</b> · ${plural(np, 'part')}${nb ? ` · ${plural(nb, 'branch')}` : ''}${open ? ` · ${open} open` : ''}`;
+    const meta = `<b>#${esc(CH[r.ch] || r.ch)}</b> · ${plural(np, 'part')}${nb ? ` · ${plural(nb, 'branch')}` : ''}`;
     return `<button class="trow${on ? ' on' : ''}" type="button" id="th-${r.id}" data-a="thread" data-id="${r.id}"${on ? ' aria-current="true"' : ''}>${av(q?.by.u ?? ME)}<span><span class="tc">${meta}</span><span class="tt">${esc(q ? clip(strip(q.text), 120) : tabLabel(r) + ' (draft)')}</span></span>${n ? `<span class="tn" aria-label="${n} new">${n}</span>` : ''}</button>`;
   }).join('');
 }
@@ -589,9 +592,10 @@ function placeMarks() {
     const pr = pe.querySelector('.prose[data-p]'), kids = pr ? [...pr.children] : [];
     for (const [k, list] of groups) {
       let top;
-      if (k >= 0 && kids[k]) { const r = kids[k].getBoundingClientRect(), pb = pr.getBoundingClientRect(); top = Math.min(r.top - 2, pb.bottom - 26) - br.top; }
+      let hid = false;
+      if (k >= 0 && kids[k]) { const r = kids[k].getBoundingClientRect(), pb = pr.getBoundingClientRect(); hid = pr.classList.contains('clamp') && r.top > pb.bottom - 60; top = Math.min(r.top - 2, pb.bottom - 26) - br.top; }
       else top = pe.getBoundingClientRect().top + 8 - br.top;
-      marks.push({ top, pid: p.id, k, list });
+      marks.push({ top, pid: p.id, k, list, hid });
     }
   });
   marks.sort((a, b) => a.top - b.top);
@@ -599,8 +603,8 @@ function placeMarks() {
   for (const m of marks) {
     m.top = Math.max(m.top, last + 28); last = m.top;
     const n = m.list.length, open = m.list.some(f => t.list.includes(f.id)), nw = m.list.some(f => unitStacks(f).some(s => partsOf(s.id).some(isNew)));
-    const what = m.k >= 0 ? 'this paragraph' : `this ${partKind(P[m.pid])}`;
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'bmk' + (open ? ' open' : '');
+    const what = m.k >= 0 ? (m.hid ? 'a paragraph further down (Show all)' : 'this paragraph') : `this ${partKind(P[m.pid])}`;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'bmk' + (open ? ' open' : '') + (m.hid ? ' below' : '');
     b.dataset.a = 'mark'; b.dataset.part = m.pid; b.dataset.b = m.k; b.style.top = m.top + 'px';
     b.title = n === 1 ? `Open the branch from ${what}: “${tabLabel(m.list[0], 60)}”` : `${plural(n, 'branch')} from ${what}`;
     b.setAttribute('aria-label', `${plural(n, 'branch')} from ${what}${open ? ', open in a tab' : ''}`);
@@ -663,8 +667,8 @@ function commitDraft(ask) {
   if (!texts.length) { document.querySelector('.draft textarea')?.focus(); return; }
   let [a, b] = keyAfter(d.st, d.after); const step = (b - a) / (texts.length + (ask ? 2 : 1));
   const made = []; let k = a;
-  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(NOW + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
-  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: new Date(NOW + (seq - 1000) * 1000).toISOString(),
+  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(LATEST + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
+  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: new Date(LATEST + (seq - 1000) * 1000).toISOString(),
     run: { by: ME, model: MODEL, ctx: [], status: 'queued', step: 0, src: [] } }; P[m.id] = m; made.push(m.id); V.seen.add(m.id); startRun(m); }
   V.fresh = new Set(made); V.draft = null; render();
 }
@@ -779,7 +783,7 @@ document.addEventListener('click', e => {
   if (gapEl && !e.target.closest('.sp')) { gapEl.querySelector('.sp')?.click(); return; }
   if (!e.target.closest('#selfork')) $('#selfork')?.remove();
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
-  if (a === 'thread') { const tt = tabsOf(d.id); activate(d.id, tt.active, { focus: `#th-${d.id}` }); return; }
+  if (a === 'thread') { const tt = tabsOf(d.id); activate(d.id, tt.active, narrow() ? {} : { focus: `#th-${d.id}` }); return; }
   if (a === 'tab') { activate(V.thread, d.id, e.target.closest('#tmenu') ? { focus: `#tab-${d.id}` } : {}); return; }
   if (a === 'tclose') { e.stopPropagation(); closeTab(d.id); return; }
   if (a === 'src') { goToSource(d.id); return; }
