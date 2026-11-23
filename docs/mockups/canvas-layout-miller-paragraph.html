@@ -959,8 +959,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.stopPropagation(); closeBmenu(); return; }
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const bs = [...m.querySelectorAll('button')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus(); }
 }, true);
-/* a scroll by the person closes the part menu; the scroll a render restores does not */
-track.addEventListener('scroll', () => { if (performance.now() - renderedAt > 120) closeBmenu(); }, true);
+/* scrolling the columns by wheel or touch closes the part menu */
+colsEl.addEventListener('wheel', closeBmenu, { passive: true });
+colsEl.addEventListener('touchmove', closeBmenu, { passive: true });
 
 /* the "+" insert controls show only in the gaps directly above and below the hovered part; a question and its answer
    count as one */
