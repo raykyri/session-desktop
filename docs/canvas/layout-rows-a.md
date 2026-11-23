@@ -12,7 +12,7 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 | Column 0 position | 16px from the left edge | centred on the page at the row's scroll start, at every width |
 | Branch columns | 320px, from 16px + 360px | 320px, from the root's right edge + 40px |
 | Row header | full page width | the root column's left edge and width |
-| Row arrows | page by whole 360px steps | scroll the least distance that shows the next cut-off column; Left returns to the start |
+| Row header controls | dots, arrows, collapse | dots only (no arrows, no collapse control) |
 | Selecting a root | scrolls the row until the root is inside it | scrolls the row back to its start |
 | Touch snap | every stack to its start | a centred root to the centre, branches to their start |
 
@@ -29,7 +29,7 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 - The scroll start of every row is the centred root. Rows load there, a new or expanded row starts there, and the lane is rebuilt around it when the window width or the page scrollbar changes.
 - A row's horizontal scroll is kept across re-renders, as in 3, so a finished answer or a new part does not move a row the person has scrolled. A new branch scrolls its row by the least distance that shows the whole new stack.
 - Shift+wheel, a trackpad swipe and touch move a row sideways; the start is `scrollLeft` 0, so scrolling fully left returns the root to the centre.
-- Right arrow: scrolls the least distance that shows the first column cut off at the right edge. Left arrow: the least distance that shows the last branch column cut off at the left edge, then the start. At 1100px on the deepest seed row (four columns) the stops are 0, 146, 506 and 866px.
+- The row header has only the dots: no arrow buttons and no collapse control. A row collapsed at load is expanded with its "N more parts" row.
 - Selecting a root (click, row dot, ← from a branch, bell) scrolls its row back to the start.
 
 ## Unchanged from 3

@@ -4,7 +4,7 @@ Session Canvas: Rows, centred main thread (layout 3a)
 A variant of docs/mockups/canvas-layout-rows.html (layout 3, "Rows"; notes: docs/canvas/layout-rows.md). Notes for
 this variant: docs/canvas/layout-rows-a.md. The data model, context rules, part menu, drafts, composer, bell, branch
 placement, connectors and keyboard navigation are as in 3. What differs is the width and position of column 0 (the
-root stack), the row header's position, and where the row arrows stop.
+root stack), the row header's position and its controls.
 
 Differences from 3
 - Column 0 is 640px wide (RW); branch columns keep 3's stack width (320px; 240-320px on a phone).
@@ -13,10 +13,10 @@ Differences from 3
   down the page. Branch columns continue to the right of the root. Below 720px column 0 is the track width less a
   16px gutter on each side. Rows load at the start, and scrolling a row back to its start returns the root to the
   centre; a row's horizontal scroll is otherwise kept across re-renders as in 3.
-- The row header (channel, counts, dots, arrows, collapse) has the root column's left edge and width.
-- Row arrows: Right scrolls the least distance that shows the first column cut off at the right edge; Left scrolls
-  the least distance that shows the last column cut off at the left edge, and returns to the start when only the
-  root is left of the view. Selecting a root (click, dot, keyboard, bell) also returns its row to the start.
+- The row header (channel, counts, dots) has the root column's left edge and width. It has no arrow buttons and no
+  collapse control: a row is moved sideways with the dots, Shift+wheel, a trackpad or touch swipe, or the keyboard.
+  A row collapsed at load (no new posts) is expanded with its "N more parts" row; it cannot be collapsed again.
+  Selecting a root (click, dot, keyboard, bell) returns its row to the start.
 - A new branch scrolls its row by the least distance that shows the whole new stack (3 brings only its draft into
   view, which can leave the card's edge under the row's edge fade).
 - On touch, a centred root snaps to the track's centre; branches snap to their start, as in 3.
@@ -33,7 +33,7 @@ Layout (as in 3)
   it in the column; stacks never overlap. Anchor heights are measured from the rendered cards, so they follow the
   wider root's line breaks. A row is as tall as its tallest column; cards are never cut off, and the page scrolls.
   Long answers keep "Show all".
-- A row wider than the page scrolls horizontally on its own (arrow buttons, Shift+wheel, trackpad or touch swipe);
+- A row wider than the page scrolls horizontally on its own (Shift+wheel, trackpad or touch swipe);
   the row header shows one dot per stack, column by column.
 - Connectors stay inside a row. Each branch has one: a dot on the parent's right edge level with the anchor
   paragraph (or near the top of the anchor part), a line to the branch's left edge next to its header, and an elbow
@@ -128,10 +128,9 @@ html { scroll-padding-top: 64px; }
 .rows { padding: 6px 0 96px; }
 .row { padding: 8px 0 6px; border-top: 1px solid var(--divider); }
 .row:first-child { border-top: 0; }
-/* the row header: channel, new count, branch count, then the row's position controls and collapse */
+/* the row header: channel, new count, branch count, then one dot per stack */
 /* it has the root column's left edge and width (--rl, --rw, set by setGeometry()) */
 .rh { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0; margin-left: var(--rl, 16px); width: var(--rw, calc(100% - 32px)); font-size: 12px; color: var(--t-faint); min-width: 0; }
-.rh > .ib:last-child { margin-right: -6px; }   /* the collapse icon's right edge on the card's right edge */
 .rh .ch { font-weight: 600; color: var(--t-secondary); white-space: nowrap; }
 .rh .newc { color: var(--new); font-weight: 600; white-space: nowrap; }
 .rh .cnt { white-space: nowrap; }
@@ -462,16 +461,13 @@ function stackHTML(s) {
   const label = (s.fork ? 'Branch: ' : 'Stack: ') + (ps[0] ? clip(strip(ps[0].text), 80) : 'new');
   return `<div class="stack${isRoot ? ' root' : ''}${selected ? ' sel' : ''}${collapsed ? ' coll' : ''}${ps.length ? '' : ' fresh'}" data-stack="${s.id}" data-fl="s:${s.id}" style="--sw:${isRoot ? G.rw : W()}px" tabindex="-1" aria-label="${esc(label)}"><div class="sbody">${h}</div></div>`;
 }
-/* the row header: channel, new parts, branches; then one dot per stack (filled while it is in view), the arrows that
-   move the row sideways, and collapse */
+/* the row header: channel, new parts, branches; then one dot per stack (filled while it is in view) */
 function rowHead(r, list) {
   const n = unitNew(r), coll = V.collapsed.has(r.id), nb = unitStacks(r).length - 1;
   const pips = !coll && list.length > 1 ? `<span class="pips">${list.map(({ s, d }) => { const f = partsOf(s.id)[0];
     const t = (s.fork ? 'Branch: ' : 'Root: ') + (f ? clip(strip(f.text), 70) : 'new stack');
     return `<button type="button" class="pip${d ? ` br${Math.min(d, 2)}` : ''}${V.sel === s.id ? ' sel' : ''}" data-a="pip" data-id="${s.id}" title="${esc(t)}" aria-label="${esc(t)}"><i></i></button>`; }).join('')}</span>` : '';
-  const arrows = !coll && list.length > 1 ? `<button type="button" class="ib" data-a="prev" data-id="${r.id}" aria-label="Scroll row left" title="Scroll row left">${icon('chevron-left')}</button><button type="button" class="ib" data-a="next" data-id="${r.id}" aria-label="Scroll row right" title="Scroll row right">${icon('chevron-right')}</button>` : '';
-  return `<span class="ch">#${esc(CH[r.ch] || r.ch)}</span>${n ? `<span class="newc">${n} new</span>` : ''}${nb ? `<span class="cnt">${nb} branch${nb === 1 ? '' : 'es'}</span>` : ''}<span class="grow"></span>${pips}${arrows}
-    <button type="button" class="ib" data-a="collapse" data-id="${r.id}" aria-expanded="${!coll}" aria-label="${coll ? 'Expand row' : 'Collapse row'}" title="${coll ? 'Expand row' : 'Collapse row'}">${icon(coll ? 'chevron-right' : 'chevron-down')}</button>`;
+  return `<span class="ch">#${esc(CH[r.ch] || r.ch)}</span>${n ? `<span class="newc">${n} new</span>` : ''}${nb ? `<span class="cnt">${nb} branch${nb === 1 ? '' : 'es'}</span>` : ''}<span class="grow"></span>${pips}`;
 }
 const rowEl = id => rowsEl.querySelector(`:scope > .row[data-row="${id}"]`);
 const stackEl = id => rowsEl.querySelector(`.lane > .stack[data-stack="${id}"]`);
@@ -573,7 +569,7 @@ function markAnchor() {
     if (f.fork.block != null) pe.querySelector('.prose[data-p]')?.children[f.fork.block]?.classList.add('anchor-hot');
     else pe.classList.add('anchor-hot'); }
 }
-/* the row's scroll state: edge fades, arrows, and which dots are in view */
+/* the row's scroll state: edge fades, and which dots are in view */
 function updateRow(sec) {
   const tr = sec?.querySelector('.track'); if (!tr) return;
   const max = tr.scrollWidth - tr.clientWidth, l = tr.scrollLeft > 2, r = tr.scrollLeft < max - 2;
