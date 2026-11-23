@@ -6,12 +6,12 @@ Mock: `docs/mockups/canvas-layout-rows.html`, a copy of `session-canvas.html` th
 
 - The page is a vertical list of rows, one per root stack, ordered by last activity at load. Rows keep their place while the page is open; Add post and Add ask insert a row at the top.
 - A row holds the root, then one column per branch, depth first. Each stack is followed by its branches in anchor order.
-- Row height follows the tallest stack, capped at `clamp(300px, 100vh − 190px, 640px)`. A taller stack scrolls inside its card. Long answers keep "Show all".
+- Row height follows the tallest stack, with no cap: cards are never cut off and the page scrolls. Long answers keep "Show all".
 - Rows with parts new to the viewer start expanded.
 
 ## Navigation
 
-- **Wheel:** scrolls the page; a tall card under the pointer scrolls first. Shift+wheel or a trackpad swipe moves a row sideways. The row header has arrows that move by whole stacks, and one dot per stack, filled while in view, that selects it.
+- **Wheel:** scrolls the page. Shift+wheel or a trackpad swipe moves a row sideways. The row header has arrows that move by whole stacks, and one dot per stack, filled while in view, that selects it.
 - **Keyboard:** ↑ and ↓ move between rows, returning to each row's last selected stack. ← and → move through a row. Enter expands a collapsed row.
 - **Touch:** swipe vertically for the page and horizontally for a row, which snaps. The next card shows at the edge.
 - **Bell:** an item scrolls to its row, then its stack, then its part.

@@ -10,8 +10,7 @@ Layout
 - A row holds the root at the left and its branches to its right, one stack per column, depth first: each stack is
   followed by its branches, in the order of their anchors. A row wider than the page scrolls horizontally on its own
   (arrow buttons, Shift+wheel, trackpad or touch swipe); the row header shows one dot per stack.
-- A row is as tall as its tallest stack, up to a cap; a taller stack scrolls inside its card. Long answers keep
-  "Show all".
+- A row is as tall as its tallest stack; cards are never cut off, and the page scrolls. Long answers keep "Show all".
 - Connectors stay inside a row. Each stack with branches has one bus in a rail above the cards: a stub from each
   anchor (a dot on the parent's right edge, level with the anchor paragraph) joins a spine in the gap, the spine
   rises to the rail, and the rail drops into each branch. Deeper buses sit lower in the rail and lie between their
@@ -69,7 +68,7 @@ Inter font.
   --shadow: 0 0 0 1px rgba(255,255,255,.07); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { min-height: 100%; margin: 0; }   /* min-height, not height: the sticky top bar needs a body as tall as the page */
 body { background: var(--page); color: var(--t-body); font: 400 13.5px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
 button, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
@@ -142,19 +141,13 @@ svg.links circle.hot.off { fill: var(--page); stroke: var(--accent); }
 .stack { position: relative; flex: none; width: var(--sw); display: flex; flex-direction: column; }
 .stack:focus { outline: none; }
 .stack.sel > .sbody { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-pop); }
-/* a stack taller than the row cap scrolls inside its card */
-.sbody { background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05);
-  max-height: var(--cap); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-:root { --cap: clamp(300px, calc(100vh - 190px), 640px); }
+/* a card is as tall as its content: the row grows to its tallest card and the page scrolls */
+.sbody { background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); overflow-x: clip; }
 .sbody > :first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
 .sbody > :last-child:not(.draft) { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
 .sbody > .fq:last-child { border-bottom: 0; }
-/* a branch keeps the passage it starts from in view while its card scrolls */
-.sbody > .fq { position: sticky; top: 0; z-index: 3; }
 button.fq { display: block; width: 100%; text-align: left; cursor: pointer; }
 button.fq:hover i, button.fq:focus-visible i { color: var(--accent); }
-.sbody::after { content: ''; display: block; position: sticky; bottom: 0; height: 0; pointer-events: none; }
-.sbody.cut::after { height: 40px; margin-top: -40px; background: linear-gradient(to bottom, transparent, var(--card)); }
 .fq { padding: 7px 12px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: 10px 10px 0 0; }
 .fq i { display: flex; align-items: center; gap: 5px; font-style: normal; color: var(--t-faint); margin-bottom: 1px; }
 .fq i .lc { width: 13px; height: 13px; }
@@ -440,8 +433,7 @@ const rowEl = id => rowsEl.querySelector(`:scope > .row[data-row="${id}"]`);
 const stackEl = id => rowsEl.querySelector(`.lane > .stack[data-stack="${id}"]`);
 
 /* ---- connectors, per row, in the lane's own coordinates (so scrolling the page or the row does not move them) ----
-   For each stack with visible branches: a dot on its right edge level with each anchor (hollow when the anchor is
-   scrolled out of its card), a stub to a spine in the gap, the spine up to the stack's bus in the rail, the bus to
+   For each stack with visible branches: a dot on its right edge level with each anchor, a stub to a spine in the gap, the spine up to the stack's bus in the rail, the bus to
    each branch, and a drop into the branch's top edge. */
 function anchorAt(f, pe, sb) {
   const fp = P[f.fork.part], el = pe.querySelector(`[data-part="${fp.id}"]`); let y;
@@ -495,17 +487,13 @@ function updateRow(sec) {
     const q = e.getBoundingClientRect(); b.classList.toggle('in', Math.min(q.right, t.right) - Math.max(q.left, t.left) > q.width * .5); });
 }
 const updateRows = () => rowsEl.querySelectorAll(':scope > .row').forEach(updateRow);
-/* a card cut off by the cap fades at its bottom edge until it is scrolled to the end */
-const markCut = sb => sb.classList.toggle('cut', sb.scrollTop + sb.clientHeight < sb.scrollHeight - 4);
-const markCuts = (root = rowsEl) => root.querySelectorAll('.lane > .stack > .sbody').forEach(markCut);
 
 /* FLIP: record where things were, render, then animate each from its old place to its new one */
 function snapshot() { const m = {}; document.querySelectorAll('[data-fl]').forEach(e => { m[e.dataset.fl] = e.getBoundingClientRect(); }); return m; }
 let animUntil = 0;
 function render(opts = {}) {
   const before = opts.noAnim || reduced() ? null : snapshot();
-  /* a re-render keeps each card's own scroll position; a row's horizontal scroll is kept because its track is reused */
-  const tops = {}; rowsEl.querySelectorAll('.lane > .stack').forEach(e => { const b = e.firstElementChild; if (b?.scrollTop) tops[e.dataset.stack] = b.scrollTop; });
+  /* a row's horizontal scroll is kept across a re-render because its track is reused */
   const ids = rowIds(), keep = new Set(ids);
   rowsEl.querySelectorAll(':scope > .row').forEach(e => { if (!keep.has(e.dataset.row)) e.remove(); });
   let prev = null;
@@ -523,7 +511,6 @@ function render(opts = {}) {
     lane.style.setProperty('--gap', GAP + 'px'); lane.style.paddingTop = railOf(list) + 'px';
     lane.innerHTML = '<svg class="links" aria-hidden="true"></svg>' + list.map(x => stackHTML(x.s)).join('');
   }
-  for (const id in tops) { const e = stackEl(id); if (e) e.firstElementChild.scrollTop = tops[id]; }
   if (before) {
     const moved = [];
     document.querySelectorAll('[data-fl]').forEach(e => { const b = before[e.dataset.fl]; if (!b) return;
@@ -535,7 +522,7 @@ function render(opts = {}) {
       for (const [e] of moved) { e.style.transition = 'transform .3s cubic-bezier(.2,.7,.2,1)'; e.style.transform = ''; }
       animUntil = performance.now() + 340; tick(); }
   }
-  drawLinks(); updateRows(); markCuts(); markAnchor(); updateNext();
+  drawLinks(); updateRows(); markAnchor(); updateNext();
   V.fresh = null;
   if (opts.focus) { const t = document.querySelector(opts.focus); t?.focus({ preventScroll: true }); }
 }
@@ -573,9 +560,8 @@ addEventListener('touchmove', closeFloating, { passive: true });
 document.addEventListener('scroll', e => {
   const t = e.target; if (!(t instanceof Element)) return;
   if (t.classList.contains('track')) updateRow(t.closest('.row'));
-  else if (t.classList.contains('sbody')) { markCut(t); drawRowLinks(t.closest('.row')); }
 }, { capture: true, passive: true });
-/* Shift+wheel moves the row under the pointer sideways; a plain wheel scrolls the page (or a tall card) */
+/* Shift+wheel moves the row under the pointer sideways; a plain wheel scrolls the page */
 document.addEventListener('wheel', e => {
   if (!e.shiftKey) return; const tr = e.target.closest?.('.track'); if (!tr) return;
   const d = e.deltaX || e.deltaY; if (!d || tr.scrollWidth <= tr.clientWidth) return;
@@ -674,7 +660,7 @@ function canned(p, q) {
 document.addEventListener('input', e => {
   const t = e.target.closest('.draft textarea'); if (!t) return;
   V.draft.texts[+t.dataset.di] = t.value; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
-  requestAnimationFrame(() => { const sec = t.closest('.row'); drawRowLinks(sec); updateRow(sec); if (sec) markCuts(sec); });
+  requestAnimationFrame(() => { const sec = t.closest('.row'); drawRowLinks(sec); updateRow(sec); });
 });
 
 /* ---- new: a notifications menu of the parts that are new to this viewer ---- */
@@ -705,8 +691,7 @@ function goToNote(id) {
   const sec = rowEl(r.id), el = stackEl(s.id), pe = el?.querySelector(`[data-part="${id}"]`); if (!sec || !el) return;
   scrollTo({ top: sec.getBoundingClientRect().top + scrollY - TOPGAP + 4 });
   revealX(el, 'auto');
-  const sb = el.firstElementChild, q = pe?.getBoundingClientRect(), b = sb.getBoundingClientRect();
-  if (q && (q.top < b.top || q.bottom > b.bottom)) sb.scrollTop += q.top - b.top - 36;
+  if (pe && pe.getBoundingClientRect().bottom > innerHeight - 12) revealY(pe);
   el.focus({ preventScroll: true });
   pe?.animate([{ boxShadow: 'inset 3px 0 0 var(--new)' }, { boxShadow: 'inset 3px 0 0 transparent' }], 1600);
 }
@@ -772,7 +757,7 @@ document.addEventListener('click', e => {
   if (stEl && !e.target.closest('textarea, button')) { if (V.sel !== stEl.dataset.stack) selectStack(stEl.dataset.stack); return; }
   if (!stEl && !e.target.closest('.top, .rh, #selfork, #bmenu, #nmenu') && V.sel && !V.draft) { V.sel = null; render({ noAnim: true }); }
 });
-/* a branch's header ("From paragraph", "From answer") scrolls the row and the parent card back to the anchor, which
+/* a branch's header ("From paragraph", "From answer") scrolls the row and the page back to the anchor, which
    matters once a row is scrolled past the parent */
 function revealAnchor(fid) {
   const f = S[fid]; if (!f?.fork) return; const fp = P[f.fork.part]; if (!fp) return;
@@ -782,8 +767,7 @@ function revealAnchor(fid) {
   revealX(pe);
   const partEl = pe.querySelector(`[data-part="${fp.id}"]`), tgt = (f.fork.block != null && partEl?.querySelector('.prose[data-p]')?.children[f.fork.block]) || partEl;
   if (!tgt) return;
-  const sb = pe.firstElementChild, q = tgt.getBoundingClientRect(), b = sb.getBoundingClientRect();
-  if (q.top < b.top + 8 || q.bottom > b.bottom - 8) sb.scrollTop += q.top - b.top - 48;
+  revealY(tgt, smooth());
   tgt.animate([{ backgroundColor: 'var(--hl)' }, { backgroundColor: 'transparent' }], { duration: 1600, easing: 'ease-in' });
 }
 /* hovering a branch marks where it starts: its path, and the anchor part or paragraph in the parent */
