@@ -4,16 +4,20 @@ Session Canvas: Miller columns
 A layout variant of docs/mockups/session-canvas.html (the data model, context rule, part menu, drafts, bell and
 visual language are unchanged). Notes: docs/canvas/layout-miller.md.
 
-The free 2D canvas is replaced by a column browser. Left to right: channels; the root stacks of the chosen channel,
-newest activity first; the chosen thread, read in full; then one column per branch opened from the column before it.
+The free 2D canvas is replaced by a column browser. Left to right: the root stacks of the chosen channel, newest
+activity first; the chosen thread, read in full; then one column per branch opened from the column before it.
+Channels (All, then each channel, with new counts) are shown in one of three places, chosen with the "Channels"
+toggle in the top bar: Header (default; a row of chips in the top bar), Above (the same row as a bar above the top
+bar) or Column (a list in a first column, before the threads). The choice is view state, kept in localStorage.
 The page scrolls horizontally only when the columns overflow; each column scrolls vertically. Below 640px one column
-shows at a time, with a back button.
+shows at a time, with a back button; the channel row then scrolls horizontally, and in Header it is a second row of
+the top bar.
 
 Data model (in memory; a reload starts over), as in the base mock:
 - Part { id, st (stack), key, by {k:'p', u} | {k:'m', model}, text (HTML), at, run? }.
 - Stack { id, ch (channel), fork? { part, block?, quote? } }. No x, y: nothing is placed by hand.
-- View state, per viewer, not content: the channel, the thread and the open branch path, the focused column, seen
-  parts, the draft.
+- View state, per viewer, not content: the channel, where channels are shown, the thread and the open branch path,
+  the focused column, seen parts, the draft.
 -->
 <title>5. Session Canvas: Miller columns</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">

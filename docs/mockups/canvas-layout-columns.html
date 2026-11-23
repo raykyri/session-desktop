@@ -27,7 +27,8 @@ Canvas pane
   in session-canvas.html. Each branch sits in a lane to the right of its source, level with the source paragraph or
   part; siblings are stacked by the height of their subtree. Connectors run from the source paragraph (or part) on
   the right edge of the source card to the top of the branch. Cards use the base mock's styling and are drawn in
-  full, with answers over 520 characters clamped as in the base mock, so every connector starts at its paragraph.
+  full. Answers over 520 characters are clamped as in the base mock, except those with paragraph branches, so every
+  connector starts at its paragraph.
   At zoom below 50% each card shows a headline instead of its text.
 - The pane is read-only: no drafts, inserts or drags start there. Clicking a card opens the path from the root to
   that stack in the columns (as the bell does) and pans the canvas to the card.
@@ -1056,6 +1057,229 @@ document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').m
 
 
 
+/* ---- canvas pane: the open thread in 2D ----
+   The pane draws the thread whose root is open in the first stack column: the root and every branch under it. The
+   layout, card styling and connectors are those of session-canvas.html: each branch sits in a lane to the right of
+   its source stack, level with the source paragraph (or part); siblings are stacked by the extent of their whole
+   subtree, so connectors do not cross. Cards are drawn in full; answers over 520 characters are clamped unless a
+   branch starts at one of their paragraphs. The pane is read-only; clicking a card opens the path to it in the columns.
+   CV holds this viewer's pan and zoom for the pane, kept while the same thread stays open. */
+const cv = $('#cv'), cvWorld = $('#cvworld'), cvStacks = $('#cvstacks'), cvLinksEl = $('#cvlinks');
+const CW = 320, CGAP = 44, CVGAP = 16;
+const CV = { x: 24, y: 56, z: 1, root: null, pos: {}, b: null, hov: null, lastSel: undefined, view: 'cols', tw: 0, justPanned: false };
+/* room above the cards for the pane's title row */
+const cvTop = () => G.solo ? 44 : 56;
+
+/* below 900px: show the columns or the canvas */
+function setView(v) {
+  CV.view = v; const on = G.solo && v === 'canvas';
+  document.body.classList.toggle('cvview', on);
+  const b = $('#viewt'), lbl = on ? 'Show the columns' : 'Show the canvas';
+  b.innerHTML = on ? `${icon('columns-3')}Columns` : `${icon('workflow')}Canvas`; b.setAttribute('aria-label', lbl); b.title = lbl;
+  if (!on && stripEl.firstChild) { updateSpines(); drawLinks(); }
+}
+$('#viewt').onclick = () => setView(CV.view === 'canvas' ? 'cols' : 'canvas');
+
+function cvPartHTML(p, s, first) {
+  const nw = isNew(p) ? '<span class="dot" title="New"></span>' : '';
+  const gut = `<div class="gut" title="${esc(isModel(p) ? p.run.model : NAMES[p.by.u] || p.by.u)}">${nw}${isModel(p) ? MARK : av(p.by.u)}</div>`;
+  let meta = '';
+  if (insertedLater(p)) meta = '<div class="ph"><span class="late">Inserted</span></div>';
+  else if (isModel(p)) { const lead = partsOf(s.id).find(q => !isModel(q))?.by.u; if (p.run.by !== lead) meta = `<div class="ph"><span>Asked by ${esc(NAMES[p.run.by] || p.run.by)}</span></div>`; }
+  let body;
+  if (isModel(p) && p.run.status !== 'complete') body = pendingHTML(p);
+  else {
+    /* a paragraph a branch starts from gets the margin mark; accent while that branch is open in the columns */
+    const tmp = document.createElement('div'); tmp.innerHTML = p.text;
+    const kids = [...tmp.children];
+    for (const f of forksOf(p.id)) if (f.fork.block != null && kids[f.fork.block]) { kids[f.fork.block].classList.add('anc'); if (colOf(f.id) > 0) kids[f.fork.block].classList.add('anc-on'); }
+    /* as in the columns, an answer with paragraph branches is not clamped, so each connector starts at its paragraph */
+    const long = isModel(p) && strip(p.text).length > 520 && !forksOf(p.id).some(f => f.fork.block != null);
+    body = `<div class="prose${long ? ' clamp' : ''}">${kids.map(k => k.outerHTML).join('')}</div>`;
+  }
+  const whole = forksOf(p.id).some(f => f.fork.block == null && colOf(f.id) > 0);
+  const n = first && !s.fork ? unitNew(s) : 0;
+  const pre = first ? `<small>${s.fork ? 'Branch' : `${esc(chName(s))}${n ? ` · <b>${n} new</b>` : ''}`}</small>` : '';
+  return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${insertedPart(p) ? ' ins' : ''}${whole ? ' src-on' : ''}" data-k="${p.id}"><span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${gut}<div class="pb">${body}${meta}</div></div>`;
+}
+function cvStackHTML(s) {
+  const ps = partsOf(s.id); let h = '';
+  if (!s.fork) { const n = unitNew(s);
+    h += `<div class="sh"><span class="ov" aria-hidden="true">${esc(chName(s))}${n ? ` · <b>${n} new</b>` : ''}</span><span class="ch">${esc(chName(s))}</span>${n ? `<span class="newc">${n} new</span>` : ''}<span class="grow"></span></div>`; }
+  else { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : '';
+    h += `<div class="fq"><i>${icon('corner-down-right')}From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
+  if (!ps.length) h += '<div class="cvd">Draft</div>';
+  ps.forEach((p, i) => { h += cvPartHTML(p, s, i === 0); if (i < ps.length - 1) h += pairedWith(p, ps[i + 1]) ? '<div class="pairline"></div>' : '<div class="cvsep"></div>'; });
+  return `<div class="cst" data-cv="${s.id}" tabindex="0" role="button" aria-label="Open in the columns: ${esc(titleOf(s))}"><div class="sbody">${h}</div></div>`;
+}
+
+/* where a branch wants to start, relative to the top of its source card: the source paragraph (not below the end of
+   a clamped answer), or the source part */
+function cvAnchorY(f, el) {
+  const fp = P[f.fork.part], pe = el.querySelector(`[data-k="${fp.id}"]`); if (!pe) return 0;
+  const top = el.getBoundingClientRect().top;
+  if (f.fork.block != null) { const pr = pe.querySelector('.prose'), b = pr && pr.children[f.fork.block];
+    if (b) return (Math.min(b.getBoundingClientRect().top, pr.getBoundingClientRect().bottom - 20) - top) / CV.z; }
+  return (pe.getBoundingClientRect().top - top) / CV.z;
+}
+function cvLayout(r) {
+  const els = {}; cvStacks.querySelectorAll(':scope > .cst').forEach(e => { els[e.dataset.cv] = e; });
+  const pos = {}, H = id => els[id]?.offsetHeight || 0;
+  const place = (s, x, y) => {
+    pos[s.id] = { x, y, h: H(s.id) }; let cursor = y, ext = H(s.id);
+    const fs = partsOf(s.id).flatMap(p => forksOf(p.id)).filter(f => f.x == null && els[f.id]).map(f => ({ f, want: y + cvAnchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want);
+    for (const { f, want } of fs) { const fy = Math.max(want, cursor); const e = place(f, x + CW + CGAP, fy); cursor = fy + e + CVGAP; ext = Math.max(ext, fy + e - y); }
+    return ext;
+  };
+  const h = place(r, 0, 0); let w = CW;
+  for (const id in pos) { els[id].style.left = pos[id].x + 'px'; els[id].style.top = pos[id].y + 'px'; w = Math.max(w, pos[id].x + CW); }
+  CV.pos = pos; CV.b = { x: 0, y: 0, w, h };
+}
+/* connectors: from the source paragraph (or part) on the right edge of the source card to the branch's top-left.
+   A connector into a stack open in the columns is accent; into the selected stack, thicker. */
+function cvLinks() {
+  const wr = cvWorld.getBoundingClientRect(), z = CV.z, out = [];
+  cvStacks.querySelectorAll(':scope > .cst').forEach(el => {
+    const s = S[el.dataset.cv]; if (!s?.fork) return;
+    const fp = P[s.fork.part], pst = fp && cvStacks.querySelector(`:scope > .cst[data-cv="${fp.st}"]`); if (!pst) return;
+    const pe = pst.querySelector(`[data-k="${fp.id}"]`); if (!pe) return;
+    let ay = pe.getBoundingClientRect().top + 16 * z;
+    if (s.fork.block != null) { const pr = pe.querySelector('.prose'), b = pr?.children[s.fork.block]; if (b) ay = Math.min(b.getBoundingClientRect().top + 9 * z, pr.getBoundingClientRect().bottom - 8 * z); }
+    const pr = pst.getBoundingClientRect(), fr = el.getBoundingClientRect();
+    const x1 = (pr.right - wr.left) / z, y1 = (ay - wr.top) / z, x2 = (fr.left - wr.left) / z, y2 = (fr.top - wr.top) / z + 16;
+    const mx = x2 < x1 ? 40 : Math.max(16, (x2 - x1) / 2);
+    const cls = [colOf(s.id) > 0 ? 'on' : '', V.sel === s.id ? 'sel' : '', V.hot === s.id || CV.hov === s.id ? 'hot' : ''].filter(Boolean).join(' ');
+    out.push(`<path class="${cls}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="${cls}" cx="${x1}" cy="${y1}" r="${3 / Math.max(z, .4)}"/>`);
+  });
+  cvLinksEl.innerHTML = out.join('');
+}
+function cvRender() {
+  const rid = V.trail[0] && S[V.trail[0]] ? rootOf(S[V.trail[0]]).id : null, changed = rid !== CV.root;
+  const focusId = document.activeElement?.closest?.('.cst')?.dataset.cv;
+  CV.root = rid;
+  $('#cvempty').hidden = !!rid;
+  if (!rid) { cvStacks.innerHTML = ''; cvLinksEl.innerHTML = ''; CV.pos = {}; CV.b = null; $('#cvt').innerHTML = '<b>Canvas</b>'; CV.lastSel = V.sel; cvApply(); return; }
+  const r = S[rid], list = unitStacks(r);
+  cvStacks.innerHTML = list.map(cvStackHTML).join('');
+  cvLayout(r);
+  const open = list.filter(s => colOf(s.id) > 0).length;
+  $('#cvt').innerHTML = `<b>Canvas</b> · ${esc(chName(r))} thread · ${list.length} stack${list.length === 1 ? '' : 's'}, ${open} open in columns`;
+  if (changed) { cvHome(); CV.lastSel = undefined; }
+  cvApply(); cvMark(changed);
+  if (focusId) cvStacks.querySelector(`[data-cv="${focusId}"]`)?.focus({ preventScroll: true });
+}
+/* marks: open in the columns, selected, hovered on either side. When the selection changes, a selected card that is
+   off-screen is brought into view. */
+function cvMark(instant = false) {
+  cvStacks.querySelectorAll(':scope > .cst').forEach(el => { const id = el.dataset.cv;
+    el.classList.toggle('open', colOf(id) > 0); el.classList.toggle('sel', V.sel === id); el.classList.toggle('hov', V.hot === id && CV.hov !== id); });
+  cvLinks();
+  if (V.sel !== CV.lastSel) { CV.lastSel = V.sel; if (V.sel && CV.pos[V.sel]) cvReveal(V.sel, false, instant); }
+}
+/* hovering a card marks the same stack in the columns */
+function markCols(id) {
+  stripEl.querySelectorAll('.xhov').forEach(x => x.classList.remove('xhov'));
+  if (id) stripEl.querySelectorAll(`.col[data-sid="${id}"], .col[data-sid="${id}"] .stack, .fk[data-id="${id}"], .ix[data-id="${id}"]`).forEach(x => x.classList.add('xhov'));
+}
+
+/* pan and zoom, in pane pixels */
+function cvApply() {
+  cvWorld.style.transform = `translate(${CV.x}px,${CV.y}px) scale(${CV.z})`; cvWorld.style.setProperty('--z', CV.z);
+  cv.style.backgroundPosition = `${CV.x}px ${CV.y}px`; cv.style.backgroundSize = `${24 * CV.z}px ${24 * CV.z}px`;
+  cvWorld.classList.toggle('far', CV.z < 0.5);
+  $('#zval').textContent = Math.round(CV.z * 100) + '%';
+}
+function cvStop() { cancelAnimationFrame(CV.tw); CV.tw = 0; }
+function cvZoomAt(z, cx, cy) {
+  cvStop(); z = Math.max(0.15, Math.min(1.6, z));
+  CV.x = cx - (cx - CV.x) * (z / CV.z); CV.y = cy - (cy - CV.y) * (z / CV.z); CV.z = z;
+  cvApply(); cvLinks();
+}
+const cvCenter = () => [cv.clientWidth / 2, cv.clientHeight / 2];
+/* a new thread: its full width if that fits at 45% or more, top-aligned under the title */
+function cvHome() {
+  cvStop(); const b = CV.b, pw = cv.clientWidth; if (!b) return;
+  CV.z = Math.max(0.45, Math.min(1, (pw - 48) / b.w));
+  CV.x = b.w * CV.z <= pw - 48 ? (pw - b.w * CV.z) / 2 : 24; CV.y = cvTop() - b.y * CV.z;
+}
+/* the whole thread, width and height */
+function cvFit() {
+  const b = CV.b; if (!b) return; cvStop();
+  const pw = cv.clientWidth, ph = cv.clientHeight, top = cvTop();
+  const z = Math.max(0.15, Math.min(1, Math.min((pw - 48) / b.w, (ph - top - 64) / b.h)));
+  cvPanTo((pw - b.w * z) / 2 - b.x * z, top - b.y * z, false, z);
+}
+/* move the view to (x, y) at zoom z, in about 260ms unless reduced motion is set or instant is asked for */
+function cvPanTo(x, y, instant = false, z = CV.z) {
+  cvStop();
+  if (instant || reduced() || getComputedStyle(cv).visibility === 'hidden') { CV.x = x; CV.y = y; CV.z = z; cvApply(); cvLinks(); return; }
+  const a = { x: CV.x, y: CV.y, z: CV.z }, t0 = performance.now(), far = a.z < 0.5;
+  const step = now => { const k = Math.min(1, (now - t0) / 260), e = 1 - Math.pow(1 - k, 3);
+    CV.x = a.x + (x - a.x) * e; CV.y = a.y + (y - a.y) * e; CV.z = a.z + (z - a.z) * e; cvApply();
+    if (k < 1) CV.tw = requestAnimationFrame(step); else { CV.tw = 0; if (far !== (z < 0.5) || a.z !== z) cvLinks(); } };
+  CV.tw = requestAnimationFrame(step);
+}
+/* bring a card into view. center: put it at the top, centred across the pane; otherwise move only if its top-left
+   corner is outside the pane, or its top is below the lower part of the pane */
+function cvReveal(sid, center = false, instant = false) {
+  const p = CV.pos[sid]; if (!p) return;
+  const pw = cv.clientWidth, ph = cv.clientHeight, z = CV.z, top = cvTop(), w = CW * z;
+  const sx = p.x * z + CV.x, sy = p.y * z + CV.y; let nx = CV.x, ny = CV.y;
+  const fitsX = w + 48 <= pw;
+  if (center) { nx = fitsX ? (pw - w) / 2 - p.x * z : 24 - p.x * z; ny = top + 12 - p.y * z; }
+  else {
+    if (sx < 12 || sx + w > pw - 12) nx = !fitsX || sx < 12 ? 24 - p.x * z : pw - 24 - w - p.x * z;
+    if (sy < top - 4 || sy > ph - 140) ny = top + 12 - p.y * z;
+  }
+  if (Math.abs(nx - CV.x) > 1 || Math.abs(ny - CV.y) > 1) cvPanTo(nx, ny, instant);
+}
+/* clicking a card: open the path from the root to that stack in the columns (as the bell does), or focus its column
+   if it is already open; then pan the canvas to it */
+function cvOpen(sid) {
+  const s = S[sid]; if (!s) return;
+  if (colOf(sid) > 0) { if (G.solo) setView('cols'); focusCol(colOf(sid)); cvReveal(sid, true); return; }
+  const path = pathTo(s).map(x => x.id);
+  if (V.draft && !path.includes(V.draft.st) && !leaveDraft()) return;
+  V.trail = path; V.sel = sid; for (const p of partsOf(sid)) V.seen.add(p.id);
+  if (G.solo) setView('cols');
+  render({ noAnim: true }); focusCol(colOf(sid)); cvReveal(sid, true);
+}
+
+$('#zin').onclick = () => cvZoomAt(CV.z * 1.25, ...cvCenter());
+$('#zout').onclick = () => cvZoomAt(CV.z / 1.25, ...cvCenter());
+$('#zval').onclick = () => cvZoomAt(1, ...cvCenter());
+$('#fit').onclick = () => cvFit();
+cv.addEventListener('wheel', e => {
+  e.preventDefault(); cvStop(); const r = cv.getBoundingClientRect();
+  if (e.ctrlKey || e.metaKey) cvZoomAt(CV.z * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
+  else { CV.x -= e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX; CV.y -= e.shiftKey && !e.deltaX ? 0 : e.deltaY; cvApply(); }
+}, { passive: false });
+/* pan: drag anywhere in the pane (cards included; a press that does not move is a click). Two fingers pinch. */
+const cpts = new Map(); let cpan = null, cpinch = null;
+cv.addEventListener('pointerdown', e => {
+  if (e.target.closest('.zc') || e.button > 0) return; cvStop();
+  cpts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (cpts.size === 2) { const [a, b] = [...cpts.values()]; cpinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: CV.z }; cpan = null; return; }
+  cpan = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: CV.x, vy: CV.y, moved: false };
+});
+cv.addEventListener('pointermove', e => {
+  if (!cpts.has(e.pointerId)) return; cpts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (cpinch && cpts.size === 2) { const [a, b] = [...cpts.values()], r = cv.getBoundingClientRect(); cvZoomAt(cpinch.z * Math.hypot(a.x - b.x, a.y - b.y) / cpinch.d, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); return; }
+  if (!cpan) return; const dx = e.clientX - cpan.x, dy = e.clientY - cpan.y;
+  if (!cpan.moved && Math.abs(dx) + Math.abs(dy) > 4) { cpan.moved = true; cv.classList.add('panning'); try { cv.setPointerCapture(e.pointerId); } catch {} }
+  if (cpan.moved) { CV.x = cpan.vx + dx; CV.y = cpan.vy + dy; cvApply(); }
+});
+const cvEnd = e => { cpts.delete(e.pointerId); if (cpts.size < 2) cpinch = null;
+  if (cpts.size === 0) { if (cpan?.moved) { CV.justPanned = true; setTimeout(() => { CV.justPanned = false; }, 0); } cpan = null; cv.classList.remove('panning'); } };
+cv.addEventListener('pointerup', cvEnd); cv.addEventListener('pointercancel', cvEnd);
+/* the click stops here: opening re-renders the pane, and the page's click handler would read the removed card as a
+   click on empty space and clear the selection */
+cv.addEventListener('click', e => { if (e.target.closest('.zc')) return; e.stopPropagation(); $('#selfork')?.remove();
+  if (CV.justPanned) return; const c = e.target.closest('.cst'); if (c) cvOpen(c.dataset.cv); });
+cv.addEventListener('keydown', e => { const c = e.target.closest?.('.cst'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); cvOpen(c.dataset.cv); } });
+cv.addEventListener('mouseover', e => { const id = e.target.closest('.cst')?.dataset.cv || null; if (id === CV.hov) return; CV.hov = id; cvMark(); markCols(id); drawLinks(); });
+cv.addEventListener('mouseleave', () => { if (!CV.hov) return; CV.hov = null; cvMark(); markCols(null); drawLinks(); });
+
 /* ---- initial view: the featured root in column 1, and one of its paragraph branches in column 2 ---- */
 function start() {
   measure();
@@ -1071,5 +1295,5 @@ function start() {
 }
 start();
 document.fonts?.ready.then(() => { render({ noAnim: true }); });
-addEventListener('resize', () => { const c = V.sel ? colOf(V.sel) : V.trail.length; measure(); render({ noAnim: true }); reveal(Math.max(0, c), false); updateSpines(); drawLinks(); });
+addEventListener('resize', () => { const c = V.sel ? colOf(V.sel) : V.trail.length; measure(); render({ noAnim: true }); reveal(Math.max(0, c), false); updateSpines(); drawLinks(); cvLinks(); });
 </script>
