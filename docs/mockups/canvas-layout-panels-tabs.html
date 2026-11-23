@@ -17,6 +17,11 @@ Data model (in memory; a reload starts over)
   the part it forks from: that paragraph carries a margin marker in the parent, and the branch links back to it.
   x and y are not used by this layout.
   A stack's author is the person who wrote its first part. Only the author adds to or inserts into it; others fork.
+- Drafts: V.draft is a new stack's first part or an insert between two parts (the seam "+"). Unlike the base mock,
+  there is no Continue button: under the last part of a stack the viewer authored, a composer is always open (V.ends,
+  per stack). It holds no draft until it has text; switching tabs or threads keeps its text and never asks. Post and
+  Ask append below the last part and leave the composer open and empty. Its discard control shows only when it holds
+  something and clears it (asking first if there is text). An insert draft and the end composer can be open together.
 - View state, per viewer, not content: the open thread, each thread's open tabs, active tab and scroll positions
   (kept while the page is open), expanded answers, seen parts.
 -->
@@ -85,7 +90,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #threads { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 16px; display: grid; align-content: start; gap: 2px; overscroll-behavior: contain; }
 .trow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 9px; width: 100%; padding: 8px 10px; border-radius: 8px; text-align: left; align-items: start; }
 .trow:hover { background: var(--control); }
-.trow.on { background: var(--card); box-shadow: var(--shadow); }
+.trow.on { background: var(--control); }
 .trow .av { width: 20px; height: 20px; font-size: 8px; margin-top: 1px; }
 .trow .tc { display: block; font-size: 11px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trow .tc b { font-weight: 600; color: var(--t-secondary); }
@@ -154,7 +159,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stack { display: flex; flex-direction: column; }
 .sbody { position: relative; background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
 .sbody > :first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
-.sbody > .part:last-of-type, .sbody > .addend { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+.sbody > .part:last-of-type, .sbody > .draft.end { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
 .sh { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 42px; font-size: 11.5px; color: var(--t-faint); border-bottom: 1px solid var(--divider); user-select: none; }
 .sh .ch { font-weight: 600; color: var(--t-secondary); }
 .sh .grow { flex: 1; }
@@ -226,10 +231,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .seam .sp:hover { transform: scale(1.12); }
 @media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; top: -16px; left: -18px; } .seam .hz { display: none; } }
 .pairline { height: 1px; background: var(--divider); margin: 0 12px; }
-.addend { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 7px 12px 8px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
-.addend .lc { width: 22px; height: 14px; flex: none; }
-.addend:hover { color: var(--t-secondary); background: color-mix(in srgb, var(--t-heading) 4%, transparent); }
-@media (pointer: coarse) { .addend { padding: 11px 12px 11px 11px; } }
 
 /* draft: a small stack of part fields */
 .draft { position: relative; padding: 8px 10px 10px; margin: 6px 8px; background: var(--card); border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--border-strong)); border-radius: 8px; }
@@ -248,6 +249,11 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .draft .ibtn svg { width: 17px; height: 17px; }
 .draft .ibtn:hover { background: var(--control); color: var(--accent); }
 @media (pointer: coarse) { .draft .ibtn { width: 38px; height: 38px; } .draft .dx { width: 32px; height: 32px; } .draft .dp:first-child textarea { padding-right: 32px; } }
+/* the end composer: the last row of the viewer's own stack, flush with the card; its text lines up with the parts' text */
+.draft.end { margin: 0; padding: 10px 12px 10px 42px; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: var(--part-u); }
+.draft.end textarea { min-height: 24px; }
+.draft.end .dx { top: 6px; right: 8px; }
+.draft.end:focus-within { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
 .btn { height: 28px; padding: 0 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; background: var(--control); color: var(--t-heading); }
 .btn:hover { background: var(--control-hover); }
 .btn.pri { background: var(--accent); color: var(--on-accent); }
@@ -380,7 +386,7 @@ for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 /* ---- view state (per viewer) ----
    TABS holds, per thread (root stack id), its open tabs in order, the active one and each tab's scroll position.
    It lives in memory: tabs stay as they were while the page is open, and a reload starts over. */
-const V = { thread: null, prevThread: null, full: new Set(), seen: new Set(), draft: null, fresh: null };
+const V = { thread: null, prevThread: null, full: new Set(), seen: new Set(), draft: null, ends: {}, fresh: null };
 const TABS = {};
 const tabsOf = rid => TABS[rid] ??= { list: [rid], active: rid, scroll: {} };
 const cur = () => tabsOf(V.thread);
@@ -491,15 +497,18 @@ function partHTML(p, s) {
 const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
 const pairedWith = (p, next) => !isModel(p) && next && isModel(next) && next.run.by === p.by.u;
 const seam = (sid, after) => `<div class="seam"><span class="hz"></span><button class="sp" data-a="seam" data-st="${sid}" data-after="${after}" title="Insert a part here" aria-label="Insert a part here">${icon('plus')}</button></div>`;
-function draftHTML() {
-  const d = V.draft, list = partsOf(d.st), after = list.findIndex(p => p.id === d.after), below = d.after && after >= 0 && after < list.length - 1;
-  return `<div class="draft fresh" data-fl="draft">${d.texts.map((t, i) => `<div class="dp"><textarea data-di="${i}" rows="2" placeholder="${i ? 'Next part' : d.mode === 'ask' ? 'Ask a question' : 'Write a post'}" aria-label="Part ${i + 1}">${esc(t)}</textarea></div>`).join('')}
+/* a draft: V.draft (kind 'ins'), or the end composer of the stack in the active tab (kind 'end') */
+function draftHTML(d, kind = 'ins') {
+  const end = kind === 'end', list = partsOf(d.st), after = list.findIndex(p => p.id === d.after), below = !end && d.after && after >= 0 && after < list.length - 1;
+  const ph = i => i ? 'Next part' : end ? 'Continue' : d.mode === 'ask' ? 'Ask a question' : 'Write a post';
+  const idle = end && !holds(d);
+  return `<div class="draft${end ? ' end' : ' fresh'}" data-dk="${kind}" data-fl="${end ? 'end' : 'draft'}">${d.texts.map((t, i) => `<div class="dp"><textarea data-di="${i}" rows="${end ? 1 : 2}" placeholder="${ph(i)}" aria-label="${end ? (i ? `Continue, part ${i + 1}` : 'Continue this stack') : `Part ${i + 1}`}">${esc(t)}</textarea></div>`).join('')}
     ${below ? '<div class="below">Answers below won’t read this.</div>' : ''}
     <div class="drow"><span class="grow"></span><button class="ibtn" data-a="dpart" type="button" aria-label="Add a part" title="Add a part">${icon('circle-plus')}</button><button class="btn${d.mode === 'post' ? ' pri' : ''}" data-a="dpost" type="button" title="Post">Post</button><button class="btn${d.mode === 'ask' ? ' pri' : ''}" data-a="dask" type="button" title="Ask (⌘/Ctrl+Enter)">Ask</button></div>
-    <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft">${icon('x')}</button></div>`;
+    <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft"${idle ? ' hidden' : ''}>${icon('x')}</button></div>`;
 }
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : w.endsWith('ch') ? 'es' : 's'}`;
-/* the stack in the active tab: a header, the link to its source (a branch), its parts, and Continue for its author */
+/* the stack in the active tab: a header, the link to its source (a branch), its parts, and the end composer for its author */
 function stackHTML(s) {
   const ps = partsOf(s.id), nb = ps.reduce((n, p) => n + branchesAt(p.id).length, 0);
   let h = `<div class="sh"><span class="ch">#${esc(CH[s.ch] || s.ch)}</span><span>· ${s.fork ? 'Branch' : 'Thread'}</span><span class="grow"></span><span>${plural(ps.length, 'part')}${nb ? ` · ${plural(nb, 'branch')}` : ''}</span></div>`;
@@ -507,9 +516,9 @@ function stackHTML(s) {
     const para = s.fork.block != null || s.fork.quote, bt = s.fork.block != null ? blockText(fp, s.fork.block) : '';
     h += `<div class="fq"><button class="src" type="button" data-a="src" data-id="${s.id}" title="Show it in “${esc(tabLabel(parentOf(s), 40))}”">${icon('corner-down-right')}From ${para ? 'paragraph' : partKind(fp)}${icon('arrow-up-right')}</button><span class="q">${s.fork.quote ? `“${esc(clip(s.fork.quote, 160))}”` : bt ? `“${esc(clip(bt, 160))}”` : esc(words(fp, 12))}</span></div>`; } }
   const d = V.draft?.st === s.id, own = authorOf(s) === ME;
-  if (d && V.draft.after === '') h += draftHTML();
-  ps.forEach((p, i) => { h += partHTML(p, s); if (d && V.draft.after === p.id) h += draftHTML(); else if (i < ps.length - 1) h += pairedWith(p, ps[i + 1]) || !own ? '<div class="pairline"></div>' : seam(s.id, p.id); });
-  if (!d && ps.length && own) h += `<button class="addend" data-a="seam" data-st="${s.id}" data-after="${ps[ps.length - 1].id}">${icon('plus')}Continue</button>`;
+  if (d && V.draft.after === '') h += draftHTML(V.draft);
+  ps.forEach((p, i) => { h += partHTML(p, s); if (d && V.draft.after === p.id) h += draftHTML(V.draft); else if (i < ps.length - 1) h += pairedWith(p, ps[i + 1]) || !own ? '<div class="pairline"></div>' : seam(s.id, p.id); });
+  if (ps.length && own) h += draftHTML(endDraft(s.id), 'end');
   return `<div class="stack" data-stack="${s.id}" data-fl="s:${s.id}"><div class="sbody">${h}</div></div>`;
 }
 function sideHTML() {
@@ -550,7 +559,7 @@ let shownKey = '';
 function render(opts = {}) {
   const t = cur(), key = V.thread + '/' + t.active, switched = key !== shownKey;
   const before = opts.noAnim || switched || reduced() ? null : snapshot();
-  const ae = document.activeElement, keepTa = ae?.matches?.('.draft textarea') ? { di: ae.dataset.di, a: ae.selectionStart, b: ae.selectionEnd } : null, keepId = !keepTa && ae?.id && ae !== document.body ? ae.id : null;
+  const ae = document.activeElement, keepTa = ae?.matches?.('.draft textarea') ? { dk: ae.closest('.draft').dataset.dk, di: ae.dataset.di, a: ae.selectionStart, b: ae.selectionEnd } : null, keepId = !keepTa && ae?.id && ae !== document.body ? ae.id : null;
   const top = reader.scrollTop;
   threadsEl.innerHTML = sideHTML();
   renderTabs();
@@ -573,7 +582,7 @@ function render(opts = {}) {
   placeMarks(); updateNext();
   V.fresh = null;
   if (opts.focus) document.querySelector(opts.focus)?.focus({ preventScroll: true });
-  else if (keepTa) { const ta = reader.querySelector(`.draft textarea[data-di="${keepTa.di}"]`); if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(keepTa.a, keepTa.b); } }
+  else if (keepTa) { const ta = reader.querySelector(`.draft[data-dk="${keepTa.dk}"] textarea[data-di="${keepTa.di}"]`); if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(keepTa.a, keepTa.b); } }
   else if (keepId) document.getElementById(keepId)?.focus({ preventScroll: true });
 }
 const autosize = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
@@ -643,7 +652,23 @@ function openMarkMenu(b) {
   m.querySelector('button').focus();
 }
 
-/* ---- drafts ---- */
+/* ---- drafts ----
+   V.draft: a new stack's first part, or an insert between two parts. The end composer of each own stack keeps its
+   fields in V.ends[stack id] while the page is open; endDraft gives it the same shape as V.draft (st, after, mode,
+   texts), with after = the last part. Its primary button is Ask under an answer and Post otherwise. */
+const holds = d => d.texts.length > 1 || d.texts.some(t => t.trim());   /* anything to clear: text or an extra field */
+function endDraft(sid) {
+  const ps = partsOf(sid), last = ps[ps.length - 1], e = V.ends[sid] ??= { texts: [''] };
+  return { st: sid, after: last?.id ?? '', mode: last && isModel(last) ? 'ask' : 'post', texts: e.texts };
+}
+const draftOf = kind => kind === 'end' ? endDraft(cur().active) : V.draft;
+const dsel = (kind, i = 0) => `.draft[data-dk="${kind}"] textarea[data-di="${i}"]`;
+/* the end composer's discard control: clears it, asking first if it has text; the composer stays open */
+function clearEnd() {
+  const sid = cur().active, e = V.ends[sid]; if (!e) return;
+  if (e.texts.some(t => t.trim()) && !confirm('Discard this draft?')) return;
+  delete V.ends[sid]; render({ focus: dsel('end') });
+}
 function openDraft(st, after, mode = 'post') { if (!leaveDraft()) return;
   V.draft = { st, after, mode, texts: [''] };
   render({ focus: '.draft textarea' });
@@ -661,16 +686,18 @@ function keyAfter(st, after) {
   const a = i >= 0 ? list[i].key : (list[0] ? list[0].key - 1 : 0), b = list[i + 1] ? list[i + 1].key : a + 2;
   return [a, b];
 }
-function commitDraft(ask) {
-  const d = V.draft; if (!d) return;
+function commitDraft(ask, kind = 'ins') {
+  const d = draftOf(kind); if (!d) return;
   const texts = d.texts.map(t => t.trim()).filter(Boolean);
-  if (!texts.length) { document.querySelector('.draft textarea')?.focus(); return; }
+  if (!texts.length) { document.querySelector(dsel(kind))?.focus(); return; }
   let [a, b] = keyAfter(d.st, d.after); const step = (b - a) / (texts.length + (ask ? 2 : 1));
   const made = []; let k = a;
   for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(LATEST + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
   if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: new Date(LATEST + (seq - 1000) * 1000).toISOString(),
     run: { by: ME, model: MODEL, ctx: [], status: 'queued', step: 0, src: [] } }; P[m.id] = m; made.push(m.id); V.seen.add(m.id); startRun(m); }
-  V.fresh = new Set(made); V.draft = null; render();
+  V.fresh = new Set(made);
+  if (kind === 'end') { delete V.ends[d.st]; render({ focus: dsel('end') }); reader.querySelector('.draft.end')?.scrollIntoView({ block: 'nearest' }); return; }
+  V.draft = null; render();
 }
 
 /* ---- runs (simulated; no model is called) ---- */
@@ -697,7 +724,10 @@ function canned(p, q) {
 
 document.addEventListener('input', e => {
   const t = e.target.closest('.draft textarea'); if (!t) return;
-  V.draft.texts[+t.dataset.di] = t.value; autosize(t); placeMarks();
+  const box = t.closest('.draft'), d = draftOf(box.dataset.dk);
+  d.texts[+t.dataset.di] = t.value; autosize(t);
+  if (box.dataset.dk === 'end') box.querySelector('.dx').hidden = !holds(d);
+  placeMarks();
 });
 
 /* ---- new: a notifications menu of the parts that are new to this viewer ---- */
@@ -792,10 +822,11 @@ document.addEventListener('click', e => {
   if (a === 'seam') { e.stopPropagation(); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }
   if (a === 'bfork') { newFork(d.id, { block: +d.b }); return; }
   if (a === 'fork') { newFork(d.id); return; }
-  if (a === 'dpart') { V.draft.texts.push(''); render({ focus: `.draft textarea[data-di="${V.draft.texts.length - 1}"]` }); return; }
-  if (a === 'dcancel') { cancelDraft(); return; }
-  if (a === 'dpost') { commitDraft(false); return; }
-  if (a === 'dask') { commitDraft(true); return; }
+  const dk = t?.closest('.draft')?.dataset.dk;
+  if (a === 'dpart') { const dr = draftOf(dk); dr.texts.push(''); render({ focus: dsel(dk, dr.texts.length - 1) }); return; }
+  if (a === 'dcancel') { dk === 'end' ? clearEnd() : cancelDraft(); return; }
+  if (a === 'dpost') { commitDraft(false, dk); return; }
+  if (a === 'dask') { commitDraft(true, dk); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
 });
 /* middle-click closes a tab, as in a browser */
@@ -811,18 +842,20 @@ document.addEventListener('mouseover', e => {
 reader.addEventListener('scroll', () => { closeBmenu(); $('#selfork')?.remove(); }, { passive: true });
 
 /* keys: Cmd/Ctrl+Enter asks, Shift+Cmd/Ctrl+Enter posts; Escape closes the innermost thing. In a draft, a blank
-   line followed by Enter on an empty line starts the next part. Outside a text field, [ and ] switch tabs. In the
+   line followed by Enter on an empty line starts the next part. Escape in the end composer leaves it (its text is
+   kept). Outside a text field, [ and ] switch tabs. In the
    tab bar, Left/Right move between tabs, Home/End go to the ends, Delete closes. In the thread list, Up/Down move. */
 document.addEventListener('keydown', e => {
-  const ta = e.target.closest?.('.draft textarea');
-  if (ta && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitDraft(!e.shiftKey); return; }
+  const ta = e.target.closest?.('.draft textarea'), dk = ta?.closest('.draft').dataset.dk, dr = ta && draftOf(dk);
+  if (ta && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitDraft(!e.shiftKey, dk); return; }
   if (ta && e.key === 'Enter' && !e.shiftKey && /\n\n$/.test(ta.value.slice(0, ta.selectionStart)) && ta.selectionStart === ta.value.length) {
-    e.preventDefault(); const i = +ta.dataset.di; V.draft.texts[i] = ta.value.replace(/\n+$/, ''); V.draft.texts.splice(i + 1, 0, ''); render({ focus: `.draft textarea[data-di="${i + 1}"]` }); return; }
-  if (ta && e.key === 'Backspace' && !ta.value && V.draft.texts.length > 1) { e.preventDefault(); const i = +ta.dataset.di; V.draft.texts.splice(i, 1); render({ focus: `.draft textarea[data-di="${Math.max(0, i - 1)}"]` }); return; }
+    e.preventDefault(); const i = +ta.dataset.di; dr.texts[i] = ta.value.replace(/\n+$/, ''); dr.texts.splice(i + 1, 0, ''); render({ focus: dsel(dk, i + 1) }); return; }
+  if (ta && e.key === 'Backspace' && !ta.value && dr.texts.length > 1) { e.preventDefault(); const i = +ta.dataset.di; dr.texts.splice(i, 1); render({ focus: dsel(dk, Math.max(0, i - 1)) }); return; }
   if (e.key === 'Escape') {
     if ($('#tmenu')) { closeTabMenu(); $('#tovf').focus(); return; }
     if ($('#selfork')) { $('#selfork').remove(); return; }
     if (document.body.classList.contains('side-open')) { closeSide(); $('#sidetoggle').focus(); return; }
+    if (dk === 'end') { ta.blur(); return; }
     if (V.draft) { cancelDraft(); return; }
     return;
   }
