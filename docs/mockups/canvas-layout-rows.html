@@ -574,6 +574,8 @@ function render(opts = {}) {
   if (opts.focus) { const t = document.querySelector(opts.focus); t?.focus({ preventScroll: true }); }
 }
 function tick() { drawLinks(); if (performance.now() < animUntil) requestAnimationFrame(tick); }
+/* a new stack or part opens with a short offset animation (.fresh); its row's connectors are redrawn when it ends */
+document.addEventListener('animationend', e => { const sec = e.target.closest?.('.row'); if (sec) drawRowLinks(sec); });
 
 /* ---- scrolling: the page vertically, each row horizontally, a tall card inside itself ---- */
 const smooth = () => reduced() ? 'auto' : 'smooth';
