@@ -100,7 +100,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #links circle { fill: var(--link); }
 #links .hot { opacity: 1; }
 #links circle.hot { fill: var(--accent); }
-#links path.det { stroke-dasharray: 4 4; }
 #links path.hot { stroke: var(--accent); stroke-width: 1.75; }
 
 /* ---- top-left buttons and bottom-right view controls ---- */
@@ -236,6 +235,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stack.main .prose h4 { font-size: 15px; }
 .stack.main .prose table { font-size: 13.5px; }
 .stack.main .part { padding: 14px 18px 14px 14px; gap: 12px; }
+.stack.main .sh { padding-left: 48px; }
+.stack.main .cmeta, .stack.main .addend { padding-left: 14px; gap: 12px; }
 .stack.main .clamp { max-height: 440px; }
 .stack.main .draft textarea { font-size: 15px; }
 
@@ -458,11 +459,13 @@ function stackHTML(s) {
 }
 
 /* ---- layout ----
-   A unit is a root stack and its lane forks. Only the root has a stored position (x, y). Inside a unit, each fork
-   wants to start level with its anchor (the part, or the block for a block anchor); siblings are stacked by the
-   extent of their whole subtree, so a fork's own forks stay next to it and connectors do not cross. Units that
-   overlap after a change are drawn lower (one sweep, top to bottom), and that offset is never stored. */
-const POS = {}, LASTDY = {};
+   Rows, top to bottom in ORDER. A row is a root and its visible branches. The root is drawn in the main column
+   (colX(0)) at the row's top. Its branches are placed depth-first, siblings in the order of their anchors: a branch
+   of depth n goes in column n, level with its anchor when that column is free there in this row, otherwise VGAP below
+   the previous card in that column. A parent's branches are placed one after another, so they stay together in the
+   next column and their connectors do not cross. The next row starts ROWGAP below the lowest card of this row, in
+   any column. Nothing here is stored. */
+const POS = {};
 function visibleLaneForks(s) {
   if (V.collapsed.has(s.id) && !s.fork) return [];
   const out = [];
@@ -480,52 +483,72 @@ function layout() {
   for (const k in POS) delete POS[k];   // only what is drawn now
   const els = {}; stacksEl.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
   const H = id => els[id] ? els[id].offsetHeight : 0;
-  const place = (s, x, y) => {
-    POS[s.id] = { x, y, h: H(s.id) }; let cursor = y, ext = H(s.id);
-    const fs = visibleLaneForks(s).map(f => ({ f, want: y + anchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want);
-    for (const { f, want } of fs) { const fy = Math.max(want, cursor); const e = place(f, x + W() + GAP, fy); cursor = fy + e + VGAP; ext = Math.max(ext, fy + e - y); }
-    return ext;
-  };
-  const units = roots().map(r => { const ext = place(r, r.x, r.y);
-    const right = Math.max(...unitStacks(r).filter(s => POS[s.id] && visible(s)).map(s => POS[s.id].x + W())); return { r, x: r.x, y: r.y, w: right - r.x, h: ext, dy: 0 }; });
-  /* one sweep: sort by stored y then x; each unit moves below any earlier unit it overlaps */
-  /* the unit being edited (selection or draft) goes first and stays put; the rest follow by stored y, then x. Each
-     unit moves down until it overlaps no unit already placed, rechecking all of them after every move. */
-  const fixedId = (V.draft && S[V.draft.st] && rootOf(S[V.draft.st]).id) || (V.sel && S[V.sel] && rootOf(S[V.sel]).id);
-  /* a new, still empty stack goes last: if anything has to move, it is the new stack, never the ones already there */
-  const fresh = u => !partsOf(u.r.id).length;
-  units.sort((a, b) => fresh(a) - fresh(b) || (b.r.id === fixedId && !fresh(b)) - (a.r.id === fixedId && !fresh(a)) || a.y - b.y || a.x - b.x);
-  const hit = (u, top, v) => u.x < v.x + v.w + 12 && v.x < u.x + u.w + 12 && top < v.y + v.dy + v.h + 20 && top + u.h > v.y + v.dy - 20;
-  /* the edited unit keeps the offset it was last drawn with, so selecting it never makes it jump */
-  for (let i = 0; i < units.length; i++) { const u = units[i]; let top = u.r.id === fixedId ? u.y + (LASTDY[u.r.id] || 0) : u.y, moved = !fresh(u);   // a new stack was put in a free spot: it stays there
-    while (moved) { moved = false; for (let j = 0; j < i; j++) { const v = units[j]; if (hit(u, top, v)) { top = v.y + v.dy + v.h + 24; moved = true; } } }
-    u.dy = top - u.y; }
-  for (const u of units) LASTDY[u.r.id] = u.dy;
-  for (const u of units) for (const s of unitStacks(u.r)) if (POS[s.id]) POS[s.id].y += u.dy;
+  const rows = []; let top = 0;
+  for (const r of roots()) {
+    if (!els[r.id]) continue;
+    const low = {};   // column -> bottom of the last card placed in it in this row
+    let bottom = top + H(r.id), right = colX(0) + MAINW();
+    POS[r.id] = { x: colX(0), y: top, h: H(r.id), c: 0 };
+    const place = (s, c) => {
+      const fs = visibleLaneForks(s).filter(f => els[f.id]).map(f => ({ f, want: POS[s.id].y + anchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want);
+      for (const { f, want } of fs) {
+        const n = c + 1, y = Math.round(low[n] == null ? want : Math.max(want, low[n] + VGAP));
+        POS[f.id] = { x: colX(n), y, h: H(f.id), c: n }; low[n] = y + H(f.id);
+        bottom = Math.max(bottom, low[n]); right = Math.max(right, colX(n) + SIDEW);
+        place(f, n);
+      }
+    };
+    place(r, 0);
+    rows.push({ r, x: 0, y: top, w: right, h: bottom - top });
+    top = bottom + ROWGAP;
+  }
   for (const id in els) { const p = POS[id]; if (p) { els[id].style.left = p.x + 'px'; els[id].style.top = p.y + 'px'; } }
-  return units;
+  return rows;
 }
 const visible = s => { if (!s.fork) return true; const parent = S[P[s.fork.part].st]; const r = rootOf(s); return !V.collapsed.has(r.id) && visible(parent); };
 
-/* connectors: from the anchor on the parent's right edge to the fork's top-left. Recomputed each frame during an
-   animation, from the live positions of the elements. */
+/* connectors: from the anchor (the paragraph, or the top of the post) on the parent's right edge, horizontally into
+   the column gap, vertically to the level of the branch's header, and horizontally into it. In each gap, connectors
+   whose vertical spans overlap get separate tracks: the one that starts lower turns nearer the parent, so connectors
+   in one gap do not cross. Recomputed each frame during an animation, from the live positions of the elements. */
+const r1 = v => Math.round(v * 10) / 10;
+function elbow(x1, y1, x2, y2, xe) {
+  const dy = y2 - y1, sy = Math.sign(dy), d1 = Math.sign(xe - x1) || 1, d2 = Math.sign(x2 - xe) || 1;
+  if (Math.abs(dy) < 1.5) return `M${r1(x1)},${r1(y1)} L${r1(x2)},${r1(y2)}`;
+  const r = Math.min(6, Math.abs(dy) / 2, Math.abs(xe - x1), Math.abs(x2 - xe));
+  return `M${r1(x1)},${r1(y1)} H${r1(xe - d1 * r)} Q${r1(xe)},${r1(y1)} ${r1(xe)},${r1(y1 + sy * r)} V${r1(y2 - sy * r)} Q${r1(xe)},${r1(y2)} ${r1(xe + d2 * r)},${r1(y2)} H${r1(x2)}`;
+}
+/* track offsets from the parent's edge, per gap: within a group of overlapping spans, the earliest start turns
+   farthest from the parent */
+function trackOffsets(list, keyOf) {
+  const byGap = {}; for (const k of list) (byGap[keyOf(k)] ||= []).push(k);
+  for (const g of Object.values(byGap)) {
+    g.sort((a, b) => a.y1 - b.y1 || a.y2 - b.y2);
+    let grp = [], hi = -Infinity;
+    const flush = () => { const n = grp.length, step = n > 1 ? Math.min(8, (GAP - 16) / (n - 1)) : 0;
+      grp.forEach((k, t) => { k.off = GAP / 2 + (n - 1) * step / 2 - t * step; }); grp = []; hi = -Infinity; };
+    for (const k of g) { const lo = Math.min(k.y1, k.y2); if (grp.length && lo > hi + 2) flush(); grp.push(k); hi = Math.max(hi, k.y1, k.y2); }
+    flush();
+  }
+}
+function linkEnds(el) {
+  const s = S[el.dataset.stack]; if (!s?.fork) return null;
+  const fp = P[s.fork.part], pst = fp && stacksEl.querySelector(`:scope > .stack[data-stack="${fp.st}"]`); if (!pst) return null;
+  const pe = pst.querySelector(`[data-part="${fp.id}"]`); if (!pe) return null;
+  let ay;
+  if (s.fork.block != null) { const pr = pe.querySelector(`.prose[data-p="${fp.id}"]`), kids = pr ? [...pr.children] : [], b = kids[s.fork.block]; ay = b ? Math.min(b.getBoundingClientRect().top + 9, pr.getBoundingClientRect().bottom - 8) : pe.getBoundingClientRect().top + 16; }
+  else ay = pe.getBoundingClientRect().top + 16;
+  return { s, pr: pst.getBoundingClientRect(), fr: el.getBoundingClientRect(), ay };
+}
 function drawLinks() {
-  const wr = world.getBoundingClientRect(), z = V.z; let d = '';
-  const out = [];
+  const wr = world.getBoundingClientRect(), z = V.z, list = [];
   stacksEl.querySelectorAll(':scope > .stack').forEach(el => {
-    const s = S[el.dataset.stack]; if (!s?.fork) return;
-    const fp = P[s.fork.part], pst = fp && stacksEl.querySelector(`:scope > .stack[data-stack="${rootLane(S[fp.st]).id}"]`); if (!pst) return;
-    const pe = pst.querySelector(`[data-part="${fp.id}"]`); if (!pe) return;
-    let ay;
-    if (s.fork.block != null) { const pr = pe.querySelector(`.prose[data-p="${fp.id}"]`), kids = pr ? [...pr.children] : [], b = kids[s.fork.block]; ay = b ? Math.min(b.getBoundingClientRect().top + 9, pr.getBoundingClientRect().bottom - 8) : pe.getBoundingClientRect().top + 16; }
-    else ay = pe.getBoundingClientRect().top + 16;
-    const pr = pst.getBoundingClientRect(), fr = el.getBoundingClientRect();
-    const x1 = (pr.right - wr.left) / z, y1 = (ay - wr.top) / z, x2 = (fr.left - wr.left) / z, y2 = (fr.top - wr.top) / z + 16;
-    const mx = x2 < x1 ? 40 : Math.max(16, (x2 - x1) / 2);
-    const hotU = V.sel === s.id;   // only the connector that starts the selected stack
-    out.push(`<path class="${s.x != null ? 'det' : ''}${hotU ? ' hot' : ''}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="tick${hotU ? ' hot' : ''}" cx="${x1}" cy="${y1}" r="${3 / Math.max(z, .4)}"/>`);
+    const e = linkEnds(el); if (!e) return;
+    list.push({ s: e.s, x1: (e.pr.right - wr.left) / z, y1: (e.ay - wr.top) / z, x2: (e.fr.left - wr.left) / z, y2: (e.fr.top - wr.top) / z + 16 });
   });
-  links.innerHTML = out.join('');
+  trackOffsets(list, k => depthOf(k.s));
+  links.innerHTML = list.map(k => { const hot = V.sel === k.s.id;   // only the connector that starts the selected stack
+    return `<path data-st="${k.s.id}" class="${hot ? 'hot' : ''}" d="${elbow(k.x1, k.y1, k.x2, k.y2, k.x1 + k.off)}"/><circle class="tick${hot ? ' hot' : ''}" cx="${r1(k.x1)}" cy="${r1(k.y1)}" r="${3 / Math.max(z, .4)}"/>`; }).join('');
 }
 const rootLane = s => s;
 
@@ -556,6 +579,8 @@ function render(opts = {}) {
   if (opts.focus) { const t = document.querySelector(opts.focus); t?.focus({ preventScroll: true }); }
 }
 function tick() { drawLinks(); if (performance.now() < animUntil) requestAnimationFrame(tick); }
+/* a new stack or post opens with a short CSS animation that moves it; redraw the connectors when it ends */
+stacksEl.addEventListener('animationend', () => drawLinks());
 
 /* ---- view: pan and zoom ---- */
 function applyView() {
@@ -569,14 +594,24 @@ function zoomAt(z, cx, cy) {
   if (wasFar !== (z < 0.5)) world.classList.toggle('far', z < 0.5);
   applyView(); drawLinks();
 }
-function bounds() { const u = V.units || []; if (!u.length) return { x: 0, y: 0, w: 1, h: 1 };
-  const x0 = Math.min(...u.map(a => a.x)), y0 = Math.min(...u.map(a => a.y + a.dy)), x1 = Math.max(...u.map(a => a.x + a.w)), y1 = Math.max(...u.map(a => a.y + a.dy + a.h)); return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; }
-function fit() { const b = bounds(), pad = 60; const z = Math.max(0.15, Math.min(1, Math.min((innerWidth - pad * 2) / b.w, (innerHeight - pad * 2 - 40) / b.h)));
-  V.z = z; V.x = (innerWidth - b.w * z) / 2 - b.x * z; V.y = 60 - b.y * z; world.classList.toggle('far', z < 0.5); applyView(); drawLinks(); }
+/* the area the rows cover, from the main column's left edge to the right edge of the deepest visible side column */
+function bounds() { const u = V.units || []; if (!u.length) return { x: 0, y: 0, w: MAINW(), h: 1 };
+  return { x: 0, y: 0, w: Math.max(...u.map(a => a.x + a.w)), h: Math.max(...u.map(a => a.y + a.h)) }; }
+/* Fit: the columns in use fill the width of the window, at most 100%; what is at the top of the view stays there */
+const fitZ = () => { const pad = 16; return Math.max(0.15, Math.min(1, (innerWidth - pad * 2) / bounds().w)); };
+function fit() { const b = bounds(), z = fitZ(), wy = Math.max(0, (topInset() - V.y) / V.z);
+  V.z = z; V.x = (innerWidth - b.w * z) / 2; V.y = topInset() - wy * z; world.classList.toggle('far', z < 0.5); applyView(); drawLinks(); }
 /* room above the canvas content for the toolbars: one row, or two on a narrow page */
 const topInset = () => innerWidth <= 760 ? 112 : 64;
-function centerOn(sid, z = Math.max(V.z, 0.9)) { const p = POS[sid]; if (!p) return; V.z = z; world.classList.toggle('far', z < 0.5);
-  V.x = Math.min(60, innerWidth / 2 - (p.x + W() / 2) * z); if (innerWidth > 900) V.x = 80 - p.x * z; V.y = topInset() - p.y * z; applyView(); drawLinks(); }
+/* bring a stack into view: its top at the top of the view; horizontally, move only as far as needed to show its
+   column. From the overview zoom, go to the Fit zoom first. */
+function centerOn(sid) { const p = POS[sid]; if (!p) return;
+  if (V.z < 0.5) { const z = innerWidth < 720 ? 1 : fitZ(); V.x = innerWidth / 2 - (innerWidth / 2 - V.x) * z / V.z; V.z = z; }
+  world.classList.toggle('far', V.z < 0.5); const z = V.z;
+  const w = (S[sid].fork ? SIDEW : MAINW()) * z, sx = p.x * z + V.x, pad = innerWidth < 720 ? 16 : 24;
+  if (sx + w > innerWidth - pad) V.x -= sx + w - (innerWidth - pad);
+  if (p.x * z + V.x < pad) V.x = pad - p.x * z;
+  V.y = topInset() + 8 - p.y * z; applyView(); drawLinks(); }
 
 $('#zin').onclick = () => zoomAt(V.z * 1.25, innerWidth / 2, innerHeight / 2);
 $('#zout').onclick = () => zoomAt(V.z / 1.25, innerWidth / 2, innerHeight / 2);
@@ -588,45 +623,23 @@ vp.addEventListener('wheel', e => {
   else { V.x -= e.deltaX; V.y -= e.deltaY; applyView(); }
 }, { passive: false });
 /* panning: drag on empty canvas (mouse), or one finger anywhere outside a text field; two fingers pinch */
-const pts = new Map(); let pan = null, pinch = null, drag = null;
+const pts = new Map(); let pan = null, pinch = null;
 vp.addEventListener('pointerdown', e => {
   pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: V.z }; pan = null; return; }
-  const grip = e.target.closest('[data-a="grip"]');
-  if (grip && !e.target.closest('button')) { const s = S[grip.dataset.id]; drag = { s, x0: e.clientX, y0: e.clientY, sx: POS[s.id].x, sy: POS[s.id].y, moved: false }; vp.setPointerCapture(e.pointerId); return; }
   const onStack = e.target.closest('.stack, .tl, .br');
   if (!onStack || (e.pointerType === 'touch' && !e.target.closest('textarea, input, button, .prose'))) { pan = { x: e.clientX, y: e.clientY, vx: V.x, vy: V.y, moved: false, onStack: !!onStack }; }
 });
 vp.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; zoomAt(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, (a.x + b.x) / 2, (a.y + b.y) / 2); return; }
-  if (drag) { const dx = (e.clientX - drag.x0) / V.z, dy = (e.clientY - drag.y0) / V.z; if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
-    if (drag.moved) { drag.s.x = Math.round(drag.sx + dx); drag.s.y = Math.round(drag.sy + dy); render({ noAnim: true }); } return; }
-  if (pan) { const dx = e.clientX - pan.x, dy = e.clientY - pan.y; if (Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vp.classList.add('panning'); }
+  /* once a pan moves, the canvas captures the pointer, so releasing it over the toolbar still ends the pan */
+  if (pan) { const dx = e.clientX - pan.x, dy = e.clientY - pan.y; if (!pan.moved && Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vp.classList.add('panning'); try { vp.setPointerCapture(e.pointerId); } catch {} }
     if (pan.moved) { V.x = pan.vx + dx; V.y = pan.vy + dy; applyView(); } }
 });
 const endPtr = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
-  if (pinch === null && pts.size === 0) { if (pan?.moved) { vp.dataset.justPanned = '1'; setTimeout(() => delete vp.dataset.justPanned, 0); } pan = null; vp.classList.remove('panning');
-    if (drag) { if (drag.moved) { vp.dataset.justPanned = '1'; setTimeout(() => delete vp.dataset.justPanned, 0); } drag = null; } } };
+  if (pinch === null && pts.size === 0) { if (pan?.moved) { vp.dataset.justPanned = '1'; setTimeout(() => delete vp.dataset.justPanned, 0); } pan = null; vp.classList.remove('panning'); } };
 vp.addEventListener('pointerup', endPtr); vp.addEventListener('pointercancel', endPtr);
-
-/* ---- placement of new root stacks: the free spot nearest the centre of the view ---- */
-/* the free spot nearest a point (by default the centre of the view), so a new stack displaces nothing */
-function freeSpot(w = W(), h = 220, at = null) {
-  const cx = at ? at.x : (innerWidth / 2 - V.x) / V.z - w / 2, cy = at ? at.y : (innerHeight / 2.6 - V.y) / V.z;
-  /* against each drawn stack, not a unit's bounding box: the empty space between lanes is free */
-  const hit = (x, y) => Object.values(POS).some(q => x < q.x + W() + 24 && q.x < x + w + 24 && y < q.y + q.h + 24 && q.y < y + h + 24);
-    /* the nearest free spot on screen, on a 16px grid; failing that, the nearest free spot anywhere */
-  let best = null;
-  const x0 = (12 - V.x) / V.z, x1 = (innerWidth - 12 - V.x) / V.z - w, y0 = (topInset() - V.y) / V.z, y1 = (innerHeight - 12 - V.y) / V.z - Math.min(h, 160);
-  for (let y = y0; y <= y1; y += 16) for (let x = x0; x <= x1; x += 16) if (!hit(x, y)) { const d = Math.hypot(x - cx, y - cy); if (!best || d < best.d) best = { x: Math.round(x), y: Math.round(y), d }; }
-  /* a double-click puts the stack where you clicked, or within ~240px of it; if the area is full it opens at the
-     pointer, drawn on top, rather than somewhere else on the canvas */
-  if (at && (!best || best.d > 240 / V.z)) return { x: Math.round(cx), y: Math.round(cy) };
-  if (best) return { x: best.x, y: best.y };
-  for (let r = 0; r < 4000; r += 24) for (let a = 0; a < (r ? 16 : 1); a++) { const x = Math.round(cx + r * Math.cos(a * Math.PI / 8)), y = Math.round(cy + r * Math.sin(a * Math.PI / 8)); if (!hit(x, y)) return { x, y }; }
-  return { x: cx, y: cy };
-}
 
 /* ---- drafts ---- */
 function openDraft(st, after, mode = 'post') { if (!leaveDraft()) return; hideHint();
@@ -750,16 +763,15 @@ document.addEventListener('keydown', e => {
 
 /* ---- clicks ---- */
 function toast(t) { document.querySelector('.toast')?.remove(); const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600); }
+/* Add post / Add ask: a new root at the top of the main column */
 function newRoot(mode) {
   if (!leaveDraft()) return;
-  const { x, y } = freeSpot(); const id = 's' + (++seq);
-  S[id] = { id, ch: 'public', fork: null, x, y };
+  const id = 's' + (++seq);
+  S[id] = { id, ch: 'public', fork: null }; ORDER.unshift(id);
   V.draft = { st: id, after: '', mode, texts: [''] }; V.sel = id; hideHint();
-  render({ noAnim: true }); centerOnNew(id);
+  render({ noAnim: true }); centerOn(id);
   document.querySelector('.draft textarea')?.focus({ preventScroll: true });
 }
-function centerOnNew(id) { const p = POS[id]; if (!p) return; if (V.z < 0.7) V.z = 1; world.classList.toggle('far', false);
-  const sx = p.x * V.z + V.x, sy = p.y * V.z + V.y; if (sx < 20 || sx + W() * V.z > innerWidth - 20 || sy < 56 || sy > innerHeight - 200) { V.x = innerWidth / 2 - (p.x + W() / 2) * V.z; V.y = topInset() + 26 - p.y * V.z; } applyView(); drawLinks(); }
 function hideHint() { $('#hint').hidden = true; }
 $('#add-post').onclick = () => newRoot('post');
 $('#add-ask').onclick = () => newRoot('ask');
@@ -794,13 +806,6 @@ document.addEventListener('click', e => {
   if (stEl && !e.target.closest('textarea, button')) { const sid = stEl.dataset.stack; if (V.sel !== sid) { V.sel = sid; for (const p of partsOf(sid)) V.seen.add(p.id); render({ noAnim: true });
     const r = document.querySelector(`#stacks > .stack[data-stack="${sid}"]`)?.getBoundingClientRect(); if (r && (r.right > innerWidth - 8 || r.left < 8)) { V.x += r.right > innerWidth - 8 ? innerWidth - 16 - r.right : 16 - r.left; applyView(); drawLinks(); } } return; }
   if (!stEl && !e.target.closest('.tl, .br')) { let ch = false; if (V.sel && !V.draft) { V.sel = null; ch = true; } if (ch) render({ noAnim: true }); }
-});
-vp.addEventListener('dblclick', e => {
-  if (e.target.closest('.stack')) return;
-  if (!leaveDraft()) return;
-  const { x, y } = freeSpot(W(), 140, { x: Math.round((e.clientX - V.x) / V.z), y: Math.round((e.clientY - V.y) / V.z) }), id = 's' + (++seq);
-  S[id] = { id, ch: 'public', fork: null, x, y };
-  V.draft = { st: id, after: '', mode: 'post', texts: [''] }; V.sel = id; render({ noAnim: true, focus: '.draft textarea' });
 });
 /* hovering a fork marks where it starts: the anchor part, or the anchor block, in the parent */
 document.addEventListener('mouseover', e => { const s = e.target.closest('.stack'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks();
@@ -885,35 +890,24 @@ document.addEventListener('mouseover', e => { if (e.target.closest?.('.seam')) r
 document.addEventListener('click', e => { if (!matchMedia('(pointer: coarse)').matches) return; const p = e.target.closest?.('.sbody > .part'); if (p) setTimeout(() => { const live = document.querySelector(`[data-part="${p.dataset.part}"]`); nearPart = live; nearSeams(live); }, 0); });
 
 
-/* ---- initial placement: units ordered by last activity, packed into columns ---- */
+/* ---- initial order: roots by last activity (newest first), all collapsed except three expanded for the demo ---- */
 function initialLayout() {
   const featured = ['01M7HWGZJGT7JTFFVSYPX055KV', '01M7HQMDT0RH0G2WHVJHQ6Z8C2', '01M7HM6J60BNFNCYM0WE5BCMK1'];
   const rs = Object.values(S).filter(s => !s.fork);
   const last = r => Math.max(...unitStacks(r).flatMap(s => partsOf(s.id).map(p => Date.parse(p.at))));
-  for (const r of rs) { r.x = 0; r.y = 0; V.collapsed.add(r.id); }
-  const rank = r => featured.includes(r.src) ? 1e15 - featured.indexOf(r.src) : last(r);
-  rs.sort((a, b) => rank(b) - rank(a));
-  /* measure each unit at the origin, one at a time */
-  const size = {};
-  for (const r of rs) {
-    stacksEl.innerHTML = unitStacks(r).filter(s => s === r || visible(s)).map(stackHTML).join('');
-    const els = {}; stacksEl.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
-    let maxX = 0; const place = (s, x, y) => { let ext = els[s.id].offsetHeight, cursor = y; maxX = Math.max(maxX, x + W());
-      const fs = visibleLaneForks(s).map(f => ({ f, want: y + anchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want);
-      for (const { f, want } of fs) { const fy = Math.max(want, cursor); const e2 = place(f, x + W() + GAP, fy); cursor = fy + e2 + VGAP; ext = Math.max(ext, fy + e2 - y); } return ext; };
-    size[r.id] = { h: place(r, 0, 0), lanes: Math.max(1, Math.round((maxX + GAP) / (W() + GAP))) };
-  }
-  const cols = 6, colH = Array(cols).fill(0), slot = W() + GAP;
-  for (const r of rs) { const L = Math.min(cols, size[r.id].lanes); let best = 0, bestY = Infinity;
-    for (let c = 0; c + L <= cols; c++) { const y = Math.max(...colH.slice(c, c + L)); if (y < bestY - 1) { bestY = y; best = c; } }
-    r.x = best * slot; r.y = bestY; for (let c = best; c < best + L; c++) colH[c] = bestY + size[r.id].h + 40; }
-  /* positions above are the same for every viewer (sizes measured collapsed, fixed column count); this viewer then
-     expands the featured units, and the overlap sweep makes room for them */
-  for (const r of rs) if (featured.includes(r.src)) V.collapsed.delete(r.id);
+  rs.sort((a, b) => last(b) - last(a) || String(b.src || b.id).localeCompare(String(a.src || a.id)));
+  ORDER = rs.map(r => r.id);
+  for (const r of rs) if (!featured.includes(r.src)) V.collapsed.add(r.id);
+}
+/* the opening view: the top of the main column at Fit; below 720px, 100% with the main column filling the width */
+function initialView() {
+  V.z = 1; V.y = topInset();
+  if (innerWidth < 720) { V.x = 16; world.classList.remove('far'); applyView(); drawLinks(); } else fit();
 }
 initialLayout();
 render({ noAnim: true });
-{ const r = Object.values(S).find(s => s.src === '01M7HWGZJGT7JTFFVSYPX055KV'); centerOn(r.id, innerWidth < 520 ? 0.95 : 1); V.x = innerWidth < 520 ? 16 : 40; applyView(); drawLinks(); }
+initialView();
 document.fonts?.ready.then(() => render({ noAnim: true }));
 addEventListener('resize', () => render({ noAnim: true }));
 </script>
+
