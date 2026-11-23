@@ -10,7 +10,7 @@ branching".
 From 3a (unchanged): a page of rows, one per root stack, that scrolls vertically like a document; each row's root
 stack is RW (640px) wide and centred on the page at the row's scroll start; branch columns are W (320px) wide,
 one per depth, grouped by parent, level with the anchor paragraph when there is room; direct connectors; each row
-scrolls horizontally on its own (arrows, dots, Shift+wheel, trackpad, touch). There is no pan/zoom canvas: no free
+scrolls horizontally on its own (dots, Shift+wheel, trackpad, touch, keyboard). There is no pan/zoom canvas: no free
 2D scrolling, no zoom, no Fit.
 
 From 0a-2: branches on both sides of the root.
@@ -34,14 +34,15 @@ Differences from 3a
   the centred root, s0 is 0; a row with no left columns has no left scroll room. The lane is at least s0 + the track
   width wide, so s0 can always be reached.
 - Rows load at their start (scrollLeft s0). A row's scroll is kept across re-renders relative to its start: when s0
-  changes (a left column is added or removed, the row is collapsed or expanded, the window width changes), the
+  changes (a left column is added or removed, a collapsed row is expanded, the window width changes), the
   track's scrollLeft moves by the same amount, so the root stays where it was on screen.
-- Row arrows cover both sides. Right scrolls the least distance that shows the first column cut off at the right
-  edge; Left the least distance that shows the last column cut off at the left edge. When that column is the root,
-  either arrow returns the row to its start. Selecting a root (click, dot, keyboard, bell) also returns its row to
+- Row dots cover both sides, in page order: left columns from the outermost in, the root, then right columns
+  outward; within a column, top to bottom. A dot selects its stack and scrolls the row the least distance that shows
+  it; the root's dot returns the row to its start. Selecting a root (click, dot, keyboard, bell) returns its row to
   its start.
-- Row dots are in page order: left columns from the outermost in, the root, then right columns outward; within a
-  column, top to bottom.
+- As in 3a, the row header has no arrow buttons and no collapse control: a row is moved sideways with the dots,
+  Shift+wheel, a trackpad or touch swipe, or the keyboard, and a row collapsed at load (no new posts) is expanded
+  with its "N more parts" row. 3a's unused pageRow() and the arrow styles are removed here.
 - Keyboard: Left and Right move in the direction of the key. On the root, Left goes to a branch on the left side and
   Right to one on the right side. In a right-side column, Right goes outward to a branch and Left to the parent; in a
   left-side column, Left goes outward to a branch and Right to the parent. Going outward picks the branch last left
@@ -139,9 +140,6 @@ html { scroll-padding-top: 64px; }
 .br .nn { position: relative; }
 .br .nn b { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--page); }
 .br .nn b:empty { display: none; }
-.keys { margin-left: 12px; font-size: 11.5px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.keys kbd { font: inherit; font-size: 11px; padding: 0 4px; border-radius: 4px; background: var(--control); color: var(--t-secondary); }
-@media (max-width: 1000px) { .keys { display: none; } }
 @media (max-width: 440px) { .top { padding: 0 12px; gap: 6px; } .tl { gap: 6px; } .tl button { padding: 0 10px; } .tl .modl { padding: 0; font-size: 11px; } }
 @media (max-width: 370px) { .tl .modl { display: none; } }
 @media (pointer: coarse) { .tl button, .br button { height: 40px; } }
@@ -156,10 +154,6 @@ html { scroll-padding-top: 64px; }
 .rh .newc { color: var(--new); font-weight: 600; white-space: nowrap; }
 .rh .cnt { white-space: nowrap; }
 .rh .grow { flex: 1; }
-.rh .ib { width: 28px; height: 28px; border-radius: 7px; display: inline-grid; place-items: center; color: var(--t-faint); flex: none; }
-.rh .ib .lc { width: 16px; height: 16px; }
-.rh .ib:hover:not(:disabled) { background: var(--control); color: var(--t-heading); }
-.rh .ib:disabled { opacity: .35; cursor: default; }
 .rh .pips { display: flex; align-items: center; flex-wrap: nowrap; overflow: hidden; margin-right: 2px; }
 .pip { width: 13px; height: 24px; display: grid; place-items: center; flex: none; }
 .pip i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: background .12s, transform .12s; }
@@ -167,8 +161,8 @@ html { scroll-padding-top: 64px; }
 .pip.in i { background: var(--t-faint); }
 .pip.sel i { background: var(--accent); transform: scale(1.25); }
 .pip:hover i { background: var(--t-secondary); }
-.row.fits .pips, .row.fits [data-a="prev"], .row.fits [data-a="next"] { display: none; }
-@media (pointer: coarse) { .pip { width: 18px; height: 32px; } .rh .ib { width: 36px; height: 36px; } .rh [data-a="prev"], .rh [data-a="next"] { display: none; } }
+.row.fits .pips { display: none; }
+@media (pointer: coarse) { .pip { width: 18px; height: 32px; } }
 
 /* the row's track scrolls horizontally on its own; the edges fade when there is more to that side */
 .track { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
@@ -338,7 +332,6 @@ button.fq:hover i, button.fq:focus-visible i { color: var(--accent); }
 </style>
 
 <header class="top"><div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
-<span class="keys" id="keys"><kbd>←</kbd> <kbd>→</kbd> branch or parent in that direction · <kbd>↑</kbd> <kbd>↓</kbd> column, then rows · Shift+scroll moves a row sideways</span>
 <div class="br"><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></div></header>
 <main class="rows" id="rows" aria-label="Rows"></main>
 
@@ -639,7 +632,6 @@ function updateRow(sec) {
   const max = tr.scrollWidth - tr.clientWidth, l = tr.scrollLeft > 2, r = tr.scrollLeft < max - 2;
   sec.classList.toggle('fits', max <= 2);
   tr.style.setProperty('--ml', l ? '48px' : '0px'); tr.style.setProperty('--mr', r ? '48px' : '0px');
-  const pv = sec.querySelector('[data-a="prev"]'), nx = sec.querySelector('[data-a="next"]'); if (pv) pv.disabled = !l; if (nx) nx.disabled = !r;
   const t = tr.getBoundingClientRect();
   sec.querySelectorAll('.pip').forEach(b => { const e = sec.querySelector(`.lane > .stack[data-stack="${b.dataset.id}"]`); if (!e) return;
     const q = e.getBoundingClientRect(); b.classList.toggle('in', Math.min(q.right, t.right) - Math.max(q.left, t.left) > q.width * .5); });
@@ -709,20 +701,6 @@ function revealY(el, behavior = 'auto') {
   if (r.top < TOPGAP) scrollBy({ top: r.top - TOPGAP, behavior });
   else if (r.bottom > innerHeight - 12) scrollBy({ top: r.height > room ? r.top - TOPGAP : r.bottom - innerHeight + 12, behavior });
 }
-/* move a row by whole columns, on either side. Right: the least distance that shows the first column (in page order)
-   cut off at the right edge. Left: the least distance that shows the last column cut off at the left edge. When that
-   column is the root, the row returns to its start (s0, root centred). */
-function pageRow(id, dir) {
-  const sec = rowEl(id), tr = sec?.querySelector('.track'), g = ROWG[id]; if (!tr || !g) return;
-  const x = tr.scrollLeft, vw = tr.clientWidth, max = tr.scrollWidth - vw;
-  const cols = rowCols(S[id]).map(c => ({ c, l: colX(c, g), r: colX(c, g) + colW(c) }));
-  let k = null;
-  if (dir > 0) k = cols.find(o => o.r > x + vw - PADX + 1);
-  else for (const o of cols) if (o.l < x + PADX - 1) k = o;
-  if (!k) return;
-  const to = k.c.side === 'm' ? g.s0 : dir > 0 ? k.r + PADX - vw : k.l - PADX;
-  tr.scrollTo({ left: Math.max(0, Math.min(max, to)), behavior: smooth() });
-}
 /* menus close when the person scrolls (a re-render also restores scroll positions, so this listens to wheel and touch) */
 const closeFloating = () => { closeBmenu(); $('#selfork')?.remove(); };
 addEventListener('wheel', closeFloating, { passive: true });
@@ -745,7 +723,7 @@ function selectStack(id, { kb = false, scroll = true } = {}) {
   render({ noAnim: true });
   const el = stackEl(id); if (!el) return;
   if (scroll) revealX(el, kb ? smooth() : 'auto');
-  if (kb) { revealY(s.fork ? el : rowEl(r.id)); el.focus({ preventScroll: true }); }
+  if (kb) { revealY(s.fork ? el : rowEl(r.id), smooth()); el.focus({ preventScroll: true }); }   // the page scrolls to the stack smoothly
 }
 /* Left and Right move in the key's direction. On the root: to a branch on that side. On a side column: outward (Right
    on the right side, Left on the left side) to a branch, inward to the parent. Going outward picks the branch last
@@ -935,7 +913,6 @@ document.addEventListener('click', e => {
   if (a === 'pip') { selectStack(d.id); const el = stackEl(d.id), r = el?.getBoundingClientRect();
     if (r && (r.top > innerHeight - 80 || r.bottom < TOPGAP + 40)) revealY(el, smooth()); return; }
   if (a === 'anchor') { revealAnchor(d.id); return; }
-  if (a === 'prev' || a === 'next') { pageRow(d.id, a === 'next' ? 1 : -1); return; }
   const stEl = e.target.closest('.stack');
   if (stEl && getSelection()?.toString().trim()) return;
   if (stEl && !e.target.closest('textarea, button')) { if (V.sel !== stEl.dataset.stack) selectStack(stEl.dataset.stack); return; }
