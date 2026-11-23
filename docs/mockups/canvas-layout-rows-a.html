@@ -118,9 +118,6 @@ html { scroll-padding-top: 64px; }
 .br .nn { position: relative; }
 .br .nn b { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--page); }
 .br .nn b:empty { display: none; }
-.keys { margin-left: 12px; font-size: 11.5px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.keys kbd { font: inherit; font-size: 11px; padding: 0 4px; border-radius: 4px; background: var(--control); color: var(--t-secondary); }
-@media (max-width: 1000px) { .keys { display: none; } }
 @media (max-width: 440px) { .top { padding: 0 12px; gap: 6px; } .tl { gap: 6px; } .tl button { padding: 0 10px; } .tl .modl { padding: 0; font-size: 11px; } }
 @media (max-width: 370px) { .tl .modl { display: none; } }
 @media (pointer: coarse) { .tl button, .br button { height: 40px; } }
@@ -308,7 +305,6 @@ button.fq:hover i, button.fq:focus-visible i { color: var(--accent); }
 </style>
 
 <header class="top"><div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
-<span class="keys" id="keys"><kbd>←</kbd> <kbd>→</kbd> parent, branch · <kbd>↑</kbd> <kbd>↓</kbd> column, then rows · Shift+scroll moves a row sideways</span>
 <div class="br"><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></div></header>
 <main class="rows" id="rows" aria-label="Rows"></main>
 
