@@ -230,6 +230,29 @@ body { display: flex; flex-direction: column; }
 .nn b { position: absolute; top: -1px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--card-m); }
 .nn b:empty { display: none; }
 @media (pointer: coarse) { .tb { height: 54px; } .tb .back, .nn { height: 42px; } .nn { width: 44px; } }
+/* where channels are shown: a column (ch-column), a row in the top bar (ch-header) or a bar above it (ch-above) */
+.place { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.place .segl { font-size: 11.5px; color: var(--t-faint); }
+.seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 8px; background: var(--control); }
+.seg button { height: 26px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--t-secondary); display: inline-flex; align-items: center; gap: 5px; }
+.seg button .lc { width: 15px; height: 15px; display: none; }
+.seg button:hover { color: var(--t-heading); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); font-weight: 600; box-shadow: var(--shadow); }
+.chips { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+.chips::-webkit-scrollbar { display: none; }
+.chips:empty { display: none; }
+.chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border-radius: 7px; font-size: 12.5px; color: var(--t-secondary); white-space: nowrap; }
+.chip i { font-style: normal; color: var(--t-faint); margin-right: -4px; }
+.chip:hover { background: var(--control); }
+.chip.sel { background: var(--control-hover); color: var(--t-heading); font-weight: 600; }
+.chip.sel:focus-visible { background: var(--accent-soft); }
+.chip .cnt { margin-left: 1px; }
+/* the breadcrumb keeps room beside the channel row; the row scrolls instead */
+.tb .chips:not(:empty) + .crumbs { flex: 1 1 0; min-width: 240px; }
+.tb .chips:not(:empty) + .crumbs { margin-left: 2px; padding-left: 8px; border-left: 1px solid var(--divider); }
+.chbar { flex: none; height: 40px; display: flex; align-items: center; padding: 0 12px; background: var(--inset); border-bottom: 1px solid var(--divider); }
+.chbar .chips { flex: 1; }
+@media (pointer: coarse) { .chip { height: 34px; } .chbar { height: 46px; } .seg button { height: 36px; min-width: 38px; justify-content: center; } }
 
 #cols { flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
 .col { flex: none; height: 100%; overflow-y: auto; overflow-x: hidden; border-right: 1px solid var(--divider); position: relative; overscroll-behavior-y: contain; transition: width .18s ease-out; }
@@ -259,7 +282,7 @@ body { display: flex; flex-direction: column; }
 .chrow:hover { background: var(--control); }
 .chrow.sel { background: var(--control-hover); color: var(--t-heading); font-weight: 600; }
 .col:focus-within .chrow.sel { background: var(--accent-soft); }
-.chrow .cnt { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; }
+.cnt { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; }
 @media (pointer: coarse) { .chrow { min-height: 44px; } }
 
 /* threads */
@@ -320,10 +343,19 @@ body.narrow .cc .colhd { display: none; }
 body.narrow .sc .sbody { margin: 10px 10px 40px 14px; }
 body.narrow .crumbs { flex: 1; justify-content: center; }
 body.narrow .tb .back + .crumbs { justify-content: flex-start; }
+body.narrow .place .segl, body.narrow .seg button span { display: none; }
+body.narrow .seg button .lc { display: block; }
+body.narrow .seg button { padding: 0 6px; }
+/* narrow, channels in the top bar: they wrap to a second row of the bar, which scrolls horizontally */
+body.narrow.ch-header .tb { height: auto; flex-wrap: wrap; row-gap: 2px; padding-top: 8px; padding-bottom: 4px; }
+body.narrow.ch-header .tb .chips { order: 5; flex: 1 0 100%; margin: 0 -12px; padding: 0 12px; height: 38px; }
+body.narrow.ch-header .tb .chips + .crumbs { margin-left: 0; padding-left: 0; border-left: 0; min-width: 0; }
+@media (pointer: coarse) { body.narrow.ch-header .tb { padding-top: 6px; } body.narrow.ch-header .tb .chips { height: 44px; } }
 
 </style>
 
-<header class="tb"><button class="back" id="back" type="button" hidden><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span></span></button><nav class="crumbs" id="crumbs" aria-label="Open columns"></nav><span class="grow"></span><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></header>
+<div class="chbar" id="chabove" hidden><div class="chips" role="group" aria-label="Channels"></div></div>
+<header class="tb"><button class="back" id="back" type="button" hidden><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span></span></button><div class="chips" id="chhead" role="group" aria-label="Channels"></div><nav class="crumbs" id="crumbs" aria-label="Open columns"></nav><span class="grow"></span><div class="place" id="chplace" role="group" aria-label="Where channels are shown"><span class="segl" aria-hidden="true">Channels</span><span class="seg"><button type="button" data-a="place" data-v="column" title="Channels in a column" aria-label="Channels in a column"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg><span>Column</span></button><button type="button" data-a="place" data-v="header" title="Channels in the top bar" aria-label="Channels in the top bar"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg><span>Header</span></button><button type="button" data-a="place" data-v="above" title="Channels above the top bar" aria-label="Channels above the top bar"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18"/><rect width="18" height="14" x="3" y="7" rx="2"/></svg><span>Above</span></button></span></div><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></header>
 <main id="cols" aria-label="Columns"></main>
 
 <script>
@@ -388,8 +420,12 @@ for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 /* ---- view state (per viewer) ----
    ch: the channel in column 1 ('all' or a channel id); thread: the root stack in column 3; path: the branches open
    in columns 4, 5, ...; each is a fork of a part in the column before it. col: the focused column (the visible one on
-   a narrow page). */
-const V = { ch: 'all', thread: null, path: [], col: 2, full: new Set(), seen: new Set(), showNew: new Set(), draft: null };
+   a narrow page). place: where channels are shown, 'column' (column 1), 'header' (a row in the top bar) or 'above' (a
+   bar above the top bar); outside 'column' the threads column is the first column. Remembered in localStorage. */
+const V = { ch: 'all', thread: null, path: [], col: 2, full: new Set(), seen: new Set(), showNew: new Set(), draft: null, place: 'header' };
+try { const v = localStorage.getItem('session.miller.channels'); if (['column', 'header', 'above'].includes(v)) V.place = v; } catch {}
+/* the first column shown: channels, or threads when channels are in the top bar or above it */
+const firstCol = () => V.place === 'column' ? 0 : 1;
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
 /* a part keeps its dot while its column stays open, though it already counts as read */
@@ -459,10 +495,29 @@ function draftHTML() {
     <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft">${icon('x')}</button></div>`;
 }
 
-/* column 1: channels */
+/* new parts per channel ('all' counts every channel) */
+const chNew = ch => roots().filter(r => ch === 'all' || r.ch === ch).reduce((a, r) => a + treeNew(r), 0);
+/* channels as a row (in the top bar, or in a bar above it): All, then each channel, with new counts. Left and Right
+   move between them and open the channel; Down enters the threads column. */
+function renderChips(opts) {
+  const host = V.place === 'header' ? $('#chhead') : V.place === 'above' ? $('#chabove .chips') : null;
+  $('#chabove').hidden = V.place !== 'above';
+  const ae = document.activeElement, fk = opts.focusK !== undefined ? opts.focusK : ae?.closest?.('.chips [data-k]')?.dataset.k;
+  for (const h of document.querySelectorAll('.chips')) if (h !== host) h.innerHTML = '';
+  if (!host) return;
+  const sl = host.scrollLeft;
+  const chip = (id, label) => { const c = chNew(id), on = V.ch === id; return `<button type="button" class="chip${on ? ' sel' : ''}" data-a="ch" data-id="${id}" data-k="ch:${id}" tabindex="${on ? 0 : -1}" aria-current="${on}">${id === 'all' ? '' : '<i aria-hidden="true">#</i>'}<span>${esc(label)}</span>${c ? `<b class="cnt" aria-label="${c} new">${c}</b>` : ''}</button>`; };
+  host.innerHTML = chip('all', 'All') + D.spaces.map(s => chip(s.id, s.name)).join('');
+  host.scrollLeft = sl;
+  const sel = host.querySelector('.chip.sel');
+  if (sel) { const L = sel.offsetLeft - 12, R = sel.offsetLeft + sel.offsetWidth + 12; if (L < host.scrollLeft) host.scrollLeft = L; else if (R > host.scrollLeft + host.clientWidth) host.scrollLeft = R - host.clientWidth; }
+  if (fk?.startsWith('ch:')) host.querySelector(`[data-k="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
+}
+/* choosing a channel in the row; on a narrow page this also shows its threads */
+function chooseChip(id) { if (selectChannel(id, { focusK: 'ch:' + id }) && isNarrow() && V.col !== 1) { V.col = 1; render({ focusK: 'ch:' + id }); } }
+/* column 1 (when channels are shown as a column) */
 function channelsHTML() {
-  const rs = roots(), n = ch => rs.filter(r => ch === 'all' || r.ch === ch).reduce((a, r) => a + treeNew(r), 0);
-  const row = (id, ic, label) => { const c = n(id); return `<button type="button" class="chrow${V.ch === id ? ' sel' : ''}" data-a="ch" data-id="${id}" data-k="ch:${id}" data-nav tabindex="-1" aria-current="${V.ch === id}">${icon(ic)}<span>${esc(label)}</span>${c ? `<b class="cnt" aria-label="${c} new">${c}</b>` : ''}</button>`; };
+  const row = (id, ic, label) => { const c = chNew(id); return `<button type="button" class="chrow${V.ch === id ? ' sel' : ''}" data-a="ch" data-id="${id}" data-k="ch:${id}" data-nav tabindex="-1" aria-current="${V.ch === id}">${icon(ic)}<span>${esc(label)}</span>${c ? `<b class="cnt" aria-label="${c} new">${c}</b>` : ''}</button>`; };
   return `<section class="col cc" data-key="ch" data-ci="0" aria-label="Channels"><div class="colhd"><span class="ttl">Channels</span></div>
     <div class="chlist">${row('all', 'inbox', 'All')}${D.spaces.map(s => row(s.id, 'hash', s.name)).join('')}</div></section>`;
 }
@@ -505,7 +560,7 @@ function stackColHTML(sid, depth) {
    scrolls horizontally */
 function widths(k) {
   const W = innerWidth, tight = k >= 2 || W < 1100;
-  const C = tight ? 156 : 200, T = tight ? 256 : 304, E = 360;
+  const C = V.place !== 'column' ? 0 : tight ? 156 : 200, T = tight ? 256 : 304, E = 360;
   const L = Math.max(460, W - C - T - Math.max(0, k - 1) * E);
   return { C, T, E, L };
 }
@@ -513,7 +568,8 @@ function widths(k) {
 const colTitles = () => ['Channels', V.ch === 'all' ? 'All' : '#' + (CH[V.ch] || V.ch), ...stackCols().map(id => stackTitle(S[id]))];
 function updateToolbar() {
   const t = colTitles(), narrow = document.body.classList.contains('narrow'), back = $('#back'), cr = $('#crumbs');
-  back.hidden = !narrow || V.col === 0;
+  back.hidden = !narrow || V.col <= firstCol();
+  document.querySelectorAll('#chplace [data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === V.place)));
   if (!back.hidden) { back.querySelector('span').textContent = t[V.col - 1]; back.setAttribute('aria-label', 'Back to ' + t[V.col - 1]); }
   if (narrow) { cr.innerHTML = `<span class="ttl">${esc(V.col >= 2 ? (V.col === 2 ? 'Thread' : 'Branch') : t[V.col])}</span>`; return; }
   cr.innerHTML = t.slice(1).map((x, i) => `${i ? `<span class="sep">${icon('chevron-right')}</span>` : ''}<button type="button" data-a="crumb" data-ci="${i + 1}" class="${i + 1 === t.length - 1 ? 'cur' : ''}">${esc(x)}</button>`).join('');
@@ -547,13 +603,14 @@ function placeMarkers(root = colsEl) {
 function snapshot() { const m = {}; colsEl.querySelectorAll('[data-fl]').forEach(e => { m[e.dataset.fl] = e.getBoundingClientRect(); }); return m; }
 function render(opts = {}) {
   const narrow = isNarrow(); document.body.classList.toggle('narrow', narrow);
+  for (const v of ['column', 'header', 'above']) document.body.classList.toggle('ch-' + v, V.place === v);
   V.path = V.path.filter(id => S[id]); if (V.thread && !S[V.thread]) { V.thread = null; V.path = []; }
   const cols = stackCols();
   /* opening a stack reads its parts: they stop counting as new, and keep their dot while the column is open */
   const shown = new Set(cols);
   for (const id of cols) for (const p of partsOf(id)) if (isNew(p)) { V.seen.add(p.id); V.showNew.add(p.id); }
   for (const id of [...V.showNew]) if (!shown.has(P[id]?.st)) V.showNew.delete(id);
-  V.col = Math.max(0, Math.min(V.col, 1 + cols.length));
+  V.col = Math.max(firstCol(), Math.min(V.col, 1 + cols.length));
 
   const before = opts.flip && !reduced() ? snapshot() : null;
   const sc = {}; colsEl.querySelectorAll('.col').forEach(c => { sc[c.dataset.key] = c.scrollTop; });
@@ -561,7 +618,7 @@ function render(opts = {}) {
   const ae = document.activeElement, fk = opts.focusK ?? ae?.closest?.('[data-k]')?.dataset.k;
   const ta = ae?.matches?.('.draft textarea') ? { i: ae.dataset.di, a: ae.selectionStart, b: ae.selectionEnd } : null;
 
-  colsEl.innerHTML = channelsHTML() + threadsHTML() + (cols.length ? cols.map((id, i) => stackColHTML(id, i)).join('') : '<section class="col blank" data-key="blank" data-ci="2">Choose a thread</section>');
+  colsEl.innerHTML = (V.place === 'column' ? channelsHTML() : '') + threadsHTML() + (cols.length ? cols.map((id, i) => stackColHTML(id, i)).join('') : '<section class="col blank" data-key="blank" data-ci="2">Choose a thread</section>');
   const w = widths(cols.length);
   colsEl.querySelectorAll('.col').forEach(c => { const ci = +c.dataset.ci; c.classList.toggle('cur', ci === V.col);
     if (ci === 0) c.style.width = w.C + 'px'; else if (ci === 1) c.style.width = w.T + 'px';
@@ -581,7 +638,7 @@ function render(opts = {}) {
   if (opts.focus) { const t = colsEl.querySelector(opts.focus); t?.focus({ preventScroll: true }); if (t) revealIn(t.closest('.col'), t); }
   else if (ta) { const t = colsEl.querySelector(`.draft textarea[data-di="${ta.i}"]`); if (t) { t.focus({ preventScroll: true }); t.setSelectionRange(ta.a, ta.b); } }
   else if (fk) { const t = colsEl.querySelector(`[data-k="${CSS.escape(fk)}"]`); if (t && !t.closest('.col:not(.cur)') || t && !narrow) { t.focus({ preventScroll: true }); if (opts.focusK) revealIn(t.closest('.col'), t); } }
-  updateToolbar(); updateNext();
+  updateToolbar(); renderChips(opts); updateNext();
   V.fresh = null;
 }
 
@@ -742,7 +799,9 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#selfork')) $('#selfork')?.remove();
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
   const narrow = document.body.classList.contains('narrow');
+  if (a === 'ch' && V.place !== 'column') { chooseChip(d.id); return; }
   if (a === 'ch') { selectChannel(d.id, { focusK: 'ch:' + d.id }); if (narrow) { V.col = 1; render(); } else V.col = 0; return; }
+  if (a === 'place') { V.place = d.v; try { localStorage.setItem('session.miller.channels', d.v); } catch {} render({ focusK: null }); t.focus(); return; }
   if (a === 'th') { V.col = narrow ? 2 : 1; selectThread(d.id, { focusK: narrow ? null : 'th:' + d.id }); return; }
   if (a === 'mk') { openAnchor(+d.d, d.id, d.b, { col: narrow ? +d.d + 3 : +d.d + 2, focusK: narrow ? null : `m:${d.id}:${d.b}` }); return; }
   if (a === 'sib') { const cols = stackCols(); go({ path: [...cols.slice(1, +d.d), d.id] }, { focusK: null }); return; }
@@ -760,7 +819,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('focusin', e => { const c = e.target.closest?.('#cols .col'); if (c && !document.body.classList.contains('narrow')) V.col = +c.dataset.ci; });
 function goBack() {
-  if (V.col <= 0) return; const from = V.col; V.col--;
+  if (V.col <= firstCol()) return; const from = V.col; V.col--;
   const s = from >= 3 ? S[stackCols()[from - 2]] : null;
   render({ focusK: null }); updateToolbar();
   if (s?.fork) { const el = srcEl(s), col = colAt(V.col); if (el && col) { revealIn(col, el, 80); flash(el); } }
@@ -795,6 +854,16 @@ document.addEventListener('keydown', e => {
   const k = e.key, narrow = document.body.classList.contains('narrow');
   if (k === 'Escape') { if ($('#selfork')) { $('#selfork').remove(); return; } if (V.draft) { cancelDraft(); return; } return; }
   if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Home', 'End', 'ContextMenu'].includes(k) && !(k === 'F10' && e.shiftKey)) return;
+  const chip = e.target.closest?.('.chip');
+  if (chip) {
+    if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'Home' || k === 'End') {
+      e.preventDefault(); const cs = [...chip.parentElement.querySelectorAll('.chip')], i = cs.indexOf(chip);
+      const j = k === 'Home' ? 0 : k === 'End' ? cs.length - 1 : Math.max(0, Math.min(cs.length - 1, i + (k === 'ArrowRight' ? 1 : -1)));
+      if (j !== i) chooseChip(cs[j].dataset.id);
+    } else if (k === 'ArrowDown') { e.preventDefault(); V.col = 1; if (narrow) render({ focusK: null }); const t = currentStop(colAt(1)); t?.focus({ preventScroll: true }); if (t) { revealIn(colAt(1), t); revealCol(1); } }
+    return;
+  }
+  if (e.target.closest?.('#chplace')) return;
   let cur = e.target.closest?.('#cols [data-nav]');
   if (!cur) { if (e.target.closest?.('button, a') && k === 'Enter') return; const t = currentStop(colAt(V.col)); if (t) { e.preventDefault(); t.focus(); revealIn(t.closest('.col'), t); } return; }
   const col = cur.closest('.col'), ci = +col.dataset.ci;
@@ -808,6 +877,7 @@ document.addEventListener('keydown', e => {
   const enter = ci2 => { V.col = ci2; if (narrow) render({ focusK: null }); const c = colAt(ci2), t = c && stopsOf(c)[0]; if (t) { t.focus({ preventScroll: true }); revealIn(c, t); revealCol(ci2); } };
   if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'Home' || k === 'End') {
     e.preventDefault(); const st = stopsOf(col), i = st.indexOf(cur);
+    if (k === 'ArrowUp' && i === 0 && ci === 1 && V.place !== 'column') { document.querySelector('.chips .chip.sel')?.focus(); return; }
     const j = k === 'Home' ? 0 : k === 'End' ? st.length - 1 : Math.max(0, Math.min(st.length - 1, i + (k === 'ArrowDown' ? 1 : -1)));
     if (j !== i) { st[j].focus({ preventScroll: true }); revealIn(col, st[j]); activate(st[j]); }
     return;
@@ -822,8 +892,9 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (k === 'ArrowLeft') {
-    e.preventDefault(); if (ci === 0) return; V.col = ci - 1;
-    if (narrow) goBack(); else { const t = currentStop(colAt(ci - 1)); t?.focus({ preventScroll: true }); if (t) { revealIn(colAt(ci - 1), t); revealCol(ci - 1); } }
+    e.preventDefault();
+    if (ci === firstCol()) { if (ci === 1) document.querySelector('.chips .chip.sel')?.focus(); return; }
+    if (narrow) goBack(); else { V.col = ci - 1; const t = currentStop(colAt(ci - 1)); t?.focus({ preventScroll: true }); if (t) { revealIn(colAt(ci - 1), t); revealCol(ci - 1); } }
     return;
   }
   if (cur.matches('.part') && (k === 'Enter' || k === 'ContextMenu' || k === 'F10')) { e.preventDefault(); const r = cur.getBoundingClientRect(); openPartMenu(cur, r.left + 40, r.top + 24); }

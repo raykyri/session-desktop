@@ -7,8 +7,11 @@ same as the base mock; only the layout and navigation differ. No model API is ca
 simulated with timers. The only external request is the Inter font.
 
 Layout
-- The page is one horizontal strip of equal-width columns. It scrolls only horizontally; each column scrolls
-  vertically on its own. There is no 2D pan, no zoom and no Fit.
+- The page is split in two. The left part (about 58% of a wide screen) is the column strip; the right part is a
+  canvas pane that draws the open thread in 2D.
+- The column strip is one horizontal strip of equal-width columns, sized so that a whole number of columns plus one
+  spine fits the left part. It scrolls only horizontally, inside its own container; each column scrolls vertically
+  on its own.
 - Column 1 lists the root stacks, most recent activity first. Every later column holds exactly one stack.
 - The open columns form a trail. Opening a branch from column k puts it in column k+1 and closes the columns after it.
   Dragging a part (by its avatar or model mark) or selected text into a column to the right, or into the empty slot
@@ -19,9 +22,28 @@ Layout
   branch is open, its source is marked in accent, a connector runs from the source to the branch's "From paragraph"
   header, and that header steps back to the source.
 
+Canvas pane
+- It shows the thread whose root is open in the first stack column: the root and every branch under it, placed as
+  in session-canvas.html. Each branch sits in a lane to the right of its source, level with the source paragraph or
+  part; siblings are stacked by the height of their subtree. Connectors run from the source paragraph (or part) on
+  the right edge of the source card to the top of the branch. Cards use the base mock's styling and are drawn in
+  full, with answers over 520 characters clamped as in the base mock, so every connector starts at its paragraph.
+  At zoom below 50% each card shows a headline instead of its text.
+- The pane is read-only: no drafts, inserts or drags start there. Clicking a card opens the path from the root to
+  that stack in the columns (as the bell does) and pans the canvas to the card.
+- Stacks open in the columns have an accent outline and accent connectors; the selected stack has a stronger
+  outline. When the selection changes in the columns and the selected card is off-screen, the canvas pans to it.
+  Hovering a stack in the columns outlines its card (dashed); hovering a card outlines its column, its branch row
+  and its index row.
+- Pan: drag anywhere in the pane, or scroll. Zoom: Ctrl/Cmd+scroll or pinch, the − and + buttons, or Fit. The view
+  is kept while the same thread stays open; opening a different thread resets it to fit the thread's width.
+- With no stack open, the pane shows an empty state.
+- Below 900px wide only one of the two is shown, the columns by default; a button in the top bar switches between
+  them. Opening a stack from the canvas, the bell, or Add post/Add ask switches back to the columns.
+
 Data model (in memory; a reload starts over): as in the base mock. Part { id, st, key, by, text, at, run? };
 Stack { id, ch, fork? { part, block?, quote? } }. View state, per viewer: the open trail of columns, selection,
-expanded answers, seen parts.
+expanded answers, seen parts, and the canvas pane's pan and zoom.
 -->
 <title>1. Session Canvas: Columns</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -72,12 +94,12 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .tl { position: fixed; top: 12px; left: 12px; display: flex; gap: 8px; z-index: 20; align-items: center; }
 .tl .modl { font-size: 11.5px; color: var(--t-faint); padding: 0 4px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
 .tl .modl::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .7; }
-.tl button, .br button { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06);
+.tl button, .br button, .zc button { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06);
   font-size: 12.5px; font-weight: 600; color: var(--t-heading); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.tl button:hover, .br button:hover { background: var(--inset); }
+.tl button:hover, .br button:hover, .zc button:hover { background: var(--inset); }
 .lc { width: 14px; height: 14px; flex: none; display: block; }
 .tl button .pl { color: var(--accent); width: 15px; height: 15px; }
-.br button .lc { width: 15px; height: 15px; }
+.br button .lc, .zc button .lc { width: 15px; height: 15px; }
 .br { position: fixed; right: 12px; top: 12px; display: flex; gap: 6px; z-index: 20; align-items: center; }
 .br .nn { position: relative; }
 .br .nn b { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--page); }
@@ -92,7 +114,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #nmenu .ns { display: block; margin-top: 1px; font-size: 12.5px; color: var(--t-secondary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 #nmenu .nw { font-size: 11px; color: var(--t-faint); padding-top: 1px; }
 #nmenu .nempty { padding: 14px 10px 16px; font-size: 12.5px; color: var(--t-faint); }
-@media (pointer: coarse) { .tl button, .br button { height: 40px; } }
+@media (pointer: coarse) { .tl button, .br button, .zc button { height: 40px; } }
 
 /* ---- stacks ---- */
 .stack.sel > .sbody { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-pop); }
@@ -217,10 +239,10 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 @media (prefers-reduced-motion: reduce) { .fresh { animation: none; } }
 
 /* ---- columns: one horizontal strip of equal-width columns; each column scrolls vertically on its own ---- */
-:root { --top: 56px; --cw: 376px; --spine: 40px; }
+:root { --top: 56px; --cw: 376px; --spine: 40px; --lw: 100vw; }
 @media (pointer: coarse) { :root { --top: 64px; } }
 body { background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 24px 24px; }
-#strip { position: fixed; left: 0; right: 0; top: var(--top); bottom: 0; display: flex; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; scroll-snap-type: x proximity; }
+#strip { position: fixed; left: 0; width: var(--lw); top: var(--top); bottom: 0; display: flex; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; scroll-snap-type: x proximity; }
 body.narrow #strip { scroll-snap-type: x mandatory; scrollbar-width: none; }
 .snap { position: absolute; top: 0; width: 1px; height: 1px; scroll-snap-align: start; pointer-events: none; }
 .col { position: sticky; flex: none; width: var(--cw); height: 100%; display: flex; flex-direction: column; background-color: var(--page);
@@ -307,22 +329,81 @@ body.narrow .slot { flex: 0 0 0; padding: 0; overflow: hidden; }
 .slot.dz-hover .slotb { border-color: var(--accent); background: var(--accent-soft); color: var(--t-heading); }
 
 /* connectors: from the source paragraph (or part) to the header of the branch in the next column */
-#links { position: fixed; left: 0; top: var(--top); width: 100vw; height: calc(100vh - var(--top)); pointer-events: none; z-index: 6; overflow: visible; }
+#links { position: fixed; left: 0; top: var(--top); width: var(--lw); height: calc(100vh - var(--top)); pointer-events: none; z-index: 6; overflow: hidden; }
 #links path { fill: none; stroke: var(--link); stroke-width: 1.5; opacity: .9; }
 #links circle { fill: var(--link); }
 #links path.det { stroke-dasharray: 4 4; }
 #links path.hot { stroke: var(--accent); stroke-width: 1.75; opacity: 1; }
 #links circle.hot { fill: var(--accent); }
 
-.hint { position: fixed; left: 352px; top: 12px; height: 32px; line-height: 32px; padding: 0 12px; z-index: 19; font-size: 11.5px; color: var(--t-faint); max-width: calc(100vw - 420px); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the hint sits above the column strip only, in up to two lines */
+.hint { position: fixed; left: 352px; top: 12px; height: 32px; display: flex; align-items: center; line-height: 15px; padding: 0 12px; z-index: 19; font-size: 11.5px; color: var(--t-faint); max-width: calc(var(--lw) - 352px); pointer-events: none; overflow: hidden; }
 @media (max-width: 1100px) { .hint { display: none; } }
+body.nohint .hint, body.solo .hint { display: none; }
 @media (max-width: 520px) { .tl .modl { display: none; } }
 @media (max-width: 360px) { .tl button { padding: 0 9px; } }
+/* ---- canvas pane: the open thread in 2D, to the right of the strip (styling from session-canvas.html) ---- */
+#cv { position: fixed; top: 0; bottom: 0; left: var(--lw); right: 0; z-index: 8; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+  background-color: var(--page); background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 24px 24px;
+  border-left: 1px solid var(--divider); box-shadow: -12px 0 22px -18px rgba(20,24,26,.5); }
+#cv.panning, #cv.panning .cst { cursor: grabbing; }
+#cvworld { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#cvlinks { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+#cvlinks path { fill: none; stroke: var(--link); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .55; }
+#cvlinks circle { fill: var(--link); }
+#cvlinks .on, #cvlinks .hot { opacity: 1; }
+#cvlinks path.on { stroke: var(--accent); stroke-width: 1.75; }
+#cvlinks path.sel { stroke-width: 2.5; }
+#cvlinks path.hot:not(.on) { stroke: color-mix(in srgb, var(--accent) 60%, var(--link)); }
+#cvlinks circle.on, #cvlinks circle.hot { fill: var(--accent); }
+.cst { position: absolute; left: 0; top: 0; width: 320px; display: flex; flex-direction: column; cursor: pointer; }
+.cst > .sbody { transition: box-shadow .15s; }
+.cst:hover > .sbody, .cst.hov > .sbody { outline: 1.5px dashed var(--accent); outline-offset: 4px; }
+.cst.open > .sbody { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
+.cst.sel > .sbody { box-shadow: 0 0 0 2.5px var(--accent), var(--shadow-pop); }
+.cst:focus-visible { outline: none; } .cst:focus-visible > .sbody { outline: 2px solid var(--accent); outline-offset: 4px; }
+.cst .sh { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px 0 42px; font-size: 11.5px; color: var(--t-faint); border-bottom: 1px solid var(--divider); }
+.cst .sh .ch { font-weight: 600; color: var(--t-secondary); }
+.cst .sh .newc { color: var(--new); font-weight: 600; }
+.cst .sh .grow { flex: 1; }
+.cst .fq { border-bottom: 1px solid var(--divider); }
+.cst .cvsep { height: 1px; background: var(--divider); }
+.cst .cvd { padding: 10px 12px 11px 42px; font-size: 12.5px; color: var(--t-faint); font-style: italic; }
+/* overview zoom (below 50%): geometry stays; each card shows a headline over its first part */
+.cst .sh .ov { display: none; }
+#cvworld.far .sh .ov { display: block; position: absolute; left: 0; bottom: 100%; margin-bottom: 4px; font-size: calc(11px / var(--z, 1)); font-weight: 600; color: var(--t-secondary); white-space: nowrap; line-height: 1.2; }
+#cvworld.far .sh .ov b { color: var(--new); }
+#cvworld.far .sh { position: relative; }
+#cvworld.far .prose, #cvworld.far .ph, #cvworld.far .part > .gut, #cvworld.far .fq, #cvworld.far .pending, #cvworld.far .sh > :not(.ov) { visibility: hidden; }
+.cst .part .hl { display: none; }
+#cvworld.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+#cvworld.far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
+#cvworld.far .hl small b { color: var(--new); }
+.cvt { position: absolute; left: 16px; top: 12px; height: 32px; line-height: 32px; max-width: calc(100% - 84px); z-index: 2; font-size: 12px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.cvt b { color: var(--t-heading); font-weight: 600; }
+.cvempty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(300px, calc(100% - 48px)); display: grid; justify-items: center; gap: 8px; text-align: center; font-size: 12.5px; color: var(--t-faint); }
+.cvempty .lc { width: 18px; height: 18px; color: var(--t-dim); }
+.zc { position: absolute; right: 12px; bottom: 12px; z-index: 2; display: flex; gap: 6px; }
+.zc .zv { min-width: 52px; justify-content: center; font-variant-numeric: tabular-nums; }
+#viewt { display: none; }
+/* below 900px: one of the two at a time; the top-bar button switches */
+body.solo #viewt { display: inline-flex; }
+body.solo #cv { top: var(--top); left: 0; border-left: 0; box-shadow: none; }
+body.solo .cvt { top: 2px; left: 12px; }
+body.solo:not(.cvview) #cv { visibility: hidden; }
+body.solo.cvview #strip, body.solo.cvview #links { visibility: hidden; }
+/* hovering a card marks the same stack in the columns: its column, its card, its branch row and its index row */
+.col.xhov > .chd .ch { color: var(--accent); }
+.col.xhov .spine span { color: var(--accent); }
+.stack.xhov > .sbody { outline: 1.5px dashed var(--accent); outline-offset: 3px; }
+.fk.xhov, .ix.xhov { outline: 1.5px dashed var(--accent); outline-offset: 2px; }
 </style>
 
 <div id="strip" aria-label="Columns"></div><svg id="links" aria-hidden="true"></svg>
+<div id="cv" aria-label="Canvas: the open thread"><div id="cvworld"><svg id="cvlinks" width="1" height="1" aria-hidden="true"></svg><div id="cvstacks"></div></div><div class="cvt" id="cvt"></div><div class="cvempty" id="cvempty" hidden><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg><span>No thread is open. Open a stack from the list to show it and its branches here.</span></div><div class="zc"><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in" title="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button" title="Fit the thread in the pane">Fit</button></div></div>
 <div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
-<div class="br"><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></div>
+<div class="br"><button id="viewt" type="button" aria-label="Show the canvas" title="Show the canvas"></button><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></div>
 <div class="hint" id="hint">Shift+scroll or ← → moves between columns. Drag an avatar or selected text into a column on the right to branch.</div>
 
 <script>
@@ -344,7 +425,7 @@ const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
 const av = u => `<span class="av" style="background:var(--av${AVN[u] || (u.length % 6) + 1})" aria-hidden="true">${initials(u)}</span>`;
 /* Lucide icons (lucide.dev, ISC licence), inlined */
-const LUCIDE = { 'list': '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>', 'git-fork': '<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/>', 'bell': '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>' };
+const LUCIDE = { 'list': '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>', 'git-fork': '<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/>', 'bell': '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>', 'columns-3': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>', 'workflow': '<rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>' };
 const icon = (n, cls = '') => `<svg class="lc${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]}</svg>`;
 const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -397,14 +478,25 @@ const colOf = sid => { const i = V.trail.indexOf(sid); return i < 0 ? -1 : i + 1
 
 /* ---- column geometry ----
    Equal-width columns. On a wide screen column i sticks at i × spine from the left, so earlier columns pile up as
-   spines; on a narrow screen every column sticks at 0 and only the previous column's spine shows. */
-const G = { narrow: false, spine: 40, w: 376 };
+   spines; on a narrow screen every column sticks at 0 and only the previous column's spine shows.
+   From 900px up the strip takes the left part of the page (lw) and the canvas pane the rest. The target is 58% of
+   the page; the strip is then cut to k whole columns plus one spine (k = 1 to 3, columns 340 to 420px wide, or up to
+   520px when only one fits). Below 900px (solo) the strip is the full width, and the canvas replaces it when
+   switched to. */
+const G = { narrow: false, solo: false, spine: 40, w: 376, lw: 0 };
 function measure() {
-  G.narrow = innerWidth < 760; G.spine = G.narrow ? 28 : 40;
-  G.w = G.narrow ? innerWidth - G.spine : Math.max(340, Math.min(400, Math.floor(innerWidth / 3.4)));
-  const r = document.documentElement.style; r.setProperty('--cw', G.w + 'px'); r.setProperty('--spine', G.spine + 'px');
-  document.body.classList.toggle('narrow', G.narrow);
+  G.narrow = innerWidth < 760; G.solo = innerWidth < 900; G.spine = G.narrow ? 28 : 40;
+  if (G.narrow) { G.w = innerWidth - G.spine; G.lw = innerWidth; }
+  else if (G.solo) { G.w = Math.max(340, Math.min(400, Math.floor(innerWidth / 3.4))); G.lw = innerWidth; }
+  else { const t = Math.round(innerWidth * 0.58) - G.spine, k = Math.max(1, Math.min(3, Math.floor(t / 340)));
+    G.w = k === 1 ? Math.max(340, Math.min(520, t)) : Math.min(420, Math.floor(t / k)); G.lw = k * G.w + G.spine; }
+  const r = document.documentElement.style; r.setProperty('--cw', G.w + 'px'); r.setProperty('--spine', G.spine + 'px'); r.setProperty('--lw', G.lw + 'px');
+  document.body.classList.toggle('narrow', G.narrow); document.body.classList.toggle('solo', G.solo);
+  document.body.classList.toggle('nohint', G.lw - 352 < 330);
+  setView(CV.view);
 }
+/* the right edge of the strip, in viewport pixels */
+const stripRight = () => G.lw;
 
 /* ---- rendering ---- */
 const stripEl = $('#strip'), links = $('#links');
@@ -430,12 +522,14 @@ function chipHTML(f) {
   const who = q ? (isModel(q) ? MARK : av(q.by.u)) : '';
   return `<button type="button" class="fk${c > 0 ? ' on' : ''}" data-a="open" data-id="${f.id}" title="${c > 0 ? 'Open' : 'Open in the next column'}">${icon('corner-down-right')}${who}<span class="fw">${q ? esc(words(q, 9)) : 'New branch'}</span>${dist}${nn ? `<span class="fnew">${nn} new</span>` : ''}<span class="fn" title="${ps.length} part${ps.length === 1 ? '' : 's'}">${ps.length}</span></button>`;
 }
+/* a model part whose run has not finished: its step and a progress bar */
+function pendingHTML(p) {
+  const r = p.run, steps = ['Queued', 'Reading context', 'Searching sources', 'Writing', 'Checking citations'];
+  const label = r.status === 'stopped' ? 'Stopped' : r.status === 'queued' ? 'Queued' : `Step ${r.step + 1} of 4 · ${steps[r.step + 1]}`;
+  return `<div class="pending"><span>${label} · reading ${ctxOf(p).length} part${ctxOf(p).length === 1 ? "" : "s"}</span><span class="bar"><i style="width:${r.status === 'queued' ? 4 : (r.step + 1) * 25}%"></i></span></div>${p.text ? `<div class="prose" style="margin-top:6px">${p.text}</div>` : ''}`;
+}
 function proseHTML(p, s) {
-  if (isModel(p) && p.run.status !== 'complete') {
-    const r = p.run, steps = ['Queued', 'Reading context', 'Searching sources', 'Writing', 'Checking citations'];
-    const label = r.status === 'stopped' ? 'Stopped' : r.status === 'queued' ? 'Queued' : `Step ${r.step + 1} of 4 · ${steps[r.step + 1]}`;
-    return `<div class="pending"><span>${label} · reading ${ctxOf(p).length} part${ctxOf(p).length === 1 ? "" : "s"}</span><span class="bar"><i style="width:${r.status === 'queued' ? 4 : (r.step + 1) * 25}%"></i></span></div>${p.text ? `<div class="prose" style="margin-top:6px">${p.text}</div>` : ''}`;
-  }
+  if (isModel(p) && p.run.status !== 'complete') return pendingHTML(p);
   /* branches from a paragraph are listed directly under that paragraph */
   const byBlock = {}; for (const f of forksOf(p.id)) if (f.fork.block != null) (byBlock[f.fork.block] ||= []).push(f);
   const tmp = document.createElement('div'); tmp.innerHTML = p.text;
@@ -557,7 +651,7 @@ function render(opts = {}) {
       for (const [e] of moved) { e.style.transition = 'transform .3s cubic-bezier(.2,.7,.2,1)'; e.style.transform = ''; }
       animUntil = performance.now() + 340; tick(); }
   }
-  updateSpines(); drawLinks(); updateNext();
+  updateSpines(); drawLinks(); updateNext(); cvRender(); markCols(CV.hov);
   V.fresh = null;
   if (opts.focus) { const t = document.querySelector(opts.focus); t?.focus({ preventScroll: true }); }
 }
@@ -567,7 +661,7 @@ function tick() { drawLinks(); if (performance.now() < animUntil) requestAnimati
 function updateSpines() {
   const cols = [...stripEl.querySelectorAll(':scope > .col')];
   cols.forEach((c, i) => { const r = c.getBoundingClientRect(), nx = cols[i + 1] ? cols[i + 1].getBoundingClientRect().left : Infinity;
-    const vis = Math.min(nx, innerWidth) - r.left; c.classList.toggle('spined', r.left < innerWidth && vis < G.w * 0.5); });
+    const vis = Math.min(nx, stripRight()) - r.left; c.classList.toggle('spined', r.left < stripRight() && vis < G.w * 0.5); });
 }
 /* the scroll position that shows column c in full. Positions are aligned so that every column left of the first
    full one is exactly a spine (j × (width − spine) puts column j at j × spine); of the aligned positions that show
@@ -602,8 +696,8 @@ function drawLinks() {
     const pr = pcol.querySelector('.cscroll').getBoundingClientRect(), cr = ccol.querySelector('.cscroll').getBoundingClientRect();
     const y1v = clampY(ay, pr), y2v = clampY(by, cr), off = y1v !== ay || y2v !== by;
     const x1 = Math.min(card.getBoundingClientRect().right, ccol.getBoundingClientRect().left) - lr.left, x2 = fr.left - lr.left, y1 = y1v - lr.top, y2 = y2v - lr.top;
-    if (x2 - x1 < 6 || fr.left > innerWidth - 2) return;
-    const mx = (x2 - x1) / 2, hot = V.sel === s.id || V.hot === s.id;
+    if (x2 - x1 < 6 || fr.left > stripRight() - 2) return;
+    const mx = (x2 - x1) / 2, hot = V.sel === s.id || V.hot === s.id || CV.hov === s.id;
     out.push(`<path class="${off ? 'det' : ''}${hot ? ' hot' : ''}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="${hot ? 'hot' : ''}" cx="${x1}" cy="${y1}" r="3"/>`);
   });
   links.innerHTML = out.join('');
@@ -732,7 +826,7 @@ function openNotes() {
 function goToNote(id) {
   const p = P[id]; if (!p) return; const s = S[p.st], path = pathTo(s).map(x => x.id);
   if (V.draft && !path.includes(V.draft.st) && !leaveDraft()) return;
-  V.trail = path; V.sel = s.id; V.seen.add(id);
+  V.trail = path; V.sel = s.id; V.seen.add(id); setView('cols');
   render({ noAnim: true }); focusCol(colOf(s.id));
   const el = stripEl.querySelector(`[data-part="${id}"]`), cs = el?.closest('.cscroll');
   if (el && cs) { cs.scrollTop += el.getBoundingClientRect().top - cs.getBoundingClientRect().top - 48; drawLinks(); }
@@ -761,7 +855,7 @@ function newRoot(mode) {
   if (!leaveDraft()) return;
   const id = 's' + (++seq);
   S[id] = { id, ch: 'public', fork: null };
-  V.trail = [id]; V.draft = { st: id, after: '', mode, texts: [''] }; V.sel = id; hideHint();
+  V.trail = [id]; V.draft = { st: id, after: '', mode, texts: [''] }; V.sel = id; hideHint(); setView('cols');
   render({ noAnim: true, focus: '.draft textarea' }); reveal(1);
 }
 function hideHint() { $('#hint').hidden = true; }
@@ -808,10 +902,11 @@ document.addEventListener('click', e => {
   if (stEl && !e.target.closest('textarea, button')) { const sid = stEl.dataset.stack;
     if (V.sel !== sid) { V.sel = sid; for (const p of partsOf(sid)) V.seen.add(p.id); render({ noAnim: true }); }
     const c = colOf(sid); if (c > 0) reveal(c); return; }
-  if (!stEl && !e.target.closest('.tl, .br, #selfork, .ix') && V.sel && !V.draft) { V.sel = null; render({ noAnim: true }); }
+  if (!stEl && !e.target.closest('.tl, .br, #selfork, .ix, #cv') && V.sel && !V.draft) { V.sel = null; render({ noAnim: true }); }
 });
-/* hovering a branch marks where it starts: the source part, or the source paragraph */
-document.addEventListener('mouseover', e => { const s = e.target.closest('.stack'); const id = s?.dataset.stack || null; if (id === V.hot) return; V.hot = id; drawLinks();
+/* hovering a branch (its column, or its row under the source) marks where it starts: the source part, or the source
+   paragraph. It also marks the stack's card in the canvas pane. */
+document.addEventListener('mouseover', e => { const s = e.target.closest('#strip .stack, #strip .fk[data-id], #strip .ix[data-id]'); const id = s?.dataset.stack || s?.dataset.id || null; if (id === V.hot) return; V.hot = id; drawLinks(); cvMark();
   document.querySelectorAll('.anchor-hot').forEach(x => x.classList.remove('anchor-hot'));
   const f = id && S[id]; if (!f?.fork) return; const pe = document.querySelector(`[data-part="${f.fork.part}"]`); if (!pe) return;
   if (f.fork.block != null) { const pr = pe.querySelector('.prose[data-p]'); if (pr) blocksOf(pr)[f.fork.block]?.classList.add('anchor-hot'); }
@@ -876,7 +971,7 @@ document.addEventListener('dragover', e => {
   stripEl.querySelectorAll('.dz-hover').forEach(x => { if (x !== t?.el) x.classList.remove('dz-hover'); });
   if (!t) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; t.el.classList.add('dz-hover');
   /* near the right edge, keep scrolling toward the empty slot */
-  if (e.clientX > innerWidth - 48) stripEl.scrollLeft += 16;
+  if (e.clientX > stripRight() - 48 && e.clientX < stripRight()) stripEl.scrollLeft += 16;
 });
 document.addEventListener('drop', e => {
   if (!DRAG) return; e.preventDefault();
@@ -945,6 +1040,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const bs = [...m.querySelectorAll('button')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus(); }
 }, true);
 stripEl.addEventListener('wheel', closeBmenu, { passive: true });
+$('#cv').addEventListener('wheel', closeBmenu, { passive: true });
 
 /* the "+" insert controls show only in the gaps directly above and below the hovered part; a question and its answer
    count as one */
