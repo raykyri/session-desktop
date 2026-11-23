@@ -138,7 +138,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .fq i { display: flex; align-items: center; gap: 5px; font-style: normal; color: var(--t-faint); margin-bottom: 1px; }
 .fq i .lc { width: 13px; height: 13px; }
 .fq .old { color: var(--warn); }
-.cmeta { display: flex; width: 100%; text-align: left; gap: 9px; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
+.cmeta { display: flex; align-items: center; width: 100%; text-align: left; gap: 9px; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
 
 .part { position: relative; padding: 10px 12px 10px 11px; display: flex; gap: 9px; align-items: flex-start; }
 .part > .gut { flex: none; width: 22px; display: flex; justify-content: center; position: relative; }
@@ -152,6 +152,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* a person's part, and a model answer: each tinted against the page */
 .part { background: var(--part-u); }
 .part.m { background: var(--part-m); }
+.part.ins { margin-left: 18px; box-shadow: inset 2px 0 0 var(--border-strong); }
 .ph { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t-faint); margin-top: 4px; flex-wrap: wrap; }
 .ph b { color: var(--t-heading); font-weight: 600; font-size: 12px; }
 .ph .late { color: var(--warn); }
@@ -173,7 +174,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
 .prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; padding: 0 1px; }
 .part:not(.m) .prose { color: var(--t-heading); font-size: 14px; line-height: calc(1.58em - 1px); }
-.prose .anc { box-shadow: -8px 0 0 -5px var(--link); }
+/* the mark beside a paragraph a branch starts from: 2px wide, 3px left of the text */
+.prose .anc { position: relative; }
+.prose .anc::before { content: ''; position: absolute; left: -5px; top: 5px; bottom: 5px; width: 2px; border-radius: 1px; background: var(--link); }
 .clamp { max-height: 236px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
 .more { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
 .pending { color: var(--t-faint); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
@@ -185,17 +188,20 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* seams: the gap between two parts. Desktop: a "+" in the left gutter of the hovered gap. Touch, or a selected stack:
    every gap shows its "+" (44px target). */
 .seam { position: relative; height: 1px; background: var(--divider); }
-.seam .sp .lc { width: 13px; height: 13px; }
-.seam .sp { display: grid; place-items: center; position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
+.seam .sp .lc { width: 8px; height: 8px; stroke-width: 3; }
+.seam .sp { display: grid; place-items: center; position: absolute; left: -8px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--card); color: var(--accent);
   box-shadow: var(--shadow); font-weight: 700; font-size: 15px; line-height: 22px; text-align: center; opacity: 0; transition: opacity .1s, transform .1s; z-index: 3; }
 .seam .hz { position: absolute; left: -26px; right: 0; top: -7px; height: 14px; z-index: 2; }
-.seam:hover .sp, .seam .sp:focus-visible, .seam.near .sp { opacity: 1; }
+.seam:hover .sp, .seam .sp:focus-visible { opacity: 1; }
+@media (pointer: coarse) { .seam.near .sp { opacity: 1; } }
 .seam:hover { background: var(--accent); }
 .seam .sp:hover { transform: scale(1.12); }
-@media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; line-height: 32px; top: -16px; left: -18px; }
+@media (pointer: coarse) { .seam .sp { width: 28px; height: 28px; top: -14px; left: -16px; } .seam .sp .lc { width: 13px; height: 13px; stroke-width: 2; }
   .seam .hz { display: none; } }
 .addend { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); border-radius: 0 0 10px 10px; }
 .addend .lc, .cmeta .gutsp { width: 22px; flex: none; }
+.cmeta .nf { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.cmeta .nf .lc { width: 13px; height: 13px; }
 .addend .lc { height: 14px; }
 .addend:hover, .cmeta:hover { color: var(--t-secondary); background: color-mix(in srgb, var(--t-heading) 4%, transparent); }
 @media (pointer: coarse) { .addend { padding: 11px 12px 11px 11px; } }
@@ -225,7 +231,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .draft textarea::placeholder { color: var(--t-dim); }
 .draft .drow { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 .draft .drow .grow { flex: 1; }
-.draft .below { font-size: 11.5px; color: var(--t-faint); margin-top: 2px; }
 .draft { position: relative; }
 .draft .dp:first-child textarea { padding-right: 26px; }
 .draft .dx { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--t-dim); }
@@ -246,6 +251,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* ---- focus view: lanes ---- */
 .stack.root { z-index: 3; }
 .stack.gone { opacity: 0; pointer-events: none; }
+.stack.peek .sbody > * { opacity: 0; }
+.stack.peek .sbody { background: color-mix(in srgb, var(--card) 70%, var(--page)); }
+#links circle.open { fill: var(--page); stroke: var(--link); stroke-width: 1.5; }
+#links circle.open.hot { stroke: var(--accent); fill: var(--page); }
+#hiddenl { position: absolute; z-index: 5; width: 28px; padding: 6px 0; border-radius: 8px; background: var(--card); box-shadow: var(--shadow); color: var(--t-secondary);
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; font-weight: 600; }
+#hiddenl .lc { width: 14px; height: 14px; }
+#hiddenl:hover { background: var(--inset); color: var(--t-heading); }
 .stack:not(.sel) { cursor: pointer; }
 .stack:not(.sel) .prose, .stack:not(.sel) textarea { cursor: auto; }
 
@@ -324,7 +337,7 @@ const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
 const av = u => `<span class="av" style="background:var(--av${AVN[u] || (u.length % 6) + 1})" aria-hidden="true">${initials(u)}</span>`;
 /* Lucide icons (lucide.dev, ISC licence), inlined */
-const LUCIDE = { 'bell': '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>' };
+const LUCIDE = { 'bell': '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'minus': '<path d="M5 12h14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'chevron-left': '<path d="m15 18-6-6 6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>' };
 const icon = (n, cls = '') => `<svg class="lc${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]}</svg>`;
 const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -532,9 +545,20 @@ function layout() {
     return ext;
   };
   const ext = place(r, 0, 0);
-  for (const id in els) { const p = POS[id]; if (!p) continue; const shown = colShown(p.c);
-    els[id].style.left = colX(p.c) + 'px'; els[id].style.top = (p.y + TOPPAD) + 'px'; els[id].classList.toggle('gone', !shown); els[id].inert = !shown; }
+  const vw = fv.clientWidth;
+  for (const id in els) { const p = POS[id]; if (!p) continue; const shown = colShown(p.c), x = colX(p.c);
+    els[id].style.left = x + 'px'; els[id].style.top = (p.y + TOPPAD) + 'px'; els[id].classList.toggle('gone', !shown); els[id].inert = !shown;
+    /* a lane only partly on screen (the phone's parent strip, or the next lane at the right edge) shows its card, not its text */
+    els[id].classList.toggle('peek', shown && (x < 0 || x + G.W > vw)); }
   world.style.height = (ext + TOPPAD + 160) + 'px';
+  /* with the root pinned and lanes slid under it, a control in the gap says how many and shows the nearest one */
+  let hb = $('#hiddenl');
+  if (G.mode === 'pin' && V.off > 0) {
+    if (!hb) { hb = document.createElement('button'); hb.id = 'hiddenl'; hb.type = 'button'; world.append(hb); }
+    hb.style.left = (G.pad + G.W + (G.gap - 28) / 2) + 'px'; hb.style.top = TOPPAD + 'px';
+    hb.innerHTML = `${icon('chevron-left')}<span>${V.off}</span>`;
+    hb.title = `${V.off} lane${V.off === 1 ? '' : 's'} hidden behind the root. Show the nearest`; hb.setAttribute('aria-label', hb.title);
+  } else hb?.remove();
 }
 
 /* connectors: from the anchor on the parent's right edge to the fork's top-left. A lane whose parent lane has slid
@@ -547,7 +571,7 @@ function drawLinks() {
     const s = S[el.dataset.stack]; if (!s?.fork || el.classList.contains('gone')) return;
     const fp = P[s.fork.part], pst = fp && stacksEl.querySelector(`:scope > .stack[data-stack="${fp.st}"]`); if (!pst) return;
     const fr = el.getBoundingClientRect(), x2 = fr.left - wr.left, y2 = fr.top - wr.top + 16, h = hot.has(s.id) ? ' hot' : '';
-    if (pst.classList.contains('gone')) { out.push(`<path class="det${h}" d="M${x2 - G.gap + 10},${y2} H${x2}"/><circle class="tick${h}" cx="${x2 - G.gap + 10}" cy="${y2}" r="3"/>`); return; }
+    if (pst.classList.contains('gone')) { out.push(`<path class="det${h}" d="M${x2 - G.gap / 2},${y2} H${x2}"/><circle class="open${h}" cx="${x2 - G.gap / 2}" cy="${y2}" r="3"/>`); return; }
     const pe = pst.querySelector(`[data-part="${fp.id}"]`); if (!pe) return;
     let ay;
     if (s.fork.block != null) { const pr = pe.querySelector(`.prose[data-p="${fp.id}"]`), b = pr ? pr.children[s.fork.block] : null; ay = b ? Math.min(b.getBoundingClientRect().top + 9, pr.getBoundingClientRect().bottom - 8) : pe.getBoundingClientRect().top + 16; }
@@ -627,13 +651,13 @@ function exitFocus() {
   const id = V.focus, b = stacksEl.querySelector(`.stack[data-stack="${id}"]`)?.getBoundingClientRect();
   V.focus = null; V.sel = null; closeBmenu(); $('#selfork')?.remove();
   fv.hidden = true; ov.hidden = false; document.body.dataset.view = 'overview';
-  stacksEl.innerHTML = ''; links.innerHTML = '';
+  stacksEl.innerHTML = ''; links.innerHTML = ''; $('#hiddenl')?.remove();
   render();
   ov.scrollTop = V.ovScroll;
   const t = grid.querySelector(`.tile[data-id="${id}"]`); if (!t) return;
   t.focus({ preventScroll: true });
   const a = t.getBoundingClientRect(), top = ov.getBoundingClientRect().top;
-  if (a.top < top || a.bottom > innerHeight) t.scrollIntoView({ block: 'nearest' });
+  if (a.bottom < top || a.top > innerHeight) t.scrollIntoView({ block: 'nearest' });   // only a tile entirely out of view (a new unit) moves the page
   if (b && !reduced()) { const c = t.getBoundingClientRect();
     t.animate([{ transformOrigin: '0 0', transform: `translate(${b.left - c.left}px,${b.top - c.top}px) scale(${b.width / c.width})`, opacity: .4 }, { transformOrigin: '0 0', transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.7,.2,1)' }); }
 }
@@ -803,6 +827,7 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#selfork')) $('#selfork')?.remove();
   const tile = e.target.closest('.tile'); if (tile) { openTile(tile); return; }
   if (e.target.closest('#back')) { exitFocus(); return; }
+  if (e.target.closest('#hiddenl')) { const a = pathTo(V.sel)[V.off]; if (a) selectStack(a.id); return; }
   const cr = e.target.closest('[data-crumb]'); if (cr) { selectStack(cr.dataset.crumb); return; }
   const t = e.target.closest('[data-a]'), a = t?.dataset.a, d = t?.dataset || {};
   if (a === 'seam') { e.stopPropagation(); openDraft(d.st, d.after, P[d.after] && isModel(P[d.after]) ? 'ask' : 'post'); return; }

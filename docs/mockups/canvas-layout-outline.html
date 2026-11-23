@@ -100,13 +100,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 /* ---- the document column ---- */
 #doc { max-width: 712px; margin: 0 auto; padding: 2px 16px 40vh; }
 .hint { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 2px 12px; font-size: 11.5px; color: var(--t-faint); }
-.hint kbd { font: 600 10.5px/1 var(--font); padding: 2px 5px; border-radius: 4px; background: var(--control); color: var(--t-secondary); }
+.hint kbd { font: 600 10.5px/1 var(--font); padding: 2px 5px; border-radius: 4px; background: var(--card); box-shadow: var(--shadow); color: var(--t-secondary); }
 @media (pointer: coarse) { .hint .keys { display: none; } }
 .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin: 0 0 12px; font-size: 12.5px; color: var(--t-faint); }
-.crumbs button, .crumbs [aria-current] { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 6px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumbs button, .crumbs [aria-current] { display: inline-block; padding: 3px 6px; border-radius: 6px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumbs button { color: var(--accent); font-weight: 500; }
 .crumbs button:hover { background: var(--control); }
-.crumbs [aria-current] { display: inline-block; color: var(--t-heading); font-weight: 600; }
+.crumbs [aria-current] { color: var(--t-heading); font-weight: 600; }
+.crumbs button .lc { display: inline-block; vertical-align: -2px; margin-right: 5px; }
 .crumbs .sep { color: var(--t-dim); } .crumbs .sep .lc { width: 13px; height: 13px; }
 @media (pointer: coarse) { .crumbs button { padding: 8px 8px; } }
 
@@ -184,7 +185,9 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
 .prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; padding: 0 1px; }
 .part:not(.m) > .pb > .prose { color: var(--t-heading); font-size: 14px; line-height: calc(1.58em - 1px); }
-.prose .anc { box-shadow: -8px 0 0 -5px var(--link); }
+/* a paragraph that branches start from carries a short rule in the gutter beside it */
+.prose .anc { position: relative; }
+.prose .anc::before { content: ''; position: absolute; left: -6px; top: 3px; bottom: 3px; width: 2px; border-radius: 1px; background: var(--link); }
 .pb > .branches + .prose { margin-top: 4px; }
 .clamp { max-height: 236px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
 .more { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }

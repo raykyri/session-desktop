@@ -503,7 +503,7 @@ function widths(k) {
   return { C, T, E, L };
 }
 
-const colTitles = () => ['Channels', V.ch === 'all' ? 'All' : '#' + (CH[V.ch] || V.ch), ...stackCols().map((id, i) => i ? 'Branch' : stackTitle(S[id]))];
+const colTitles = () => ['Channels', V.ch === 'all' ? 'All' : '#' + (CH[V.ch] || V.ch), ...stackCols().map(id => stackTitle(S[id]))];
 function updateToolbar() {
   const t = colTitles(), narrow = document.body.classList.contains('narrow'), back = $('#back'), cr = $('#crumbs');
   back.hidden = !narrow || V.col === 0;

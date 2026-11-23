@@ -559,8 +559,11 @@ function pageRow(id, dir) {
   const i = Math.max(0, Math.round(tr.scrollLeft / step) + dir * n);
   tr.scrollTo({ left: i * step, behavior: smooth() });
 }
+/* menus close when the person scrolls (a re-render also restores scroll positions, so this listens to wheel and touch) */
+const closeFloating = () => { closeBmenu(); $('#selfork')?.remove(); };
+addEventListener('wheel', closeFloating, { passive: true });
+addEventListener('touchmove', closeFloating, { passive: true });
 document.addEventListener('scroll', e => {
-  closeBmenu(); $('#selfork')?.remove();
   const t = e.target; if (!(t instanceof Element)) return;
   if (t.classList.contains('track')) updateRow(t.closest('.row'));
   else if (t.classList.contains('sbody')) drawRowLinks(t.closest('.row'));
