@@ -654,7 +654,7 @@ function reveal(el, { y = false, behavior = 'auto' } = {}) {
   else if (r.right > p.left + vw - pad) dx = Math.min(r.left - p.left - pad, r.right - p.left - vw + pad);
   if (y) { if (r.top < p.top + pad) dy = r.top - p.top - pad;
     else if (r.bottom > p.top + vh - pad) dy = r.height > vh - 2 * pad ? r.top - p.top - pad : r.bottom - p.top - vh + pad; }
-  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) pane.scrollBy({ left: Math.abs(dx) > 1 ? dx : 0, top: dy, behavior });
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) pane.scrollTo({ left: pane.scrollLeft + (Math.abs(dx) > 1 ? dx : 0), top: pane.scrollTop + dy, behavior });
 }
 /* the bar's arrows move the pane by one column */
 function pageCols(dir) {

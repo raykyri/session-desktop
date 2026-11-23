@@ -1037,13 +1037,15 @@ function openPartMenu(target, x, y) {
   return true;
 }
 document.addEventListener('contextmenu', e => { if (openPartMenu(e.target, e.clientX, e.clientY)) e.preventDefault(); });
-/* touch: a long press opens the same menu (iOS does not fire contextmenu) */
-let lp = null;
-document.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') return; clearTimeout(lp?.t);
-  const t = e.target, x = e.clientX, y = e.clientY; lp = { x, y, t: setTimeout(() => { lp = null; if (!pan?.moved && openPartMenu(t, x, y)) suppressUntil = performance.now() + 400; }, 500) }; });
+/* touch: a long press opens the same menu (iOS does not fire contextmenu). A click that some browsers send when the
+   finger lifts is ignored, so the menu stays open. */
+let lp = null, lpOpened = false, skipClick = 0;
+document.addEventListener('pointerdown', e => { skipClick = 0; if (e.pointerType !== 'touch') return; clearTimeout(lp?.t);
+  const t = e.target, x = e.clientX, y = e.clientY; lp = { x, y, t: setTimeout(() => { lp = null; if (!pan?.moved && openPartMenu(t, x, y)) lpOpened = true; }, 500) }; });
 document.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) { clearTimeout(lp.t); lp = null; } });
-document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
+document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } if (lpOpened) { lpOpened = false; skipClick = performance.now() + 400; } });
 document.addEventListener('click', e => {
+  if (performance.now() < skipClick) { skipClick = 0; e.preventDefault(); e.stopPropagation(); return; }
   const b = e.target.closest?.('#bmenu [data-a="selask"]');
   if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q }); return; }
   if ($('#bmenu')) setTimeout(closeBmenu, 0);

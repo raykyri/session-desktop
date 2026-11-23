@@ -490,7 +490,7 @@ function layout() {
     let bottom = top + H(r.id), right = colX(0) + MAINW();
     POS[r.id] = { x: colX(0), y: top, h: H(r.id), c: 0 };
     const place = (s, c) => {
-      const fs = visibleLaneForks(s).filter(f => els[f.id]).map(f => ({ f, want: POS[s.id].y + anchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want);
+      const fs = visibleLaneForks(s).filter(f => els[f.id]).map(f => ({ f, want: POS[s.id].y + anchorY(f, els[s.id]) })).sort((a, b) => a.want - b.want || (a.f.fork.block ?? -1) - (b.f.fork.block ?? -1));
       for (const { f, want } of fs) {
         const n = c + 1, y = Math.round(low[n] == null ? want : Math.max(want, low[n] + VGAP));
         POS[f.id] = { x: colX(n), y, h: H(f.id), c: n }; low[n] = y + H(f.id);
