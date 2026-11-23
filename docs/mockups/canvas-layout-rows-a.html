@@ -678,7 +678,7 @@ function selectStack(id, { kb = false, scroll = true } = {}) {
   render({ noAnim: true });
   const el = stackEl(id); if (!el) return;
   if (scroll) revealX(el, kb ? smooth() : 'auto');
-  if (kb) { revealY(s.fork ? el : rowEl(r.id)); el.focus({ preventScroll: true }); }
+  if (kb) { revealY(s.fork ? el : rowEl(r.id), smooth()); el.focus({ preventScroll: true }); }   // the page scrolls to the stack smoothly
 }
 /* Left: the parent. Right: the branch last left with Left, else the first branch. Up and Down: the stack above or
    below in the same column of the row; past either end of the column, the previous or next row (its last selected
