@@ -5,17 +5,16 @@ Mock: `docs/mockups/canvas-layout-columns.html`. Only the layout and navigation 
 ## Layout rules
 
 - One strip of equal-width columns. The strip scrolls horizontally; each column scrolls vertically on its own.
-- Column 1 lists the root stacks, most recent activity first, with the channel, the first part, and counts of parts, branches and new parts. Every later column holds one stack.
+- Column 1 lists the root stacks, most recent activity first. Every later column holds one stack.
 - The open columns form a trail. Opening a branch from column k puts it in column k+1, closes the columns after it, and scrolls it into view.
 - Earlier columns stick at the left as 40px spines with a vertical title. Scroll positions are aligned, so a column shows in full or as a spine. A narrow screen shows only the previous column's spine.
-- Add post and Add ask open a new root in column 2.
 
 ## Navigation
 
 - **Wheel or trackpad:** vertical scroll moves the column under the pointer. Shift+wheel or a sideways swipe moves along the strip, which snaps to the aligned positions.
-- **Keyboard:** ← and → move focus between columns and scroll the focused one into view. ↑, ↓, Page Up and Page Down scroll the focused column.
+- **Keyboard:** ← and → move focus between columns; ↑ and ↓ scroll the focused column.
 - **Touch:** a swipe moves one column. Tapping a spine returns to it. A long press opens the part menu.
-- **Stepping back:** click a spine, a column's X, or a branch's "From paragraph" header. The header scrolls the source column to the paragraph.
+- **Stepping back:** click a spine, or a branch's "From paragraph" header, which scrolls the source column to the paragraph.
 
 ## Creating branches
 
@@ -30,12 +29,11 @@ Mock: `docs/mockups/canvas-layout-columns.html`. Only the layout and navigation 
 
 ## What the user no longer manages
 
-Positions, overlaps, zoom and 2D panning. A new branch is placed and scrolled into view automatically. The trail to its left is the context it reads.
+Positions, overlaps, zoom and 2D panning. The trail to the left of a branch is the context it reads.
 
 ## What is lost
 
 - An overview: one path through a tree is visible at a time, so sibling branches cannot be compared side by side.
-- Spatial memory from placing stacks yourself.
 - Collapse, which the index row replaces, and double-click to create.
 - Fit, zoom and pan. The spines show the whole trail, so none of them is kept.
 
