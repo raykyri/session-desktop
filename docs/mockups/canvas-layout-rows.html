@@ -454,12 +454,13 @@ const offY = (el, stop) => { let y = 0; for (let n = el; n && n !== stop; n = n.
    line (or near the anchor part's top), kept 10px inside the card. `off` when the paragraph is hidden under
    "Show all". */
 function anchorOff(f, pe) {
-  const fp = P[f.fork.part], el = pe.querySelector(`[data-part="${fp.id}"]`), h = pe.offsetHeight; let y;
+  const fp = P[f.fork.part], el = pe.querySelector(`[data-part="${fp.id}"]`), h = pe.offsetHeight; let y, off = false;
   if (!el) y = 16;
   else if (f.fork.block != null) { const pr = el.querySelector(`.prose[data-p="${fp.id}"]`), b = pr?.children[f.fork.block];
-    y = b ? Math.min(offY(b, pe) + 9, offY(pr, pe) + pr.offsetHeight - 8) : offY(el, pe) + 16; }
+    if (b) { const by = offY(b, pe) + 9, end = offY(pr, pe) + pr.offsetHeight - 8; y = Math.min(by, end); off = by > end; }
+    else y = offY(el, pe) + 16; }
   else y = offY(el, pe) + 16;
-  return { y: Math.max(10, Math.min(h - 10, y)), off: y < 10 || y > h - 10 };
+  return { y: Math.max(10, Math.min(h - 10, y)), off: off || y < 10 || y > h - 10 };
 }
 function layoutRow(sec) {
   const lane = sec?.querySelector('.lane'); if (!lane) return;

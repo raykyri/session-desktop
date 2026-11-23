@@ -485,16 +485,16 @@ const colOf = sid => { const i = V.trail.indexOf(sid); return i < 0 ? -1 : i + 1
 const G = { narrow: false, solo: false, spine: 40, w: 376, lw: 0 };
 function measure() {
   G.narrow = innerWidth < 760; G.solo = innerWidth < 900; G.spine = G.narrow ? 28 : 40;
-  const r0 = document.documentElement.style;
+  const r = document.documentElement.style; let slot = null;
   if (G.narrow) { G.w = innerWidth - G.spine; G.lw = innerWidth; }
   else if (G.solo) { G.w = Math.max(340, Math.min(400, Math.floor(innerWidth / 3.4))); G.lw = innerWidth; }
   else { G.lw = Math.round(innerWidth * 0.58); const k = Math.max(1, Math.min(3, Math.floor((G.lw - 3 * G.spine) / 340)));
     G.w = k === 1 ? Math.min(520, G.lw - 3 * G.spine) : Math.min(420, Math.floor((G.lw - 3 * G.spine) / k));
-    /* the empty slot after the last column is at least as wide as the space left beside the last column with one
-       spine, so the aligned scroll positions stay reachable; below 160px it shows only its icon */
-    r0.setProperty('--slot', Math.max(64, G.lw - G.spine - k * G.w) + 'px'); }
-  else r0.removeProperty('--slot');
-  const r = document.documentElement.style; r.setProperty('--cw', G.w + 'px'); r.setProperty('--spine', G.spine + 'px'); r.setProperty('--lw', G.lw + 'px');
+    /* the empty slot after the last column is at least as wide as the space beside k columns and one spine, so the
+       aligned scroll positions stay reachable; below 160px it shows only its icon */
+    slot = Math.max(64, G.lw - G.spine - k * G.w); }
+  if (slot) r.setProperty('--slot', slot + 'px'); else r.removeProperty('--slot');
+  r.setProperty('--cw', G.w + 'px'); r.setProperty('--spine', G.spine + 'px'); r.setProperty('--lw', G.lw + 'px');
   document.body.classList.toggle('narrow', G.narrow); document.body.classList.toggle('solo', G.solo);
   document.body.classList.toggle('nohint', G.lw - 352 < 330);
   setView(CV.view);
