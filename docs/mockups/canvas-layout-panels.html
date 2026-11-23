@@ -129,7 +129,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 
 /* pane headers */
 .mhead, .phead { flex: none; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 10px 6px 20px; border-bottom: 1px solid var(--divider); font-size: 12.5px; color: var(--t-faint); }
-.phead { padding-left: 12px; background: var(--card-m); flex-wrap: wrap; }
+.phead { padding-left: 12px; background: var(--card-m); flex-wrap: wrap; align-items: flex-start; }
+.phead .crumbs { padding-top: 2px; }
 .mhead .ch { font-weight: 600; color: var(--t-secondary); white-space: nowrap; }
 .mhead .ttl { color: var(--t-heading); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
 .mhead .grow { flex: 1 1 0; min-width: 8px; }
@@ -139,11 +140,14 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .hb:hover { background: var(--control); color: var(--t-heading); }
 .hb.ic { width: 28px; padding: 0; justify-content: center; }
 .hb .lc { width: 15px; height: 15px; }
-.crumbs { display: flex; align-items: center; gap: 1px; min-width: 0; flex: 1 1 0; }
-.cr { padding: 3px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; max-width: 160px; font-size: 12px; color: var(--t-faint); }
+.crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 1px; row-gap: 0; min-width: 0; flex: 1 1 0; }
+.cr { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 5px; white-space: nowrap; min-width: 0; flex: 0 1 auto; max-width: 180px; font-size: 12px; color: var(--t-faint); }
+.crumbs .step { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+.cr > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cr .av { width: 16px; height: 16px; font-size: 6.5px; }
 button.cr:hover { background: var(--control); color: var(--t-heading); }
-.cr.cur { color: var(--t-heading); font-weight: 600; flex: 0 1 auto; max-width: none; }
-.mhead .cr { max-width: 200px; }
+.cr.cur { color: var(--t-heading); font-weight: 600; max-width: 260px; }
+.mhead .cr { max-width: 200px; display: block; overflow: hidden; text-overflow: ellipsis; }
 
 /* the quoted source of a branch, at the top of the panel (or of the main pane after Swap) */
 .quote { display: block; width: 100%; text-align: left; flex-basis: 100%; margin: 2px 0 4px; padding: 6px 10px 7px; border-radius: 0 7px 7px 0; border-left: 3px solid var(--accent); background: var(--hl); font-size: 12.5px; line-height: 1.45; color: var(--t-heading); }
@@ -151,7 +155,7 @@ button.cr:hover { background: var(--control); color: var(--t-heading); }
 .quote i .lc { width: 13px; height: 13px; }
 .quote span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .quote:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
-.col .quote { margin: 0 0 12px; }
+.col .quote { margin: 0 0 12px 14px; width: calc(100% - 14px); }
 
 /* scrolling bodies, at a comfortable reading width */
 .mscroll, .pscroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
@@ -216,6 +220,8 @@ button.cr:hover { background: var(--control); color: var(--t-heading); }
   font: 700 10.5px/1 var(--font); color: var(--accent); background: var(--card); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); user-select: none; -webkit-user-select: none; }
 .pm .lc { width: 11px; height: 11px; }
 .pm:hover, .pm.on { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+/* a table scrolls sideways; when it has branches it must not clip its marker */
+.prose > table.anc { overflow: visible; }
 li.anc > .pm { left: calc(-32px - 1.3em); }
 /* the source of the branch open in the panel */
 .prose > .src-on { background: var(--hl); border-radius: 3px; box-shadow: 0 0 0 4px var(--hl); }
@@ -308,12 +314,13 @@ li.anc > .pm { left: calc(-32px - 1.3em); }
   #panel.opening { animation-name: rise; }
   .col { padding: 14px 12px 20px; }
   .col > .stack { margin-left: 0; }
+  .col .quote { margin-left: 0; width: 100%; }
   .mhead { padding-left: 14px; }
   .mhead .meta, .mhead .cr { display: none; }
   .mhead .cr + .sep { display: none; }
   .compose .col { padding: 8px 12px 10px; }
   .modl { display: none; }
-  .cr { max-width: 110px; }
+  .cr { max-width: 150px; }
 }
 @keyframes rise { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }
 @media (max-width: 380px) { .tbtn { padding: 0 9px; } }
@@ -522,9 +529,9 @@ function renderPanel() {
   const steps = t.length > 4 ? [t[0], null, ...t.slice(-2)] : t;
   const crumbs = steps.map((x, i) => {
     const sep = i ? '<span class="sep" aria-hidden="true">›</span>' : '';
-    if (!x) return sep + `<button type="button" class="cr" data-a="pcrumb" data-id="${t[t.length - 3].id}" title="Back one step">…</button>`;
-    const label = x.fork ? `${esc(nameOf(authorOf(x)))}: ${esc(title(x, 40))}` : esc(title(x, 40));
-    return sep + (i === steps.length - 1 ? `<span class="cr cur" aria-current="page" title="${esc(title(x, 200))}">${label}</span>` : `<button type="button" class="cr" data-a="pcrumb" data-id="${x.id}" title="${x.id === V.main ? 'Close the panel' : 'Open this branch'}: ${esc(title(x, 160))}">${label}</button>`);
+    if (!x) return `<span class="step">${sep}<button type="button" class="cr" data-a="pcrumb" data-id="${t[t.length - 3].id}" title="Back one step">…</button></span>`;
+    const label = (x.fork ? av(authorOf(x)) : '') + `<span>${esc(title(x, 48))}</span>`;
+    return `<span class="step">${sep}` + (i === steps.length - 1 ? `<span class="cr cur" aria-current="page" title="${esc(title(x, 200))}">${label}</span>` : `<button type="button" class="cr" data-a="pcrumb" data-id="${x.id}" title="${x.id === V.main ? 'Close the panel' : 'Open this branch'}: ${esc(title(x, 160))}">${label}</button>`) + '</span>';
   }).join('');
   panelEl.innerHTML = `<div class="phead"><nav class="crumbs" aria-label="Branch trail">${crumbs}</nav><button type="button" class="hb" data-a="swap" title="Show this branch in the main pane">${icon('arrow-left-right')}Swap</button><button type="button" class="hb ic" data-a="pclose" aria-label="Close branch" title="Close (Esc)">${icon('x')}</button>${fromHTML(s, 'toanchor')}</div>`
     + `<div class="pscroll"><div class="col">${stackHTML(s)}</div></div>` + composerHTML(s);

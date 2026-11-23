@@ -101,7 +101,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .sbody > :first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
 .sbody > :last-child:not(.draft) { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
 .sbody > .fq:last-child { border-bottom: 0; }
-  border-bottom: 1px solid var(--divider); cursor: grab; user-select: none; touch-action: none; }
 .fq { padding: 7px 12px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: 10px 10px 0 0; }
 .fq i { display: flex; align-items: center; gap: 5px; font-style: normal; color: var(--t-faint); margin-bottom: 1px; }
 .fq i .lc { width: 13px; height: 13px; }
@@ -240,7 +239,7 @@ body.narrow #strip { scroll-snap-type: x mandatory; scrollbar-width: none; }
 .cscroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: 2px 14px 45vh; scrollbar-width: thin; }
 .cscroll:focus { outline: none; }
 /* a column covered by the next one shows only its spine: a vertical title, clickable */
-.spine { position: absolute; inset: 0; z-index: 5; display: block; text-align: left; background: var(--page); opacity: 0; pointer-events: none; transition: opacity .15s; border-radius: 0; }
+.spine { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-start; justify-content: flex-start; text-align: left; background: var(--page); opacity: 0; pointer-events: none; transition: opacity .15s; border-radius: 0; }
 .spine span { display: block; writing-mode: vertical-rl; width: var(--spine); line-height: var(--spine); padding-top: 14px; max-height: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12px; font-weight: 600; color: var(--t-secondary); }
 .col.spined .spine { opacity: 1; pointer-events: auto; }

@@ -451,7 +451,7 @@ function anchorAt(f, pe, sb) {
 /* a branch is highlighted while it is selected or hovered */
 const isHot = id => !!id && (id === V.hot || id === V.sel) && !!S[id]?.fork;
 function drawRowLinks(sec) {
-  const lane = sec.querySelector('.lane'), svg = lane?.querySelector('svg.links'); if (!svg) return;
+  const lane = sec?.querySelector('.lane'), svg = lane?.querySelector('svg.links'); if (!svg) return;
   const lr = lane.getBoundingClientRect(), els = {};
   lane.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
   svg.setAttribute('width', lane.scrollWidth); svg.setAttribute('height', lane.offsetHeight);
@@ -481,7 +481,7 @@ function markAnchor() {
 }
 /* the row's scroll state: edge fades, arrows, and which dots are in view */
 function updateRow(sec) {
-  const tr = sec.querySelector('.track'); if (!tr) return;
+  const tr = sec?.querySelector('.track'); if (!tr) return;
   const max = tr.scrollWidth - tr.clientWidth, l = tr.scrollLeft > 2, r = tr.scrollLeft < max - 2;
   sec.classList.toggle('fits', max <= 2);
   tr.style.setProperty('--ml', l ? '28px' : '0px'); tr.style.setProperty('--mr', r ? '28px' : '0px');

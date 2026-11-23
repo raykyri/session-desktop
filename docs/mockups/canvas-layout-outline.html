@@ -131,7 +131,7 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
 .fq { padding: 7px 12px 7px 42px; font-size: 12px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); }
 .fq i { display: flex; align-items: center; gap: 5px; font-style: normal; color: var(--t-faint); margin-bottom: 1px; }
 .fq i .lc { width: 13px; height: 13px; }
-.cmeta { display: flex; width: 100%; text-align: left; gap: 9px; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
+.cmeta { display: flex; align-items: center; width: 100%; text-align: left; gap: 9px; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
 
 /* ---- a branch: indented under its anchor, with a left rule ---- */
 .branches { padding: 0 12px 8px 42px; }
@@ -167,6 +167,8 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
 /* a person's part, and a model answer: each tinted against the page */
 .part { background: var(--part-u); }
 .part.m { background: var(--part-m); }
+/* an ask inserted mid-thread, and the answer under it: indented, with a rule */
+.part.ins { margin-left: 18px; box-shadow: inset 2px 0 0 var(--border-strong); }
 /* the keyboard cursor: one part at a time */
 .part:focus { outline: none; }
 .part:focus-visible { box-shadow: inset 2px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--part-u)); }
@@ -185,29 +187,34 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
 .prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; padding: 0 1px; }
 .part:not(.m) > .pb > .prose { color: var(--t-heading); font-size: 14px; line-height: calc(1.58em - 1px); }
-/* a paragraph that branches start from carries a short rule in the gutter beside it */
+/* the mark beside a paragraph a branch starts from: 2px wide, 3px left of the text */
 .prose .anc { position: relative; }
-.prose .anc::before { content: ''; position: absolute; left: -6px; top: 3px; bottom: 3px; width: 2px; border-radius: 1px; background: var(--link); }
+.prose .anc::before { content: ''; position: absolute; left: -5px; top: 5px; bottom: 5px; width: 2px; border-radius: 1px; background: var(--link); }
 .pb > .branches + .prose { margin-top: 4px; }
 .clamp { max-height: 236px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+/* a clamped answer still shows the branch marks just left of its text */
+.prose.clamp { margin-left: -8px; padding-left: 8px; }
 .more { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
 .pending { color: var(--t-faint); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
 .pending .bar { flex: 1; height: 3px; border-radius: 2px; background: var(--divider); overflow: hidden; }
 .pending .bar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 
-/* seams: the gap between two parts, author only. Desktop: a "+" in the left gutter of the hovered gap. Touch: tapping a
-   part shows the "+" in the gaps above and below it. */
+/* seams: the gap between two parts, author only. Desktop: a "+" in the left gutter while the gap line is hovered.
+   Touch: tapping a part shows the "+" in the gaps above and below it. */
 .seam { position: relative; height: 1px; background: var(--divider); }
-.seam .sp .lc { width: 13px; height: 13px; }
-.seam .sp { display: grid; place-items: center; position: absolute; left: -14px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); color: var(--accent);
+.seam .sp .lc { width: 8px; height: 8px; stroke-width: 3; }
+.seam .sp { display: grid; place-items: center; position: absolute; left: -8px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--card); color: var(--accent);
   box-shadow: var(--shadow); opacity: 0; transition: opacity .1s, transform .1s; z-index: 3; }
 .seam .hz { position: absolute; left: -26px; right: 0; top: -7px; height: 14px; z-index: 2; }
-.seam:hover .sp, .seam .sp:focus-visible, .seam.near .sp { opacity: 1; }
+.seam:hover .sp, .seam .sp:focus-visible { opacity: 1; }
+@media (pointer: coarse) { .seam.near .sp { opacity: 1; } }
 .seam:hover { background: var(--accent); }
 .seam .sp:hover { transform: scale(1.12); }
-@media (pointer: coarse) { .seam .sp { width: 32px; height: 32px; top: -16px; left: -18px; } .seam .hz { display: none; } }
+@media (pointer: coarse) { .seam .sp { width: 28px; height: 28px; top: -14px; left: -16px; } .seam .sp .lc { width: 13px; height: 13px; stroke-width: 2; } .seam .hz { display: none; } }
 .addend { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 6px 12px 7px 11px; font-size: 12px; color: var(--t-faint); border-top: 1px solid var(--divider); }
 .addend .lc, .cmeta .gutsp { width: 22px; flex: none; }
+.cmeta .nf { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.cmeta .nf .lc { width: 13px; height: 13px; }
 .addend .lc { height: 14px; }
 .addend:hover, .cmeta:hover { color: var(--t-secondary); background: color-mix(in srgb, var(--t-heading) 4%, transparent); }
 @media (pointer: coarse) { .addend { padding: 11px 12px 11px 11px; } }
@@ -223,7 +230,6 @@ button.tg:hover { background: var(--control); color: var(--t-heading); }
 .draft textarea::placeholder { color: var(--t-dim); }
 .draft .drow { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
 .draft .drow .grow { flex: 1; }
-.draft .below { font-size: 11.5px; color: var(--t-faint); margin-top: 2px; }
 .draft .dp:first-child textarea { padding-right: 26px; }
 .draft .dx { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--t-dim); }
 .draft .dx:hover { background: var(--control); color: var(--t-heading); }
@@ -283,7 +289,7 @@ const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
 const av = u => `<span class="av" style="background:var(--av${AVN[u] || (u.length % 6) + 1})" aria-hidden="true">${initials(u)}</span>`;
 /* Lucide icons (lucide.dev, ISC licence), inlined */
-const LUCIDE = { 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>', 'maximize-2': '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>', 'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>' };
+const LUCIDE = { 'git-fork': '<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-down': '<path d="m6 9 6 6 6-6"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>', 'maximize-2': '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>', 'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>' };
 const icon = (n, cls = '') => `<svg class="lc${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]}</svg>`;
 const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -303,6 +309,8 @@ const rootOf = s => { while (s.fork) s = parentOf(s); return s; };
 const chainOf = s => { const c = []; for (let x = s; x; x = parentOf(x)) c.unshift(x); return c; };
 /* a stack's author is the person who wrote its first part; only they add to it or insert into it */
 const authorOf = s => partsOf(s.id).find(q => !isModel(q))?.by.u ?? ME;
+/* new parts are stamped after every existing part */
+let LAST_AT = 0; const nextAt = () => { LAST_AT = Math.max(LAST_AT, ...Object.values(P).map(q => Date.parse(q.at) || 0)) + 1000; return new Date(LAST_AT).toISOString(); };
 /* a part written after a part below it was: it was inserted (derived, not stored) */
 const insertedLater = p => partsOf(p.st).some(q => q.key > p.key && q.at < p.at);
 
@@ -384,7 +392,7 @@ function proseHTML(p, s, lvl, clampPx) {
 }
 function partHTML(p, s, lvl, clampPx = 0) {
   const hd = head(p, s);
-  return `<div class="part${isModel(p) ? ' m' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}" tabindex="-1">${hd.gut}<div class="pb">${proseHTML(p, s, lvl, clampPx)}${hd.meta}</div></div>`
+  return `<div class="part${isModel(p) ? ' m' : ''}${insertedPart(p) ? ' ins' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}" tabindex="-1">${hd.gut}<div class="pb">${proseHTML(p, s, lvl, clampPx)}${hd.meta}</div></div>`
     + (clampPx ? '' : branchesHTML(wholeForks(p), lvl + 1, s));
 }
 /* the branches under one anchor, at a level; past the cap, one row that opens the parent on its own */
@@ -399,13 +407,14 @@ function branchesHTML(list, lvl, parent) {
 /* a question and the answer it prompted are read as one: no seam between them */
 /* what a part is, in words: an answer, a question (a person's part answered right under it), or a post */
 const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
+/* a part inserted mid-thread (written after a part below it), or the answer directly under such a part: indented */
+const insertedPart = p => { if (!isModel(p)) return insertedLater(p); const l = partsOf(p.st), q = l[l.indexOf(p) - 1]; return !!q && !isModel(q) && insertedLater(q); };
 const pairedWith = (p, next) => !isModel(p) && next && isModel(next) && next.run.by === p.by.u;
 const fromWhat = s => s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(P[s.fork.part]);
 const seam = (sid, after) => `<div class="seam"><span class="hz"></span><button class="sp" data-a="seam" data-st="${sid}" data-after="${after}" title="Insert a part here" aria-label="Insert a part here">${icon('plus')}</button></div>`;
 function draftHTML() {
-  const d = V.draft, list = partsOf(d.st), after = list.findIndex(p => p.id === d.after), below = d.after && after >= 0 && after < list.length - 1;
+  const d = V.draft;
   return `<div class="draft fresh" data-fl="draft">${d.texts.map((t, i) => `<div class="dp"><textarea data-di="${i}" rows="2" placeholder="${i ? 'Next part' : d.mode === 'ask' ? 'Ask a question' : 'Write a post'}" aria-label="Part ${i + 1}">${esc(t)}</textarea></div>`).join('')}
-    ${below ? '<div class="below">Answers below won’t read this.</div>' : ''}
     <div class="drow"><span class="grow"></span><button class="ibtn" data-a="dpart" type="button" aria-label="Add a part" title="Add a part">${icon('circle-plus')}</button><button class="btn${d.mode === 'post' ? ' pri' : ''}" data-a="dpost" type="button" title="Post">Post</button><button class="btn${d.mode === 'ask' ? ' pri' : ''}" data-a="dask" type="button" title="Ask (⌘/Ctrl+Enter)">Ask</button></div>
     <button class="dx" data-a="dcancel" type="button" aria-label="Discard draft" title="Discard draft">${icon('x')}</button></div>`;
 }
@@ -413,7 +422,7 @@ function draftHTML() {
    left rule. Both collapse to their first part and a count. */
 function stackHTML(s, lvl) {
   const ps = partsOf(s.id), isTop = lvl === 0, pinned = isTop && V.view === s.id, coll = !pinned && V.collapsed.has(s.id), n = unitNew(s);
-  const tg = pinned ? '' : `<button type="button" class="tg" data-a="collapse" data-id="${s.id}" aria-expanded="${!coll}" aria-label="${coll ? 'Expand' : 'Collapse'}" title="${coll ? 'Expand (→)' : 'Collapse (←)'}">${icon(coll ? 'chevron-right' : 'chevron-down')}</button>`;
+  const tg = pinned || !ps.length ? '' : `<button type="button" class="tg" data-a="collapse" data-id="${s.id}" aria-expanded="${!coll}" aria-label="${coll ? 'Expand' : 'Collapse'}" title="${coll ? 'Expand (→)' : 'Collapse (←)'}">${icon(coll ? 'chevron-right' : 'chevron-down')}</button>`;
   let h = '';
   if (isTop) {
     h += `<div class="sh"${pinned ? ' style="padding-left:42px"' : ''}>${tg}<span class="ch">#${esc(CH[s.ch] || s.ch)}</span>${s.fork ? '<span>· branch</span>' : ''}${n ? `<span class="newc">${n} new</span>` : ''}<span class="grow"></span></div>`;
@@ -423,9 +432,9 @@ function stackHTML(s, lvl) {
     h += `<div class="bh">${tg}<span class="from">From ${fromWhat(s)}</span>${s.fork.quote ? `<span class="q">“${esc(clip(s.fork.quote, 90))}”</span>` : ''}${n ? `<span class="newc">${n} new</span>` : ''}<span class="grow"></span><button type="button" class="ib" data-a="focus" data-id="${s.id}" aria-label="Open this branch on its own" title="Open on its own (o)">${icon('maximize-2')}</button></div>`;
   }
   if (coll) {
-    const u = unitStacks(s), np = u.reduce((a, x) => a + partsOf(x.id).length, 0), more = np - 1, nf = u.length - 1;
+    const u = unitStacks(s), np = u.reduce((a, x) => a + partsOf(x.id).length, 0), more = Math.max(0, np - 1), nf = u.length - 1;
     if (ps[0]) h += partHTML(ps[0], s, lvl, isTop ? 66 : 44);
-    h += `<button type="button" class="cmeta" data-a="collapse" data-id="${s.id}" title="Expand"><span class="gutsp"></span><span>${more} more part${more === 1 ? '' : 's'}${nf ? ` · ${nf} branch${nf === 1 ? '' : 'es'}` : ''}</span></button>`;
+    if (more || nf) h += `<button type="button" class="cmeta" data-a="collapse" data-id="${s.id}" title="Expand"><span class="gutsp"></span><span>${more ? `${more} more post${more === 1 ? '' : 's'}` : 'Expand'}</span>${nf ? `<span class="nf" title="${nf} branch${nf === 1 ? '' : 'es'}">${icon('git-fork')}${nf}</span>` : ''}</button>`;
   } else {
     const d = V.draft?.st === s.id, own = authorOf(s) === ME;
     if (d && V.draft.after === '') h += draftHTML();
@@ -502,6 +511,19 @@ function leaveDraft() {
   return true;
 }
 function cancelDraft() { if (leaveDraft()) render(); }
+/* an empty draft between two parts closes when focus leaves it (a press inside the draft does not count) */
+let pressInDraft = false;
+document.addEventListener('pointerdown', e => { pressInDraft = !!e.target.closest?.('.draft'); }, true);
+document.addEventListener('focusout', e => {
+  if (!e.target.closest?.('.draft') || e.relatedTarget?.closest?.('.draft') || pressInDraft) return;
+  setTimeout(() => {
+    const d = V.draft; if (!d || document.activeElement?.closest?.('.draft')) return;
+    const list = partsOf(d.st), i = list.findIndex(p => p.id === d.after), mid = i >= 0 && i < list.length - 1;
+    if (mid && !d.texts.some(t => t.trim())) cancelDraft();
+  }, 0);
+});
+/* collapsing a stack that holds the open draft leaves the draft first */
+const collapseOk = id => V.collapsed.has(id) || !V.draft || !unitStacks(S[id]).some(x => x.id === V.draft.st) || leaveDraft();
 function keyAfter(st, after) {
   const list = partsOf(st), i = list.findIndex(p => p.id === after);
   const a = i >= 0 ? list[i].key : (list[0] ? list[0].key - 1 : 0), b = list[i + 1] ? list[i + 1].key : a + 2;
@@ -513,8 +535,8 @@ function commitDraft(ask) {
   if (!texts.length) { $('.draft textarea')?.focus(); return; }
   let [a, b] = keyAfter(d.st, d.after); const step = (b - a) / (texts.length + (ask ? 2 : 1));
   const made = []; let k = a;
-  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(NOW + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
-  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: new Date(NOW + (seq - 1000) * 1000).toISOString(),
+  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: nextAt() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
+  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: nextAt(),
     run: { by: ME, model: MODEL, ctx: [], status: 'queued', step: 0, src: [] } }; P[m.id] = m; made.push(m.id); V.seen.add(m.id); startRun(m); }
   V.fresh = new Set(made); V.draft = null; render({ focus: `#doc .part[data-part="${made[0]}"]` });
 }
@@ -653,7 +675,7 @@ document.addEventListener('click', e => {
   if (a === 'dcancel') { cancelDraft(); return; }
   if (a === 'dpost') { commitDraft(false); return; }
   if (a === 'dask') { commitDraft(true); return; }
-  if (a === 'collapse') { const id = d.id; V.collapsed.has(id) ? V.collapsed.delete(id) : V.collapsed.add(id); render({ focus: `#doc [data-a="collapse"][data-id="${id}"]` }); return; }
+  if (a === 'collapse') { const id = d.id; if (!collapseOk(id)) return; V.collapsed.has(id) ? V.collapsed.delete(id) : V.collapsed.add(id); render({ focus: `#doc [data-a="collapse"][data-id="${id}"]` }); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
   if (a === 'focus') { focusOn(d.id); return; }
   if (a === 'unfocus') { unfocus(); return; }
@@ -688,8 +710,8 @@ const partEl = id => $(`#doc .part[data-part="${id}"]`);
 const shownKids = p => forksOf(p.id).filter(f => $(`#doc .bt[data-stack="${f.id}"]`));
 function keyLeft(p, s) {
   const kids = shownKids(p);
-  if (kids.some(f => !V.collapsed.has(f.id))) { for (const f of kids) V.collapsed.add(f.id); render(); moveTo(partEl(p.id)); return; }
-  if (V.view !== s.id && !V.collapsed.has(s.id)) { V.collapsed.add(s.id); render(); moveTo($(`#doc [data-stack="${s.id}"] .part[data-part]`)); return; }
+  if (kids.some(f => !V.collapsed.has(f.id))) { if (!kids.every(f => collapseOk(f.id))) return; for (const f of kids) V.collapsed.add(f.id); render(); moveTo(partEl(p.id)); return; }
+  if (V.view !== s.id && !V.collapsed.has(s.id)) { if (!collapseOk(s.id)) return; V.collapsed.add(s.id); render(); moveTo($(`#doc [data-stack="${s.id}"] .part[data-part]`)); return; }
   if (s.fork && V.view !== s.id) moveTo(partEl(s.fork.part));
 }
 function keyRight(p, s) {
