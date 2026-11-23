@@ -209,7 +209,7 @@ body { display: flex; flex-direction: column; }
 .tb .back { height: 32px; padding: 0 10px 0 4px; border-radius: 8px; display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; color: var(--accent); max-width: 45%; white-space: nowrap; }
 .tb .back span { overflow: hidden; text-overflow: ellipsis; }
 .tb .back .lc { width: 20px; height: 20px; }
-.tb .back:hover { background: var(--control); }
+@media (hover: hover) { .tb .back:hover { background: var(--control); } }
 .crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; font-size: 12.5px; color: var(--t-faint); }
 .crumbs button { padding: 3px 6px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; flex: 0 1 auto; min-width: 0; }
 .crumbs button:hover { background: var(--control); color: var(--t-heading); }
@@ -218,7 +218,7 @@ body { display: flex; flex-direction: column; }
 .crumbs .sep .lc { width: 13px; height: 13px; }
 .crumbs .ttl { font-size: 14px; font-weight: 600; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nn { position: relative; height: 32px; width: 36px; border-radius: 8px; display: grid; place-items: center; color: var(--t-heading); }
-.nn:hover { background: var(--control); }
+@media (hover: hover) { .nn:hover { background: var(--control); } }
 .nn .lc { width: 16px; height: 16px; }
 .nn b { position: absolute; top: -1px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--card-m); }
 .nn b:empty { display: none; }
@@ -245,7 +245,7 @@ body { display: flex; flex-direction: column; }
 .colhd .nc { color: var(--new); font-weight: 600; }
 
 /* channels */
-.chlist { padding: 6px; display: grid; gap: 1px; }
+.chlist { padding: 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
 .chrow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px 0 9px; border-radius: 7px; font-size: 13px; color: var(--t-secondary); text-align: left; }
 .chrow .lc { color: var(--t-faint); }
 .chrow > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -256,10 +256,10 @@ body { display: flex; flex-direction: column; }
 @media (pointer: coarse) { .chrow { min-height: 44px; } }
 
 /* threads */
-.adds { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--divider); position: sticky; top: 40px; z-index: 5; background: var(--card); }
+.adds { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 6px; padding: 8px 12px; border-bottom: 1px solid var(--divider); position: sticky; top: 40px; z-index: 5; background: var(--card); }
 .adds .btn { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px 0 8px; white-space: nowrap; }
 .adds .btn .lc { color: var(--accent); width: 14px; height: 14px; }
-.adds .modl { font-size: 11px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; display: inline-flex; align-items: center; gap: 5px; }
+.adds .modl { flex: none; max-width: 100%; font-size: 11px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 5px; }
 .adds .modl::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .7; }
 .throw { display: grid; grid-template-columns: 22px minmax(0, 1fr) 8px; gap: 9px; width: 100%; text-align: left; padding: 10px 10px 10px 11px; border-bottom: 1px solid var(--divider); align-items: start; position: relative; }
 .throw .av { width: 20px; height: 20px; font-size: 8px; margin-top: 1px; }
@@ -310,6 +310,7 @@ body { display: flex; flex-direction: column; }
 /* narrow: one column at a time, a back button in place of the earlier columns */
 body.narrow .col { width: 100% !important; flex: 1 0 100%; border-right: 0; }
 body.narrow .col:not(.cur) { display: none; }
+body.narrow .cc .colhd { display: none; }
 body.narrow .sc .sbody { margin: 10px 10px 40px 14px; }
 body.narrow .crumbs { flex: 1; justify-content: center; }
 body.narrow .tb .back + .crumbs { justify-content: flex-start; }
@@ -342,6 +343,8 @@ const plural = (n, w, ws = w + 's') => `${n} ${n === 1 ? w : ws}`;
 const LUCIDE = { 'bell': '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>', 'corner-up-right': '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>', 'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>', 'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 'chevron-right': '<path d="m9 18 6-6-6-6"/>', 'chevron-left': '<path d="m15 18-6-6 6-6"/>', 'corner-down-right': '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>', 'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>', 'git-branch': '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>', 'hash': '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>', 'inbox': '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>' };
 const icon = (n, cls = '') => `<svg class="lc${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]}</svg>`;
 const MARK = '<span class="mk" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg></span>';
+/* new parts are stamped after the newest seeded part, so they sort as the latest activity */
+const LATEST = Math.max(NOW, ...D.parts.map(p => Date.parse(p.at)));
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isNarrow = () => innerWidth <= 640;
 
@@ -590,7 +593,9 @@ function openAnchor(depth, pid, b, opts = {}) {
   const group = branchGroups(P[pid]).find(g => String(g.b) === String(b)); if (!group) return false;
   const pick = cur && cur.fork.part === pid && String(anchorOf(cur)) === String(b) ? cur : group.list[0];
   const path = pick === cur ? V.path : [...cols.slice(1, depth + 1), pick.id];
-  return go({ path, ...(opts.col != null ? { col: opts.col } : {}) }, { reveal: 'end', ...opts });
+  const ok = go({ path, ...(opts.col != null ? { col: opts.col } : {}) }, { reveal: 'end', ...opts });
+  if (ok && !document.body.classList.contains('narrow')) { const el = srcEl(pick), col = colAt(depth + 2); if (el && col) revealIn(col, el, 80); }
+  return ok;
 }
 
 /* ---- drafts ---- */
@@ -617,8 +622,8 @@ function commitDraft(ask) {
   if (!texts.length) { colsEl.querySelector('.draft textarea')?.focus(); return; }
   let [a, b] = keyAfter(d.st, d.after); const step = (b - a) / (texts.length + (ask ? 2 : 1));
   const made = []; let k = a;
-  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(NOW + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
-  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: new Date(NOW + (seq - 1000) * 1000).toISOString(),
+  for (const t of texts) { k += step; const p = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'p', u: ME }, text: t.split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join(''), at: new Date(LATEST + (seq - 1000) * 1000).toISOString() }; P[p.id] = p; made.push(p.id); V.seen.add(p.id); }
+  if (ask) { k += step; const m = { id: 'p' + (++seq), st: d.st, key: k, by: { k: 'm', model: MODEL }, text: '', at: new Date(LATEST + (seq - 1000) * 1000).toISOString(),
     run: { by: ME, model: MODEL, ctx: [], status: 'queued', step: 0, src: [] } }; P[m.id] = m; made.push(m.id); V.seen.add(m.id); startRun(m); }
   V.fresh = new Set(made); V.draft = null; render({ flip: true, focusK: 'p:' + made[made.length - 1] });
 }
