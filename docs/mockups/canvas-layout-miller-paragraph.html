@@ -579,6 +579,10 @@ function backTarget() {
   if (c.type === 'stack' && c.sibs > 1) return `${c.sibs} branches`;
   const p = V.cols[V.active - 1]; return p.type === 'threads' ? 'Threads' : p.type === 'list' ? colLabel(p) : clip(colLabel(p), 26);
 }
+let renderedAt = 0, menuRow = null;
+/* the paragraph a part menu is open on keeps its tint while a run re-renders the columns */
+document.addEventListener('contextmenu', e => { menuRow = e.target.closest?.('.blk')?.dataset.row || null; }, true);
+document.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') menuRow = e.target.closest?.('.blk')?.dataset.row || null; }, true);
 function render(opts = {}) {
   buildBR();
   const cols = V.cols = columns();
@@ -594,7 +598,8 @@ function render(opts = {}) {
   if (foc?.ta != null) { const t = track.querySelector(`.draft textarea[data-di="${foc.ta}"]`); if (t) { t.focus({ preventScroll: true }); t.setSelectionRange(foc.a, foc.b); } }
   else if (foc?.row) track.querySelector(`.col[data-ci="${foc.ci}"] [data-row="${foc.row}"]`)?.focus({ preventScroll: true });
   $('#path').innerHTML = pathHTML(); $('#nav').innerHTML = navHTML();
-  updateNext(); drawLinks();
+  updateNext(); drawLinks(); renderedAt = performance.now();
+  if ($('#bmenu') && menuRow) track.querySelector(`.blk[data-row="${menuRow}"]`)?.classList.add('menu-on');
   V.fresh = null;
   if (opts.focus) track.querySelector(opts.focus)?.focus({ preventScroll: true });
 }
@@ -889,7 +894,7 @@ document.addEventListener('keydown', e => {
     rows[j].focus({ preventScroll: true }); scrollRowIntoView(rows[j]); return; }
   if (k === 'ArrowRight' || k === 'Enter') { e.preventDefault(); activate(ci, row.dataset.row, true); return; }
   if (k === 'ArrowLeft') { e.preventDefault(); back(ci); return; }
-  if ((k === 'F10' && e.shiftKey) || k === 'ContextMenu') { e.preventDefault(); const r = row.getBoundingClientRect(); openPartMenu(row, r.left + 40, Math.min(r.bottom, r.top + 28)); }
+  if ((k === 'F10' && e.shiftKey) || k === 'ContextMenu') { e.preventDefault(); menuRow = row.matches('.blk') ? row.dataset.row : null; const r = row.getBoundingClientRect(); openPartMenu(row, r.left + 40, Math.min(r.bottom, r.top + 28)); }
 });
 
 /* selecting text in an answer offers a fork that stores the passage (block and quote) */
@@ -954,7 +959,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.stopPropagation(); closeBmenu(); return; }
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const bs = [...m.querySelectorAll('button')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus(); }
 }, true);
-track.addEventListener('scroll', closeBmenu, true);
+/* a scroll by the person closes the part menu; the scroll a render restores does not */
+track.addEventListener('scroll', () => { if (performance.now() - renderedAt > 120) closeBmenu(); }, true);
 
 /* the "+" insert controls show only in the gaps directly above and below the hovered part; a question and its answer
    count as one */
