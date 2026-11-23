@@ -269,7 +269,7 @@ body.icons { --sw-now: var(--side-i); }
 .tile { display: none; }
 body.icons .chh, body.icons .ths, body.icons .sd-add, body.icons .modl, body.icons .sd-name { display: none; }
 body.icons .sd-top { flex-direction: column; height: auto; padding: 12px 0 8px; }
-body.icons #add-any { display: grid; margin: 0 auto 10px; width: 32px; height: 32px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow); color: var(--accent); }
+body.icons #add-any { display: grid; place-items: center; margin: 0 auto 10px; width: 32px; height: 32px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow); color: var(--accent); }
 body.icons #add-any:hover { background: var(--inset); }
 body.icons #chans { padding: 2px 0 24px; }
 body.icons .tile { display: grid; place-items: center; position: relative; width: 36px; height: 36px; margin: 0 auto; border-radius: 9px; background: var(--card); box-shadow: var(--shadow);
@@ -291,12 +291,12 @@ body.icons .chg.cur .tile { box-shadow: 0 0 0 1.5px var(--accent); color: var(--
 #reader { position: fixed; top: 0; bottom: 0; right: 0; left: var(--sw-now); overflow-y: auto; overflow-x: hidden; outline: none; transition: left .18s var(--ease); }
 .rcol { width: min(700px, calc(100% - 48px)); margin-left: max(24px, calc((100% - 700px) / 2)); padding-bottom: 160px; transition: margin-left .2s var(--ease); }
 body.sheeted .rcol { margin-left: 24px; }
-.rtop { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 10px; height: 56px; background: color-mix(in srgb, var(--page) 92%, transparent); font-size: 12.5px; color: var(--t-faint); }
+.rtop { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 10px; height: 56px; background: var(--page); font-size: 12.5px; color: var(--t-faint); }
 #rtitle { display: flex; gap: 8px; min-width: 0; flex: 1; white-space: nowrap; }
 #rtitle b { color: var(--t-heading); font-weight: 600; }
 #rtitle span { overflow: hidden; text-overflow: ellipsis; }
 #menu { display: none; }
-#rbody .stack { position: static; width: auto; }
+#rbody .stack, .sheet .stack { position: static; width: auto; }
 #rbody .sh { cursor: default; padding-left: 42px; }
 .stack.sel > .sbody { box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
 #rbody .prose, .sheet .prose { font-size: 14.5px; }
@@ -337,7 +337,7 @@ body.sheeted #scrim { opacity: 1; pointer-events: auto; cursor: pointer; }
 .sheet.drag { transition: none; }
 .sheet.under { background: var(--inset); }
 .sheet .sc { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; outline: none; overscroll-behavior: contain; }
-.edge { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: var(--off); z-index: 3; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0;
+.edge { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: var(--off); z-index: 8; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0;
   color: var(--t-faint); font-size: 11.5px; font-weight: 600; background: var(--inset); }
 .sheet.under .edge { display: flex; }
 .edge:hover { background: var(--control-hover); color: var(--t-heading); }
@@ -768,11 +768,11 @@ function readerHTML(s) {
   return stackWrap(s, h + stackInner(s));
 }
 function sheetHTML(s, i) {
-  const f = fromOf(s), a = authorOf(s), below = S[chain()[i]];
+  const f = fromOf(s), a = authorOf(s);
   const backTo = i === 0 ? 'Thread' : 'Branch';
   return `<header class="shd">
     <button type="button" class="back" data-a="pop" data-to="${i}" aria-label="Back to the ${backTo.toLowerCase()}">${icon('arrow-left')}${backTo}</button>
-    <div class="from"><span class="fl">${icon('corner-down-right')}From ${f.kind}</span><span class="fw">#${esc(CH[s.ch] || s.ch)} · ${esc(NAMES[a] || a)}${below ? ` · in ${i === 0 ? 'the thread' : 'the branch'} by ${esc(NAMES[authorOf(below)] || authorOf(below))}` : ''}</span></div>
+    <div class="from"><span class="fl">${icon('corner-down-right')}From ${f.kind}</span><span class="fw">#${esc(CH[s.ch] || s.ch)} · ${esc(NAMES[a] || a)}</span></div>
     <button type="button" class="ib close" data-a="pop" data-to="${i}" aria-label="Close this branch" title="Close (Esc)">${icon('x')}</button>
     <blockquote class="fqt">${f.q}</blockquote></header>
     <div class="scol">${stackWrap(s, stackInner(s))}</div>`;
@@ -929,7 +929,7 @@ function newFork(pid, { block = null, quote = null } = {}) {
   if (!leaveDraft()) return;
   const id = 's' + (++seq);
   S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) } };
-  V.sheets = [...V.sheets.slice(0, i), id]; V.draft = { st: id, after: '', mode: 'ask', texts: [''] };
+  V.sheets = [...V.sheets.slice(0, i), id]; V.full.add(pid); V.draft = { st: id, after: '', mode: 'ask', texts: [''] };
   render({ focus: '.draft textarea' });
   if (i === 0) setTimeout(revealSource, reduced() ? 0 : 210);
 }

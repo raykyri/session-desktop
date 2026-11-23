@@ -95,8 +95,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 @media (pointer: coarse) { #colhd.sw button { height: 36px; } }
 #doc { position: relative; margin-top: var(--top); min-width: 100%; }
 #bands { position: absolute; inset: 0; pointer-events: none; }
-#bands .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--t-heading) 2.2%, transparent); }
-#bands .band.strip { background: color-mix(in srgb, var(--t-heading) 4%, transparent); }
+#bands .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--t-heading) 1.6%, transparent); }
+#bands .band.strip { background: color-mix(in srgb, var(--t-heading) 3%, transparent); }
 #stacks { position: relative; }
 #links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 #links path { fill: none; stroke: var(--link); stroke-width: 1.5; opacity: .7; stroke-linecap: round; }
@@ -112,7 +112,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .stack.chip .sbody .mk { width: 20px; height: 20px; }
 .empty { padding: 24px 16px; font-size: 12.5px; color: var(--t-faint); }
 /* narrow: a part's branches, and a branch's source, live in other columns; these move between them */
-.brs { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--accent); padding: 2px 0; }
+.brs { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--accent); padding: 2px 0; }
 .brs .lc { width: 13px; height: 13px; }
 .fq.fb i { min-height: 22px; }
 .fq i .go { margin-left: auto; color: var(--accent); font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 6px; }

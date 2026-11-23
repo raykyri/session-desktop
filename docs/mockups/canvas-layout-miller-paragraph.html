@@ -127,6 +127,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .colhd .hback { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 7px 0 3px; margin-left: -6px; border-radius: 6px; color: var(--accent); font-weight: 600; font-size: 12px; }
 .colhd .hback:hover { background: var(--control); }
 .colhd .hback .lc { color: var(--accent); }
+.colhd .hbk { display: contents; }
+.colhd .hic { display: inline-flex; }
+.colhd .hic.alt { display: none; }
 .colhd .fq { border-radius: 0; border-bottom: 0; border-top: 1px solid var(--divider); padding: 7px 12px 8px; box-shadow: inset 3px 0 0 var(--accent); }
 .colhd .fq .qt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .colbody { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-gutter: stable; }
@@ -141,6 +144,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .row.has:hover::before { background: color-mix(in srgb, var(--t-heading) 4%, transparent); }
 .row.on::before, .row.on:hover::before { background: var(--hl); box-shadow: inset 3px 0 0 var(--accent); }
 .row:focus-visible::before { box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* the chosen row of a column other than the active one: a lighter tint, as in Finder */
+.col:not(.cur) .row.on::before { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .row.on:focus-visible::before { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1.5px var(--accent); }
 .brc { position: absolute; right: 6px; top: 9px; display: inline-flex; align-items: center; gap: 0; height: 20px; padding: 0 0 0 5px; border-radius: 10px;
   font-size: 11.5px; font-weight: 600; color: var(--t-faint); font-variant-numeric: tabular-nums; }
@@ -158,8 +163,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .wrow { display: flex; align-items: center; gap: 6px; margin-top: 10px; min-height: 24px; padding-right: 26px; font-size: 12px; font-weight: 500; color: var(--t-secondary); }
 .wrow .lc { width: 13px; height: 13px; color: var(--t-faint); }
 .wrow > .brc { right: -8px; top: 2px; }
-.prose > .menu-on { background: none; box-shadow: none; }
-.prose > .menu-on::before { background: var(--hl); }
+.col .prose > .menu-on { background: none; box-shadow: none; }
+.col .prose > .menu-on::before { background: var(--hl); }
 
 /* thread list and branch list */
 .grp { position: sticky; top: 0; z-index: 2; display: flex; gap: 6px; align-items: center; padding: 7px 12px 5px; font-size: 11.5px; font-weight: 600; color: var(--t-faint); background: var(--card); border-bottom: 1px solid var(--divider); }
@@ -177,6 +182,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .lrow > .brc { top: 50%; margin-top: -10px; }
 .lrow.draftrow .tt { color: var(--t-faint); font-style: italic; }
 .khint { position: sticky; bottom: 0; padding: 7px 12px 8px; font-size: 11px; color: var(--t-faint); background: var(--card); border-top: 1px solid var(--divider); line-height: 1.7; }
+.khint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.khint kbd + kbd { margin-left: 2px; }
 .khint kbd { font: 600 10.5px/1 var(--font); padding: 2px 4px; border-radius: 4px; background: var(--control); color: var(--t-secondary); }
 @media (pointer: coarse) { .khint { display: none; } }
 .empty { padding: 18px 14px; font-size: 12.5px; color: var(--t-faint); }
@@ -326,6 +333,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   .col:not(.cur) { display: none; }
   .col.cur { box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
   #clinks { display: none; }
+  .colhd .hbk { display: none; }
+  .colhd .hic.alt { display: inline-flex; }
 }
 @media (max-width: 560px) and (pointer: coarse) { :root { --top: 112px; } #nav #navback { height: 40px; } }
 @media (max-width: 400px) { .tl .modl { display: none; } }
@@ -519,7 +528,7 @@ function stackHead(c) {
   const s = S[c.st], n = partsOf(s.id).length, nw = partsOf(s.id).filter(isNew).length;
   const tail = `<span class="grow"></span>${nw ? `<span class="newc">${nw} new</span>` : ''}<span>${n ? `${n} part${n === 1 ? '' : 's'}` : 'Draft'}</span>`;
   if (!s.fork) return `<div class="h1"><span class="ch">#${esc(CH[s.ch] || s.ch)}</span><span>·</span><b>${esc(nameOf(authorOf(s)))}</b>${tail}</div>`;
-  const back = c.sibs > 1 ? `<button class="hback" type="button" data-a="tolist" data-ci="${c.ci}" title="Back to the list (Left)">${icon('chevron-left')}${c.sibs} branches</button><span>·</span>` : `${icon('corner-down-right')}`;
+  const back = (c.sibs > 1 ? `<span class="hbk"><button class="hback" type="button" data-a="tolist" data-ci="${c.ci}" title="Back to the list (Left)">${icon('chevron-left')}${c.sibs} branches</button><span>·</span></span>` : '') + `<span class="hic${c.sibs > 1 ? ' alt' : ''}">${icon('corner-down-right')}</span>`;
   return `<div class="h1">${back}<span>Branch by</span><b>${esc(nameOf(authorOf(s)))}</b>${tail}</div>
     <div class="fq"><i>From ${s.fork.quote || c.row.startsWith('b:') ? 'paragraph' : anchorLabel(c.row)}</i><span class="qt">${anchorQuote(c.row, s.fork.quote)}</span></div>`;
 }
@@ -538,7 +547,7 @@ function threadsBody(c) {
   for (const r of rs) (by[r.ch] ||= []).push(r);
   const chans = Object.keys(by).map(ch => ({ ch, rs: by[ch].sort((a, b) => lastAct(b).localeCompare(lastAct(a))) })).sort((a, b) => lastAct(b.rs[0]).localeCompare(lastAct(a.rs[0])));
   return chans.map(g => `<div class="grp" data-ch="${g.ch}"><b>#${esc(CH[g.ch] || g.ch)}</b><span>${g.rs.length}</span></div>` + g.rs.map(r => listRow(r.id, 't:' + r.id, c.sel)).join('')).join('')
-    + `<div class="khint"><kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>→</kbd> open branches · <kbd>←</kbd> back · <kbd>Shift</kbd>+<kbd>F10</kbd> part menu</div>`;
+    + `<div class="khint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>→</kbd> open · <kbd>←</kbd> back · <kbd>Shift</kbd> <kbd>F10</kbd> part menu</div>`;
 }
 function colHTML(c, ci, isNewCol) {
   c.ci = ci;
@@ -552,8 +561,9 @@ function colHTML(c, ci, isNewCol) {
 function colLabel(c) {
   if (c.type === 'threads') return 'Threads';
   if (c.type === 'list') return `${c.br.length} branches`;
-  const s = S[c.st], f = partsOf(s.id)[0], t = f ? clip(strip(f.text), 64) : 'Draft';
-  return s.fork ? `${nameOf(authorOf(s))}: ${t}` : t;
+  const s = S[c.st], f = partsOf(s.id)[0];
+  if (!f) return s.fork ? 'New branch' : 'New thread';
+  const t = clip(strip(f.text), 64); return s.fork ? `${nameOf(authorOf(s))}: ${t}` : t;
 }
 function colSub(c) {
   if (c.type === 'threads') return `${roots().length} threads`;
@@ -613,10 +623,11 @@ function setActive(ci) {
 const colEl = ci => track.querySelector(`.col[data-ci="${ci}"]`);
 function scrollRowIntoView(el, center = false) {
   const body = el.closest('.colbody'); if (!body) return;
-  const r = el.getBoundingClientRect(), b = body.getBoundingClientRect();
+  const r = el.getBoundingClientRect(), b = body.getBoundingClientRect(), pad = body.querySelector('.grp') ? 36 : 8;
   if (center) { body.scrollTop += r.top - b.top - Math.min(b.height / 3, 160); return; }
-  if (r.top < b.top + 8) body.scrollTop += r.top - b.top - 8;
-  else if (r.bottom > b.bottom - 8) body.scrollTop += Math.min(r.bottom - b.bottom + 8, r.top - b.top - 8);
+  const foot = body.querySelector('.khint')?.offsetHeight || 0;
+  if (r.top < b.top + pad) body.scrollTop += r.top - b.top - pad;
+  else if (r.bottom > b.bottom - 8 - foot) body.scrollTop += Math.min(r.bottom - b.bottom + 8 + foot, r.top - b.top - pad);
 }
 /* focus a row of a column: the given one, else the column's chosen row, else its draft, else its first row */
 function focusRow(ci, key, { center = false } = {}) {

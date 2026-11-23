@@ -917,7 +917,8 @@ document.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') r
 document.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) { clearTimeout(lp.t); lp = null; } });
 document.addEventListener('pointerup', () => { if (lp) { clearTimeout(lp.t); lp = null; } });
 document.addEventListener('click', e => {
-  if (suppressClick && !e.target.closest('#bmenu')) { e.preventDefault(); e.stopPropagation(); return; }
+  /* the click that ends a long press is not a choice in the menu it opened */
+  if (suppressClick) { e.preventDefault(); e.stopPropagation(); suppressClick = false; return; }
   const b = e.target.closest?.('#bmenu [data-a="selask"]');
   if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q }); return; }
   if ($('#bmenu') && !e.target.closest('.bm, .hbm')) setTimeout(closeBmenu, 0);
