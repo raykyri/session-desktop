@@ -67,11 +67,11 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 [hidden] { display: none !important; }
 .lc { width: 14px; height: 14px; flex: none; display: block; }
-:root { --hl: color-mix(in srgb, var(--accent) 19%, transparent); --top: 48px; --side-w: 256px; --panel-w: 420px; }
+:root { --hl: color-mix(in srgb, var(--accent) 19%, transparent); --bar: 48px; --chb: 0px; --side-w: 256px; --panel-w: 420px; }
 ::selection { background: var(--hl); }
 
 /* ---- top bar: new thread, model, bell ---- */
-.top { position: fixed; top: 0; left: 0; right: 0; height: var(--top); display: flex; align-items: center; gap: 8px; padding: 0 12px; z-index: 20;
+.top { position: fixed; top: var(--chb); left: 0; right: 0; height: var(--bar); display: flex; align-items: center; gap: 8px; padding: 0 12px; z-index: 20;
   background: var(--card-m); border-bottom: 1px solid var(--divider); }
 .top .grow { flex: 1; }
 .tbtn { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow);
@@ -86,6 +86,35 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .nn { position: relative; }
 .nn b { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--new); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--card-m); }
 .nn b:empty { display: none; }
+/* where channels are shown: in the sidebar (ch-sidebar), as a row in the top bar (ch-header) or as a bar above it
+   (ch-above). The same row and toggle as layout 5 (canvas-layout-miller.html). */
+.place { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.place .segl { font-size: 11.5px; color: var(--t-faint); }
+.seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 8px; background: var(--control); }
+.seg button { height: 26px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--t-secondary); display: inline-flex; align-items: center; gap: 5px; }
+.seg button .lc { width: 15px; height: 15px; display: none; }
+.seg button:hover { color: var(--t-heading); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); font-weight: 600; box-shadow: var(--shadow); }
+.chips { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+.chips::-webkit-scrollbar { display: none; }
+.chips:empty { display: none; }
+/* a channel row wider than its space fades at the edge it continues past */
+.chips.fl { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+.chips.fr { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
+.chips.fl.fr { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border-radius: 7px; font-size: 12.5px; color: var(--t-secondary); white-space: nowrap; }
+.chip i { font-style: normal; color: var(--t-faint); margin-right: -4px; }
+.chip:hover { background: var(--control); }
+.chip[aria-current] { background: var(--control-hover); color: var(--t-heading); font-weight: 600; }
+.chip[aria-current]:focus-visible { background: var(--accent-soft); }
+.chip .cnt { margin-left: 1px; }
+.top .chips:not(:empty) { margin-left: 4px; padding-left: 8px; border-left: 1px solid var(--divider); }
+.chbar { position: fixed; top: 0; left: 0; right: 0; height: var(--chb); z-index: 21; display: flex; align-items: center; padding: 0 12px; background: var(--inset); border-bottom: 1px solid var(--divider); }
+.chbar .chips { flex: 1; }
+body.ch-above { --chb: 40px; }
+/* declared on body so that it follows the ch- classes, which set --chb and --bar on body */
+body { --top: calc(var(--chb) + var(--bar)); }
+@media (pointer: coarse) { .chip { height: 34px; } body.ch-above { --chb: 46px; } .seg button { height: 36px; min-width: 38px; justify-content: center; } }
 #nmenu { position: fixed; z-index: 45; width: 340px; max-width: calc(100vw - 16px); max-height: min(70vh, 520px); overflow-y: auto; padding: 4px; border-radius: 10px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
 #nmenu .nhd { display: flex; align-items: center; padding: 8px 10px 6px; font-size: 12px; font-weight: 600; color: var(--t-heading); }
 #nmenu .nhd button { margin-left: auto; font-weight: 500; color: var(--accent); font-size: 12px; }
@@ -323,15 +352,28 @@ li.anc > .pm { left: calc(-32px - 1.3em); }
   .cr { max-width: 150px; }
 }
 @keyframes rise { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }
-@media (max-width: 380px) { .tbtn { padding: 0 9px; } }
+@media (max-width: 960px) {
+  /* channels in the top bar: a second row of the bar, which scrolls horizontally */
+  body.ch-header { --bar: 86px; }
+  body.ch-header .top { flex-wrap: wrap; align-content: flex-start; row-gap: 4px; padding-top: 8px; }
+  body.ch-header .top .chips { order: 5; flex: 1 0 100%; margin: 0 -12px; padding: 0 12px; height: 38px; border-left: 0; }
+  .place .segl, .seg button span { display: none; }
+  .seg button .lc { display: block; }
+  .seg button { padding: 0 6px; }
+}
+@media (max-width: 480px) { .tbtn { padding: 0 9px; } .top { column-gap: 6px; } }
+@media (pointer: coarse) and (max-width: 960px) { body.ch-header { --bar: 96px; } body.ch-header .top { padding-top: 4px; } body.ch-header .top .chips { height: 44px; } }
 @media (pointer: coarse) { .tbtn, .hb { height: 40px; } .tbtn.ic, .hb.ic { width: 40px; } .crow { height: 40px; } .be { padding: 8px 6px; } .btn { height: 38px; } }
 </style>
 
+<div class="chbar" id="chabove" hidden><div class="chips" role="group" aria-label="Channels"></div></div>
 <header class="top">
   <button class="tbtn ic" id="menu-btn" type="button" aria-label="Channels and threads" aria-expanded="false" title="Channels and threads"></button>
   <button class="tbtn" id="add-post" type="button"></button><button class="tbtn" id="add-ask" type="button"></button>
   <span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span>
+  <div class="chips" id="chhead" role="group" aria-label="Channels"></div>
   <span class="grow"></span>
+  <div class="place" id="chplace" role="group" aria-label="Where channels are shown"><span class="segl" aria-hidden="true">Channels</span><span class="seg"><button type="button" data-a="place" data-v="sidebar" title="Channels in the sidebar" aria-label="Channels in the sidebar"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg><span>Sidebar</span></button><button type="button" data-a="place" data-v="header" title="Channels in the top bar" aria-label="Channels in the top bar"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg><span>Header</span></button><button type="button" data-a="place" data-v="above" title="Channels above the top bar" aria-label="Channels above the top bar"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18"/><rect width="18" height="14" x="3" y="7" rx="2"/></svg><span>Above</span></button></span></div>
   <button class="tbtn ic nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"></button>
 </header>
 <div class="app">
@@ -404,7 +446,10 @@ for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 /* ---- view state (per viewer) ----
    main: the stack in the main pane (a thread, or a branch after Swap). panel: a branch below main, or null. The panel
    always shows a descendant of main, so the trail from main to the panel is a path in the branch tree. */
-const V = { ch: 'public', main: null, panel: null, prevMain: null, prevPanel: null, seen: new Set(), keep: new Set(), more: new Set(), draft: null, drawer: false, fresh: null, last: {} };
+/* place: where channels are shown, 'sidebar', 'header' (a row in the top bar) or 'above' (a bar above the top bar).
+   Remembered in localStorage. */
+const V = { place: 'header', ch: 'public', main: null, panel: null, prevMain: null, prevPanel: null, seen: new Set(), keep: new Set(), more: new Set(), draft: null, drawer: false, fresh: null, last: {} };
+try { const v = localStorage.getItem('session.panels.channels'); if (['sidebar', 'header', 'above'].includes(v)) V.place = v; } catch {}
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
 /* a part that was new when its stack was opened keeps its dot while the stack stays open */
@@ -500,11 +545,34 @@ function fromHTML(s, action) {
   return `<button type="button" class="quote" data-a="${action}" title="${action === 'toanchor' ? 'Show where this branch starts' : 'Show the parent here and this branch in the panel'}"><i>${icon('corner-down-right')}From ${what}${what === 'paragraph' ? ` of ${by}` : ''} · in ${esc(title(par, 34))}</i><span>“${esc(clip(bt, 240))}”</span></button>`;
 }
 
+/* new parts per channel ('all' counts every channel) */
+const chNew = ch => threads(ch).reduce((n, r) => n + unitNew(r), 0);
+/* channels as a row of chips (in the top bar, or in a bar above it): All, then each channel, with new counts. Left
+   and Right move between them and choose the channel. */
+const fadeChips = h => { h.classList.toggle('fl', h.scrollLeft > 1); h.classList.toggle('fr', h.scrollLeft + h.clientWidth < h.scrollWidth - 1); };
+document.addEventListener('scroll', e => { if (e.target.classList?.contains('chips')) fadeChips(e.target); }, true);
+function renderChips() {
+  const host = V.place === 'header' ? $('#chhead') : V.place === 'above' ? $('#chabove .chips') : null;
+  $('#chabove').hidden = V.place !== 'above';
+  for (const v of ['sidebar', 'header', 'above']) document.body.classList.toggle('ch-' + v, V.place === v);
+  document.querySelectorAll('#chplace [data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === V.place)));
+  const lbl = V.place === 'sidebar' ? 'Channels and threads' : 'Threads';
+  $('#menu-btn').setAttribute('aria-label', lbl); $('#menu-btn').title = lbl; sideEl.setAttribute('aria-label', lbl);
+  for (const h of document.querySelectorAll('.chips')) if (h !== host) h.innerHTML = '';
+  if (!host) return;
+  const sl = host.scrollLeft;
+  const chip = (id, label) => { const c = chNew(id), on = V.ch === id; return `<button type="button" class="chip" data-a="ch" data-id="${id}" tabindex="${on ? 0 : -1}"${on ? ' aria-current="true"' : ''}>${id === 'all' ? '' : '<i aria-hidden="true">#</i>'}<span>${esc(label)}</span>${c ? `<b class="cnt" aria-label="${c} new">${c}</b>` : ''}</button>`; };
+  host.innerHTML = chip('all', 'All') + D.spaces.map(c => chip(c.id, c.name)).join('');
+  host.scrollLeft = sl;
+  const on = host.querySelector('[aria-current]');
+  if (on) { const L = on.offsetLeft - 12, R = on.offsetLeft + on.offsetWidth + 12; if (L < host.scrollLeft) host.scrollLeft = L; else if (R > host.scrollLeft + host.clientWidth) host.scrollLeft = R - host.clientWidth; }
+  fadeChips(host);
+}
+/* the sidebar: channels (when they are shown there), then the chosen channel's threads */
 function renderSide() {
   const all = threads('all'), list = threads(V.ch), cur = S[V.main] ? rootOf(S[V.main]).id : null;
-  const chNew = ch => threads(ch).reduce((n, r) => n + unitNew(r), 0);
   const crow = (id, label, n) => `<button type="button" class="crow${n ? ' unread' : ''}" data-a="ch" data-id="${id}"${V.ch === id ? ' aria-current="true"' : ''}>${id === 'all' ? '' : '<span class="hs" aria-hidden="true">#</span>'}${esc(label)}${n ? `<span class="cnt" aria-label="${n} new">${n}</span>` : ''}</button>`;
-  let h = `<div class="sgh">Channels</div>` + crow('all', 'All threads', all.reduce((n, r) => n + unitNew(r), 0)) + D.spaces.map(c => crow(c.id, c.name, chNew(c.id))).join('');
+  let h = V.place !== 'sidebar' ? '' : `<div class="sgh">Channels</div>` + crow('all', 'All threads', all.reduce((n, r) => n + unitNew(r), 0)) + D.spaces.map(c => crow(c.id, c.name, chNew(c.id))).join('');
   h += `<div class="sgh">Threads <span>${V.ch === 'all' ? 'in all channels' : `in #${esc(CH[V.ch])}`}</span></div>`;
   h += list.map(r => {
     const ps = partsOf(r.id), n = unitNew(r), nb = unitStacks(r).filter(x => x !== r && partsOf(x.id).length).length;
@@ -563,7 +631,7 @@ function snapshot() { const m = {}; document.querySelectorAll('#main [data-fl], 
 /* focus survives a render: the focused control is found again by its data attributes */
 const FK = ['data-a', 'data-id', 'data-st', 'data-after', 'data-b', 'data-part', 'data-di', 'data-compose', 'data-note'];
 function focusKey(el) {
-  if (!el || el === document.body) return null; const pane = el.closest('#main, #panel, #side, .top'); if (!pane) return null;
+  if (!el || el === document.body) return null; const pane = el.closest('#main, #panel, #side, .top, #chabove'); if (!pane) return null;
   const at = FK.filter(a => el.hasAttribute(a)).map(a => `[${a}="${CSS.escape(el.getAttribute(a))}"]`).join(''); if (!at) return el.id ? '#' + el.id : null;
   return `#${pane.id || 'x'} ${el.tagName.toLowerCase()}${at}`.replace('#x ', '.top ');
 }
@@ -580,7 +648,7 @@ function render(opts = {}) {
   const before = opts.noAnim || changed || reduced() ? null : snapshot();
   const sc = { m: $('#main .mscroll')?.scrollTop || 0, p: $('#panel .pscroll')?.scrollTop || 0, s: sideEl.scrollTop };
   const ae = document.activeElement, fk = focusKey(ae), sel = ae?.tagName === 'TEXTAREA' ? [ae.selectionStart, ae.selectionEnd] : null;
-  renderSide(); renderMain(); renderPanel(); decorate();
+  renderChips(); renderSide(); renderMain(); renderPanel(); decorate();
   sideEl.scrollTop = sc.s;
   if (V.last.main === V.main) $('#main .mscroll').scrollTop = sc.m;
   if (V.panel && V.last.panel === V.panel) $('#panel .pscroll').scrollTop = sc.p;
@@ -792,7 +860,9 @@ document.addEventListener('click', e => {
   if (a === 'pmark') { e.stopPropagation(); markerMenu(t); return; }
   if (a === 'bmore') { V.more.has(d.id) ? V.more.delete(d.id) : V.more.add(d.id); render({ noAnim: true }); return; }
   if (a === 'thread') { selectThread(d.id); return; }
+  if (a === 'ch' && t.classList.contains('chip')) { chooseChip(d.id); return; }
   if (a === 'ch') { V.ch = d.id; render({ noAnim: true }); return; }
+  if (a === 'place') { V.place = d.v; try { localStorage.setItem('session.panels.channels', d.v); } catch {} render({ noAnim: true }); return; }
   if (a === 'pclose') { closePanel(); return; }
   if (a === 'swap') { swap(); return; }
   if (a === 'swapback') { swapBack(); return; }
@@ -800,6 +870,8 @@ document.addEventListener('click', e => {
   if (a === 'pcrumb') { if (d.id === V.main) closePanel(); else go(V.main, d.id); return; }
   if (a === 'toanchor') { const s = S[V.panel], par = parentOf(s); if (par.id === V.main) { const el = anchorEl(mainEl, s); reveal(el); flash(el?.closest('.part')); if (narrow()) closePanel(); } else go(V.main, par.id); return; }
 });
+/* choosing a channel in the row; where the sidebar is a drawer, the drawer opens on that channel's threads */
+function chooseChip(id) { V.ch = id; if (innerWidth <= 960) V.drawer = true; render({ noAnim: true }); }
 $('#menu-btn').onclick = () => { V.drawer = !V.drawer; render({ noAnim: true }); if (V.drawer) $('#side [aria-current="true"].trow, #side button')?.focus({ preventScroll: true }); };
 $('#scrim').onclick = () => { V.drawer = false; render({ noAnim: true }); };
 /* hovering a branch entry, or a marker, marks where the branch starts */
@@ -823,6 +895,11 @@ document.addEventListener('keydown', e => {
   if (ta && e.key === 'Backspace' && !ta.value && V.draft.texts.length > 1) { e.preventDefault(); const i = +ta.dataset.di; V.draft.texts.splice(i, 1); render({ focus: `.draft textarea[data-di="${Math.max(0, i - 1)}"]` }); return; }
   const pe = e.target.closest?.('.part[data-part]');
   if (pe && e.target === pe && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) { e.preventDefault(); const r = pe.getBoundingClientRect(); openPartMenu(pe, r.left + 40, r.top + 24); return; }
+  const chip = e.target.closest?.('.chip');
+  if (chip && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) && !e.altKey) { e.preventDefault();
+    const cs = [...chip.parentElement.querySelectorAll('.chip')], i = cs.indexOf(chip), k = e.key;
+    const j = k === 'Home' ? 0 : k === 'End' ? cs.length - 1 : Math.max(0, Math.min(cs.length - 1, i + (k === 'ArrowRight' ? 1 : -1)));
+    if (j !== i) { V.ch = cs[j].dataset.id; render({ noAnim: true }); document.querySelector(`.chips .chip[data-id="${CSS.escape(V.ch)}"]`)?.focus(); } return; }
   if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.target.closest?.('textarea')) { e.preventDefault();
     const list = threads(V.ch), i = list.findIndex(r => r.id === rootOf(S[V.main]).id), n = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]; if (n) selectThread(n.id); return; }
   if (e.key === 'Escape') {
@@ -917,5 +994,5 @@ $('#add-ask').innerHTML = icon('plus', 'pl') + 'Add ask';
 $('#nextnew').innerHTML = icon('bell') + '<b id="nncount"></b>';
 { const r = Object.values(S).find(s => s.src === '01M7HWGZJGT7JTFFVSYPX055KV') || threads('all')[0]; V.main = r.id; V.ch = r.ch; }
 render({ noAnim: true });
-addEventListener('resize', () => { if (innerWidth > 960 && V.drawer) { V.drawer = false; render({ noAnim: true }); } else $('#scrim').hidden = !V.drawer || innerWidth > 960; });
+addEventListener('resize', () => { document.querySelectorAll('.chips').forEach(fadeChips); if (innerWidth > 960 && V.drawer) { V.drawer = false; render({ noAnim: true }); } else $('#scrim').hidden = !V.drawer || innerWidth > 960; });
 </script>

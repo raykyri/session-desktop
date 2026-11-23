@@ -245,6 +245,10 @@ body { display: flex; flex-direction: column; }
 .chips { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
 .chips::-webkit-scrollbar { display: none; }
 .chips:empty { display: none; }
+/* a channel row wider than its space fades at the edge it continues past */
+.chips.fl { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+.chips.fr { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
+.chips.fl.fr { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 .chip { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border-radius: 7px; font-size: 12.5px; color: var(--t-secondary); white-space: nowrap; }
 .chip i { font-style: normal; color: var(--t-faint); margin-right: -4px; }
 .chip:hover { background: var(--control); }
@@ -503,6 +507,8 @@ function draftHTML() {
 const chNew = ch => roots().filter(r => ch === 'all' || r.ch === ch).reduce((a, r) => a + treeNew(r), 0);
 /* channels as a row (in the top bar, or in a bar above it): All, then each channel, with new counts. Left and Right
    move between them and open the channel; Down enters the threads column. */
+const fadeChips = h => { h.classList.toggle('fl', h.scrollLeft > 1); h.classList.toggle('fr', h.scrollLeft + h.clientWidth < h.scrollWidth - 1); };
+document.addEventListener('scroll', e => { if (e.target.classList?.contains('chips')) fadeChips(e.target); }, true);
 function renderChips(opts) {
   const host = V.place === 'header' ? $('#chhead') : V.place === 'above' ? $('#chabove .chips') : null;
   $('#chabove').hidden = V.place !== 'above';
@@ -515,6 +521,7 @@ function renderChips(opts) {
   host.scrollLeft = sl;
   const sel = host.querySelector('.chip.sel');
   if (sel) { const L = sel.offsetLeft - 12, R = sel.offsetLeft + sel.offsetWidth + 12; if (L < host.scrollLeft) host.scrollLeft = L; else if (R > host.scrollLeft + host.clientWidth) host.scrollLeft = R - host.clientWidth; }
+  fadeChips(host);
   if (fk?.startsWith('ch:')) host.querySelector(`[data-k="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
 }
 /* choosing a channel in the row; on a narrow page this also shows its threads */

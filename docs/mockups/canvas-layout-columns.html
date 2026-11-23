@@ -9,9 +9,9 @@ simulated with timers. The only external request is the Inter font.
 Layout
 - The page is split in two. The left part (about 58% of a wide screen) is the column strip; the right part is a
   canvas pane that draws the open thread in 2D.
-- The column strip is one horizontal strip of equal-width columns, sized so that a whole number of columns plus one
-  spine fits the left part. It scrolls only horizontally, inside its own container; each column scrolls vertically
-  on its own.
+- The column strip is one horizontal strip of equal-width columns, sized so that two full columns and three spines
+  fit the left part on a 1440px screen (one column from 900 to about 1300px). It scrolls only horizontally, inside
+  its own container; each column scrolls vertically on its own.
 - Column 1 lists the root stacks, most recent activity first. Every later column holds exactly one stack.
 - The open columns form a trail. Opening a branch from column k puts it in column k+1 and closes the columns after it.
   Dragging a part (by its avatar or model mark) or selected text into a column to the right, or into the empty slot
@@ -371,17 +371,14 @@ body.nohint .hint, body.solo .hint { display: none; }
 .cst .cvsep { height: 1px; background: var(--divider); }
 .cst .cvd { padding: 10px 12px 11px 42px; font-size: 12.5px; color: var(--t-faint); font-style: italic; }
 /* overview zoom (below 50%): geometry stays; each card shows a headline over its first part */
-.cst .sh .ov { display: none; }
-#cvworld.far .sh .ov { display: block; position: absolute; left: 0; bottom: 100%; margin-bottom: 4px; font-size: calc(11px / var(--z, 1)); font-weight: 600; color: var(--t-secondary); white-space: nowrap; line-height: 1.2; }
-#cvworld.far .sh .ov b { color: var(--new); }
-#cvworld.far .sh { position: relative; }
-#cvworld.far .prose, #cvworld.far .ph, #cvworld.far .part > .gut, #cvworld.far .fq, #cvworld.far .pending, #cvworld.far .sh > :not(.ov) { visibility: hidden; }
+#cvworld.far .prose, #cvworld.far .ph, #cvworld.far .part > .gut, #cvworld.far .fq, #cvworld.far .pending, #cvworld.far .sh > * { visibility: hidden; }
 .cst .part .hl { display: none; }
 #cvworld.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 #cvworld.far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
 #cvworld.far .hl small b { color: var(--new); }
-.cvt { position: absolute; left: 16px; top: 12px; height: 32px; line-height: 32px; max-width: calc(100% - 84px); z-index: 2; font-size: 12px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.cvt { position: absolute; left: 10px; top: 12px; height: 32px; line-height: 32px; padding: 0 8px; border-radius: 8px; max-width: calc(100% - 78px); z-index: 2; font-size: 12px; color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+  background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(4px); }
 .cvt b { color: var(--t-heading); font-weight: 600; }
 .cvempty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(300px, calc(100% - 48px)); display: grid; justify-items: center; gap: 8px; text-align: center; font-size: 12.5px; color: var(--t-faint); }
 .cvempty .lc { width: 18px; height: 18px; color: var(--t-dim); }
@@ -391,7 +388,7 @@ body.nohint .hint, body.solo .hint { display: none; }
 /* below 900px: one of the two at a time; the top-bar button switches */
 body.solo #viewt { display: inline-flex; }
 body.solo #cv { top: var(--top); left: 0; border-left: 0; box-shadow: none; }
-body.solo .cvt { top: 2px; left: 12px; }
+body.solo .cvt { top: 2px; left: 6px; }
 body.solo:not(.cvview) #cv { visibility: hidden; }
 body.solo.cvview #strip, body.solo.cvview #links { visibility: hidden; }
 /* hovering a card marks the same stack in the columns: its column, its card, its branch row and its index row */
@@ -480,17 +477,17 @@ const colOf = sid => { const i = V.trail.indexOf(sid); return i < 0 ? -1 : i + 1
 /* ---- column geometry ----
    Equal-width columns. On a wide screen column i sticks at i × spine from the left, so earlier columns pile up as
    spines; on a narrow screen every column sticks at 0 and only the previous column's spine shows.
-   From 900px up the strip takes the left part of the page (lw) and the canvas pane the rest. The target is 58% of
-   the page; the strip is then cut to k whole columns plus one spine (k = 1 to 3, columns 340 to 420px wide, or up to
-   520px when only one fits). Below 900px (solo) the strip is the full width, and the canvas replaces it when
-   switched to. */
+   From 900px up the strip takes the left 58% of the page (lw) and the canvas pane the rest. Columns are sized so
+   that k full columns and three spines fit in the strip (k = 1 to 3, columns 340 to 420px wide, or up to 520px when
+   only one fits), so k columns stay in full until the trail is four stacks deep. Below 900px (solo) the strip is the
+   full width, and the canvas replaces it when switched to. */
 const G = { narrow: false, solo: false, spine: 40, w: 376, lw: 0 };
 function measure() {
   G.narrow = innerWidth < 760; G.solo = innerWidth < 900; G.spine = G.narrow ? 28 : 40;
   if (G.narrow) { G.w = innerWidth - G.spine; G.lw = innerWidth; }
   else if (G.solo) { G.w = Math.max(340, Math.min(400, Math.floor(innerWidth / 3.4))); G.lw = innerWidth; }
-  else { const t = Math.round(innerWidth * 0.58) - G.spine, k = Math.max(1, Math.min(3, Math.floor(t / 340)));
-    G.w = k === 1 ? Math.max(340, Math.min(520, t)) : Math.min(420, Math.floor(t / k)); G.lw = k * G.w + G.spine; }
+  else { G.lw = Math.round(innerWidth * 0.58); const k = Math.max(1, Math.min(3, Math.floor((G.lw - 3 * G.spine) / 340)));
+    G.w = k === 1 ? Math.min(520, G.lw - G.spine) : Math.min(420, Math.floor((G.lw - 3 * G.spine) / k)); }
   const r = document.documentElement.style; r.setProperty('--cw', G.w + 'px'); r.setProperty('--spine', G.spine + 'px'); r.setProperty('--lw', G.lw + 'px');
   document.body.classList.toggle('narrow', G.narrow); document.body.classList.toggle('solo', G.solo);
   document.body.classList.toggle('nohint', G.lw - 352 < 330);
@@ -675,7 +672,7 @@ function revealLeft(c) {
   return best ?? alignedLeft(c);
 }
 function reveal(c, smooth = true) { stripEl.scrollTo({ left: revealLeft(c), behavior: smooth && !reduced() ? 'smooth' : 'auto' }); }
-function setSel(sid) { V.sel = sid; stripEl.querySelectorAll('.stack').forEach(e => e.classList.toggle('sel', e.dataset.stack === sid)); drawLinks(); }
+function setSel(sid) { V.sel = sid; stripEl.querySelectorAll('.stack').forEach(e => e.classList.toggle('sel', e.dataset.stack === sid)); drawLinks(); cvMark(); }
 function focusCol(c, smooth = true) {
   const col = colEl(c); if (!col) return;
   col.querySelector('.cscroll').focus({ preventScroll: true }); reveal(c, smooth);
@@ -1105,7 +1102,7 @@ function cvPartHTML(p, s, first) {
 function cvStackHTML(s) {
   const ps = partsOf(s.id); let h = '';
   if (!s.fork) { const n = unitNew(s);
-    h += `<div class="sh"><span class="ov" aria-hidden="true">${esc(chName(s))}${n ? ` · <b>${n} new</b>` : ''}</span><span class="ch">${esc(chName(s))}</span>${n ? `<span class="newc">${n} new</span>` : ''}<span class="grow"></span></div>`; }
+    h += `<div class="sh"><span class="ch">${esc(chName(s))}</span>${n ? `<span class="newc">${n} new</span>` : ''}<span class="grow"></span></div>`; }
   else { const fp = P[s.fork.part]; if (fp) { const bt = s.fork.block != null ? blockText(fp, s.fork.block) : '';
     h += `<div class="fq"><i>${icon('corner-down-right')}From ${s.fork.block != null || s.fork.quote ? 'paragraph' : partKind(fp)}</i>${s.fork.quote ? `“${esc(clip(s.fork.quote, 120))}”` : bt ? `“${esc(clip(bt, 110))}”` : esc(words(fp, 9))}</div>`; } }
   if (!ps.length) h += '<div class="cvd">Draft</div>';
