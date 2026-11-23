@@ -177,8 +177,9 @@ html { scroll-padding-top: 64px; }
 
 /* the row's track scrolls horizontally on its own; the edges fade when there is more to that side */
 .track { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--ml, 0px), #000 calc(100% - var(--mr, 0px)), transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 var(--ml, 0px), #000 calc(100% - var(--mr, 0px)), transparent 100%); }
+  /* a light fade at an edge with more to that side: the edge keeps 55% opacity */
+  -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,.55) 0, #000 var(--ml, 0px), #000 calc(100% - var(--mr, 0px)), rgba(0,0,0,.55) 100%);
+  mask-image: linear-gradient(to right, rgba(0,0,0,.55) 0, #000 var(--ml, 0px), #000 calc(100% - var(--mr, 0px)), rgba(0,0,0,.55) 100%); }
 .track::-webkit-scrollbar { display: none; }
 @media (pointer: coarse) { .track { scroll-snap-type: x proximity; scroll-padding-inline: 16px; } .track .stack { scroll-snap-align: start; }
   .rows.centred .track .stack.root { scroll-snap-align: center; } }   /* a centred root snaps back to the row's start (s0) */
@@ -644,7 +645,7 @@ function updateRow(sec) {
   const tr = sec?.querySelector('.track'); if (!tr) return;
   const max = tr.scrollWidth - tr.clientWidth, l = tr.scrollLeft > 2, r = tr.scrollLeft < max - 2;
   sec.classList.toggle('fits', max <= 2);
-  tr.style.setProperty('--ml', l ? '48px' : '0px'); tr.style.setProperty('--mr', r ? '48px' : '0px');
+  tr.style.setProperty('--ml', l ? '32px' : '0px'); tr.style.setProperty('--mr', r ? '32px' : '0px');
   const t = tr.getBoundingClientRect();
   sec.querySelectorAll('.pip').forEach(b => { const e = sec.querySelector(`.lane > .stack[data-stack="${b.dataset.id}"]`); if (!e) return;
     const q = e.getBoundingClientRect(); b.classList.toggle('in', Math.min(q.right, t.right) - Math.max(q.left, t.left) > q.width * .5); });
