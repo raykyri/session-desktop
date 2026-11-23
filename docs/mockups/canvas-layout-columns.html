@@ -220,7 +220,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 :root { --top: 56px; --cw: 376px; --spine: 40px; }
 @media (pointer: coarse) { :root { --top: 64px; } }
 body { background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 24px 24px; }
-#strip { position: fixed; left: 0; right: 0; top: var(--top); bottom: 0; display: flex; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
+#strip { position: fixed; left: 0; right: 0; top: var(--top); bottom: 0; display: flex; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; scroll-snap-type: x proximity; }
 body.narrow #strip { scroll-snap-type: x mandatory; scrollbar-width: none; }
 .snap { position: absolute; top: 0; width: 1px; height: 1px; scroll-snap-align: start; pointer-events: none; }
 .col { position: sticky; flex: none; width: var(--cw); height: 100%; display: flex; flex-direction: column; background-color: var(--page);
@@ -541,7 +541,8 @@ function render(opts = {}) {
   const before = opts.noAnim || reduced() ? null : snapshot(), view = saveView();
   const ix = indexHTML(), cols = [colHTML(0, ix.head, ix.body, 'Stacks')];
   V.trail.forEach((sid, t) => { const s = S[sid]; cols.push(colHTML(t + 1, colHead(s, t + 1), stackHTML(s), titleOf(s), sid)); });
-  const snaps = G.narrow ? V.trail.map((_, t) => `<i class="snap" style="left:${(t + 1) * G.w - G.spine}px"></i>`).join('') + '<i class="snap" style="left:0"></i>' : '';
+  /* snap points: the aligned positions (on a narrow screen, one column per position) */
+  const snaps = [0, ...V.trail.map((_, t) => G.narrow ? (t + 1) * G.w - G.spine : alignedLeft(t + 1))].map(x => `<i class="snap" style="left:${x}px"></i>`).join('');
   stripEl.innerHTML = cols.join('') + `<div class="slot" data-slot><div class="slotb">${icon('corner-down-right')}<span>Drag a part, or selected text, here to branch in a new column</span></div></div>` + snaps;
   stripEl.querySelectorAll('.draft textarea').forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; });
   restoreView(view, opts.focus);
@@ -568,11 +569,15 @@ function updateSpines() {
   cols.forEach((c, i) => { const r = c.getBoundingClientRect(), nx = cols[i + 1] ? cols[i + 1].getBoundingClientRect().left : Infinity;
     const vis = Math.min(nx, innerWidth) - r.left; c.classList.toggle('spined', r.left < innerWidth && vis < G.w * 0.5); });
 }
-/* the scroll position that shows column c in full, moving as little as possible */
+/* the scroll position that shows column c in full. Positions are aligned so that every column left of the first
+   full one is exactly a spine (j × (width − spine) puts column j at j × spine); of the aligned positions that show
+   column c, the one nearest the current scroll is used. */
+const alignedLeft = j => j * (G.w - G.spine);
 function revealLeft(c) {
   if (G.narrow) return c ? c * G.w - G.spine : 0;
-  const max = c * (G.w - G.spine), min = (c + 1) * G.w - stripEl.clientWidth + 8, cur = stripEl.scrollLeft;
-  return Math.max(0, min > max ? max : Math.min(max, Math.max(min, cur)));
+  const vw = stripEl.clientWidth, cur = stripEl.scrollLeft; let best = null;
+  for (let j = 0; j <= c; j++) { if ((c - j + 1) * G.w + j * G.spine > vw) continue; const s = alignedLeft(j); if (best == null || Math.abs(s - cur) < Math.abs(best - cur)) best = s; }
+  return best ?? alignedLeft(c);
 }
 function reveal(c, smooth = true) { stripEl.scrollTo({ left: revealLeft(c), behavior: smooth && !reduced() ? 'smooth' : 'auto' }); }
 function setSel(sid) { V.sel = sid; stripEl.querySelectorAll('.stack').forEach(e => e.classList.toggle('sel', e.dataset.stack === sid)); drawLinks(); }
