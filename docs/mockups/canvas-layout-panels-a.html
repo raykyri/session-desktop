@@ -344,6 +344,8 @@ body { --top: calc(var(--chb) + var(--bar)); }
 }
 @media (max-width: 720px) { .modl { display: none; } }
 @media (max-width: 480px) { .tbtn { padding: 0 9px; } .top { column-gap: 6px; } }
+/* a phone: the top bar's first row has to hold the menu, Add post, Add ask, the toggle and the bell at touch size */
+@media (max-width: 480px) and (pointer: coarse) { .tbtn .pl { display: none; } .tbtn { padding: 0 10px; } .seg button { min-width: 34px; } }
 @media (pointer: coarse) and (max-width: 960px) { body.ch-header { --bar: 96px; } body.ch-header .top { padding-top: 4px; } body.ch-header .top .chips { height: 44px; } }
 @media (pointer: coarse) { .tbtn { height: 40px; } .tbtn.ic { width: 40px; } .crow { height: 40px; } }
 </style>
@@ -717,7 +719,7 @@ $('#zout').onclick = () => { const { w, h } = pane(); zoomAt(V.z / 1.25, w / 2, 
 $('#zval').onclick = () => { const { w, h } = pane(); zoomAt(1, w / 2, h / 2); V.moved = true; render({ noAnim: true }); };
 $('#fit').onclick = () => fit();
 vp.addEventListener('wheel', e => {
-  e.preventDefault(); closeBmenu(); V.moved = true;
+  e.preventDefault(); closeBmenu(); hideHint(); V.moved = true;
   if (e.ctrlKey || e.metaKey) { const [cx, cy] = local(e.clientX, e.clientY); zoomAt(V.z * Math.exp(-e.deltaY * 0.0025), cx, cy); }
   else { V.x -= e.deltaX; V.y -= e.deltaY; applyView(); }
 }, { passive: false });
@@ -735,7 +737,7 @@ vp.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pinch && pts.size === 2) { const [a, b] = [...pts.values()], [cx, cy] = local((a.x + b.x) / 2, (a.y + b.y) / 2); zoomAt(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, cx, cy); V.moved = true; return; }
   if (pan) { const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
-    if (!pan.moved && Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; V.moved = true; vp.classList.add('panning'); closeBmenu(); try { vp.setPointerCapture(e.pointerId); } catch {} }
+    if (!pan.moved && Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; V.moved = true; vp.classList.add('panning'); closeBmenu(); hideHint(); try { vp.setPointerCapture(e.pointerId); } catch {} }
     if (pan.moved) { V.x = pan.vx + dx; V.y = pan.vy + dy; applyView(); } }
 });
 const endPtr = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
