@@ -7,16 +7,22 @@ context rules, part menu, drafts, composer and bell are unchanged; only the layo
 Layout
 - The page is a vertical list of rows, one per root stack, ordered by last activity (newest first). A new root
   (Add post, Add ask) opens a new row at the top. Only the page scrolls vertically.
-- A row holds the root at the left and its branches to its right, one stack per column, depth first: each stack is
-  followed by its branches, in the order of their anchors. A row wider than the page scrolls horizontally on its own
-  (arrow buttons, Shift+wheel, trackpad or touch swipe); the row header shows one dot per stack.
-- A row is as tall as its tallest stack; cards are never cut off, and the page scrolls. Long answers keep "Show all".
-- Connectors stay inside a row. Each stack with branches has one bus in a rail above the cards: a stub from each
-  anchor (a dot on the parent's right edge, level with the anchor paragraph) joins a spine in the gap, the spine
-  rises to the rail, and the rail drops into each branch. Deeper buses sit lower in the rail and lie between their
-  stack and its next sibling, so they never cross. The selected or hovered branch's path is drawn in the accent
-  colour and its anchor paragraph is tinted.
-- Keyboard: Up and Down move between rows; Left and Right move between the stacks in a row.
+- A row is a set of columns, one per depth. Column 0 holds the root; column 1 holds the root's branches, stacked
+  top to bottom in anchor order (by part, then paragraph); column 2 holds the branches of the column-1 stacks, parent
+  by parent, so one parent's group never interleaves with another's; and so on. A branch made while the page is open
+  goes to the end of its parent's group.
+- In each column, a branch is placed level with its anchor where there is room, otherwise 16px below the stack above
+  it in the column; stacks never overlap. A row is as tall as its tallest column; cards are never cut off, and the
+  page scrolls. Long answers keep "Show all".
+- A row wider than the page scrolls horizontally on its own (arrow buttons, Shift+wheel, trackpad or touch swipe);
+  the row header shows one dot per stack, column by column.
+- Connectors stay inside a row. Each branch has one: a dot on the parent's right edge level with the anchor
+  paragraph (or near the top of the anchor part), a line to the branch's left edge next to its header, and an elbow
+  in the gap when the branch was pushed below its anchor. Overlapping elbows are spread across the gap so connectors
+  do not cross. The selected or hovered branch's connector is drawn in the accent colour and its anchor paragraph is
+  tinted.
+- Keyboard: Left moves to the parent, Right to a branch (the one last left with Left, else the first). Up and Down
+  move between the stacks in a column, and past either end of it to the previous or next row.
 - Removed from the canvas: free positions, dragging, double-click to create, pan, zoom, Fit and the overview.
 
 Data model (in memory; a reload starts over)
@@ -26,7 +32,8 @@ Data model (in memory; a reload starts over)
   Context is set by position: everything above in the stack, plus the fork part and everything it read.
 - Stack { id, ch (channel), fork? { part, block?, quote? } }. Stored x and y are not used by this layout.
   A stack's author is the person who wrote its first part. Only the author adds to or inserts into it; others fork.
-- View state, per viewer, not content: row order, collapsed rows, expanded answers, selection, seen parts.
+- View state, per viewer, not content: row order, the place of branches made during the visit, collapsed rows,
+  expanded answers, selection, seen parts.
 No model API is called; answers are canned and runs are simulated with timers. The only external request is the
 Inter font.
 -->
@@ -330,10 +337,9 @@ for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 const V = { sel: null, hot: null, collapsed: new Set(), full: new Set(), seen: new Set(), draft: null, order: [], rowSel: {}, back: {} };
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
-const depthOf = s => s.fork ? 1 + depthOf(S[P[s.fork.part].st]) : 0;
-/* a stack's branches in sibling order: by anchor (part, then paragraph). A branch made during this visit (`made`,
-   not stored) goes after its parent's other branches, in the order made, so the stacks already shown keep their
-   place; on the next load it takes its anchor order. */
+/* a stack's branches in sibling order: by anchor (part, then paragraph). A branch made while the page is open
+   (`made`, view state, not stored) goes after its parent's other branches, in the order made, so the stacks already
+   shown keep their place. */
 const branchesOf = s => partsOf(s.id).flatMap(p => forksOf(p.id)).sort((a, b) => (a.made ?? 0) - (b.made ?? 0)
   || P[a.fork.part].key - P[b.fork.part].key || (a.fork.block ?? -1) - (b.fork.block ?? -1));
 /* a row's columns: column 0 holds the root, column d + 1 the branches of the stacks in column d, parent by parent in
@@ -548,9 +554,8 @@ function render(opts = {}) {
     sec.classList.toggle('coll', V.collapsed.has(id));
     sec.setAttribute('aria-label', `#${CH[r.ch] || r.ch}: ${first ? clip(strip(first.text), 80) : 'new stack'}`);
     sec.querySelector('.rh').innerHTML = rowHead(r, list);
-    const lane = sec.querySelector('.lane');
-    lane.style.setProperty('--gap', GAP + 'px'); lane.style.paddingTop = railOf(list) + 'px';
-    lane.innerHTML = '<svg class="links" aria-hidden="true"></svg>' + list.map(x => stackHTML(x.s)).join('');
+    sec.querySelector('.lane').innerHTML = '<svg class="links" aria-hidden="true"></svg>' + list.map(x => stackHTML(x.s)).join('');
+    layoutRow(sec);
   }
   if (before) {
     const moved = [];
@@ -587,7 +592,7 @@ function revealY(el, behavior = 'auto') {
   if (r.top < TOPGAP) scrollBy({ top: r.top - TOPGAP, behavior });
   else if (r.bottom > innerHeight - 12) scrollBy({ top: r.height > room ? r.top - TOPGAP : r.bottom - innerHeight + 12, behavior });
 }
-/* move a row by whole stacks */
+/* move a row by whole columns */
 function pageRow(id, dir) {
   const sec = rowEl(id), tr = sec?.querySelector('.track'); if (!tr) return;
   const step = W() + GAP, n = Math.max(1, Math.floor((tr.clientWidth - 32 + GAP) / step));
@@ -616,24 +621,26 @@ function selectStack(id, { kb = false, scroll = true } = {}) {
   render({ noAnim: true });
   const el = stackEl(id); if (!el) return;
   if (scroll) revealX(el, kb ? smooth() : 'auto');
-  if (kb) { revealY(rowEl(r.id)); el.focus({ preventScroll: true }); }
+  if (kb) { revealY(s.fork ? el : rowEl(r.id)); el.focus({ preventScroll: true }); }
 }
-/* Up and Down: the previous or next row (its last selected stack, else its root). Left and Right: the previous or
-   next stack in the row. With nothing selected, the first row in view. Enter expands a collapsed row. */
+/* Left: the parent. Right: the branch last left with Left, else the first branch. Up and Down: the stack above or
+   below in the same column of the row; past either end of the column, the previous or next row (its last selected
+   stack, else its root). With nothing selected, the first row in view. Enter expands a collapsed row. */
 function nav(key) {
   const ids = rowIds(); if (!ids.length) return;
   const cur = V.sel && S[V.sel] ? V.sel : null;
   if (!cur) { const id = ids.find(i => rowEl(i)?.getBoundingClientRect().bottom > TOPGAP + 20) || ids[0]; selectStack(V.rowSel[id] && S[V.rowSel[id]] ? V.rowSel[id] : id, { kb: true }); return; }
-  const root = rootOf(S[cur]).id;
+  const s = S[cur], root = rootOf(s).id;
   if (key === 'Enter') { if (V.collapsed.has(root)) { V.collapsed.delete(root); render(); } return; }
-  if (key === 'ArrowUp' || key === 'ArrowDown') {
-    const i = ids.indexOf(root), j = Math.max(0, Math.min(ids.length - 1, i + (key === 'ArrowDown' ? 1 : -1)));
-    const nr = ids[j], keep = V.rowSel[nr], vis = keep && rowList(S[nr]).some(x => x.s.id === keep);
-    selectStack(vis ? keep : nr, { kb: true }); return;
-  }
-  const list = rowList(S[root]).map(x => x.s.id), i = list.indexOf(cur);
-  const j = Math.max(0, Math.min(list.length - 1, i + (key === 'ArrowRight' ? 1 : -1)));
-  selectStack(list[j], { kb: true });
+  if (key === 'ArrowLeft') { if (s.fork) { const pid = P[s.fork.part].st; V.back[pid] = cur; selectStack(pid, { kb: true }); } return; }
+  const cols = rowCols(S[root]);
+  if (key === 'ArrowRight') { const kids = cols.some(c => c.includes(s)) ? branchesOf(s) : [];
+    if (kids.length) selectStack(kids.includes(S[V.back[cur]]) ? V.back[cur] : kids[0].id, { kb: true }); return; }
+  const dir = key === 'ArrowDown' ? 1 : -1, col = cols.find(c => c.includes(s)) || [], i = col.indexOf(s);
+  if (col[i + dir]) { selectStack(col[i + dir].id, { kb: true }); return; }
+  const nr = ids[ids.indexOf(root) + dir]; if (!nr) return;
+  const keep = V.rowSel[nr], vis = keep && rowList(S[nr]).some(x => x.s.id === keep);
+  selectStack(vis ? keep : nr, { kb: true });
 }
 document.addEventListener('keydown', e => {
   if (e.defaultPrevented || $('#nmenu') || $('#bmenu') || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
@@ -701,7 +708,7 @@ function canned(p, q) {
 document.addEventListener('input', e => {
   const t = e.target.closest('.draft textarea'); if (!t) return;
   V.draft.texts[+t.dataset.di] = t.value; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
-  requestAnimationFrame(() => { const sec = t.closest('.row'); drawRowLinks(sec); updateRow(sec); });
+  requestAnimationFrame(() => { const sec = t.closest('.row'); layoutRow(sec); drawRowLinks(sec); updateRow(sec); });
 });
 
 /* ---- new: a notifications menu of the parts that are new to this viewer ---- */
@@ -724,13 +731,14 @@ function openNotes() {
   m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px';
   m.querySelector('button')?.focus();
 }
-/* go to a new part: expand its row, select its stack, then bring the row, the stack and the part into view */
+/* go to a new part: expand its row, select its stack, then bring the stack (for a root, its row) and the part into
+   view */
 function goToNote(id) {
   const p = P[id]; if (!p) return; const s = S[p.st], r = rootOf(s);
   V.collapsed.delete(r.id); V.seen.add(id);
   selectStack(s.id, { scroll: false });
   const sec = rowEl(r.id), el = stackEl(s.id), pe = el?.querySelector(`[data-part="${id}"]`); if (!sec || !el) return;
-  scrollTo({ top: sec.getBoundingClientRect().top + scrollY - TOPGAP + 4 });
+  scrollTo({ top: (s.fork ? el : sec).getBoundingClientRect().top + scrollY - TOPGAP + 4 });
   revealX(el, 'auto');
   if (pe && pe.getBoundingClientRect().bottom > innerHeight - 12) revealY(pe);
   el.focus({ preventScroll: true });
@@ -763,11 +771,12 @@ function newRoot(mode) {
 }
 $('#add-post').onclick = () => newRoot('post');
 $('#add-ask').onclick = () => newRoot('ask');
-/* a branch opens in its row, right after its parent's earlier branches; the row scrolls to show it */
+/* a branch opens in the column right of its parent, at the end of its parent's group of branches (`made`); the row
+   and the page scroll to show it */
 function newFork(pid, { block = null, quote = null } = {}) {
   if (!leaveDraft()) return;
   const fp = P[pid], id = 's' + (++seq);
-  S[id] = { id, ch: S[fp.st].ch, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) } };
+  S[id] = { id, ch: S[fp.st].ch, made: seq, fork: { part: pid, ...(block != null ? { block } : {}), ...(quote ? { quote } : {}) } };
   const r = rootOf(S[id]); V.collapsed.delete(r.id);
   V.draft = { st: id, after: '', mode: 'ask', texts: [''] }; V.sel = id; V.rowSel[r.id] = id;
   render({ noAnim: true, focus: '.draft textarea' });

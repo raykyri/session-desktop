@@ -321,7 +321,8 @@ button.fq:hover { background: color-mix(in srgb, var(--accent) 7%, var(--inset))
 .dzb { display: grid; justify-items: center; gap: 3px; max-width: 80%; padding: 10px 14px; border-radius: 10px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); font-size: 12.5px; color: var(--t-heading); text-align: center; }
 .dzb .lc { color: var(--accent); width: 16px; height: 16px; }
 .dzb small { font-size: 11.5px; color: var(--t-faint); }
-.slot { flex: 1 0 150px; height: 100%; padding: 12px; display: flex; }
+.slot { flex: 1 0 var(--slot, 150px); height: 100%; padding: 12px; display: flex; container-type: inline-size; }
+@container (max-width: 159px) { .slotb span { display: none; } .slotb { padding-left: 0; padding-right: 0; } }
 body.narrow .slot { flex: 0 0 0; padding: 0; overflow: hidden; }
 .dragging .slot, body.narrow.dragging .slot { flex: 1 0 var(--cw); padding: 12px; }
 .slotb { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16vh 16px 0; border: 1.5px dashed var(--divider); border-radius: 12px; color: var(--t-dim); font-size: 12px; text-align: center; }
@@ -350,7 +351,7 @@ body.nohint .hint, body.solo .hint { display: none; }
 #cv.panning, #cv.panning .cst { cursor: grabbing; }
 #cvworld { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 #cvlinks { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-#cvlinks path { fill: none; stroke: var(--link); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .55; }
+#cvlinks path { fill: none; stroke: var(--link); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .8; }
 #cvlinks circle { fill: var(--link); }
 #cvlinks .on, #cvlinks .hot { opacity: 1; }
 #cvlinks path.on { stroke: var(--accent); stroke-width: 1.75; }
@@ -484,10 +485,15 @@ const colOf = sid => { const i = V.trail.indexOf(sid); return i < 0 ? -1 : i + 1
 const G = { narrow: false, solo: false, spine: 40, w: 376, lw: 0 };
 function measure() {
   G.narrow = innerWidth < 760; G.solo = innerWidth < 900; G.spine = G.narrow ? 28 : 40;
+  const r0 = document.documentElement.style;
   if (G.narrow) { G.w = innerWidth - G.spine; G.lw = innerWidth; }
   else if (G.solo) { G.w = Math.max(340, Math.min(400, Math.floor(innerWidth / 3.4))); G.lw = innerWidth; }
   else { G.lw = Math.round(innerWidth * 0.58); const k = Math.max(1, Math.min(3, Math.floor((G.lw - 3 * G.spine) / 340)));
-    G.w = k === 1 ? Math.min(520, G.lw - G.spine) : Math.min(420, Math.floor((G.lw - 3 * G.spine) / k)); }
+    G.w = k === 1 ? Math.min(520, G.lw - 3 * G.spine) : Math.min(420, Math.floor((G.lw - 3 * G.spine) / k));
+    /* the empty slot after the last column is at least as wide as the space left beside the last column with one
+       spine, so the aligned scroll positions stay reachable; below 160px it shows only its icon */
+    r0.setProperty('--slot', Math.max(64, G.lw - G.spine - k * G.w) + 'px'); }
+  else r0.removeProperty('--slot');
   const r = document.documentElement.style; r.setProperty('--cw', G.w + 'px'); r.setProperty('--spine', G.spine + 'px'); r.setProperty('--lw', G.lw + 'px');
   document.body.classList.toggle('narrow', G.narrow); document.body.classList.toggle('solo', G.solo);
   document.body.classList.toggle('nohint', G.lw - 352 < 330);

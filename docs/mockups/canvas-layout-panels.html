@@ -3,10 +3,15 @@ Session Canvas mock: thread and branch panel
 ============================================
 A layout variant of docs/mockups/session-canvas.html (concept: docs/canvas/session-canvas-concept.md; this variant:
 docs/canvas/layout-panels.md). The canvas, connectors, zoom and dragging are replaced by three fixed regions:
-- a sidebar with channels and the threads of the chosen channel, each with its count of new parts;
+- a sidebar with the threads of the chosen channel, each with its count of new parts;
 - the main pane, which shows one stack (a thread, or a branch after Swap) as a vertical column;
 - a right panel, which shows one branch of the main stack. Opening a branch inside the panel replaces the panel's
   content and extends its breadcrumb trail; Swap moves the branch into the main pane.
+Channels (All, then each channel, with new counts) are shown in one of three places, chosen with the "Channels"
+toggle in the top bar: Header (default; a row of chips in the top bar), Above (the same row as a bar above the top
+bar) or Sidebar (a list above the threads in the sidebar). The row and toggle are the ones in layout 5
+(canvas-layout-miller.html). At 960px and below the sidebar is a drawer, the channel row scrolls horizontally, and in
+Header it is a second row of the top bar; choosing a channel there opens the drawer on its threads.
 Seed content and data model are unchanged from the base mock. No model API is called; answers are canned and runs are
 simulated with timers. The only external request is the Inter font.
 
@@ -20,7 +25,8 @@ Data model (in memory; a reload starts over)
   part it forks from: that paragraph carries a margin marker with its branch count, and is highlighted in the main
   pane while the branch is open in the panel. x and y are no longer used: nothing is placed by hand.
   A stack's author is the person who wrote its first part. Only the author adds to or inserts into it; others branch.
-- View state, per viewer, not content: channel filter, main stack, panel stack, seen parts, the draft.
+- View state, per viewer, not content: channel filter, where channels are shown (kept in localStorage), main stack,
+  panel stack, seen parts, the draft.
 -->
 <title>9. Session Canvas: Thread and branch panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
