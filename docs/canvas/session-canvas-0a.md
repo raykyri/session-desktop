@@ -48,8 +48,8 @@ lower turns nearer the parent. With branches placed in anchor order, connectors 
   zoom; the overview headlines appear below 50% as in the base.
 - Fit fits the width of the columns in use (the main column and the deepest visible side column) to the window, at
   most 100%, and keeps what is at the top of the view at the top.
-- The page opens at Fit at the top of the main column. With the seed at 1440px this is 100% (main column and two side
-  columns); with every unit expanded it is about 79% (three side columns).
+- The page opens at 100% with the main column centred horizontally, at the top of the main column. Side columns that
+  do not fit are reached by panning; Fit shows them all.
 - Below 720px the page opens at 100% with the main column filling the width. Side columns are reached by panning
   horizontally; the connector ticks on the main column's right edge show where branches start.
 - Two fixes that the base does not have: a pan that moves captures the pointer, so releasing it over the toolbar

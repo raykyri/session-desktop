@@ -22,8 +22,8 @@ Differences from the base
   rounded corners), and horizontally to the branch's header. Connectors in the same gap whose vertical spans overlap
   get separate tracks: a connector that starts lower turns nearer the parent, so connectors in one gap do not cross.
 - Fit fits the width of the columns in use (main column plus the deepest visible side column), at most 100%, and
-  keeps the content at the top of the view where it is. The page opens at Fit at the top of the main column; on a
-  page narrower than 720px it opens at 100% with the main column filling the width, and side columns are reached by
+  keeps the content at the top of the view where it is. The page opens at 100% with the main column centred, at its top;
+  on a page narrower than 720px the main column fills the width, and side columns are reached by
   panning horizontally.
 
 Terms. In the UI: "post" (one block of text by one author, or one model answer), "stack" (how a thread is drawn:
@@ -900,9 +900,10 @@ function initialLayout() {
   for (const r of rs) if (!featured.includes(r.src)) V.collapsed.add(r.id);
 }
 /* the opening view: the top of the main column at Fit; below 720px, 100% with the main column filling the width */
+/* the page opens at 100% with the main column centred horizontally, at the top of the main column */
 function initialView() {
-  V.z = 1; V.y = topInset();
-  if (innerWidth < 720) { V.x = 16; world.classList.remove('far'); applyView(); drawLinks(); } else fit();
+  V.z = 1; V.y = topInset(); V.x = Math.round((innerWidth - MAINW()) / 2);
+  world.classList.remove('far'); applyView(); drawLinks();
 }
 initialLayout();
 render({ noAnim: true });

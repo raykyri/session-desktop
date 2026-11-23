@@ -17,8 +17,8 @@ Differences from the base (as in 0a)
 - Each root and its visible branches form a row. Inside a row, a branch starts level with its anchor when its column
   is free there, otherwise VGAP below the previous card in that column. Branches are placed depth-first, siblings in
   anchor order. The next row starts ROWGAP below the lowest card of the row above, in any column.
-- Fit fits the width of the columns in use, at most 100%. Below 720px the page opens at 100% with the main column
-  filling the width; side columns on both sides are reached by panning horizontally.
+- Fit fits the width of the columns in use, at most 100%. The page opens at 100% with the main column centred; below
+  720px the main column fills the width; side columns on both sides are reached by panning horizontally.
 
 Differences from 0a
 - Side columns exist on both sides of the main column. Right column n starts at MAINW + GAP + (n - 1)(SIDEW + GAP);
@@ -943,9 +943,10 @@ function initialLayout() {
   for (const r of rs) if (!featured.includes(r.src)) V.collapsed.add(r.id);
 }
 /* the opening view: the top of the main column at Fit; below 720px, 100% with the main column filling the width */
+/* the page opens at 100% with the main column centred horizontally, at the top of the main column */
 function initialView() {
-  V.z = 1; V.y = topInset();
-  if (innerWidth < 720) { V.x = 16; world.classList.remove('far'); applyView(); drawLinks(); } else fit();
+  V.z = 1; V.y = topInset(); V.x = Math.round((innerWidth - MAINW()) / 2);
+  world.classList.remove('far'); applyView(); drawLinks();
 }
 initialLayout();
 render({ noAnim: true });

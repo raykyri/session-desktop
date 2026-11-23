@@ -61,7 +61,8 @@ edge, 16px below its top. Tracks are assigned per side and gap, so connectors on
 - Fit fits the full width in use, from the deepest visible left column to the deepest visible right column. With the
   seed at 1440px this is about 79% (one main column, two left and one right side columns); with every unit expanded it
   is about 56%.
-- Below 720px the page opens at 100% with the main column filling the width. Left columns are reached by panning
+- The page opens at 100% with the main column centred horizontally, at its top; Fit shows every column in use.
+  Below 720px the main column fills the width. Left columns are reached by panning
   right, right columns by panning left; the connector ticks on the main column's edges show where branches start.
 
 ## Open questions
