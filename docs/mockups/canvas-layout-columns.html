@@ -602,7 +602,7 @@ function drawLinks() {
     const pr = pcol.querySelector('.cscroll').getBoundingClientRect(), cr = ccol.querySelector('.cscroll').getBoundingClientRect();
     const y1v = clampY(ay, pr), y2v = clampY(by, cr), off = y1v !== ay || y2v !== by;
     const x1 = Math.min(card.getBoundingClientRect().right, ccol.getBoundingClientRect().left) - lr.left, x2 = fr.left - lr.left, y1 = y1v - lr.top, y2 = y2v - lr.top;
-    if (x2 - x1 < 6) return;
+    if (x2 - x1 < 6 || fr.left > innerWidth - 2) return;
     const mx = (x2 - x1) / 2, hot = V.sel === s.id || V.hot === s.id;
     out.push(`<path class="${off ? 'det' : ''}${hot ? ' hot' : ''}" d="M${x1},${y1} C${x1 + mx},${y1} ${x2 - mx},${y2} ${x2},${y2}"/><circle class="${hot ? 'hot' : ''}" cx="${x1}" cy="${y1}" r="3"/>`);
   });

@@ -1,15 +1,14 @@
 # Layout: Branch tabs
 
-Mock: `docs/mockups/canvas-layout-panels-tabs.html`, a layout variant of `docs/mockups/session-canvas.html`. The data
-model, context rules, part menu, drafts, composer and bell are unchanged.
+Mock: `docs/mockups/canvas-layout-panels-tabs.html`. Only layout and navigation differ from `session-canvas.html`.
 
 ## Layout rules
 
-- A left sidebar lists threads (root stacks) by last activity, with channel, counts and new parts.
+- A left sidebar lists threads (root stacks) by last activity.
 - The reader shows one stack in a single column. A thread and its open branches are tabs above it. The thread's tab
   comes first and cannot be closed.
 - A branch's tab goes after its parent's tab and after the open tabs of the parent's other branches, so the bar is in
-  tree order. A closed parent is opened first. A branch of a branch shows a `↳` icon. Each tab shows its author's
+  tree order. A branch of a branch shows a `↳` icon. Each tab shows its author's
   avatar and the first words of its question.
 - Opening a branch that is already open switches to its tab. Each tab keeps its scroll position.
 - Closing a tab also closes the tabs of branches under it. Tabs are kept per thread while the page is open.
@@ -22,7 +21,7 @@ model, context rules, part menu, drafts, composer and bell are unchanged.
 - **Mouse:** the wheel scrolls the reader. On the chip row, it scrolls the row sideways. Middle-click closes a tab.
 - **Keyboard:** `[` and `]` switch tabs. In the tab bar, Left/Right, Home/End and Delete (close) work. In the thread
   list, Up/Down move. Parts are focusable, and the context-menu key opens the part menu.
-- **Touch:** tap tabs, swipe the chip row, long-press a part for its menu.
+- **Touch:** tap tabs, swipe the chip row, long-press a part.
 
 Nothing needs 2D panning. Zoom, Fit, drag, double-click to create and collapse are removed.
 
@@ -40,7 +39,7 @@ and the layout orders them.
 ## Branching from a paragraph
 
 In the parent, the source paragraph keeps its left mark and has a margin marker with a branch icon and a count. The
-marker is dashed when "Show all" hides the paragraph. Hovering a marker tints the paragraph. Choosing a marker opens or
+marker is dashed when "Show all" hides the paragraph. Choosing a marker opens or
 focuses the branch's tab; several branches give a menu. In the branch, "From paragraph ↗" sits above the quote.
 Choosing it switches to the parent tab, scrolls to the paragraph and flashes it.
 

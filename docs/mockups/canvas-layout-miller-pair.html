@@ -281,6 +281,10 @@ body.list-off #main { left: 0; padding-left: 16px; }
 .phd .newc { color: var(--new); font-weight: 600; }
 .phd .who { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .phd .lvl { font-variant-numeric: tabular-nums; }
+.hbm { display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 7px; margin-right: -6px; border-radius: 6px; font-weight: 600; color: var(--t-secondary); font-variant-numeric: tabular-nums; }
+.hbm .lc { width: 12px; height: 12px; }
+.hbm:hover { background: var(--control); color: var(--accent); }
+@media (pointer: coarse) { .hbm { height: 32px; padding: 0 9px; } }
 .back { display: inline-flex; align-items: center; gap: 2px; height: 30px; padding: 0 8px 0 2px; margin-left: -6px; border-radius: 6px; font-weight: 600; font-size: 12px; color: var(--accent); min-width: 0; max-width: 70%; }
 .back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .back .lc { width: 16px; height: 16px; }
@@ -291,7 +295,7 @@ body.list-off #main { left: 0; padding-left: 16px; }
 .psc { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; position: relative; }
 .pane .sbody { background: none; box-shadow: none; border-radius: 0; }
 .pane .sbody > :first-child, .pane .sbody > :last-child:not(.draft) { border-radius: 0; }
-.pane .part { padding-right: 50px; }
+.pane .part { padding-right: 52px; }
 .pane .part:last-child { border-bottom: 1px solid var(--divider); }
 .pane .addend { border-radius: 0; border-bottom: 1px solid var(--divider); }
 .pane .seam .hz { left: 0; }
@@ -299,7 +303,7 @@ body.list-off #main { left: 0; padding-left: 16px; }
 @media (pointer: coarse) { .pane .seam .sp { left: 8px; } }
 
 /* margin markers: one per paragraph or part that has branches, with the count */
-.bm { position: absolute; right: 9px; z-index: 2; height: 24px; min-width: 34px; padding: 0 7px 0 6px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+.bm { position: absolute; right: 7px; z-index: 2; height: 24px; min-width: 34px; padding: 0 7px 0 6px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
   font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--t-secondary); background: var(--card); box-shadow: 0 0 0 1px var(--border-strong); }
 .bm::after { content: attr(data-n); }
 .bm .lc { width: 12px; height: 12px; }
@@ -491,6 +495,8 @@ function paneHTML(L) {
   let h = '<header class="phd">';
   if (nar && L > 0) h += `<button class="back" data-a="back" type="button" title="Back one level (Left)">${icon('chevron-left')}<span>${esc(firstWords(S[V.path[L - 1]], 5))}</span></button><span class="grow"></span><span class="ch">#${esc(CH[s.ch] || s.ch)}</span>`;
   else h += `<span class="ch">#${esc(CH[s.ch] || s.ch)}</span><span class="who">${s.fork ? `Branch by ${who}` : who}</span><span class="grow"></span>${n ? `<span class="newc">${n} new</span>` : ''}<span class="lvl" title="Level in this thread">${L ? `Level ${L + 1}` : 'Thread'}</span>`;
+  const nb = branchesOf(s.id).length;
+  if (nb) h += `<button type="button" class="hbm" data-a="blist" data-lv="${L}" title="Branches from this ${L ? 'branch' : 'thread'}" aria-label="${plural(nb, 'branch', 'branches')} from this ${L ? 'branch' : 'thread'}">${icon('git-fork')}${nb}</button>`;
   h += '</header>';
   if (s.fork) h += `<button type="button" class="fq" data-a="src" data-lv="${L}" title="Show where this branch starts"><i>${icon('corner-down-right')}${forkLabel(s)}</i><span class="qt">${forkQuote(s)}</span></button>`;
   h += `<div class="psc" data-sc="${s.id}"><div class="sbody" data-stack="${s.id}">${bodyHTML(s, hl)}</div></div>`;
@@ -788,12 +794,15 @@ function openMarker(b) {
   const L = +b.dataset.lv, p = P[b.dataset.part], k = +b.dataset.b;
   const list = forksOf(p.id).filter(f => (f.fork.block ?? -1) === k);
   if (list.length === 1) { if (!leaveFor(L, list[0].id)) return; openBranch(L, list[0].id); return; }
+  branchMenu(L, list, b, k >= 0 ? b.closest('.part')?.querySelector('.prose[data-p]')?.children[k] : null);
+}
+function branchMenu(L, list, b, blockEl) {
   closeBmenu();
   const m = document.createElement('div'); m.id = 'bmenu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', 'Branches');
   m.innerHTML = list.map(f => { const f0 = partsOf(f.id)[0], n = partsOf(f.id).length, by = f0 && !isModel(f0) ? (NAMES[f0.by.u] || f0.by.u) : 'You';
-    return `<button role="menuitem" data-a="open" data-lv="${L}" data-id="${f.id}"><span class="mi" aria-hidden="true">${f0 ? (isModel(f0) ? MARK : av(f0.by.u)) : MARK}</span><span class="mt"><span>${esc(f0 ? clip(strip(f0.text), 64) : 'Empty branch')}</span><small>${esc(by)} · ${plural(n, 'part')}${f.id === V.path[L + 1] ? ' · open' : ''}</small></span></button>`; }).join('');
+    return `<button role="menuitem" data-a="open" data-lv="${L}" data-id="${f.id}"><span class="mi" aria-hidden="true">${f0 ? (isModel(f0) ? MARK : av(f0.by.u)) : MARK}</span><span class="mt"><span>${esc(f0 ? clip(strip(f0.text), 64) : 'Empty branch')}</span><small>${esc(by)} · ${plural(n, 'part')} · ${forkLabel(f).toLowerCase()}${f.id === V.path[L + 1] ? ' · open' : ''}</small></span></button>`; }).join('');
   document.body.append(m);
-  if (k >= 0) b.closest('.part')?.querySelector('.prose[data-p]')?.children[k]?.classList.add('menu-on');
+  blockEl?.classList.add('menu-on');
   const r = b.getBoundingClientRect();
   m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, innerWidth - m.offsetWidth - 8)) + 'px';
   m.style.top = Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 8) + 'px';
@@ -805,6 +814,8 @@ const leaveFor = (L, fid) => !V.draft || V.draft.st === fid || (!narrow() && V.d
 
 /* ---- clicks ---- */
 function toggleList() { V.list = !V.list; render({ noAnim: true }); animUntil = performance.now() + 280; requestAnimationFrame(tick); }
+/* the panes change width while the list opens or closes: place the markers again once they have settled */
+$('#main').addEventListener('transitionend', e => { if (e.target.id === 'main') render({ noAnim: true }); });
 $('#tlbtn').onclick = toggleList;
 document.addEventListener('click', e => {
   /* the gap between two parts (the line that turns blue on hover) inserts there, like its "+" */
@@ -821,6 +832,7 @@ document.addEventListener('click', e => {
   if (a === 'dask') { commitDraft(true); return; }
   if (a === 'full') { V.full.has(d.id) ? V.full.delete(d.id) : V.full.add(d.id); render(); return; }
   if (a === 'bm') { e.stopPropagation(); openMarker(t); return; }
+  if (a === 'blist') { e.stopPropagation(); if ($('#bmenu')) { closeBmenu(); return; } branchMenu(+d.lv, branchesOf(V.path[+d.lv]), t, null); return; }
   if (a === 'open') { if (!leaveFor(+d.lv, d.id)) return; openBranch(+d.lv, d.id); return; }
   if (a === 'strip') { goLevel(+d.lv); return; }
   if (a === 'back') { goLevel(V.focus - 1); return; }
@@ -908,7 +920,7 @@ document.addEventListener('click', e => {
   if (suppressClick && !e.target.closest('#bmenu')) { e.preventDefault(); e.stopPropagation(); return; }
   const b = e.target.closest?.('#bmenu [data-a="selask"]');
   if (b) { e.stopPropagation(); const q = $('#bmenu').dataset.sel; closeBmenu(); getSelection()?.removeAllRanges(); newFork(b.dataset.id, { block: +b.dataset.b, quote: q }); return; }
-  if ($('#bmenu') && !e.target.closest('.bm')) setTimeout(closeBmenu, 0);
+  if ($('#bmenu') && !e.target.closest('.bm, .hbm')) setTimeout(closeBmenu, 0);
 }, true);
 document.addEventListener('keydown', e => {
   const m = $('#bmenu'); if (!m) return;
