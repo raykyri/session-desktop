@@ -200,7 +200,11 @@ svg.links circle.hot.off { fill: var(--page); stroke: var(--accent); }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 3px 6px; text-align: left; }
 .prose sup.cite { font-size: 9px; color: var(--accent); font-weight: 600; padding: 0 1px; }
 .part:not(.m) .prose { color: var(--t-heading); font-size: 14px; line-height: calc(1.58em - 1px); }
-.prose .anc { box-shadow: -8px 0 0 -5px var(--link); }
+/* a paragraph a branch starts from: a 2px mark flush with the card's right edge, where its connector leaves. A clamped
+   answer reaches into the card's right padding so the mark is not cut off. */
+.prose .anc { position: relative; }
+.prose .anc::after { content: ''; position: absolute; top: 2px; bottom: 2px; right: -12px; width: 2px; border-radius: 1px 0 0 1px; background: var(--link); pointer-events: none; }
+.prose.clamp { margin-right: -12px; padding-right: 12px; }
 .clamp { max-height: 236px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
 .more { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 2px; }
 .pending { color: var(--t-faint); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
@@ -245,7 +249,8 @@ svg.links circle.hot.off { fill: var(--page); stroke: var(--accent); }
 .draft .ibtn:hover { background: var(--control); color: var(--accent); }
 @media (pointer: coarse) { .draft .ibtn { width: 38px; height: 38px; } .draft .dx { width: 32px; height: 32px; } .draft .dp:first-child textarea { padding-right: 32px; } }
 /* the end composer: the last row of the viewer's own stack, flush with the card; its text lines up with the parts' text */
-.draft.end { margin: 0; padding: 10px 12px 10px 42px; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: var(--part-u); }
+.draft.end { margin: 0; padding: 10px 12px 10px 42px; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: var(--part-u); cursor: pointer; }
+.draft.end textarea { cursor: text; }
 .draft.end textarea { min-height: 24px; }
 .draft.end .dx { top: 6px; right: 8px; }
 .draft.end:focus-within { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
@@ -877,6 +882,9 @@ document.addEventListener('click', e => {
   /* a click on a stack selects it; a click on the empty lane clears the selection */
   const stEl = e.target.closest('#lane > .stack');
   if (stEl && getSelection()?.toString().trim()) return;
+  /* a click anywhere in an open end composer (outside its fields and buttons) puts the caret at the end of its last field */
+  if (stEl && e.target.closest('.draft.end') && !e.target.closest('textarea, button')) { const sid = stEl.dataset.stack; if (V.sel !== sid) selectStack(sid);
+    const tas = stackEl(sid)?.querySelectorAll('.draft.end textarea'), ta = tas?.[tas.length - 1]; if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
   if (stEl && !e.target.closest('textarea, button')) { if (V.sel !== stEl.dataset.stack) selectStack(stEl.dataset.stack); return; }
   if (!stEl && e.target.closest('#lane') && V.sel) { V.sel = null; V.rowSel[V.thread] = null; render({ noAnim: true }); }
 });
