@@ -63,8 +63,7 @@ A tab is a stack the viewer has open in this thread. The active tab is the selec
   canvas to it.
 - **Touch:** one finger pans anywhere except text fields and buttons, two fingers pinch to zoom, and a long press on
   a part opens the part menu. Below 760px the zoom buttons float at the bottom-right of the canvas.
-- Below 50% zoom, each stack shows a headline over its first part (the base mock's overview), and the part menu is
-  off.
+- Cards show their full content at every zoom, and the part menu works at every zoom.
 
 ## Compared with 12
 

@@ -18,8 +18,8 @@ stack and every branch under it). The layout, connectors, pan and zoom are porte
   and stacks are not dragged.
 - A connector runs from the anchor paragraph (or part) on the parent's right edge to the branch's top-left. The anchor
   paragraph keeps the 2px mark. Layout 12's margin markers are removed.
-- Pan: drag empty canvas, the wheel, or one finger. Zoom: Ctrl/Cmd+wheel, pinch, the zoom buttons, Fit. Below 50%
-  each stack shows a headline over its first part, and the part menu is off.
+- Pan: drag empty canvas, the wheel, or one finger. Zoom: Ctrl/Cmd+wheel, pinch, the zoom buttons, Fit. Cards
+  show their full content at every zoom.
 - Any stack can be collapsed to its first part and "N more parts"; that hides the branches under it.
 Tabs mean the stacks the viewer has open in this thread. The active tab is the selected stack:
 - Choosing a tab pans and zooms the canvas to its stack and selects it.
@@ -303,13 +303,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .btn.pri { background: var(--accent); color: var(--on-accent); }
 @media (pointer: coarse) { .btn { height: 38px; } }
 
-/* overview zoom (below 50%): geometry stays; the first part of each stack shows a headline over its box */
-.part .hl { display: none; }
-.far .sh > *, .far .prose, .far .ph, .far .part > .gut, .far .cmeta, .far .fq, .far .more, .far .seam .sp, .far .sh .ib, .far .draft > * { visibility: hidden; }
-.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
-.far .hl small b { color: var(--new); }
 
 /* the part menu (right-click or long-press) */
 #bmenu { position: fixed; z-index: 40; min-width: 200px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
@@ -390,7 +383,7 @@ const CH = Object.fromEntries(D.spaces.map(s => [s.id, s.name]));
 const LATEST = Math.max(NOW, ...D.parts.map(p => Date.parse(p.at)));   /* new parts are stamped after every seed part */
 const MAXT = 6;   /* tabs shown in the bar before the rest go to the overflow menu */
 const W = 320, GAP = 44, VGAP = 16;   /* stack width, gap between lanes, gap between branches in one lane (as in session-canvas.html) */
-const ZMIN = 0.15, ZMAX = 1.6, FAR = 0.5;   /* zoom limits; below FAR the canvas shows headlines */
+const ZMIN = 0.15, ZMAX = 1.6, FAR = 0.5;   /* zoom limits; below FAR, bringing a stack into view zooms to it */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const strip = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -562,12 +555,10 @@ function proseHTML(p) {
   else if (long) out += `<button class="more" type="button" data-a="full" data-id="${p.id}">Show less</button>`;
   return out;
 }
-/* the first part of each stack carries a headline, shown only below 50% zoom */
 function partHTML(p, s, first = false) {
   const hd = head(p, s), n = first && !s.fork ? unitNew(s) : 0;
-  const pre = first ? `<small>${s.fork ? 'Branch' : `#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}`}</small>` : '';
   return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}" tabindex="0">
-    <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${hd.gut}<div class="pb">${proseHTML(p)}${hd.meta}</div></div>`;
+    ${hd.gut}<div class="pb">${proseHTML(p)}${hd.meta}</div></div>`;
 }
 /* what a part is, in words: an answer, a question (a person's part answered right under it), or a post */
 const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
@@ -697,7 +688,6 @@ function render(opts = {}) {
   const root = S[V.thread];
   stacksEl.innerHTML = root ? shownStacks(root).map(stackHTML).join('') : '';
   stacksEl.querySelectorAll('.draft textarea').forEach(autosize);
-  world.classList.toggle('far', V.z < FAR);
   layout();
   shownThread = V.thread;
   if (before) {
@@ -725,7 +715,6 @@ const pane = () => vp.getBoundingClientRect();
 function applyView() {
   world.style.transform = `translate(${V.x}px,${V.y}px) scale(${V.z})`; world.style.setProperty('--z', V.z);
   vp.style.backgroundPosition = `${V.x}px ${V.y}px`; vp.style.backgroundSize = `${24 * V.z}px ${24 * V.z}px`;
-  world.classList.toggle('far', V.z < FAR);
   $('#zval').textContent = Math.round(V.z * 100) + '%';
 }
 function zoomAt(z, cx, cy) {
@@ -1077,7 +1066,7 @@ document.addEventListener('keydown', e => {
 /* selecting text in an answer offers a branch that stores the passage (block and quote) */
 document.addEventListener('mouseup', () => setTimeout(() => {
   const sel = getSelection(), t = sel?.toString().replace(/\s+/g, ' ').trim(); $('#selfork')?.remove();
-  if (!t || t.length < 3 || !sel.rangeCount || V.z < FAR) return;
+  if (!t || t.length < 3 || !sel.rangeCount) return;
   const n = sel.anchorNode?.nodeType === 1 ? sel.anchorNode : sel.anchorNode?.parentElement, pr = n?.closest('#stacks .prose[data-p]'); if (!pr) return;
   const kids = [...pr.children], block = kids.findIndex(k => k.contains(n));
   const r = sel.getRangeAt(0).getBoundingClientRect(), b = document.createElement('button');
@@ -1098,7 +1087,7 @@ const blocksOf = pr => [...pr.children];
    With text selected, the first item asks about the selection instead. */
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
 function openPartMenu(target, x, y) {
-  const partEl = target.closest?.('#stacks .part[data-part]'); if (!partEl || target.closest('textarea, input') || V.z < FAR) return false;
+  const partEl = target.closest?.('#stacks .part[data-part]'); if (!partEl || target.closest('textarea, input')) return false;
   closeBmenu();
   const p = P[partEl.dataset.part]; if (!p) return false;
   const kind = partKind(p);

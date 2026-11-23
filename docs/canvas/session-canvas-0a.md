@@ -44,8 +44,8 @@ lower turns nearer the parent. With branches placed in anchor order, connectors 
 
 ## View
 
-- Pan (drag the canvas, scroll, or one finger on touch) moves on both axes; Ctrl+scroll, pinch and the zoom buttons
-  zoom; the overview headlines appear below 50% as in the base.
+- Pan (drag the canvas, scroll, or one finger on touch) moves on both axes; the zoom buttons and the keyboard (+, −, 0)
+  zoom; Ctrl+scroll and pinch do not. Cards show their full content at every zoom.
 - Fit fits the width of the columns in use (the main column and the deepest visible side column) to the window, at
   most 100%, and keeps what is at the top of the view at the top.
 - The page opens at 100% with the main column centred horizontally, at the top of the main column. Side columns that
@@ -75,5 +75,5 @@ cross, and none passes through another card; the main column is in last-activity
 on a main-column answer opens a branch in column 1 anchored to that paragraph, and a branch from a column-1 post opens
 in column 2; Ask starts a run, Stop ends it ("Stopped before it finished"); Continue and a seam insert open drafts
 and Post appends; Add post puts a root at the top; the bell lists new posts, choosing one expands its unit, selects
-the stack and brings it into view, and Mark all as read clears the list; drag, scroll, Ctrl+scroll, the zoom buttons
-and Fit work; the overview headlines show at 30%.
+the stack and brings it into view, and Mark all as read clears the list; drag, scroll, the zoom buttons
+and Fit work.

@@ -22,7 +22,6 @@ Seed content and data model are those of layout 9; stacks have no stored x or y.
   count; its branches are hidden until it is expanded. This is the base mock's collapsed form, applied per stack
   instead of per unit.
 - Long answers are clamped with "Show all", as in the base mock.
-- Below 50% zoom each stack shows one headline, as in the base mock.
 - Only a stack's author continues it: their stacks end with "Continue" and show seams between posts. Other people's
   stacks show neither; the part menu branches from them.
 - A running answer shows its step and, for the stack's author, Stop. The text written so far stays.
@@ -70,8 +69,7 @@ Seed content and data model are those of layout 9; stacks have no stored x or y.
 | "Only X continues this thread" under others' stacks | Dropped, as in the base mock: those stacks have no Continue and no seams |
 | Each pane scrolls vertically | The canvas pans and zooms |
 
-The branch rows and margin markers were not kept for low zoom either. Below 50% the base mock's headlines replace
-post text, and they name each branch; a count beside a paragraph would be unreadable at that size.
+The branch rows and margin markers were not kept for low zoom either: the cards and connectors show the branches.
 
 ## Compared with the base mock
 

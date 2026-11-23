@@ -8,15 +8,11 @@ root stack), the row header's position, and where the row arrows stop.
 
 Differences from 3
 - Column 0 is 640px wide (RW); branch columns keep 3's stack width (320px; 240-320px on a phone).
-- Root position depends on the width of the row track (the page width less any vertical scrollbar):
-  - 1040px or wider (CENTRE_MIN = 640 + 2 x (40px gap + 160px)): column 0 is centred. With the row scrolled to its
-    start (scrollLeft 0), the root's centre is the page's centre, so the roots of all rows form one centred column
-    down the page. The space left of it stays empty; branch columns continue to the right of it. At 1040px half a
-    branch column (160px) shows right of the root; from 1392px a whole one does.
-  - 720-1039px: column 0 is 640px wide and left-aligned, 16px from the left edge, as column 0 is in 3.
-  - Below 720px: column 0 is the track width less a 16px gutter on each side.
-  The scroll start of every row is therefore the centred (or left-aligned) position. A row's horizontal scroll is
-  kept across re-renders as in 3; scrolling back to the start returns the root to the centre.
+- Column 0 is centred at every page width: each row's lane starts with enough left padding that, at the row's scroll
+  start (scrollLeft 0), the root's centre is the page's centre, so the roots of all rows form one centred column
+  down the page. Branch columns continue to the right of the root. Below 720px column 0 is the track width less a
+  16px gutter on each side. Rows load at the start, and scrolling a row back to its start returns the root to the
+  centre; a row's horizontal scroll is otherwise kept across re-renders as in 3.
 - The row header (channel, counts, dots, arrows, collapse) has the root column's left edge and width.
 - Row arrows: Right scrolls the least distance that shows the first column cut off at the right edge; Left scrolls
   the least distance that shows the last column cut off at the left edge, and returns to the start when only the
@@ -487,18 +483,15 @@ const stackEl = id => rowsEl.querySelector(`.lane > .stack[data-stack="${id}"]`)
    the column, it goes VGAP below that stack instead. The lane is as tall as its tallest column. Positions are
    measured with offsets, which ignore the transforms of a running FLIP animation. */
 const PADX = 16, PADT = 4, PADB = 18, VGAP = 16, HEADY = 16;
-/* Root column geometry, the same for every row, from the width of the row track (tw):
-     tw >= CENTRE_MIN   column 0 is RW wide and centred: its centre is the track's centre at scrollLeft 0. CENTRE_MIN
-                        leaves room right of the root for the gap and half a branch column.
-     NARROW <= tw       column 0 is RW wide and starts PADX from the left edge.
-     tw < NARROW        column 0 is tw - 2 * PADX wide (so it is also centred).
+/* Root column geometry, the same for every row, from the width of the row track (tw): column 0 is RW wide (below
+   NARROW, tw - 2 * PADX) and starts at (tw - width) / 2, so its centre is the track's centre at scrollLeft 0.
    The values are set on .rows as --rl (left edge) and --rw (width) for the row header. */
-const RW = 640, NARROW = 720, CENTRE_MIN = RW + 2 * (GAP + 160);
-let G = { tw: 0, rw: RW, rl: PADX, centred: false };
+const RW = 640, NARROW = 720;
+let G = { tw: 0, rw: RW, rl: PADX, centred: true };
 function setGeometry() {
   const tw = rowsEl.clientWidth, narrow = tw < NARROW, rw = narrow ? Math.max(200, tw - 2 * PADX) : RW;
-  const centred = narrow || tw >= CENTRE_MIN;
-  G = { tw, rw, rl: centred ? Math.max(PADX, Math.round((tw - rw) / 2)) : PADX, centred };
+  const centred = true;
+  G = { tw, rw, rl: Math.max(PADX, Math.round((tw - rw) / 2)), centred };
   rowsEl.style.setProperty('--rl', G.rl + 'px'); rowsEl.style.setProperty('--rw', G.rw + 'px');
   rowsEl.classList.toggle('centred', centred && !narrow);
 }

@@ -355,13 +355,6 @@ body { display: flex; flex-direction: column; }
 @media (max-width: 1180px) { .cvhint { display: none; } }
 .pempty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--t-faint); font-size: 13px; z-index: 1; }
 
-/* overview zoom (below 50%): geometry stays; each stack shows its first post as a headline at a constant screen size */
-.part .hl { display: none; }
-.far .prose, .far .ph, .far .part > .gut, .far .part > .acts, .far .cmeta, .far .fq, .far .addend, .far .more, .far .seam .sp, .far .sh .ib { visibility: hidden; }
-.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
-.far .hl small b { color: var(--new); }
 
 /* narrow: one view at a time, a back button in place of the earlier ones */
 body.narrow .col { width: 100% !important; flex: 1 0 100%; border-right: 0; }
@@ -546,9 +539,8 @@ function proseHTML(p, s) {
 }
 function partHTML(p, s, first = false) {
   const n = first && !s.fork ? treeNew(s) : 0;
-  const pre = first ? `<small>${!s.fork ? `#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}` : 'branch'}</small>` : '';
   return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${insertedPart(p) ? ' ins' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}">
-    <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${head(p)}<div class="pb">${proseHTML(p, s)}</div></div>`;
+    ${head(p)}<div class="pb">${proseHTML(p, s)}</div></div>`;
 }
 /* what a part is, in words: an answer, a question (a person's part answered right under it), or a post */
 const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
@@ -635,7 +627,7 @@ const TOP = 56;                                   // room above the content for 
 const padX = () => narrowNow() ? 16 : 32;
 const READZ = 0.75;                               // the lowest zoom at which a whole unit counts as readable
 const clampZ = z => Math.max(0.15, Math.min(1.6, z));
-const setZ = z => { V.z = clampZ(z); world.classList.toggle('far', V.z < 0.5); };
+const setZ = z => { V.z = clampZ(z); };
 function applyView() {
   world.style.transform = `translate(${V.x}px,${V.y}px) scale(${V.z})`; world.style.setProperty('--z', V.z);
   vp.style.backgroundPosition = `${V.x}px ${V.y}px`; vp.style.backgroundSize = `${24 * V.z}px ${24 * V.z}px`;
@@ -753,7 +745,6 @@ function renderCanvas(opts) {
   const key = V.thread + (shown ? '' : ':hidden');
   const before = shown && !opts.noAnim && !reduced() && drawnKey === key ? snapshot() : null;
   stacksEl.innerHTML = unitStacks(root).map(stackHTML).join('');
-  world.classList.toggle('far', V.z < 0.5);
   V.bounds = layout(root); drawnKey = key;
   if (before) {
     /* FLIP: each element animates from where it was; a nested element only by its own movement */
@@ -1099,7 +1090,7 @@ const blocksOf = pr => [...pr.children];
    With text selected, the first item asks about the selection instead. Not offered below 50% zoom. */
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
 function openPartMenu(target, x, y) {
-  const partEl = target.closest?.('#stacks .part[data-part]'); if (!partEl || target.closest('textarea, input') || V.z < 0.5) return false;
+  const partEl = target.closest?.('#stacks .part[data-part]'); if (!partEl || target.closest('textarea, input')) return false;
   closeBmenu();
   const p = P[partEl.dataset.part]; if (!p) return false;
   const kind = partKind(p);

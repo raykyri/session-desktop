@@ -10,7 +10,7 @@ docs/canvas/layout-panels-a.md.
   author continues it.
 - The canvas shows one unit: the chosen thread's root stack and all of its branches, each branch in a lane beside its
   anchor post or paragraph, with a connector from the anchor. It pans (drag, wheel) and zooms (Ctrl+wheel, pinch,
-  the zoom buttons, Fit). Card styling, layout, connectors, pan and zoom, the overview headlines below 50% zoom, Stop
+  the zoom buttons, Fit). Card styling, layout, connectors, pan and zoom, Stop
   and the collapsed form ("N more posts") are ported from the base mock.
 - Removed from 9: the main pane's column and its composer, the branch panel with its trail and Swap, the branch rows
   under posts, the margin markers beside paragraphs, and the button shown on a text selection.
@@ -304,13 +304,6 @@ body { --top: calc(var(--chb) + var(--bar)); }
 .btn.pri { background: var(--accent); color: var(--on-accent); }
 @media (pointer: coarse) { .btn { height: 38px; } }
 
-/* overview zoom (below 50%): geometry stays; each stack shows one headline over its first part */
-.far .prose, .far .ph, .far .part > .gut, .far .cmeta, .far .fq, .far .addend, .far .more, .far .seam .sp, .far .ib { visibility: hidden; }
-.part .hl { display: none; }
-.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
-.far .hl small b { color: var(--new); }
 
 /* menus: the part menu */
 #bmenu { position: fixed; z-index: 40; min-width: 200px; max-width: min(360px, calc(100vw - 16px)); padding: 4px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); }
@@ -521,9 +514,8 @@ function proseHTML(p, s, small = false) {
 }
 function partHTML(p, s, first = false, small = false) {
   const n = first && !s.fork ? unitNew(s) : 0;
-  const pre = first ? `<small>${!s.fork ? `#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}` : 'branch'}</small>` : '';
   return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${insertedPart(p) ? ' ins' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}" tabindex="0">
-    <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${head(p)}<div class="pb">${proseHTML(p, s, small)}</div></div>`;
+    ${head(p)}<div class="pb">${proseHTML(p, s, small)}</div></div>`;
 }
 /* what a part is, in words: an answer, a question (a person's part answered right under it), or a post */
 const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
@@ -665,7 +657,6 @@ const pane = () => ({ w: vp.clientWidth, h: vp.clientHeight });
 const local = (cx, cy) => { const r = vp.getBoundingClientRect(); return [cx - r.left, cy - r.top]; };
 function applyView() {
   world.style.transform = `translate(${V.x}px,${V.y}px) scale(${V.z})`; world.style.setProperty('--z', V.z);
-  world.classList.toggle('far', V.z < 0.5);
   vp.style.backgroundPosition = `${V.x}px ${V.y}px`; vp.style.backgroundSize = `${24 * V.z}px ${24 * V.z}px`;
   $('#zval').textContent = Math.round(V.z * 100) + '%';
 }
@@ -1017,7 +1008,7 @@ const blocksOf = pr => [...pr.children];
    With text selected, the first item asks about the selection instead. Below 50% zoom there is no menu. */
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
 function openPartMenu(target, x, y) {
-  const partEl = target.closest?.('.part[data-part]'); if (!partEl || target.closest('textarea, input') || V.z < 0.5) return false;
+  const partEl = target.closest?.('.part[data-part]'); if (!partEl || target.closest('textarea, input')) return false;
   closeBmenu();
   const p = P[partEl.dataset.part]; if (!p) return false;
   const kind = partKind(p);

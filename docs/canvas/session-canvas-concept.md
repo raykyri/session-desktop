@@ -94,8 +94,9 @@ this.
   - The unit being edited keeps its place.
 - **Scale.** The seed has 22 units, 61 threads and 158 posts.
   - Units are packed in columns by last activity.
+  - Zoom is explicit: the −/+ buttons, Fit, and the keyboard (+, −, 0). The wheel, trackpad and touch only pan.
+    Cards show their full content at every zoom.
   - A collapsed unit shows its first post, "N more posts", and the branch count with a branch icon.
-  - Below 50% zoom, each stack shows one headline at a constant screen size.
   - A bell at the top right lists the posts new to the viewer, newest first; choosing one opens its unit and selects
     its stack, and "Mark all as read" clears the list.
 

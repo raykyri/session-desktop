@@ -9,7 +9,7 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 | | 3 | 3a |
 | --- | --- | --- |
 | Column 0 (root) width | 320px, as every column | 640px |
-| Column 0 position | 16px from the left edge | centred on the page at the row's scroll start, from a 1040px row track |
+| Column 0 position | 16px from the left edge | centred on the page at the row's scroll start, at every width |
 | Branch columns | 320px, from 16px + 360px | 320px, from the root's right edge + 40px |
 | Row header | full page width | the root column's left edge and width |
 | Row arrows | page by whole 360px steps | scroll the least distance that shows the next cut-off column; Left returns to the start |
@@ -20,14 +20,13 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 
 - **Width:** 640px. An answer's text is 586px wide, about 85–90 characters per line at 13.5px, the upper end of a usual reading width, and it leaves room for a branch column beside it on common laptop widths. Branch columns keep 320px (240–320px on a phone).
 - **Position**, from the width of the row track (the page width less any vertical scrollbar):
-  - **1040px or wider:** centred. With the row at its scroll start (`scrollLeft` 0), the root's centre is the page's centre, so the roots of all rows form one column down the middle of the page. The space left of the root stays empty: branches only go right. 1040px = 640 + 2 × (40px gap + 160px), so at least half a branch column shows right of the root; from 1392px a whole one does (at 1440px: the root at 400–1040px, column 1 at 1080–1400px).
-  - **720–1039px:** left-aligned, 16px from the left edge, as column 0 is in 3. A centred root there would leave less than half a branch column visible.
+  - **720px or wider:** 640px wide and centred. Each row's lane starts with enough left padding that, with the row at its scroll start (`scrollLeft` 0), the root's centre is the page's centre, so the roots of all rows form one column down the middle of the page.
   - **Below 720px:** the track width less a 16px gutter on each side (358px on a 390px phone), which is also centred. Branches are reached by scrolling the row, as in 3; the dots in the row header show how many there are.
 - The rule is the same for every row at a given width, so the root columns line up whatever a row's depth.
 
 ## Row scrolling
 
-- The scroll start of every row is the centred (or left-aligned) root. Rows load there, a new or expanded row starts there, and the lane is rebuilt around it when the window width or the page scrollbar changes.
+- The scroll start of every row is the centred root. Rows load there, a new or expanded row starts there, and the lane is rebuilt around it when the window width or the page scrollbar changes.
 - A row's horizontal scroll is kept across re-renders, as in 3, so a finished answer or a new part does not move a row the person has scrolled. A new branch scrolls its row by the least distance that shows the whole new stack.
 - Shift+wheel, a trackpad swipe and touch move a row sideways; the start is `scrollLeft` 0, so scrolling fully left returns the root to the centre.
 - Right arrow: scrolls the least distance that shows the first column cut off at the right edge. Left arrow: the least distance that shows the last branch column cut off at the left edge, then the start. At 1100px on the deepest seed row (four columns) the stops are 0, 146, 506 and 866px.
@@ -50,7 +49,7 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 ## What 3a loses
 
 - Between 1040 and 1391px only part of the first branch column is visible next to the root; reading a branch needs a row scroll, which moves the root off-centre.
-- At 720–1039px the root is not centred, so the layout changes character at 1040px.
+- Below about 1040px no branch column shows next to the centred root until the row is scrolled.
 - The space left of the root is unused at wide widths, where 3 would show one or two more columns of branches.
 - Below 720px no branch shows next to the root; only the header dots and the connector stub at the right edge indicate branches.
 - The row header stays at the root column while the row scrolls, so on a scrolled row it no longer sits over the root.

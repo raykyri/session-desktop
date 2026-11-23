@@ -28,7 +28,6 @@ thread as the base mock does (`docs/mockups/session-canvas.html`, `docs/canvas/s
     unchanged from the base mock.
   - The root's header has a collapse button. A collapsed root shows its first post, "N more posts" and the branch
     count, and hides its branches.
-  - Below 50% zoom, each stack shows its first post as a headline.
 - Zoom controls (−, the zoom level, which resets to 100%, +, Fit) are at the top right of the pane. Until the first
   draft is opened, a one-line hint is shown at the top left of the pane on screens wider than 1180px.
 - Below 640px one view fills the screen: Channels (in Column mode only), Threads or the canvas. A back button names
@@ -87,7 +86,7 @@ screen this happens only when the canvas view is shown. The bell and the thread 
 - **Replaced:** the thread column and the branch columns are replaced by the canvas pane. Branch markers, sibling
   chips and the "Close this branch" button are gone: every branch of the thread is drawn at once, and the connectors
   show where each starts.
-- **Added from the base mock:** pan, zoom, Fit, the overview headlines below 50%, collapse of the root, and Stop on a
+- **Added from the base mock:** pan, zoom, Fit, collapse of the root, and Stop on a
   queued or running answer (for the thread's author).
 - **Removed:** the "Ask about this" button that appeared on text selection in 5. As in the base mock, the part menu
   offers "Ask about the selection" instead.

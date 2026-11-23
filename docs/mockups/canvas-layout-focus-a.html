@@ -8,7 +8,7 @@ Notes for this file: docs/canvas/layout-focus-a.md. There are no discrete views;
   activity at page load, fixed for the visit; a new thread goes first.
 - Canvas: everything to the right of the column. It draws the unit (a root stack and its lane branches) of the
   selected tile, with the layout, connector and pan/zoom code of docs/mockups/session-canvas.html: drag or wheel to
-  pan; Ctrl+wheel, pinch or the zoom buttons to zoom; Fit shows the whole unit. Choosing a tile frames its unit:
+  pan; the zoom buttons or the keyboard (+, −, 0) to zoom; Fit shows the whole unit. Choosing a tile frames its unit:
   top-aligned, at 80% to 100% zoom. A wider unit shows its first lanes, and the rest is reached by panning.
 - Below 720px wide the page shows either the column or the canvas, and the canvas has a Back button.
 Differences from 4: no focus view, no lane sliding, no pinned root, no hidden-lane control and no breadcrumb. One unit
@@ -284,13 +284,6 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 ::selection { background: var(--hl); }
 .prose > .menu-on { background: var(--hl); border-radius: 3px; box-shadow: 0 0 0 3px var(--hl); }
 
-/* below 50% zoom: geometry stays; each stack shows one headline at a constant screen size (as in the base mock) */
-.far .prose, .far .pending, .far .part > .gut, .far .fq, .far .addend, .far .more, .far .seam .sp { visibility: hidden; }
-.part .hl { display: none; }
-.far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
-.far .hl small b { color: var(--new); }
 
 /* growth animation: new parts open from zero height */
 @keyframes open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
@@ -302,7 +295,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 <nav id="col" aria-label="Threads"><div id="colh"></div><div id="tiles" role="listbox" aria-label="Threads"></div></nav>
 <main id="vp" tabindex="-1" aria-label="Canvas">
   <div id="world"><svg id="links" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></div>
-  <div class="cbar"><button id="back" type="button" title="Threads (Esc)"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Threads</button><div class="hint" id="hint">Drag to move · Ctrl+scroll or pinch to zoom · Right-click a post to branch · Arrow keys move between stacks · Esc returns to the threads</div><div class="zoom"><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in" title="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button" title="Show the whole unit">Fit</button></div></div>
+  <div class="cbar"><button id="back" type="button" title="Threads (Esc)"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Threads</button><div class="hint" id="hint">Drag to move · + and − zoom · Right-click a post to branch · Arrow keys move between stacks · Esc returns to the threads</div><div class="zoom"><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in" title="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button" title="Show the whole unit">Fit</button></div></div>
 </main>
 
 <script>
@@ -405,9 +398,8 @@ function proseHTML(p, s) {
 }
 function partHTML(p, s, first = false) {
   const isRoot = !s.fork, n = first && isRoot ? unitNew(s) : 0;
-  const pre = first ? `<small>${isRoot ? `#${esc(CH[s.ch] || s.ch)}${n ? ` · <b>${n} new</b>` : ''}` : 'branch'}</small>` : '';
   return `<div class="part${first ? ' first' : ''}${isModel(p) ? ' m' : ''}${insertedPart(p) ? ' ins' : ''}${V.fresh?.has(p.id) ? ' fresh' : ''}" data-part="${p.id}" data-fl="p:${p.id}">
-    <span class="hl" aria-hidden="true">${pre}${esc(clip(strip(p.text), 90))}</span>${gutHTML(p)}<div class="pb">${proseHTML(p, s)}</div></div>`;
+    ${gutHTML(p)}<div class="pb">${proseHTML(p, s)}</div></div>`;
 }
 /* what a part is, in words: an answer, a question (a person's part answered right under it), or a post */
 const partKind = p => { const l = partsOf(p.st), n = l[l.indexOf(p) + 1]; return isModel(p) ? 'answer' : pairedWith(p, n) ? 'question' : 'post'; };
@@ -543,7 +535,6 @@ function render(opts = {}) {
   renderTiles();
   const before = opts.noAnim || reduced() ? null : snapshot();
   stacksEl.innerHTML = V.tile ? unitStacks(S[V.tile]).map(stackHTML).join('') : '';
-  world.classList.toggle('far', V.z < 0.5);
   layout();
   if (before) {
     const moved = [];
@@ -572,11 +563,11 @@ let tween = 0;
 /* move the view to x, y, z; with anim, over 240 ms */
 function setView(x, y, z, anim = false) {
   cancelAnimationFrame(tween);
-  if (!anim || reduced()) { V.x = x; V.y = y; V.z = z; world.classList.toggle('far', z < 0.5); applyView(); drawLinks(); return; }
+  if (!anim || reduced()) { V.x = x; V.y = y; V.z = z; applyView(); drawLinks(); return; }
   const x0 = V.x, y0 = V.y, z0 = V.z, t0 = performance.now();
   const step = now => { const k = Math.min(1, (now - t0) / 240), e = 1 - Math.pow(1 - k, 3);
     V.x = x0 + (x - x0) * e; V.y = y0 + (y - y0) * e; V.z = z0 + (z - z0) * e; applyView();
-    if (k < 1) tween = requestAnimationFrame(step); else { world.classList.toggle('far', V.z < 0.5); drawLinks(); } };
+    if (k < 1) tween = requestAnimationFrame(step); else { drawLinks(); } };
   tween = requestAnimationFrame(step);
 }
 function zoomAt(z, cx, cy) {
@@ -622,29 +613,37 @@ $('#fit').onclick = () => fitUnit();
 vp.addEventListener('wheel', e => {
   e.preventDefault(); closeBmenu(); cancelAnimationFrame(tween);
   const v = vp.getBoundingClientRect();
-  if (e.ctrlKey || e.metaKey) zoomAt(V.z * Math.exp(-e.deltaY * 0.0025), e.clientX - v.left, e.clientY - v.top);
-  else { V.x -= e.deltaX; V.y -= e.deltaY; applyView(); }
+  if (e.ctrlKey || e.metaKey) return;   // Ctrl/Cmd+wheel and trackpad pinch do not zoom: zoom is the keyboard and the buttons only
+  V.x -= e.deltaX; V.y -= e.deltaY; applyView();
 }, { passive: false });
 /* focus moving to a control inside the canvas can scroll the clipped viewport; turn that into a pan */
 vp.addEventListener('scroll', () => { if (!vp.scrollLeft && !vp.scrollTop) return; V.x -= vp.scrollLeft; V.y -= vp.scrollTop; vp.scrollLeft = 0; vp.scrollTop = 0; applyView(); });
-/* panning: drag on empty canvas (mouse), or one finger anywhere outside text and controls; two fingers pinch */
+/* panning: drag on empty canvas (mouse), or one finger anywhere outside text and controls; two fingers do nothing */
 const pts = new Map(); let pan = null, pinch = null;
 vp.addEventListener('pointerdown', e => {
   pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); cancelAnimationFrame(tween);
-  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: V.z }; pan = null; return; }
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pan = null; return; }   // two fingers neither pan nor zoom
   const onStack = e.target.closest('.stack, .cbar');
   if (!onStack || (e.pointerType === 'touch' && !e.target.closest('textarea, input, button, .prose, .cbar'))) pan = { x: e.clientX, y: e.clientY, vx: V.x, vy: V.y, moved: false };
 });
 vp.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (pinch && pts.size === 2) { const [a, b] = [...pts.values()], v = vp.getBoundingClientRect(); zoomAt(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, (a.x + b.x) / 2 - v.left, (a.y + b.y) / 2 - v.top); return; }
   if (pan) { const dx = e.clientX - pan.x, dy = e.clientY - pan.y; if (Math.abs(dx) + Math.abs(dy) > 4) { pan.moved = true; vp.classList.add('panning'); closeBmenu(); }
     if (pan.moved) { V.x = pan.vx + dx; V.y = pan.vy + dy; applyView(); } }
 });
 const endPtr = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
   if (pinch === null && pts.size === 0) { if (pan?.moved) { vp.dataset.justPanned = '1'; setTimeout(() => delete vp.dataset.justPanned, 0); } pan = null; vp.classList.remove('panning'); } };
 vp.addEventListener('pointerup', endPtr); vp.addEventListener('pointercancel', endPtr);
-vp.addEventListener('gesturestart', e => e.preventDefault());   // Safari: the pinch above zooms the canvas, not the page
+vp.addEventListener('gesturestart', e => e.preventDefault());   // Safari: a trackpad pinch does not zoom the page
+/* keyboard zoom, outside text fields: + (or =) zooms in, − zooms out, 0 goes to 100%; with Ctrl/Cmd as well, in
+   place of the browser's page zoom */
+document.addEventListener('keydown', e => {
+  if (e.altKey || e.target.closest?.('textarea, input, [contenteditable]')) return;
+  const k = e.key, cx = vp.clientWidth / 2, cy = vp.clientHeight / 2;
+  if (k === '+' || k === '=') { e.preventDefault(); zoomAt(V.z * 1.25, cx, cy); }
+  else if (k === '-' || k === '_') { e.preventDefault(); zoomAt(V.z / 1.25, cx, cy); }
+  else if (k === '0') { e.preventDefault(); zoomAt(1, cx, cy); }
+});
 
 /* ---- selection: tiles, stacks, and the two regions ---- */
 /* choosing a tile selects it and draws its unit; a different unit (or o.frame) is framed */
@@ -921,7 +920,7 @@ const blocksOf = pr => [...pr.children];
    With text selected, the first item asks about the selection instead. */
 function closeBmenu() { $('#bmenu')?.remove(); document.querySelectorAll('.menu-on').forEach(x => x.classList.remove('menu-on')); }
 function openPartMenu(target, x, y) {
-  const partEl = target.closest?.('#stacks .part[data-part]'); if (!partEl || target.closest('textarea, input') || V.z < 0.5) return false;
+  const partEl = target.closest?.('#stacks .part[data-part]'); if (!partEl || target.closest('textarea, input')) return false;
   closeBmenu();
   const p = P[partEl.dataset.part]; if (!p) return false;
   const kind = partKind(p);
