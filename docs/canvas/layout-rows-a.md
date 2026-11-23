@@ -1,6 +1,6 @@
 # Layout: Rows, centred main thread (3a)
 
-Mock: `docs/mockups/canvas-layout-rows-a.html`, a copy of `canvas-layout-rows.html` (layout 3, notes: `layout-rows.md`) that changes only the width and position of each row's root column, the row header's position and the stops of the row arrows. Everything else is as in 3: row order, columns per depth, branch placement, connectors, keyboard navigation, the part menu, drafts, Continue and the bell.
+Mock: `docs/mockups/canvas-layout-rows-a.html`, a copy of `canvas-layout-rows.html` (layout 3, notes: `layout-rows.md`) that changes the width and position of each row's root column, the row header's position and the stops of the row arrows, and takes the post and run changes of `session-canvas.html` (see "From the base mock" below). Everything else is as in 3: row order, columns per depth, branch placement, connectors, keyboard navigation, the post menu, drafts, Continue and the bell.
 
 Request: "make a version of 3 that centers the main thread and makes it wider".
 
@@ -16,6 +16,16 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 | Selecting a root | scrolls the row until the root is inside it | scrolls the row back to its start |
 | Touch snap | every stack to its start | a centred root to the centre, branches to their start |
 
+## From the base mock
+
+These follow `docs/mockups/session-canvas.html` ("0. Session Canvas") and `session-canvas-concept.md`; layout 3 does not have them yet.
+
+- **Terms.** Visible text and labels say "post" (one block of text by one author, or one model answer), "stack" (the drawn column of a thread) and "branch"; "part" and "fork" remain only in code names and the stored `fork` field. Examples: "N more posts", "Insert a post here", "Add a post", "Next post", "The run read N posts".
+- **No selection button.** Selecting text in an answer shows no floating "Ask about this" button. The post menu (right-click or long-press) offers "Ask about the selection" when text is selected.
+- **No "Inserted" label.** A post written after the posts below it has no label; 3a does not indent it either.
+- **Stop.** A queued or running answer shows a Stop button to the thread's author. Stop cancels the run's remaining timers and sets its status to `stopped`; the answer then reads "Stopped before it finished", keeps the text written so far and has no progress bar. The pending line reads "Queued" or "Step n of 4 · …", without a count of the posts read.
+- **Run record.** A run has no `by` (who asked) or `ctx` (ids read); context is set by position. A person's post directly followed by an answer is a question and answer pair, whoever wrote the post, so there is no "Asked by" line.
+
 ## Root column
 
 - **Width:** 640px. An answer's text is 586px wide, about 85–90 characters per line at 13.5px, the upper end of a usual reading width, and it leaves room for a branch column beside it on common laptop widths. Branch columns keep 320px (240–320px on a phone).
@@ -27,9 +37,9 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 ## Row scrolling
 
 - The scroll start of every row is the centred root. Rows load there, a new or expanded row starts there, and the lane is rebuilt around it when the window width or the page scrollbar changes.
-- A row's horizontal scroll is kept across re-renders, as in 3, so a finished answer or a new part does not move a row the person has scrolled. A new branch scrolls its row by the least distance that shows the whole new stack.
+- A row's horizontal scroll is kept across re-renders, as in 3, so a finished answer or a new post does not move a row the person has scrolled. A new branch scrolls its row by the least distance that shows the whole new stack.
 - Shift+wheel, a trackpad swipe and touch move a row sideways; the start is `scrollLeft` 0, so scrolling fully left returns the root to the centre.
-- The row header has only the dots: no arrow buttons and no collapse control. A row collapsed at load is expanded with its "N more parts" row.
+- The row header has only the dots: no arrow buttons and no collapse control. A row collapsed at load is expanded with its "N more posts" row.
 - Selecting a root (click, row dot, ← from a branch, bell) scrolls its row back to the start.
 
 ## Unchanged from 3
@@ -37,7 +47,7 @@ Request: "make a version of 3 that centers the main thread and makes it wider".
 - Columns: column 0 the root, column d + 1 the branches of column d's stacks, parent by parent in anchor order; a branch made during the visit goes to the end of its parent's group.
 - Branches are placed level with their anchor paragraph where there is room, else 16px below the stack above. Anchor heights are measured from the rendered cards, so they follow the root's new line breaks; the wider root is shorter, and anchored branches move up with it.
 - One connector per branch from the dot on the parent's right edge, straight when level and an elbow in the gap when pushed down; elbows spread so they do not cross; the selected or hovered connector and its paragraph are highlighted.
-- No card height cap; long answers keep "Show all". Rows with new parts start expanded.
+- No card height cap; long answers keep "Show all". Rows with new posts start expanded.
 - Keyboard: ← parent, → branch, ↑ ↓ within a column and then to the neighbouring row; Enter expands a collapsed row.
 - The bell menu now has the styles of `session-canvas.html`; 3 has none, so its menu opens unstyled at the end of the page.
 
