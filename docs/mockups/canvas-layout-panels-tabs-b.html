@@ -163,9 +163,11 @@ svg.links circle.hot.off { fill: var(--page); stroke: var(--accent); }
 .sbody { position: relative; background: var(--card); border-radius: 10px; box-shadow: var(--shadow), 0 3px 10px rgba(20,24,26,.05); }
 .sbody > :first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
 .sbody > .part:last-of-type, .sbody > .draft.end { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
-.sh { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 42px; font-size: 11.5px; color: var(--t-faint); border-bottom: 1px solid var(--divider); user-select: none; }
-.sh .ch { font-weight: 600; color: var(--t-secondary); }
-.sh .grow { flex: 1; }
+.sh { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 42px; font-size: 11.5px; color: var(--t-faint); border-bottom: 1px solid var(--divider); user-select: none; white-space: nowrap; min-width: 0; }
+/* one line: the counts and "Thread" keep their width; a long channel name is cut with an ellipsis */
+.sh > span { flex: none; }
+.sh .ch { font-weight: 600; color: var(--t-secondary); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sh .grow { flex: 1 1 0; min-width: 4px; }
 .fq { padding: 8px 12px 9px 42px; font-size: 12.5px; color: var(--t-secondary); border-bottom: 1px solid var(--divider); background: var(--inset); }
 .fq .src { display: inline-flex; align-items: center; gap: 5px; margin: 0 0 3px -24px; padding: 2px 6px 2px 4px; border-radius: 6px; color: var(--accent); font-weight: 600; font-size: 12px; }
 .fq .src:hover { background: var(--accent-soft); }
