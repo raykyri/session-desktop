@@ -103,9 +103,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .sideh h1 { margin: 0; font-size: 13px; font-weight: 600; color: var(--t-heading); flex: 1; }
 .modl { font-size: 11.5px; color: var(--t-faint); white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
 .modl::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .7; }
-.tbtn, .zc button { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06);
+.tbtn { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06);
   font-size: 12.5px; font-weight: 600; color: var(--t-heading); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.tbtn:hover, .zc button:hover { background: var(--inset); }
+.tbtn:hover { background: var(--inset); }
 .tbtn .pl { color: var(--accent); width: 15px; height: 15px; }
 .adds { display: flex; gap: 8px; }
 .adds .tbtn { flex: 1; justify-content: center; }
@@ -187,10 +187,12 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 #links .hot { opacity: 1; }
 #links circle.hot { fill: var(--accent); }
 #links path.hot { stroke: var(--accent); stroke-width: 1.75; }
-/* zoom controls: bottom-right of the canvas pane */
-.zc { position: absolute; right: 12px; bottom: 12px; z-index: 20; display: flex; gap: 6px; }
+/* zoom controls: in the top bar, left of the bell; on a narrow page they float at the bottom-right of the canvas */
+.zc { display: flex; gap: 2px; flex: none; margin: 0 4px 5px 0; padding-right: 6px; border-right: 1px solid var(--divider); }
+.zc button { height: 32px; min-width: 32px; padding: 0 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--t-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.zc button:hover { background: var(--control-hover); color: var(--t-heading); }
 .zc .lc { width: 15px; height: 15px; }
-.zc .zv { min-width: 52px; justify-content: center; font-variant-numeric: tabular-nums; }
+.zc .zv { min-width: 46px; font-variant-numeric: tabular-nums; }
 
 /* ---- stacks: absolutely placed cards in the world ---- */
 .stack { position: absolute; width: var(--sw); display: flex; flex-direction: column; }
@@ -303,7 +305,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 
 /* overview zoom (below 50%): geometry stays; the first part of each stack shows a headline over its box */
 .part .hl { display: none; }
-.far .prose, .far .ph, .far .part > .gut, .far .cmeta, .far .fq, .far .more, .far .seam .sp, .far .sh .ib, .far .draft > * { visibility: hidden; }
+.far .sh > *, .far .prose, .far .ph, .far .part > .gut, .far .cmeta, .far .fq, .far .more, .far .seam .sp, .far .sh .ib, .far .draft > * { visibility: hidden; }
 .far .part.first .hl { display: block; position: absolute; z-index: 2; left: 12px; right: 12px; top: 10px; font-size: min(30px, calc(12.5px / var(--z, 1))); line-height: 1.2; font-weight: 600; color: var(--t-heading);
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .far .hl small { display: block; font-size: .8em; color: var(--t-faint); font-weight: 600; }
@@ -346,8 +348,9 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   .tab:not(.on) .tx { display: none; }
   .tab:not(.on) .tb { padding-right: 12px; }
   .tx { margin-right: 5px; }
-  .zc { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
-  .zc button { padding: 0 10px; }
+  .zc { position: fixed; z-index: 20; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); gap: 4px; margin: 0; padding: 0; border: 0; }
+  .zc button { padding: 0 10px; background: var(--card); color: var(--t-heading); box-shadow: var(--shadow), 0 2px 6px rgba(0,0,0,.06); }
+  .zc button:hover { background: var(--inset); }
 }
 @media (pointer: coarse) { .tbtn, .ibar, .zc button { height: 40px; } .tab { height: 38px; } .tx { width: 30px; height: 30px; } }
 </style>
@@ -367,10 +370,10 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
       <div class="rtitle" id="rtitle"></div>
       <div id="tabs" role="tablist" aria-label="Stacks open in this thread"></div>
       <button class="ibar" id="tovf" type="button" aria-haspopup="menu" aria-expanded="false" hidden></button>
+      <div class="zc" role="group" aria-label="Zoom"><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in" title="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button" title="Show the whole thread">Fit</button></div>
       <button class="ibar nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button>
     </div>
     <div id="vp" role="region" aria-label="Canvas" tabindex="-1"><div id="world"><svg id="links" width="1" height="1" aria-hidden="true"></svg><div id="stacks"></div></div></div>
-    <div class="zc" role="group" aria-label="Zoom"><button id="zout" type="button" aria-label="Zoom out" title="Zoom out"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><button class="zv" id="zval" type="button" title="Zoom to 100%">100%</button><button id="zin" type="button" aria-label="Zoom in" title="Zoom in"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button><button id="fit" type="button" title="Show the whole thread">Fit</button></div>
   </main>
 </div>
 
@@ -777,10 +780,10 @@ function ensureVisible(sid, el = null) {
   if (r.top < pr.top + 8 || r.top > pr.bottom - 140) dy = pr.top + 24 - r.top;
   if (dx || dy) animateView({ x: V.x + dx, y: V.y + dy, z: V.z });
 }
-/* the bottom of an element (the end composer after a post) stays in the pane */
+/* the bottom of an element (the end composer after a post) stays in the pane, above the zoom controls on a narrow page */
 function keepBottom(el) {
   if (!el) return; const r = el.getBoundingClientRect(), pr = pane();
-  if (r.bottom > pr.bottom - 56) { V.y -= r.bottom - (pr.bottom - 56); applyView(); drawLinks(); }
+  const m = narrow() ? 64 : 24; if (r.bottom > pr.bottom - m) { V.y -= r.bottom - (pr.bottom - m); applyView(); drawLinks(); }
 }
 $('#zin').onclick = () => zoomAt(V.z * 1.25, vp.clientWidth / 2, vp.clientHeight / 2);
 $('#zout').onclick = () => zoomAt(V.z / 1.25, vp.clientWidth / 2, vp.clientHeight / 2);
