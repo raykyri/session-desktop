@@ -256,7 +256,8 @@ body { display: flex; flex-direction: column; }
 .chip.sel:focus-visible { background: var(--accent-soft); }
 .chip .cnt { margin-left: 1px; }
 /* the breadcrumb keeps room beside the channel row; the row scrolls instead */
-.tb .chips:not(:empty) + .crumbs { flex: 1 1 0; min-width: 240px; }
+.tb .chips:not(:empty) + .crumbs { flex: 1 1 0; min-width: 300px; }
+.tb .chips:not(:empty) + .crumbs button:first-child { flex-shrink: 0; }
 .tb .chips:not(:empty) + .crumbs { margin-left: 2px; padding-left: 8px; border-left: 1px solid var(--divider); }
 .chbar { flex: none; height: 40px; display: flex; align-items: center; padding: 0 12px; background: var(--inset); border-bottom: 1px solid var(--divider); }
 .chbar .chips { flex: 1; }

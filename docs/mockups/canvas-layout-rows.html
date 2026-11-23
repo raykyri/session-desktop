@@ -128,7 +128,8 @@ html { scroll-padding-top: 64px; }
   mask-image: linear-gradient(to right, transparent 0, #000 var(--ml, 0px), #000 calc(100% - var(--mr, 0px)), transparent 100%); }
 .track::-webkit-scrollbar { display: none; }
 @media (pointer: coarse) { .track { scroll-snap-type: x proximity; scroll-padding-inline: 16px; } .track .stack { scroll-snap-align: start; } }
-.lane { position: relative; display: flex; align-items: flex-start; gap: var(--gap); padding: 4px 16px 18px; width: max-content; }
+/* the lane is sized by layoutRow(): one column per depth, stacks placed absolutely within their column */
+.lane { position: relative; }
 .lane > svg.links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 svg.links path { fill: none; stroke: var(--link); stroke-width: 1.5; }
 svg.links circle { fill: var(--link); }
@@ -138,7 +139,7 @@ svg.links circle.hot { fill: var(--accent); }
 svg.links circle.hot.off { fill: var(--page); stroke: var(--accent); }
 
 /* ---- stacks ---- */
-.stack { position: relative; flex: none; width: var(--sw); display: flex; flex-direction: column; }
+.stack { position: absolute; width: var(--sw); display: flex; flex-direction: column; }
 .stack:focus { outline: none; }
 .stack.sel > .sbody { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-pop); }
 /* a card is as tall as its content: the row grows to its tallest card and the page scrolls */
@@ -268,7 +269,7 @@ button.fq:hover i, button.fq:focus-visible i { color: var(--accent); }
 </style>
 
 <header class="top"><div class="tl"><button id="add-post" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add post</button><button id="add-ask" type="button"><svg class="lc pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add ask</button><span class="modl" title="Every answer in this workspace uses this model">Gemini 3.8 Flash</span></div>
-<span class="keys" id="keys"><kbd>↑</kbd> <kbd>↓</kbd> rows · <kbd>←</kbd> <kbd>→</kbd> stacks in a row · Shift+scroll moves a row sideways</span>
+<span class="keys" id="keys"><kbd>←</kbd> <kbd>→</kbd> parent, branch · <kbd>↑</kbd> <kbd>↓</kbd> column, then rows · Shift+scroll moves a row sideways</span>
 <div class="br"><button class="nn" id="nextnew" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="New" title="New"><svg class="lc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><b id="nncount"></b></button></div></header>
 <main class="rows" id="rows" aria-label="Rows"></main>
 
@@ -326,19 +327,25 @@ const ctxOf = p => resolve(p).parts.map(q => q.id);
 for (const p of Object.values(P)) if (p.run) p.run.ctx = ctxOf(p);
 
 /* ---- view state (per viewer) ---- */
-const V = { sel: null, hot: null, collapsed: new Set(), full: new Set(), seen: new Set(), draft: null, order: [], rowSel: {} };
+const V = { sel: null, hot: null, collapsed: new Set(), full: new Set(), seen: new Set(), draft: null, order: [], rowSel: {}, back: {} };
 const NEWSINCE = '2026-11-16T09:40:00Z';
 const isNew = p => p.at >= NEWSINCE && !(p.by.k === 'p' && p.by.u === ME) && !V.seen.has(p.id);
 const depthOf = s => s.fork ? 1 + depthOf(S[P[s.fork.part].st]) : 0;
-/* a row: the root, then each stack's branches right after it, in the order of their anchors (part, then
-   paragraph). With `all`, a collapsed row still lists every stack. */
-function rowList(root, all = false) {
-  const out = [];
-  const walk = (s, d) => { out.push({ s, d }); if (!all && V.collapsed.has(root.id)) return;
-    const fs = partsOf(s.id).flatMap(p => forksOf(p.id).sort((a, b) => (a.fork.block ?? -1) - (b.fork.block ?? -1)));
-    for (const f of fs) walk(f, d + 1); };
-  walk(root, 0); return out;
+/* a stack's branches in sibling order: by anchor (part, then paragraph). A branch made during this visit (`made`,
+   not stored) goes after its parent's other branches, in the order made, so the stacks already shown keep their
+   place; on the next load it takes its anchor order. */
+const branchesOf = s => partsOf(s.id).flatMap(p => forksOf(p.id)).sort((a, b) => (a.made ?? 0) - (b.made ?? 0)
+  || P[a.fork.part].key - P[b.fork.part].key || (a.fork.block ?? -1) - (b.fork.block ?? -1));
+/* a row's columns: column 0 holds the root, column d + 1 the branches of the stacks in column d, parent by parent in
+   column order and each parent's branches in sibling order, so two parents' groups never interleave. With `all`, a
+   collapsed row still lists every stack. */
+function rowCols(root, all = false) {
+  const cols = [[root]];
+  if (!all && V.collapsed.has(root.id)) return cols;
+  for (let d = 0; ; d++) { const next = cols[d].flatMap(branchesOf); if (!next.length) return cols; cols.push(next); }
 }
+/* the row's stacks column by column, top to bottom, with their depth (the column index) */
+const rowList = (root, all = false) => rowCols(root, all).flatMap((c, d) => c.map(s => ({ s, d })));
 const unitStacks = root => rowList(root, true).map(x => x.s);
 const unitNew = root => unitStacks(root).reduce((n, s) => n + partsOf(s.id).filter(isNew).length, 0);
 const lastAt = root => unitStacks(root).flatMap(s => partsOf(s.id).map(p => p.at)).sort().pop() || '9999';
@@ -426,43 +433,77 @@ function rowHead(r, list) {
   return `<span class="ch">#${esc(CH[r.ch] || r.ch)}</span>${n ? `<span class="newc">${n} new</span>` : ''}${nb ? `<span class="cnt">${nb} branch${nb === 1 ? '' : 'es'}</span>` : ''}<span class="grow"></span>${pips}${arrows}
     <button type="button" class="ib" data-a="collapse" data-id="${r.id}" aria-expanded="${!coll}" aria-label="${coll ? 'Expand row' : 'Collapse row'}" title="${coll ? 'Expand row' : 'Collapse row'}">${icon(coll ? 'chevron-right' : 'chevron-down')}</button>`;
 }
-/* the rail above the cards holds one bus per stack that has branches, 8px lower for each level of depth */
-const railOf = list => { const deep = Math.max(0, ...list.map(x => x.d)); return deep ? 14 + deep * 8 : 4; };
-const busY = d => 8 + d * 8;
 const rowEl = id => rowsEl.querySelector(`:scope > .row[data-row="${id}"]`);
 const stackEl = id => rowsEl.querySelector(`.lane > .stack[data-stack="${id}"]`);
 
-/* ---- connectors, per row, in the lane's own coordinates (so scrolling the page or the row does not move them) ----
-   For each stack with visible branches: a dot on its right edge level with each anchor, a stub to a spine in the gap, the spine up to the stack's bus in the rail, the bus to
-   each branch, and a drop into the branch's top edge. */
-function anchorAt(f, pe, sb) {
-  const fp = P[f.fork.part], el = pe.querySelector(`[data-part="${fp.id}"]`); let y;
-  if (!el) y = sb.top + 16;
+/* ---- layout, per row ----
+   Column d starts at PADX + d * (W + GAP). In each column, top to bottom, a branch is placed so that its connector
+   end (HEADY below its top, in the header) is level with its anchor; if that would overlap the stack above it in
+   the column, it goes VGAP below that stack instead. The lane is as tall as its tallest column. Positions are
+   measured with offsets, which ignore the transforms of a running FLIP animation. */
+const PADX = 16, PADT = 4, PADB = 18, VGAP = 16, HEADY = 16;
+/* the vertical offset of `el` inside the positioned ancestor `stop` */
+const offY = (el, stop) => { let y = 0; for (let n = el; n && n !== stop; n = n.offsetParent) y += n.offsetTop; return y; };
+/* where branch f starts on its parent's card, relative to the parent's top: level with the anchor paragraph's first
+   line (or near the anchor part's top), kept 10px inside the card. `off` when the paragraph is hidden under
+   "Show all". */
+function anchorOff(f, pe) {
+  const fp = P[f.fork.part], el = pe.querySelector(`[data-part="${fp.id}"]`), h = pe.offsetHeight; let y;
+  if (!el) y = 16;
   else if (f.fork.block != null) { const pr = el.querySelector(`.prose[data-p="${fp.id}"]`), b = pr?.children[f.fork.block];
-    y = b ? Math.min(b.getBoundingClientRect().top + 9, pr.getBoundingClientRect().bottom - 8) : el.getBoundingClientRect().top + 16; }
-  else y = el.getBoundingClientRect().top + 16;
-  const lo = sb.top + 10, hi = sb.bottom - 10;
-  return { y: Math.max(lo, Math.min(hi, y)), off: y < lo || y > hi };
+    y = b ? Math.min(offY(b, pe) + 9, offY(pr, pe) + pr.offsetHeight - 8) : offY(el, pe) + 16; }
+  else y = offY(el, pe) + 16;
+  return { y: Math.max(10, Math.min(h - 10, y)), off: y < 10 || y > h - 10 };
 }
+function layoutRow(sec) {
+  const lane = sec?.querySelector('.lane'); if (!lane) return;
+  const cols = rowCols(S[sec.dataset.row]), w = W(), top = {}, els = {};
+  lane.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
+  let bottom = 0;
+  cols.forEach((col, d) => {
+    let free = PADT;   // the first y below the stacks already placed in this column
+    for (const s of col) { const el = els[s.id]; if (!el) continue;
+      const pe = s.fork && els[P[s.fork.part].st], want = pe ? top[pe.dataset.stack] + anchorOff(s, pe).y - HEADY : PADT;
+      const t = Math.round(Math.max(free, want)); top[s.id] = t;
+      el.style.left = PADX + d * (w + GAP) + 'px'; el.style.top = t + 'px';
+      free = t + el.offsetHeight + VGAP; bottom = Math.max(bottom, t + el.offsetHeight); }
+  });
+  lane.style.width = 2 * PADX + cols.length * (w + GAP) - GAP + 'px';
+  lane.style.height = bottom + PADB + 'px';
+}
+
+/* ---- connectors, per row, in the lane's own coordinates (so scrolling the page or the row does not move them) ----
+   One per branch: a dot on the parent's right edge level with the anchor, then a line to the branch's left edge,
+   HEADY below its top. A branch placed level with its anchor gets a straight line; one pushed down gets an elbow in
+   the gap. Elbows whose vertical spans overlap are spread across the gap, later branches nearer the parent, so a
+   connector never crosses a sibling's or a neighbouring group's. Drawn from live positions, so they follow a FLIP
+   animation. */
 /* a branch is highlighted while it is selected or hovered */
 const isHot = id => !!id && (id === V.hot || id === V.sel) && !!S[id]?.fork;
 function drawRowLinks(sec) {
   const lane = sec?.querySelector('.lane'), svg = lane?.querySelector('svg.links'); if (!svg) return;
   const lr = lane.getBoundingClientRect(), els = {};
   lane.querySelectorAll(':scope > .stack').forEach(e => { els[e.dataset.stack] = e; });
-  svg.setAttribute('width', lane.scrollWidth); svg.setAttribute('height', lane.offsetHeight);
-  const groups = {};
-  for (const id in els) { const s = S[id]; if (!s?.fork) continue; const pid = P[s.fork.part]?.st; if (els[pid]) (groups[pid] ||= []).push(s); }
+  svg.setAttribute('width', lane.offsetWidth); svg.setAttribute('height', lane.offsetHeight);
+  /* connectors grouped by the gap they cross (the parent's column), in the child's column order */
+  const gaps = [];
+  rowList(S[sec.dataset.row]).forEach(({ s, d }) => {
+    if (!s.fork || !els[s.id]) return; const pe = els[P[s.fork.part].st]; if (!pe) return;
+    const pr = pe.getBoundingClientRect(), fr = els[s.id].getBoundingClientRect(), a = anchorOff(s, pe);
+    const c = { s, x1: pr.right - lr.left, y1: pr.top - lr.top + a.y, x2: fr.left - lr.left, y2: fr.top - lr.top + HEADY, off: a.off };
+    c.down = c.y2 - c.y1 > 1; (gaps[d - 1] ||= []).push(c);
+  });
   const cold = [], hot = [];
-  for (const pid in groups) {
-    const pe = els[pid], pr = pe.getBoundingClientRect(), sb = pe.querySelector('.sbody').getBoundingClientRect();
-    const x1 = pr.right - lr.left, sx = x1 + 16, by = busY(depthOf(S[pid]));
-    for (const f of groups[pid]) {
-      const fr = els[f.id].getBoundingClientRect(), a = anchorAt(f, pe, sb), ay = a.y - lr.top;
-      const cx = fr.left - lr.left + 20, ct = fr.top - lr.top, on = isHot(f.id);
-      const path = `<path class="${on ? 'hot' : ''}" d="M${x1},${ay} H${sx - 5} Q${sx},${ay} ${sx},${ay - 5} V${by + 5} Q${sx},${by} ${sx + 5},${by} H${cx - 5} Q${cx},${by} ${cx},${by + 5} V${ct}"/>`;
-      const dot = `<circle class="${a.off ? 'off' : ''}${on ? ' hot' : ''}" cx="${x1}" cy="${ay}" r="3"/>`;
-      (on ? hot : cold).push(path + dot);
+  for (const g of gaps) { if (!g) continue;
+    /* slot 0 is nearest the parent; a connector takes the slot right of every later one its vertical span overlaps */
+    for (let i = g.length - 1; i >= 0; i--) { const c = g[i]; c.slot = 0; if (!c.down) continue;
+      for (let j = i + 1; j < g.length; j++) { const o = g[j]; if (o.down && o.y1 < c.y2 && c.y1 < o.y2) c.slot = Math.max(c.slot, o.slot + 1); } }
+    const n = Math.max(0, ...g.map(c => c.slot));
+    for (const c of g) {
+      const { x1, y1, x2, y2 } = c, room = x2 - x1 - 16, step = n ? Math.min(6, room / n) : 0, ex = (x1 + x2) / 2 - n * step / 2 + c.slot * step;
+      const r = Math.min(5, (y2 - y1) / 2), on = isHot(c.s.id);
+      const d = c.down ? `M${x1},${y1} H${ex - r} Q${ex},${y1} ${ex},${y1 + r} V${y2 - r} Q${ex},${y2} ${ex + r},${y2} H${x2}` : `M${x1},${y1} L${x2},${y2}`;
+      (on ? hot : cold).push(`<path class="${on ? 'hot' : ''}" d="${d}"/><circle class="${c.off ? 'off' : ''}${on ? ' hot' : ''}" cx="${x1}" cy="${y1}" r="3"/>`);
     }
   }
   svg.innerHTML = cold.join('') + hot.join('');

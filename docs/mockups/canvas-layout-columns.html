@@ -1160,7 +1160,8 @@ function cvRender() {
   cvStacks.innerHTML = list.map(cvStackHTML).join('');
   cvLayout(r);
   const open = list.filter(s => colOf(s.id) > 0).length;
-  $('#cvt').innerHTML = `<b>Canvas</b> · ${esc(chName(r))} thread · ${list.length} stack${list.length === 1 ? '' : 's'}, ${open} open in columns`;
+  $('#cvt').innerHTML = `<b>${esc(chName(r))}</b> thread · ${list.length} stack${list.length === 1 ? '' : 's'}, ${open} open`;
+  $('#cvt').title = `${list.length} stack${list.length === 1 ? '' : 's'} in this thread; ${open} open in the columns`;
   if (changed) { cvHome(); CV.lastSel = undefined; }
   cvApply(); cvMark(changed);
   if (focusId) cvStacks.querySelector(`[data-cv="${focusId}"]`)?.focus({ preventScroll: true });

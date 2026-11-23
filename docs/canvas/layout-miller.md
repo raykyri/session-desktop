@@ -9,7 +9,7 @@ Mock: `docs/mockups/canvas-layout-miller.html`. A column browser replaces the ca
 - **Channels** (All, then each channel, with new counts) are shown in one of three places, set with the "Channels"
   toggle at the right of the top bar:
   - **Header** (default): a row of chips in the top bar, left of the breadcrumb. The breadcrumb keeps at least
-    240px; the chip row scrolls horizontally when it does not fit.
+    300px; the chip row scrolls horizontally when it does not fit.
   - **Above**: the same row as its own bar above the top bar.
   - **Column**: a list in a first column, before Threads (156–200px).
   The choice is view state, kept in localStorage.
