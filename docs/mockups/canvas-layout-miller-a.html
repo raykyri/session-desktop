@@ -748,7 +748,7 @@ let drawnKey = null, animUntil = 0;
 function tick() { drawLinks(); if (performance.now() < animUntil) requestAnimationFrame(tick); }
 function renderCanvas(opts) {
   const root = V.thread && S[V.thread], shown = vp.clientWidth > 0;
-  $('#pempty').hidden = !!root; $('#zb').hidden = !root; $('#hint').hidden ||= !root;
+  $('#pempty').hidden = !!root; $('#zb').hidden = !root; $('#hint').hidden = !root || hintOff;
   if (!root) { stacksEl.innerHTML = ''; links.innerHTML = ''; V.bounds = null; drawnKey = null; return; }
   const key = V.thread + (shown ? '' : ':hidden');
   const before = shown && !opts.noAnim && !reduced() && drawnKey === key ? snapshot() : null;
@@ -832,7 +832,8 @@ function goBack() {
 }
 
 /* ---- drafts ---- */
-const hideHint = () => { $('#hint').hidden = true; };
+/* the hint over the canvas goes away for good once a draft is opened */
+let hintOff = false; const hideHint = () => { hintOff = true; $('#hint').hidden = true; };
 function openDraft(st, after, mode = 'post') { if (!leaveDraft()) return; hideHint();
   V.draft = { st, after, mode, texts: [''] }; V.sel = st; V.collapsed.delete(rootOf(S[st]).id);
   render({ focus: '.draft textarea' });
